@@ -1,0 +1,9 @@
+[package]
+name = "pitchfork-rs"
+version = "0.1.0"
+authors = ["Craig Disselkoen <craigdissel@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+llvm-sys = "80"
+libc = "0.2"
