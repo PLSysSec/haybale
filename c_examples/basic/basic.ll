@@ -5,6 +5,13 @@ target triple = "x86_64-apple-macosx10.14.0"
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
 define i32 @basic(i32, i32) local_unnamed_addr #0 {
+  %3 = add i32 %0, -3
+  %4 = add i32 %3, %1
+  ret i32 %4
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @basic_if(i32, i32) local_unnamed_addr #0 {
   %3 = icmp slt i32 %0, %1
   br i1 %3, label %4, label %6
 
