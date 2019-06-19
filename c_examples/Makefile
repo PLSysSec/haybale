@@ -1,11 +1,12 @@
 CC=clang-7
+CFLAGS=-O3
 LLVMAS=llvm-as
 
 .PHONY: all
 all: basic/basic.bc basic/basic.ll
 
 %.ll : %.c
-	$(CC) -S -emit-llvm $^ -o $@
+	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
 
 %.bc : %.ll
 	$(LLVMAS) $^ -o $@
