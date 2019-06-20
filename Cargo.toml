@@ -12,3 +12,7 @@ z3 = "0.3.2"
 # see https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#overriding-dependencies
 [patch."https://github.com/TheDan64/inkwell"]
 inkwell = { path = "../inkwell" }
+
+# likewise for z3
+[patch.crates-io]
+z3 = { path = "../z3.rs/z3" }

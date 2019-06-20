@@ -91,7 +91,7 @@ name = "pitchfork-rs"
 version = "0.1.0"
 dependencies = [
  "inkwell 0.1.0",
- "z3 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "z3 0.3.2",
 ]
 
 [[package]]
@@ -207,17 +207,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "z3"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "z3-sys 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "z3-sys 0.4.0",
 ]
 
 [[package]]
 name = "z3-sys"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
 "checksum aho-corasick 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "e6f484ae0c99fec2e858eb6134949117399f222608d84cadb3f58c1f97c2364c"
@@ -245,5 +243,3 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum unicode-xid 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "8c1f860d7d29cf02cb2f3f359fd35991af3d30bac52c57d265a3c461074cb4dc"
 "checksum unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fc72304796d0818e357ead4e000d19c9c174ab23dc11093ac919054d20a6a7fc"
 "checksum utf8-ranges 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "9d50aa7650df78abf942826607c62468ce18d9019673d4a2ebe1865dbb96ffde"
-"checksum z3 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "64b756784ad9666b8128c486d6f3eee4d9f7627d8af54ff4502d178811648f09"
-"checksum z3-sys 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1dff903712349c6fa80acbd690641acd98f170a2e01b6f28f8fdcf850e2d4500"
