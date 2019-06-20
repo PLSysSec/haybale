@@ -7,6 +7,8 @@ use z3;
 mod iterators;
 use iterators::*;
 
+type VarMap<'ctx> = HashMap<AnyValueEnum, z3::Ast<'ctx>>;
+
 fn main() {
     let filepath = Path::new("/Users/craig/pitchfork-rs/c_examples/basic/basic.bc");
     let llvm_mod = Module::parse_bitcode_from_path(&filepath).expect("Failed to parse module");
@@ -27,7 +29,7 @@ fn main() {
 // Assumes function takes precisely two i32 arguments and returns an i32
 // Returns None if there are no values of the inputs such that the function returns zero
 fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i32)> {
-    let mut vars: HashMap<AnyValueEnum, z3::Ast> = HashMap::new();
+    let mut vars: VarMap = HashMap::new();
 
     assert_eq!(func.count_params(), 2);
     let param1: IntValue = func.get_first_param().unwrap().into_int_value();
@@ -43,20 +45,12 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
 
     let bb = func.get_entry_basic_block().unwrap();
     let insts = InstructionIterator::new(&bb);
-    let term = bb.get_terminator().unwrap();
     for inst in insts {
         let opcode = inst.get_opcode();
         if let Some(z3binop) = opcode_to_binop(&opcode) {
             symex_binop(z3ctx, &solver, &inst, &mut vars, z3binop);
         } else if opcode == InstructionOpcode::Return {
-            assert_eq!(term.get_num_operands(), 1);
-            let rval = term.get_operand(0).unwrap().left().unwrap();
-            if !rval.is_int_value() {
-                unimplemented!("Returning a non-integer value");
-            }
-            let z3rval = intval_to_ast(&rval.into_int_value(), z3ctx, &vars);
-            let zero = z3::Ast::bitvector_from_u64(z3ctx, 0, 32);
-            solver.assert(&z3rval._eq(&zero));
+            symex_return(z3ctx, &solver, &inst, &mut vars);
         } else {
             unimplemented!("Instruction {:?}", opcode);
         }
@@ -108,7 +102,7 @@ fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&z3::A
     }
 }
 
-fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut HashMap<AnyValueEnum, z3::Ast<'ctx>>, z3op: F)
+fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut VarMap<'ctx>, z3op: F)
     where F: FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>
 {
     assert_eq!(inst.get_num_operands(), 2);
@@ -128,8 +122,19 @@ fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &Inst
     vars.insert(inst.as_any_value_enum(), z3dest);
 }
 
-// Convert an IntValue to the appropriate z3::Ast, looking it up in the HashMap if necessary
-fn intval_to_ast<'ctx>(v: &IntValue, ctx: &'ctx z3::Context, vars: &HashMap<AnyValueEnum, z3::Ast<'ctx>>) -> z3::Ast<'ctx> {
+fn symex_return(ctx: &z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut VarMap) {
+    assert_eq!(inst.get_num_operands(), 1);
+    let rval = inst.get_operand(0).unwrap().left().unwrap();
+    if !rval.is_int_value() {
+        unimplemented!("Returning a non-integer value");
+    }
+    let z3rval = intval_to_ast(&rval.into_int_value(), ctx, &vars);
+    let zero = z3::Ast::bitvector_from_u64(ctx, 0, 32);
+    solver.assert(&z3rval._eq(&zero));
+}
+
+// Convert an IntValue to the appropriate z3::Ast, looking it up in the VarMap if necessary
+fn intval_to_ast<'ctx>(v: &IntValue, ctx: &'ctx z3::Context, vars: &VarMap<'ctx>) -> z3::Ast<'ctx> {
     if v.is_const() {
         // TODO: don't assume all constants are 32-bit
         z3::Ast::bitvector_from_u64(&ctx, v.get_zero_extended_constant().unwrap(), 32)
@@ -138,8 +143,7 @@ fn intval_to_ast<'ctx>(v: &IntValue, ctx: &'ctx z3::Context, vars: &HashMap<AnyV
     }
 }
 
-fn lookup_ast_for_llvmvalue<'a, 'ctx, V>(v: &V, vars: &'a HashMap<AnyValueEnum, z3::Ast<'ctx>>) -> &'a z3::Ast<'ctx>
-    where V: AnyValue
+fn lookup_ast_for_llvmvalue<'a, 'ctx>(v: &impl AnyValue, vars: &'a VarMap<'ctx>) -> &'a z3::Ast<'ctx>
 {
     vars.get(&v.as_any_value_enum()).unwrap_or_else(|| {
         let keys: Vec<&AnyValueEnum> = vars.keys().collect();
