@@ -11,6 +11,22 @@ define i32 @basic(i32, i32) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @basic_binops(i32, i32) local_unnamed_addr #0 {
+  %3 = mul i32 %0, -77
+  %4 = add i32 %0, 1
+  %5 = add i32 %4, %1
+  %6 = add i32 %5, %3
+  %7 = and i32 %6, 23
+  %8 = or i32 %0, 99
+  %9 = sdiv i32 %7, %8
+  %10 = xor i32 %9, %0
+  %11 = shl i32 %6, 3
+  %12 = srem i32 %10, %11
+  %13 = ashr i32 %12, %9
+  ret i32 %13
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
 define i32 @basic_if(i32, i32) local_unnamed_addr #0 {
   %3 = icmp slt i32 %0, %1
   br i1 %3, label %4, label %6

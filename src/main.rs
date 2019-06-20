@@ -7,7 +7,8 @@ use z3;
 fn main() {
     let filepath = Path::new("/Users/craig/pitchfork-rs/c_examples/basic/basic.bc");
     let llvm_mod = Module::parse_bitcode_from_path(&filepath).expect("Failed to parse module");
-    if let Some(func) = llvm_mod.get_first_function() {
+    let mut o_func = llvm_mod.get_first_function();
+    while let Some(func) = o_func {
         println!("Finding zero of function {:?}...", func.get_name());
         let z3cfg = z3::Config::new();
         let z3ctx = z3::Context::new(&z3cfg);
@@ -16,8 +17,7 @@ fn main() {
         } else {
             println!("Function never returns zero for any values of the arguments");
         }
-    } else {
-        println!("No functions found in the LLVM file");
+        o_func = func.get_next_function();
     }
 }
 
@@ -43,13 +43,10 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
     let mut inst = bb.get_first_instruction().unwrap();
     let term = bb.get_terminator().unwrap();
     while inst != term {
-        match inst.get_opcode() {
-            InstructionOpcode::Add => {
-                symex_binop(z3ctx, &solver, &inst, &mut vars, z3::Ast::bvadd);
-            }
-            _ => {
-                unimplemented!("Instruction other than Add");
-            }
+        if let Some(z3binop) = opcode_to_binop(&inst.get_opcode()) {
+            symex_binop(z3ctx, &solver, &inst, &mut vars, z3binop);
+        } else {
+            unimplemented!("Instruction {:?}", inst.get_opcode());
         }
         inst = inst.get_next_instruction().unwrap();
     }
@@ -94,6 +91,25 @@ fn get_dest_name(inst: &InstructionValue) -> String {
         unimplemented!("Instruction producing value other than integer");
     }
     get_value_name(&bve.into_int_value())
+}
+
+fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>>> {
+    match opcode {
+        InstructionOpcode::Add => Some(Box::new(z3::Ast::bvadd)),
+        InstructionOpcode::Sub => Some(Box::new(z3::Ast::bvsub)),
+        InstructionOpcode::Mul => Some(Box::new(z3::Ast::bvmul)),
+        InstructionOpcode::UDiv => Some(Box::new(z3::Ast::bvudiv)),
+        InstructionOpcode::SDiv => Some(Box::new(z3::Ast::bvsdiv)),
+        InstructionOpcode::URem => Some(Box::new(z3::Ast::bvurem)),
+        InstructionOpcode::SRem => Some(Box::new(z3::Ast::bvsrem)),
+        InstructionOpcode::And => Some(Box::new(z3::Ast::bvand)),
+        InstructionOpcode::Or => Some(Box::new(z3::Ast::bvor)),
+        InstructionOpcode::Xor => Some(Box::new(z3::Ast::bvxor)),
+        InstructionOpcode::Shl => Some(Box::new(z3::Ast::bvshl)),
+        InstructionOpcode::LShr => Some(Box::new(z3::Ast::bvlshr)),
+        InstructionOpcode::AShr => Some(Box::new(z3::Ast::bvashr)),
+        _ => None,
+    }
 }
 
 fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut HashMap<AnyValueEnum, z3::Ast<'ctx>>, z3op: F)
