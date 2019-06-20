@@ -37,35 +37,20 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
     vars.insert(param1.as_any_value_enum(), z3param1);
     vars.insert(param2.as_any_value_enum(), z3param2);
 
-    let solver = z3::Solver::new(&z3ctx);
+    let solver = z3::Solver::new(z3ctx);
 
     let bb = func.get_entry_basic_block().unwrap();
     let mut inst = bb.get_first_instruction().unwrap();
     let term = bb.get_terminator().unwrap();
     while inst != term {
-        let z3dest = match inst.get_opcode() {
+        match inst.get_opcode() {
             InstructionOpcode::Add => {
-                assert_eq!(inst.get_num_operands(), 2);
-                let firstop = inst.get_operand(0).unwrap().left().unwrap();
-                let secondop = inst.get_operand(1).unwrap().left().unwrap();
-                if !firstop.is_int_value() {
-                    unimplemented!("Add with operands other than integers");
-                }
-                if !secondop.is_int_value() {
-                    unimplemented!("Add with operands other than integers");
-                }
-                let z3firstop = intval_to_ast(&firstop.into_int_value(), z3ctx, &vars);
-                let z3secondop = intval_to_ast(&secondop.into_int_value(), z3ctx, &vars);
-                let dest = get_dest_name(&inst);
-                let z3dest = z3ctx.named_bitvector_const(&dest, 32);
-                solver.assert(&z3dest._eq(&z3firstop.bvadd(&z3secondop)));
-                z3dest
+                symex_binop(z3ctx, &solver, &inst, &mut vars, z3::Ast::bvadd);
             }
             _ => {
                 unimplemented!("Instruction other than Add");
             }
-        };
-        vars.insert(inst.as_any_value_enum(), z3dest);
+        }
         inst = inst.get_next_instruction().unwrap();
     }
     match term.get_opcode() {
@@ -111,8 +96,28 @@ fn get_dest_name(inst: &InstructionValue) -> String {
     get_value_name(&bve.into_int_value())
 }
 
+fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut HashMap<AnyValueEnum, z3::Ast<'ctx>>, z3op: F)
+    where F: FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>
+{
+    assert_eq!(inst.get_num_operands(), 2);
+    let dest = get_dest_name(&inst);
+    let z3dest = ctx.named_bitvector_const(&dest, 32);
+    let firstop = inst.get_operand(0).unwrap().left().unwrap();
+    let secondop = inst.get_operand(1).unwrap().left().unwrap();
+    if !firstop.is_int_value() {
+        unimplemented!("Add with operands other than integers");
+    }
+    if !secondop.is_int_value() {
+        unimplemented!("Add with operands other than integers");
+    }
+    let z3firstop = intval_to_ast(&firstop.into_int_value(), ctx, vars);
+    let z3secondop = intval_to_ast(&secondop.into_int_value(), ctx, vars);
+    solver.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
+    vars.insert(inst.as_any_value_enum(), z3dest);
+}
+
 // Convert an IntValue to the appropriate z3::Ast, looking it up in the HashMap if necessary
-fn intval_to_ast<'a>(v: &IntValue, ctx: &'a z3::Context, vars: &'a HashMap<AnyValueEnum, z3::Ast>) -> z3::Ast<'a> {
+fn intval_to_ast<'ctx>(v: &IntValue, ctx: &'ctx z3::Context, vars: &HashMap<AnyValueEnum, z3::Ast<'ctx>>) -> z3::Ast<'ctx> {
     if v.is_const() {
         // TODO: don't assume all constants are 32-bit
         z3::Ast::bitvector_from_u64(&ctx, v.get_zero_extended_constant().unwrap(), 32)
@@ -121,7 +126,7 @@ fn intval_to_ast<'a>(v: &IntValue, ctx: &'a z3::Context, vars: &'a HashMap<AnyVa
     }
 }
 
-fn lookup_ast_for_llvmvalue<'a, V>(v: &V, vars: &'a HashMap<AnyValueEnum, z3::Ast>) -> &'a z3::Ast<'a>
+fn lookup_ast_for_llvmvalue<'a, 'ctx, V>(v: &V, vars: &'a HashMap<AnyValueEnum, z3::Ast<'ctx>>) -> &'a z3::Ast<'ctx>
     where V: AnyValue
 {
     vars.get(&v.as_any_value_enum()).unwrap_or_else(|| {
