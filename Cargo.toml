@@ -10,8 +10,8 @@ z3 = "0.3.2"
 
 # override the git dependency with our locally-patched version, for now
 # see https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#overriding-dependencies
-#[patch."https://github.com/TheDan64/inkwell"]
-#inkwell = { path = "../inkwell" }
+[patch."https://github.com/TheDan64/inkwell"]
+inkwell = { path = "../inkwell" }
 
 # likewise for z3
 [patch.crates-io]
