@@ -43,20 +43,9 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
 
     let solver = z3::Solver::new(z3ctx);
 
-    let bb = func.get_entry_basic_block().unwrap();
-    let insts = InstructionIterator::new(&bb);
-    for inst in insts {
-        let opcode = inst.get_opcode();
-        if let Some(z3binop) = opcode_to_binop(&opcode) {
-            symex_binop(z3ctx, &solver, &inst, &mut vars, z3binop);
-        } else if opcode == InstructionOpcode::ICmp {
-            symex_icmp(z3ctx, &solver, &inst, &mut vars);
-        } else if opcode == InstructionOpcode::Return {
-            symex_return(z3ctx, &solver, &inst, &mut vars);
-        } else {
-            unimplemented!("Instruction {:?}", opcode);
-        }
-    }
+    let z3rval = symex_function(z3ctx, &solver, func, &mut vars);
+    let zero = z3::Ast::bitvector_from_u64(z3ctx, 0, 32);
+    solver.assert(&z3rval._eq(&zero));
 
     //println!("Solving constraints\n{}", solver);
     if solver.check() {
@@ -69,6 +58,26 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
     } else {
         None
     }
+}
+
+// Symex the given function and return the new AST representing its return value.
+// Assumes that the function's parameters are already inserted into the VarMap.
+fn symex_function<'ctx>(z3ctx: &'ctx z3::Context, solver: &z3::Solver, func: FunctionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
+    let bb = func.get_entry_basic_block().unwrap();
+    let insts = InstructionIterator::new(&bb);
+    for inst in insts {
+        let opcode = inst.get_opcode();
+        if let Some(z3binop) = opcode_to_binop(&opcode) {
+            symex_binop(z3ctx, &solver, &inst, vars, z3binop);
+        } else if opcode == InstructionOpcode::ICmp {
+            symex_icmp(z3ctx, &solver, &inst, vars);
+        } else if opcode == InstructionOpcode::Return {
+            return symex_return(z3ctx, &inst, vars);
+        } else {
+            unimplemented!("Instruction {:?}", opcode);
+        }
+    }
+    panic!("No terminator found in function");
 }
 
 fn get_value_name(v: &IntValue) -> String {
@@ -158,15 +167,14 @@ fn symex_icmp<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &Instruct
     vars.insert(inst.as_any_value_enum(), z3dest);
 }
 
-fn symex_return(ctx: &z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut VarMap) {
+// Returns the z3::Ast representing the return value
+fn symex_return<'ctx>(ctx: &'ctx z3::Context, inst: &InstructionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
     assert_eq!(inst.get_num_operands(), 1);
     let rval = inst.get_operand(0).unwrap().left().unwrap();
     if !rval.is_int_value() {
         unimplemented!("Returning a non-integer value");
     }
-    let z3rval = intval_to_ast(&rval.into_int_value(), ctx, &vars);
-    let zero = z3::Ast::bitvector_from_u64(ctx, 0, 32);
-    solver.assert(&z3rval._eq(&zero));
+    intval_to_ast(&rval.into_int_value(), ctx, &vars)
 }
 
 // Convert an IntValue to the appropriate z3::Ast, looking it up in the VarMap if necessary
