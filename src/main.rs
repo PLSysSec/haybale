@@ -4,11 +4,14 @@ use std::collections::HashMap;
 use std::path::Path;
 use z3;
 
+mod iterators;
+use iterators::*;
+
 fn main() {
     let filepath = Path::new("/Users/craig/pitchfork-rs/c_examples/basic/basic.bc");
     let llvm_mod = Module::parse_bitcode_from_path(&filepath).expect("Failed to parse module");
-    let mut o_func = llvm_mod.get_first_function();
-    while let Some(func) = o_func {
+    let functions = FunctionIterator::new(&llvm_mod);
+    for func in functions {
         println!("Finding zero of function {:?}...", func.get_name());
         let z3cfg = z3::Config::new();
         let z3ctx = z3::Context::new(&z3cfg);
@@ -17,7 +20,6 @@ fn main() {
         } else {
             println!("Function never returns zero for any values of the arguments");
         }
-        o_func = func.get_next_function();
     }
 }
 
@@ -40,18 +42,13 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
     let solver = z3::Solver::new(z3ctx);
 
     let bb = func.get_entry_basic_block().unwrap();
-    let mut inst = bb.get_first_instruction().unwrap();
+    let insts = InstructionIterator::new(&bb);
     let term = bb.get_terminator().unwrap();
-    while inst != term {
-        if let Some(z3binop) = opcode_to_binop(&inst.get_opcode()) {
+    for inst in insts {
+        let opcode = inst.get_opcode();
+        if let Some(z3binop) = opcode_to_binop(&opcode) {
             symex_binop(z3ctx, &solver, &inst, &mut vars, z3binop);
-        } else {
-            unimplemented!("Instruction {:?}", inst.get_opcode());
-        }
-        inst = inst.get_next_instruction().unwrap();
-    }
-    match term.get_opcode() {
-        InstructionOpcode::Return => {
+        } else if opcode == InstructionOpcode::Return {
             assert_eq!(term.get_num_operands(), 1);
             let rval = term.get_operand(0).unwrap().left().unwrap();
             if !rval.is_int_value() {
@@ -60,9 +57,8 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
             let z3rval = intval_to_ast(&rval.into_int_value(), z3ctx, &vars);
             let zero = z3::Ast::bitvector_from_u64(z3ctx, 0, 32);
             solver.assert(&z3rval._eq(&zero));
-        }
-        _ => {
-            unimplemented!("Terminator other than Return");
+        } else {
+            unimplemented!("Instruction {:?}", opcode);
         }
     }
 
