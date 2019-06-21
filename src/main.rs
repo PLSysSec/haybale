@@ -1,3 +1,4 @@
+use inkwell::basic_block::BasicBlock;
 use inkwell::module::Module;
 use inkwell::values::*;
 use std::collections::HashMap;
@@ -6,6 +7,9 @@ use z3;
 
 mod iterators;
 use iterators::*;
+
+mod state;
+use state::State;
 
 type VarMap<'ctx> = HashMap<AnyValueEnum, z3::Ast<'ctx>>;
 
@@ -44,15 +48,16 @@ fn find_zero_of_func(ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>>
         vars.insert(param.as_any_value_enum(), z3ast);
     }
 
-    let solver = z3::Solver::new(ctx);
+    let mut state = State::new(ctx);
 
-    let z3rval = symex_function(ctx, &solver, func, &mut vars);
+    let z3rval = symex_function(ctx, &mut state, func, &mut vars);
     let zero = z3::Ast::bitvector_from_u64(ctx, 0, 32);
-    solver.assert(&z3rval._eq(&zero));
+    state.assert(&z3rval._eq(&zero));
 
-    //println!("Solving constraints\n{}", solver);
-    if solver.check() {
-        let model = solver.get_model();
+    //println!("Solving constraints:");
+    //state.prettyprint_constraints();
+    if state.check() {
+        let model = state.get_model();
         let z3params = params.iter().map(|p| lookup_ast_for_llvmvalue(*p, &vars));
         let params = z3params.map(|p| model.eval(&p).unwrap().as_i64().unwrap() as i32);
         Some(params.collect())
@@ -63,17 +68,25 @@ fn find_zero_of_func(ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>>
 
 // Symex the given function and return the new AST representing its return value.
 // Assumes that the function's parameters are already inserted into the VarMap.
-fn symex_function<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, func: FunctionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
+fn symex_function<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, func: FunctionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
     let bb = func.get_entry_basic_block().unwrap();
+    symex_from_bb(ctx, state, bb, vars)
+}
+
+// Symex the given bb, through the rest of the function.
+// Returns the new AST representing the return value of the function.
+fn symex_from_bb<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, bb: BasicBlock, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
     let insts = InstructionIterator::new(&bb);
     for inst in insts {
         let opcode = inst.get_opcode();
         if let Some(z3binop) = opcode_to_binop(&opcode) {
-            symex_binop(ctx, &solver, inst, vars, z3binop);
+            symex_binop(ctx, state, inst, vars, z3binop);
         } else if opcode == InstructionOpcode::ICmp {
-            symex_icmp(ctx, &solver, inst, vars);
+            symex_icmp(ctx, state, inst, vars);
         } else if opcode == InstructionOpcode::Return {
             return symex_return(ctx, inst, vars);
+        } else if opcode == InstructionOpcode::Br {
+            return symex_br(ctx, state, inst, vars);
         } else {
             unimplemented!("Instruction {:?}", opcode);
         }
@@ -129,7 +142,7 @@ fn intpred_to_z3pred<'ctx>(pred: inkwell::IntPredicate) -> Box<FnOnce(&z3::Ast<'
     }
 }
 
-fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: InstructionValue, vars: &mut VarMap<'ctx>, z3op: F)
+fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, state: &State, inst: InstructionValue, vars: &mut VarMap<'ctx>, z3op: F)
     where F: FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>
 {
     assert_eq!(inst.get_num_operands(), 2);
@@ -145,11 +158,11 @@ fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: Instr
     }
     let z3firstop = intval_to_ast(firstop.into_int_value(), ctx, vars);
     let z3secondop = intval_to_ast(secondop.into_int_value(), ctx, vars);
-    solver.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
+    state.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
     vars.insert(inst.as_any_value_enum(), z3dest);
 }
 
-fn symex_icmp<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: InstructionValue, vars: &mut VarMap<'ctx>) {
+fn symex_icmp<'ctx>(ctx: &'ctx z3::Context, state: &State, inst: InstructionValue, vars: &mut VarMap<'ctx>) {
     assert_eq!(inst.get_num_operands(), 2);
     let dest = get_dest_name(inst);
     let z3dest = ctx.named_bool_const(&dest);
@@ -164,7 +177,7 @@ fn symex_icmp<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: Instructi
     let z3firstop = intval_to_ast(firstop.into_int_value(), ctx, vars);
     let z3secondop = intval_to_ast(secondop.into_int_value(), ctx, vars);
     let z3pred = intpred_to_z3pred(inst.get_icmp_predicate().unwrap());
-    solver.assert(&z3dest._eq(&z3pred(&z3firstop, &z3secondop)));
+    state.assert(&z3dest._eq(&z3pred(&z3firstop, &z3secondop)));
     vars.insert(inst.as_any_value_enum(), z3dest);
 }
 
@@ -175,7 +188,42 @@ fn symex_return<'ctx>(ctx: &'ctx z3::Context, inst: InstructionValue, vars: &mut
     if !rval.is_int_value() {
         unimplemented!("Returning a non-integer value");
     }
-    intval_to_ast(rval.into_int_value(), ctx, &vars)
+    intval_to_ast(rval.into_int_value(), ctx, vars)
+}
+
+// Continues to the target of the Br (saving a backtracking point if necessary)
+// and eventually returns the new AST representing the return value of the function
+// (when it reaches the end of the function)
+fn symex_br<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, inst: InstructionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
+    match inst.get_num_operands() {
+        1 => {
+            // unconditional branch
+            let bb = inst.get_operand(0).unwrap().right().expect("Single-operand Br but operand is not a BasicBlock");
+            symex_from_bb(ctx, state, bb, vars)
+        },
+        3 => {
+            // conditional branch
+            let cond = inst.get_operand(0).unwrap().left().unwrap();
+            assert!(cond.is_int_value());
+            let z3cond = intval_to_ast(cond.into_int_value(), ctx, vars);
+            let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
+            let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
+            if true_feasible && false_feasible {
+                // for now we choose to explore true first, and backtrack to false if necessary
+                state.save_backtracking_point(inst.get_operand(2).unwrap().right().unwrap(), z3cond.not());
+                symex_from_bb(ctx, state, inst.get_operand(1).unwrap().right().unwrap(), vars)
+            } else if true_feasible {
+                symex_from_bb(ctx, state, inst.get_operand(1).unwrap().right().unwrap(), vars)
+            } else if false_feasible {
+                symex_from_bb(ctx, state, inst.get_operand(2).unwrap().right().unwrap(), vars)
+            } else if let Some(bb) = state.revert_to_backtracking_point() {
+                symex_from_bb(ctx, state, bb, vars)
+            } else {
+                panic!("All possible paths seem to be unsat");
+            }
+        },
+        n => { unimplemented!("Br with {} operands", n); },
+    }
 }
 
 // Convert an IntValue to the appropriate z3::Ast, looking it up in the VarMap if necessary
