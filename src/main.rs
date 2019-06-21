@@ -2,7 +2,6 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::module::Module;
 use inkwell::values::*;
 use std::path::Path;
-use z3;
 
 mod iterators;
 use iterators::*;
