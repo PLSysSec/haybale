@@ -1,9 +1,14 @@
 use inkwell::basic_block::BasicBlock;
+use inkwell::values::*;
+use std::collections::HashMap;
 use z3;
+
+type VarMap<'ctx> = HashMap<AnyValueEnum, z3::Ast<'ctx>>;
 
 pub struct State<'ctx> {
     pub ctx: &'ctx z3::Context,
     solver: z3::Solver<'ctx>,
+    vars: VarMap<'ctx>,
     backtrack_points: Vec<BacktrackPoint<'ctx>>,
 }
 
@@ -38,6 +43,7 @@ impl<'ctx> State<'ctx> {
         State {
             ctx,
             solver: z3::Solver::new(ctx),
+            vars: HashMap::new(),
             backtrack_points: Vec::new(),
         }
     }
@@ -62,6 +68,19 @@ impl<'ctx> State<'ctx> {
 
     pub fn get_model(&self) -> z3::Model<'ctx> {
       self.solver.get_model()
+    }
+
+    // Associate the given value with the given z3::Ast
+    pub fn add_var(&mut self, v: impl AnyValue, ast: z3::Ast<'ctx>) {
+        self.vars.insert(v.as_any_value_enum(), ast);
+    }
+
+    // Look up the z3::Ast previously created for the given value
+    pub fn lookup_var(&self, v: impl AnyValue) -> &z3::Ast<'ctx> {
+        self.vars.get(&v.as_any_value_enum()).unwrap_or_else(|| {
+            let keys: Vec<&AnyValueEnum> = self.vars.keys().collect();
+            panic!("Failed to find value {:?} in map with keys {:?}", v, keys);
+        })
     }
 
     // again, we require owned BasicBlocks because copy should be cheap.  Caller can clone if necessary.
