@@ -2,6 +2,7 @@ use inkwell::basic_block::BasicBlock;
 use z3;
 
 pub struct State<'ctx> {
+    pub ctx: &'ctx z3::Context,
     solver: z3::Solver<'ctx>,
     backtrack_points: Vec<BacktrackPoint<'ctx>>,
 }
@@ -35,6 +36,7 @@ impl<'ctx> BacktrackPoint<'ctx> {
 impl<'ctx> State<'ctx> {
     pub fn new(ctx: &'ctx z3::Context) -> Self {
         State {
+            ctx,
             solver: z3::Solver::new(ctx),
             backtrack_points: Vec::new(),
         }
