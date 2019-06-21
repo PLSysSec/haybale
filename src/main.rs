@@ -38,8 +38,8 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32
     let params: Vec<IntValue> = ParamsIterator::new(func)
         .map(|p| p.into_int_value())
         .collect();
-    let paramnames = params.iter().map(get_value_name);
-    let z3params = paramnames.map(|p| z3ctx.named_bitvector_const(&p, 32));
+    let paramnames = params.iter().cloned().map(get_value_name);  // 'cloned()' can become 'copied()' once Rust 1.36 hits stable
+    let z3params = paramnames.map(|s| z3ctx.named_bitvector_const(&s, 32));
     for (param, z3ast) in Iterator::zip(params.iter(), z3params) {
         vars.insert(param.as_any_value_enum(), z3ast);
     }
@@ -53,7 +53,7 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32
     //println!("Solving constraints\n{}", solver);
     if solver.check() {
         let model = solver.get_model();
-        let z3params = params.iter().map(|p| lookup_ast_for_llvmvalue(p, &vars));
+        let z3params = params.iter().map(|p| lookup_ast_for_llvmvalue(*p, &vars));
         let params = z3params.map(|p| model.eval(&p).unwrap().as_i64().unwrap() as i32);
         Some(params.collect())
     } else {
@@ -69,11 +69,11 @@ fn symex_function<'ctx>(z3ctx: &'ctx z3::Context, solver: &z3::Solver, func: Fun
     for inst in insts {
         let opcode = inst.get_opcode();
         if let Some(z3binop) = opcode_to_binop(&opcode) {
-            symex_binop(z3ctx, &solver, &inst, vars, z3binop);
+            symex_binop(z3ctx, &solver, inst, vars, z3binop);
         } else if opcode == InstructionOpcode::ICmp {
-            symex_icmp(z3ctx, &solver, &inst, vars);
+            symex_icmp(z3ctx, &solver, inst, vars);
         } else if opcode == InstructionOpcode::Return {
-            return symex_return(z3ctx, &inst, vars);
+            return symex_return(z3ctx, inst, vars);
         } else {
             unimplemented!("Instruction {:?}", opcode);
         }
@@ -81,18 +81,18 @@ fn symex_function<'ctx>(z3ctx: &'ctx z3::Context, solver: &z3::Solver, func: Fun
     panic!("No terminator found in function");
 }
 
-fn get_value_name(v: &IntValue) -> String {
+fn get_value_name(v: IntValue) -> String {
     // get_name() is empty for values like '%0', unfortunately
     v.print_to_string().to_string()
 }
 
-fn get_dest_name(inst: &InstructionValue) -> String {
+fn get_dest_name(inst: InstructionValue) -> String {
     // seems like there should be a more efficient way?
     let bve: BasicValueEnum = inst.get_first_use().unwrap().get_used_value().left().unwrap();
     if !bve.is_int_value() {
         unimplemented!("Instruction producing value other than integer");
     }
-    get_value_name(&bve.into_int_value())
+    get_value_name(bve.into_int_value())
 }
 
 fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>>> {
@@ -114,7 +114,7 @@ fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&z3::A
     }
 }
 
-fn intpred_to_z3pred<'ctx>(pred: &inkwell::IntPredicate) -> Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>> {
+fn intpred_to_z3pred<'ctx>(pred: inkwell::IntPredicate) -> Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>> {
     match pred {
         inkwell::IntPredicate::EQ => Box::new(|a,b| z3::Ast::not(&z3::Ast::_eq(a,b))),
         inkwell::IntPredicate::NE => Box::new(z3::Ast::_eq),
@@ -129,11 +129,11 @@ fn intpred_to_z3pred<'ctx>(pred: &inkwell::IntPredicate) -> Box<FnOnce(&z3::Ast<
     }
 }
 
-fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut VarMap<'ctx>, z3op: F)
+fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: InstructionValue, vars: &mut VarMap<'ctx>, z3op: F)
     where F: FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>
 {
     assert_eq!(inst.get_num_operands(), 2);
-    let dest = get_dest_name(&inst);
+    let dest = get_dest_name(inst);
     let z3dest = ctx.named_bitvector_const(&dest, 32);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
@@ -143,15 +143,15 @@ fn symex_binop<'ctx, F>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &Inst
     if !secondop.is_int_value() {
         unimplemented!("Binop with operands other than integers");
     }
-    let z3firstop = intval_to_ast(&firstop.into_int_value(), ctx, vars);
-    let z3secondop = intval_to_ast(&secondop.into_int_value(), ctx, vars);
+    let z3firstop = intval_to_ast(firstop.into_int_value(), ctx, vars);
+    let z3secondop = intval_to_ast(secondop.into_int_value(), ctx, vars);
     solver.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
     vars.insert(inst.as_any_value_enum(), z3dest);
 }
 
-fn symex_icmp<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &InstructionValue, vars: &mut VarMap<'ctx>) {
+fn symex_icmp<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: InstructionValue, vars: &mut VarMap<'ctx>) {
     assert_eq!(inst.get_num_operands(), 2);
-    let dest = get_dest_name(&inst);
+    let dest = get_dest_name(inst);
     let z3dest = ctx.named_bool_const(&dest);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
@@ -161,25 +161,25 @@ fn symex_icmp<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, inst: &Instruct
     if !secondop.is_int_value() {
         unimplemented!("ICmp with operands other than integers");
     }
-    let z3firstop = intval_to_ast(&firstop.into_int_value(), ctx, vars);
-    let z3secondop = intval_to_ast(&secondop.into_int_value(), ctx, vars);
-    let z3pred = intpred_to_z3pred(&inst.get_icmp_predicate().unwrap());
+    let z3firstop = intval_to_ast(firstop.into_int_value(), ctx, vars);
+    let z3secondop = intval_to_ast(secondop.into_int_value(), ctx, vars);
+    let z3pred = intpred_to_z3pred(inst.get_icmp_predicate().unwrap());
     solver.assert(&z3dest._eq(&z3pred(&z3firstop, &z3secondop)));
     vars.insert(inst.as_any_value_enum(), z3dest);
 }
 
 // Returns the z3::Ast representing the return value
-fn symex_return<'ctx>(ctx: &'ctx z3::Context, inst: &InstructionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
+fn symex_return<'ctx>(ctx: &'ctx z3::Context, inst: InstructionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
     assert_eq!(inst.get_num_operands(), 1);
     let rval = inst.get_operand(0).unwrap().left().unwrap();
     if !rval.is_int_value() {
         unimplemented!("Returning a non-integer value");
     }
-    intval_to_ast(&rval.into_int_value(), ctx, &vars)
+    intval_to_ast(rval.into_int_value(), ctx, &vars)
 }
 
 // Convert an IntValue to the appropriate z3::Ast, looking it up in the VarMap if necessary
-fn intval_to_ast<'ctx>(v: &IntValue, ctx: &'ctx z3::Context, vars: &VarMap<'ctx>) -> z3::Ast<'ctx> {
+fn intval_to_ast<'ctx>(v: IntValue, ctx: &'ctx z3::Context, vars: &VarMap<'ctx>) -> z3::Ast<'ctx> {
     if v.is_const() {
         // TODO: don't assume all constants are 32-bit
         z3::Ast::bitvector_from_u64(&ctx, v.get_zero_extended_constant().unwrap(), 32)
@@ -188,7 +188,7 @@ fn intval_to_ast<'ctx>(v: &IntValue, ctx: &'ctx z3::Context, vars: &VarMap<'ctx>
     }
 }
 
-fn lookup_ast_for_llvmvalue<'a, 'ctx>(v: &impl AnyValue, vars: &'a VarMap<'ctx>) -> &'a z3::Ast<'ctx>
+fn lookup_ast_for_llvmvalue<'a, 'ctx>(v: impl AnyValue, vars: &'a VarMap<'ctx>) -> &'a z3::Ast<'ctx>
 {
     vars.get(&v.as_any_value_enum()).unwrap_or_else(|| {
         let keys: Vec<&AnyValueEnum> = vars.keys().collect();
