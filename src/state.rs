@@ -83,6 +83,23 @@ impl<'ctx> State<'ctx> {
         })
     }
 
+    // Convert a Value to the appropriate z3::Ast
+    // Should be an operand, that is, an RHS value
+    // (that way, we know it's either a constant or a variable we previously added to the state)
+    pub fn operand_to_ast(&self, v: impl BasicValue) -> z3::Ast<'ctx> {
+        match v.as_basic_value_enum() {
+            BasicValueEnum::IntValue(iv) => {
+                if iv.is_const() {
+                    // TODO: don't assume all constants are 32-bit
+                    z3::Ast::bitvector_from_u64(self.ctx, iv.get_zero_extended_constant().unwrap(), 32)
+                } else {
+                    self.lookup_var(v).clone()
+                }
+            },
+            v => unimplemented!("operand_to_ast() for {:?}", v)
+        }
+    }
+
     // again, we require owned BasicBlocks because copy should be cheap.  Caller can clone if necessary.
     // The constraint will be added only if we end up backtracking to this point, and only then
     pub fn save_backtracking_point(&mut self, next_bb: BasicBlock, prev_bb: BasicBlock, constraint: z3::Ast<'ctx>) {

@@ -36,9 +36,7 @@ fn main() {
 fn find_zero_of_func(ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>> {
     let mut state = State::new(ctx);
 
-    let params: Vec<IntValue> = ParamsIterator::new(func)
-        .map(|p| p.into_int_value())
-        .collect();
+    let params: Vec<BasicValueEnum> = ParamsIterator::new(func).collect();
     for &param in params.iter() {
         // TODO: don't assume all parameters are 32-bit
         let z3param = ctx.named_bitvector_const(&get_value_name(param), 32);
@@ -54,8 +52,7 @@ fn find_zero_of_func(ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>>
     if state.check() {
         let model = state.get_model();
         let z3params = params.iter().map(|&p| state.lookup_var(p));
-        let params = z3params.map(|p| model.eval(&p).unwrap().as_i64().unwrap() as i32);
-        Some(params.collect())
+        Some(z3params.map(|p| model.eval(&p).unwrap().as_i64().unwrap() as i32).collect())
     } else {
         None
     }
@@ -130,10 +127,7 @@ fn get_value_name(v: impl AnyValue) -> String {
 fn get_dest_name(inst: InstructionValue) -> String {
     // seems like there should be a more efficient way?
     let bve: BasicValueEnum = inst.get_first_use().unwrap().get_used_value().left().unwrap();
-    if !bve.is_int_value() {
-        unimplemented!("Instruction producing value other than integer");
-    }
-    get_value_name(bve.into_int_value())
+    get_value_name(bve)
 }
 
 fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>>> {
@@ -178,14 +172,8 @@ fn symex_binop<'ctx, F>(state: &mut State<'ctx>, inst: InstructionValue, z3op: F
     let z3dest = state.ctx.named_bitvector_const(&dest, 32);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
-    if !firstop.is_int_value() {
-        unimplemented!("Binop with operands other than integers");
-    }
-    if !secondop.is_int_value() {
-        unimplemented!("Binop with operands other than integers");
-    }
-    let z3firstop = intval_to_ast(firstop.into_int_value(), state);
-    let z3secondop = intval_to_ast(secondop.into_int_value(), state);
+    let z3firstop = state.operand_to_ast(firstop);
+    let z3secondop = state.operand_to_ast(secondop);
     state.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
     state.add_var(inst, z3dest);
 }
@@ -196,14 +184,8 @@ fn symex_icmp<'ctx>(state: &mut State<'ctx>, inst: InstructionValue) {
     let z3dest = state.ctx.named_bool_const(&dest);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
-    if !firstop.is_int_value() {
-        unimplemented!("ICmp with operands other than integers");
-    }
-    if !secondop.is_int_value() {
-        unimplemented!("ICmp with operands other than integers");
-    }
-    let z3firstop = intval_to_ast(firstop.into_int_value(), state);
-    let z3secondop = intval_to_ast(secondop.into_int_value(), state);
+    let z3firstop = state.operand_to_ast(firstop);
+    let z3secondop = state.operand_to_ast(secondop);
     let z3pred = intpred_to_z3pred(inst.get_icmp_predicate().unwrap());
     state.assert(&z3dest._eq(&z3pred(&z3firstop, &z3secondop)));
     state.add_var(inst, z3dest);
@@ -213,10 +195,7 @@ fn symex_icmp<'ctx>(state: &mut State<'ctx>, inst: InstructionValue) {
 fn symex_return<'ctx>(state: &State<'ctx>, inst: InstructionValue) -> z3::Ast<'ctx> {
     assert_eq!(inst.get_num_operands(), 1);
     let rval = inst.get_operand(0).unwrap().left().unwrap();
-    if !rval.is_int_value() {
-        unimplemented!("Returning a non-integer value");
-    }
-    intval_to_ast(rval.into_int_value(), state)
+    state.operand_to_ast(rval)
 }
 
 // Continues to the target of the Br (saving a backtracking point if necessary)
@@ -232,8 +211,7 @@ fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: Basic
         3 => {
             // conditional branch
             let cond = inst.get_operand(0).unwrap().left().unwrap();
-            assert!(cond.is_int_value());
-            let z3cond = intval_to_ast(cond.into_int_value(), state);
+            let z3cond = state.operand_to_ast(cond);
             let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
             let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
             if true_feasible && false_feasible {
@@ -265,21 +243,6 @@ fn symex_phi<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, prev_bb: Opt
         }
     }
     let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
-    if !chosen_value.is_int_value() {
-        unimplemented!("Phi returning value other than integer");
-    }
-    let z3value = intval_to_ast(chosen_value.into_int_value(), state);
+    let z3value = state.operand_to_ast(chosen_value);
     state.add_var(inst, z3value);
-}
-
-// Convert an IntValue to the appropriate z3::Ast
-// Should be an RHS value, that is, an operand (that way, we know it's either a
-// constant or a variable we previously added to the state)
-fn intval_to_ast<'ctx>(v: IntValue, state: &State<'ctx>) -> z3::Ast<'ctx> {
-    if v.is_const() {
-        // TODO: don't assume all constants are 32-bit
-        z3::Ast::bitvector_from_u64(state.ctx, v.get_zero_extended_constant().unwrap(), 32)
-    } else {
-        state.lookup_var(v).clone()
-    }
 }
