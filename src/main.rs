@@ -17,29 +17,32 @@ fn main() {
         println!("Finding zero of function {:?}...", func.get_name());
         let z3cfg = z3::Config::new();
         let z3ctx = z3::Context::new(&z3cfg);
-        if let Some((arg1, arg2)) = find_zero_of_func(&z3ctx, func) {
-            println!("Function returns zero for arguments {}, {}", arg1, arg2);
+        if let Some(args) = find_zero_of_func(&z3ctx, func) {
+            match func.count_params() {
+                0 => println!("Function returns zero when passed no arguments\n"),
+                1 => println!("Function returns zero when passed the argument {}\n", args[0]),
+                _ => println!("Function returns zero when passed arguments {:?}\n", args),
+            }
         } else {
-            println!("Function never returns zero for any values of the arguments");
+            println!("Function never returns zero for any values of the arguments\n");
         }
     }
 }
 
 // Given a function, find values of its inputs such that it returns zero
-// Assumes function takes precisely two i32 arguments and returns an i32
+// Assumes function takes (some number of) i32 arguments and returns an i32
 // Returns None if there are no values of the inputs such that the function returns zero
-fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i32)> {
+fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>> {
     let mut vars: VarMap = HashMap::new();
 
-    assert_eq!(func.count_params(), 2);
-    let param1: IntValue = func.get_first_param().unwrap().into_int_value();
-    let param2: IntValue = func.get_last_param().unwrap().into_int_value();
-    let param1name = get_value_name(&param1);
-    let param2name = get_value_name(&param2);
-    let z3param1 = z3ctx.named_bitvector_const(&param1name, 32);
-    let z3param2 = z3ctx.named_bitvector_const(&param2name, 32);
-    vars.insert(param1.as_any_value_enum(), z3param1);
-    vars.insert(param2.as_any_value_enum(), z3param2);
+    let params: Vec<IntValue> = ParamsIterator::new(func)
+        .map(|p| p.into_int_value())
+        .collect();
+    let paramnames = params.iter().map(get_value_name);
+    let z3params = paramnames.map(|p| z3ctx.named_bitvector_const(&p, 32));
+    for (param, z3ast) in Iterator::zip(params.iter(), z3params) {
+        vars.insert(param.as_any_value_enum(), z3ast);
+    }
 
     let solver = z3::Solver::new(z3ctx);
 
@@ -50,11 +53,9 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<(i32, i
     //println!("Solving constraints\n{}", solver);
     if solver.check() {
         let model = solver.get_model();
-        let z3param1 = lookup_ast_for_llvmvalue(&param1, &vars);
-        let z3param2 = lookup_ast_for_llvmvalue(&param2, &vars);
-        let param1 = model.eval(&z3param1).unwrap().as_i64().unwrap();
-        let param2 = model.eval(&z3param2).unwrap().as_i64().unwrap();
-        Some((param1 as i32, param2 as i32))
+        let z3params = params.iter().map(|p| lookup_ast_for_llvmvalue(p, &vars));
+        let params = z3params.map(|p| model.eval(&p).unwrap().as_i64().unwrap() as i32);
+        Some(params.collect())
     } else {
         None
     }

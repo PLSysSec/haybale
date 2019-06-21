@@ -4,14 +4,52 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.14.0"
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
-define i32 @basic(i32, i32) local_unnamed_addr #0 {
+define i32 @no_args() local_unnamed_addr #0 {
+  ret i32 0
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @one_arg(i32) local_unnamed_addr #0 {
+  %2 = add nsw i32 %0, -3
+  ret i32 %2
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @two_args(i32, i32) local_unnamed_addr #0 {
   %3 = add i32 %0, -3
   %4 = add i32 %3, %1
   ret i32 %4
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
-define i32 @basic_binops(i32, i32) local_unnamed_addr #0 {
+define i32 @three_args(i32, i32, i32) local_unnamed_addr #0 {
+  %4 = add i32 %0, -3
+  %5 = add i32 %4, %1
+  %6 = add i32 %5, %2
+  ret i32 %6
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @four_args(i32, i32, i32, i32) local_unnamed_addr #0 {
+  %5 = add i32 %0, -3
+  %6 = add i32 %5, %1
+  %7 = add i32 %6, %2
+  %8 = add i32 %7, %3
+  ret i32 %8
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @five_args(i32, i32, i32, i32, i32) local_unnamed_addr #0 {
+  %6 = add i32 %0, -3
+  %7 = add i32 %6, %1
+  %8 = add i32 %7, %2
+  %9 = add i32 %8, %3
+  %10 = add i32 %9, %4
+  ret i32 %10
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @binops(i32, i32) local_unnamed_addr #0 {
   %3 = mul i32 %0, -77
   %4 = add i32 %0, 1
   %5 = add i32 %4, %1
@@ -27,8 +65,8 @@ define i32 @basic_binops(i32, i32) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
-define i32 @basic_if(i32, i32) local_unnamed_addr #0 {
-  %3 = icmp slt i32 %0, %1
+define i32 @conditional(i32, i32) local_unnamed_addr #0 {
+  %3 = icmp sgt i32 %0, %1
   br i1 %3, label %4, label %6
 
 ; <label>:4:                                      ; preds = %2

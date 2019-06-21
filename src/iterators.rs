@@ -45,3 +45,33 @@ impl Iterator for InstructionIterator {
         rval
     }
 }
+
+pub struct ParamsIterator {
+    func: FunctionValue,  // the function we're getting the params for
+    cur_param_num: u32,  // the number of the parameter that will be returned by the next call to next()
+    num_params: u32,  // cache this here to avoid calling into LLVM every time
+}
+
+impl ParamsIterator {
+    pub fn new(func: FunctionValue) -> Self {
+        ParamsIterator {
+            func,
+            cur_param_num: 0,
+            num_params: func.count_params(),
+        }
+    }
+}
+
+impl Iterator for ParamsIterator {
+    type Item = BasicValueEnum;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur_param_num >= self.num_params {
+            None
+        } else {
+            let rval = self.func.get_nth_param(self.cur_param_num);
+            self.cur_param_num += 1;
+            rval
+        }
+    }
+}
