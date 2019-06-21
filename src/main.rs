@@ -53,7 +53,7 @@ fn find_zero_of_func(ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>>
     //state.prettyprint_constraints();
     if state.check() {
         let model = state.get_model();
-        let z3params = params.iter().map(|p| state.lookup_var(*p));
+        let z3params = params.iter().map(|&p| state.lookup_var(p));
         let params = z3params.map(|p| model.eval(&p).unwrap().as_i64().unwrap() as i32);
         Some(params.collect())
     } else {
