@@ -15,9 +15,9 @@ fn main() {
     let functions = FunctionIterator::new(&llvm_mod);
     for func in functions {
         println!("Finding zero of function {:?}...", func.get_name());
-        let z3cfg = z3::Config::new();
-        let z3ctx = z3::Context::new(&z3cfg);
-        if let Some(args) = find_zero_of_func(&z3ctx, func) {
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+        if let Some(args) = find_zero_of_func(&ctx, func) {
             match func.count_params() {
                 0 => println!("Function returns zero when passed no arguments\n"),
                 1 => println!("Function returns zero when passed the argument {}\n", args[0]),
@@ -32,22 +32,22 @@ fn main() {
 // Given a function, find values of its inputs such that it returns zero
 // Assumes function takes (some number of) i32 arguments and returns an i32
 // Returns None if there are no values of the inputs such that the function returns zero
-fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>> {
+fn find_zero_of_func(ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>> {
     let mut vars: VarMap = HashMap::new();
 
     let params: Vec<IntValue> = ParamsIterator::new(func)
         .map(|p| p.into_int_value())
         .collect();
     let paramnames = params.iter().cloned().map(get_value_name);  // 'cloned()' can become 'copied()' once Rust 1.36 hits stable
-    let z3params = paramnames.map(|s| z3ctx.named_bitvector_const(&s, 32));
+    let z3params = paramnames.map(|s| ctx.named_bitvector_const(&s, 32));
     for (param, z3ast) in Iterator::zip(params.iter(), z3params) {
         vars.insert(param.as_any_value_enum(), z3ast);
     }
 
-    let solver = z3::Solver::new(z3ctx);
+    let solver = z3::Solver::new(ctx);
 
-    let z3rval = symex_function(z3ctx, &solver, func, &mut vars);
-    let zero = z3::Ast::bitvector_from_u64(z3ctx, 0, 32);
+    let z3rval = symex_function(ctx, &solver, func, &mut vars);
+    let zero = z3::Ast::bitvector_from_u64(ctx, 0, 32);
     solver.assert(&z3rval._eq(&zero));
 
     //println!("Solving constraints\n{}", solver);
@@ -63,17 +63,17 @@ fn find_zero_of_func(z3ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32
 
 // Symex the given function and return the new AST representing its return value.
 // Assumes that the function's parameters are already inserted into the VarMap.
-fn symex_function<'ctx>(z3ctx: &'ctx z3::Context, solver: &z3::Solver, func: FunctionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
+fn symex_function<'ctx>(ctx: &'ctx z3::Context, solver: &z3::Solver, func: FunctionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
     let bb = func.get_entry_basic_block().unwrap();
     let insts = InstructionIterator::new(&bb);
     for inst in insts {
         let opcode = inst.get_opcode();
         if let Some(z3binop) = opcode_to_binop(&opcode) {
-            symex_binop(z3ctx, &solver, inst, vars, z3binop);
+            symex_binop(ctx, &solver, inst, vars, z3binop);
         } else if opcode == InstructionOpcode::ICmp {
-            symex_icmp(z3ctx, &solver, inst, vars);
+            symex_icmp(ctx, &solver, inst, vars);
         } else if opcode == InstructionOpcode::Return {
-            return symex_return(z3ctx, inst, vars);
+            return symex_return(ctx, inst, vars);
         } else {
             unimplemented!("Instruction {:?}", opcode);
         }
