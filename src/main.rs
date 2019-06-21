@@ -70,12 +70,12 @@ fn find_zero_of_func(ctx: &z3::Context, func: FunctionValue) -> Option<Vec<i32>>
 // Assumes that the function's parameters are already inserted into the VarMap.
 fn symex_function<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, func: FunctionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
     let bb = func.get_entry_basic_block().unwrap();
-    symex_from_bb(ctx, state, bb, vars)
+    symex_from_bb(ctx, state, bb, None, vars)
 }
 
 // Symex the given bb, through the rest of the function.
 // Returns the new AST representing the return value of the function.
-fn symex_from_bb<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, bb: BasicBlock, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
+fn symex_from_bb<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<BasicBlock>, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
     let insts = InstructionIterator::new(&bb);
     for inst in insts {
         let opcode = inst.get_opcode();
@@ -83,10 +83,12 @@ fn symex_from_bb<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, bb: Basi
             symex_binop(ctx, state, inst, vars, z3binop);
         } else if opcode == InstructionOpcode::ICmp {
             symex_icmp(ctx, state, inst, vars);
+        } else if opcode == InstructionOpcode::Phi {
+            symex_phi(ctx, inst, vars, prev_bb);
         } else if opcode == InstructionOpcode::Return {
             return symex_return(ctx, inst, vars);
         } else if opcode == InstructionOpcode::Br {
-            return symex_br(ctx, state, inst, vars);
+            return symex_br(ctx, state, inst, vars, bb);
         } else {
             unimplemented!("Instruction {:?}", opcode);
         }
@@ -194,12 +196,12 @@ fn symex_return<'ctx>(ctx: &'ctx z3::Context, inst: InstructionValue, vars: &mut
 // Continues to the target of the Br (saving a backtracking point if necessary)
 // and eventually returns the new AST representing the return value of the function
 // (when it reaches the end of the function)
-fn symex_br<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, inst: InstructionValue, vars: &mut VarMap<'ctx>) -> z3::Ast<'ctx> {
+fn symex_br<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, inst: InstructionValue, vars: &mut VarMap<'ctx>, cur_bb: BasicBlock) -> z3::Ast<'ctx> {
     match inst.get_num_operands() {
         1 => {
             // unconditional branch
             let bb = inst.get_operand(0).unwrap().right().expect("Single-operand Br but operand is not a BasicBlock");
-            symex_from_bb(ctx, state, bb, vars)
+            symex_from_bb(ctx, state, bb, Some(cur_bb), vars)
         },
         3 => {
             // conditional branch
@@ -210,20 +212,38 @@ fn symex_br<'ctx>(ctx: &'ctx z3::Context, state: &mut State<'ctx>, inst: Instruc
             let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
             if true_feasible && false_feasible {
                 // for now we choose to explore true first, and backtrack to false if necessary
-                state.save_backtracking_point(inst.get_operand(2).unwrap().right().unwrap(), z3cond.not());
-                symex_from_bb(ctx, state, inst.get_operand(1).unwrap().right().unwrap(), vars)
+                state.save_backtracking_point(inst.get_operand(2).unwrap().right().unwrap(), cur_bb, z3cond.not());
+                symex_from_bb(ctx, state, inst.get_operand(1).unwrap().right().unwrap(), Some(cur_bb), vars)
             } else if true_feasible {
-                symex_from_bb(ctx, state, inst.get_operand(1).unwrap().right().unwrap(), vars)
+                symex_from_bb(ctx, state, inst.get_operand(1).unwrap().right().unwrap(), Some(cur_bb), vars)
             } else if false_feasible {
-                symex_from_bb(ctx, state, inst.get_operand(2).unwrap().right().unwrap(), vars)
-            } else if let Some(bb) = state.revert_to_backtracking_point() {
-                symex_from_bb(ctx, state, bb, vars)
+                symex_from_bb(ctx, state, inst.get_operand(2).unwrap().right().unwrap(), Some(cur_bb), vars)
+            } else if let Some((bb, prev_bb)) = state.revert_to_backtracking_point() {
+                symex_from_bb(ctx, state, bb, Some(prev_bb), vars)
             } else {
                 panic!("All possible paths seem to be unsat");
             }
         },
         n => { unimplemented!("Br with {} operands", n); },
     }
+}
+
+fn symex_phi<'ctx>(ctx: &'ctx z3::Context, inst: InstructionValue, vars: &mut VarMap<'ctx>, prev_bb: Option<BasicBlock>) {
+    let inst: PhiValue = unsafe { std::mem::transmute(inst) };  // This InstructionValue is actually a PhiValue, but the current inkwell type system doesn't express this (?) so this seems to be the way to do it (?)
+    let prev_bb = prev_bb.expect("not yet implemented: starting in a block with Phi instructions");
+    let pairs = PhiIterator::new(inst);
+    let mut chosen_value = None;
+    for (bve, bb) in pairs {
+        if bb == prev_bb {
+            chosen_value = Some(bve);
+        }
+    }
+    let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
+    if !chosen_value.is_int_value() {
+        unimplemented!("Phi returning value other than integer");
+    }
+    let z3value = intval_to_ast(chosen_value.into_int_value(), ctx, vars);
+    vars.insert(inst.as_any_value_enum(), z3value);
 }
 
 // Convert an IntValue to the appropriate z3::Ast, looking it up in the VarMap if necessary

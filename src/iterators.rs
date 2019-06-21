@@ -75,3 +75,33 @@ impl Iterator for ParamsIterator {
         }
     }
 }
+
+pub struct PhiIterator {
+    phi: PhiValue,  // the phi we're iterating over the members of
+    cur_member_num: u32,  // the index of the member that will be returned by the next call to next()
+    num_members: u32,  // cache this here to avoid calling into LLVM every time
+}
+
+impl PhiIterator {
+    pub fn new(phi: PhiValue) -> Self {
+        PhiIterator {
+            phi,
+            cur_member_num: 0,
+            num_members: phi.count_incoming(),
+        }
+    }
+}
+
+impl Iterator for PhiIterator {
+    type Item = (BasicValueEnum, BasicBlock);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur_member_num >= self.num_members {
+            None
+        } else {
+            let rval = self.phi.get_incoming(self.cur_member_num);
+            self.cur_member_num += 1;
+            rval
+        }
+    }
+}
