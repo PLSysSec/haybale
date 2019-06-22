@@ -70,28 +70,52 @@ define i32 @binops(i32, i32) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
-define i32 @conditional(i32, i32) local_unnamed_addr #0 {
+define i32 @conditional_true(i32, i32) local_unnamed_addr #0 {
   %3 = icmp sgt i32 %0, %1
-  br i1 %3, label %4, label %6
+  br i1 %3, label %4, label %8
 
 ; <label>:4:                                      ; preds = %2
-  %5 = sub nsw i32 %0, %1
-  br label %10
+  %5 = add nsw i32 %0, -1
+  %6 = add nsw i32 %1, -1
+  %7 = mul nsw i32 %6, %5
+  br label %12
 
-; <label>:6:                                      ; preds = %2
-  %7 = add nsw i32 %0, -1
-  %8 = add nsw i32 %1, -1
-  %9 = mul nsw i32 %8, %7
-  br label %10
+; <label>:8:                                      ; preds = %2
+  %9 = add nsw i32 %1, %0
+  %10 = srem i32 %9, 3
+  %11 = add nsw i32 %10, 10
+  br label %12
 
-; <label>:10:                                     ; preds = %6, %4
-  %11 = phi i32 [ %5, %4 ], [ %9, %6 ]
-  ret i32 %11
+; <label>:12:                                     ; preds = %8, %4
+  %13 = phi i32 [ %7, %4 ], [ %11, %8 ]
+  ret i32 %13
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @conditional_false(i32, i32) local_unnamed_addr #0 {
+  %3 = icmp sgt i32 %0, %1
+  br i1 %3, label %4, label %8
+
+; <label>:4:                                      ; preds = %2
+  %5 = add nsw i32 %1, %0
+  %6 = srem i32 %5, 3
+  %7 = add nsw i32 %6, 10
+  br label %12
+
+; <label>:8:                                      ; preds = %2
+  %9 = add nsw i32 %0, -1
+  %10 = add nsw i32 %1, -1
+  %11 = mul nsw i32 %10, %9
+  br label %12
+
+; <label>:12:                                     ; preds = %8, %4
+  %13 = phi i32 [ %7, %4 ], [ %11, %8 ]
+  ret i32 %13
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
 define i32 @conditional_nozero(i32, i32) local_unnamed_addr #0 {
-  %3 = icmp sgt i32 %0, 2
+  %3 = icmp slt i32 %0, 2
   br i1 %3, label %8, label %4
 
 ; <label>:4:                                      ; preds = %2

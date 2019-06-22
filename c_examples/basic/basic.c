@@ -33,16 +33,26 @@ int binops(int a, int b) {
   return e >> d;
 }
 
-int conditional(int a, int b) {
+// this function can only return zero in its true branch
+int conditional_true(int a, int b) {
   if (a > b) {
-    return a - b;
+    return (a-1) * (b-1);
+  } else {
+    return (a + b) % 3 + 10;
+  }
+}
+
+// this function can only return zero in its false branch
+int conditional_false(int a, int b) {
+  if (a > b) {
+    return (a + b) % 3 + 10;
   } else {
     return (a-1) * (b-1);
   }
 }
 
 int conditional_nozero(int a, int b) {
-  if (a > 2) {
+  if (a < 2) {
     return a;
   } else if (b == 0) {
     return b + 3;
