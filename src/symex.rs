@@ -122,10 +122,13 @@ fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: Basic
             if true_feasible && false_feasible {
                 // for now we choose to explore true first, and backtrack to false if necessary
                 state.save_backtracking_point(inst.get_operand(2).unwrap().right().unwrap(), cur_bb, z3cond.not());
+                state.assert(&z3cond);
                 symex_from_bb(state, inst.get_operand(1).unwrap().right().unwrap(), Some(cur_bb))
             } else if true_feasible {
+                state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
                 symex_from_bb(state, inst.get_operand(1).unwrap().right().unwrap(), Some(cur_bb))
             } else if false_feasible {
+                state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
                 symex_from_bb(state, inst.get_operand(2).unwrap().right().unwrap(), Some(cur_bb))
             } else if let Some((bb, prev_bb)) = state.revert_to_backtracking_point() {
                 symex_from_bb(state, bb, Some(prev_bb))
