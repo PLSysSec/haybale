@@ -24,12 +24,14 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_icmp(state, inst);
         } else if opcode == InstructionOpcode::Phi {
             symex_phi(state, inst, prev_bb);
+        } else if opcode == InstructionOpcode::Select {
+            symex_select(state, inst);
         } else if opcode == InstructionOpcode::Return {
             return symex_return(state, inst);
         } else if opcode == InstructionOpcode::Br {
             return symex_br(state, inst, bb);
         } else {
-            unimplemented!("Instruction {:?}", opcode);
+            unimplemented!("instruction {:?}", opcode);
         }
     }
     panic!("No terminator found in function");
@@ -153,4 +155,30 @@ fn symex_phi(state: &mut State, inst: InstructionValue, prev_bb: Option<BasicBlo
     let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
     let z3value = state.operand_to_ast(chosen_value);
     state.add_var(inst, z3value);
+}
+
+fn symex_select(state: &mut State, inst: InstructionValue) {
+    assert_eq!(inst.get_num_operands(), 3);
+    let dest = get_dest_name(inst);
+    let z3dest = state.ctx.named_bitvector_const(&dest, 32);
+    let cond = inst.get_operand(0).unwrap().left().unwrap();
+    let firstop = inst.get_operand(1).unwrap().left().unwrap();
+    let secondop = inst.get_operand(2).unwrap().left().unwrap();
+    let z3cond = state.operand_to_ast(cond);
+    let z3firstop = state.operand_to_ast(firstop);
+    let z3secondop = state.operand_to_ast(secondop);
+    let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
+    let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
+    if true_feasible && false_feasible {
+        state.assert(&z3dest._eq(&z3::Ast::ite(&z3cond, &z3firstop, &z3secondop)));
+    } else if true_feasible {
+        state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
+        state.assert(&z3dest._eq(&z3firstop));
+    } else if false_feasible {
+        state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
+        state.assert(&z3dest._eq(&z3secondop));
+    } else {
+        unimplemented!("discovered we're unsat while checking a switch condition");
+    }
+    state.add_var(inst, z3dest);
 }
