@@ -83,7 +83,7 @@ fn symex_binop<'ctx, F>(state: &mut State<'ctx>, inst: InstructionValue, z3op: F
     state.add_var(inst, z3dest);
 }
 
-fn symex_icmp<'ctx>(state: &mut State<'ctx>, inst: InstructionValue) {
+fn symex_icmp(state: &mut State, inst: InstructionValue) {
     assert_eq!(inst.get_num_operands(), 2);
     let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bool_const(&dest);
@@ -137,7 +137,7 @@ fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: Basic
     }
 }
 
-fn symex_phi<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, prev_bb: Option<BasicBlock>) {
+fn symex_phi(state: &mut State, inst: InstructionValue, prev_bb: Option<BasicBlock>) {
     let inst: PhiValue = unsafe { std::mem::transmute(inst) };  // This InstructionValue is actually a PhiValue, but the current inkwell type system doesn't express this (?) so this seems to be the way to do it (?)
     let prev_bb = prev_bb.expect("not yet implemented: starting in a block with Phi instructions");
     let pairs = PhiIterator::new(inst);
