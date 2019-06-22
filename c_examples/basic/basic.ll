@@ -115,7 +115,7 @@ define i32 @conditional_false(i32, i32) local_unnamed_addr #0 {
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
 define i32 @conditional_nozero(i32, i32) local_unnamed_addr #0 {
-  %3 = icmp slt i32 %0, 2
+  %3 = icmp sgt i32 %0, 2
   br i1 %3, label %8, label %4
 
 ; <label>:4:                                      ; preds = %2

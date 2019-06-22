@@ -52,7 +52,7 @@ int conditional_false(int a, int b) {
 }
 
 int conditional_nozero(int a, int b) {
-  if (a < 2) {
+  if (a > 2) {
     return a;
   } else if (b == 0) {
     return b + 3;
