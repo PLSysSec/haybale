@@ -146,6 +146,7 @@ mod tests {
         assert_eq!(args.len(), 2);
         let a = Wrapping(args[0]);
         let b = Wrapping(args[1]);
+        println!("a = {}, b = {}", a, b);
         let c = a + b - (Wrapping(77) * a) + Wrapping(1);
         let d = (c & Wrapping(23)) / (a | Wrapping(99));
         let e = (d ^ a) % (c << 3);
@@ -183,11 +184,6 @@ mod tests {
     fn conditional_nozero() {
         let module = get_module();
         let func = module.get_function("conditional_nozero").expect("Failed to find function");
-        let args = find_zero_of_func(func).expect("Failed to find zero of the function");
-        assert_eq!(args.len(), 2);
-        let a = Wrapping(args[0]);
-        let b = Wrapping(args[1]);
-        let c = if a < Wrapping(2) { a } else if b == Wrapping(0) { b + Wrapping(3) } else { a * b };
-        assert_eq!(c.0, 0);
+        assert_eq!(find_zero_of_func(func), None);
     }
 }
