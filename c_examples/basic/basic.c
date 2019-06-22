@@ -1,5 +1,9 @@
-int no_args() {
+int no_args_zero() {
   return 0;
+}
+
+int no_args_nozero() {
+  return 1;
 }
 
 int one_arg(int a) {
@@ -34,5 +38,15 @@ int conditional(int a, int b) {
     return a - b;
   } else {
     return (a-1) * (b-1);
+  }
+}
+
+int conditional_nozero(int a, int b) {
+  if (a > 2) {
+    return a;
+  } else if (b == 0) {
+    return b + 3;
+  } else {
+    return a * b;
   }
 }
