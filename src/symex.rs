@@ -1,5 +1,6 @@
 use inkwell::basic_block::BasicBlock;
 use inkwell::values::*;
+use log::debug;
 
 use crate::iterators::*;
 use crate::state::State;
@@ -8,6 +9,7 @@ use crate::utils::get_dest_name;
 // Symex the given function and return the new AST representing its return value.
 // Assumes that the function's parameters are already added to the state.
 pub fn symex_function<'ctx>(state: &mut State<'ctx>, func: FunctionValue) -> z3::Ast<'ctx> {
+    debug!("Symexing function {:?}", func.get_name().to_str().unwrap());
     let bb = func.get_entry_basic_block().unwrap();
     symex_from_bb(state, bb, None)
 }
@@ -15,6 +17,7 @@ pub fn symex_function<'ctx>(state: &mut State<'ctx>, func: FunctionValue) -> z3:
 // Symex the given bb, through the rest of the function.
 // Returns the new AST representing the return value of the function.
 fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<BasicBlock>) -> z3::Ast<'ctx> {
+    debug!("Symexing basic block {:?}", bb.get_name().to_str().unwrap());
     let insts = InstructionIterator::new(&bb);
     for inst in insts {
         let opcode = inst.get_opcode();
@@ -74,6 +77,7 @@ fn intpred_to_z3pred<'ctx>(pred: inkwell::IntPredicate) -> Box<FnOnce(&z3::Ast<'
 fn symex_binop<'ctx, F>(state: &mut State<'ctx>, inst: InstructionValue, z3op: F)
     where F: FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>
 {
+    debug!("Symexing binop {:?}", inst);
     assert_eq!(inst.get_num_operands(), 2);
     let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bitvector_const(&dest, 32);
@@ -86,6 +90,7 @@ fn symex_binop<'ctx, F>(state: &mut State<'ctx>, inst: InstructionValue, z3op: F
 }
 
 fn symex_icmp(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing icmp {:?}", inst);
     assert_eq!(inst.get_num_operands(), 2);
     let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bool_const(&dest);
@@ -100,6 +105,7 @@ fn symex_icmp(state: &mut State, inst: InstructionValue) {
 
 // Returns the z3::Ast representing the return value
 fn symex_return<'ctx>(state: &State<'ctx>, inst: InstructionValue) -> z3::Ast<'ctx> {
+    debug!("Symexing return {:?}", inst);
     assert_eq!(inst.get_num_operands(), 1);
     let rval = inst.get_operand(0).unwrap().left().unwrap();
     state.operand_to_ast(rval)
@@ -109,6 +115,7 @@ fn symex_return<'ctx>(state: &State<'ctx>, inst: InstructionValue) -> z3::Ast<'c
 // and eventually returns the new AST representing the return value of the function
 // (when it reaches the end of the function)
 fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: BasicBlock) -> z3::Ast<'ctx> {
+    debug!("Symexing branch {:?}", inst);
     match inst.get_num_operands() {
         1 => {
             // unconditional branch
@@ -144,6 +151,7 @@ fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: Basic
 
 fn symex_phi(state: &mut State, inst: InstructionValue, prev_bb: Option<BasicBlock>) {
     let inst: PhiValue = unsafe { std::mem::transmute(inst) };  // This InstructionValue is actually a PhiValue, but the current inkwell type system doesn't express this (?) so this seems to be the way to do it (?)
+    debug!("Symexing phi {:?}", inst);
     let prev_bb = prev_bb.expect("not yet implemented: starting in a block with Phi instructions");
     let pairs = PhiIterator::new(inst);
     let mut chosen_value = None;
@@ -158,6 +166,7 @@ fn symex_phi(state: &mut State, inst: InstructionValue, prev_bb: Option<BasicBlo
 }
 
 fn symex_select(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing select {:?}", inst);
     assert_eq!(inst.get_num_operands(), 3);
     let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bitvector_const(&dest, 32);

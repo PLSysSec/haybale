@@ -1,7 +1,11 @@
 use inkwell::basic_block::BasicBlock;
 use inkwell::values::*;
+use log::debug;
 use std::collections::HashMap;
+use std::fmt;
 use z3;
+
+use crate::utils::*;
 
 type VarMap<'ctx> = HashMap<AnyValueEnum, z3::Ast<'ctx>>;
 
@@ -38,6 +42,13 @@ impl<'ctx> BacktrackPoint<'ctx> {
     }
 }
 
+impl<'ctx> fmt::Display for BacktrackPoint<'ctx> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<BacktrackPoint to execute bb {} with constraint {}>",
+            self.next_bb.get_name().to_str().expect("Failed to convert from CStr"), self.constraint)
+    }
+}
+
 impl<'ctx> State<'ctx> {
     pub fn new(ctx: &'ctx z3::Context) -> Self {
         State {
@@ -49,6 +60,7 @@ impl<'ctx> State<'ctx> {
     }
 
     pub fn assert(&self, ast: &z3::Ast<'ctx>) {
+        debug!("asserting {}", ast);
         self.solver.assert(ast);
     }
 
@@ -67,16 +79,18 @@ impl<'ctx> State<'ctx> {
     }
 
     pub fn get_model(&self) -> z3::Model<'ctx> {
-      self.solver.get_model()
+        self.solver.get_model()
     }
 
     // Associate the given value with the given z3::Ast
-    pub fn add_var(&mut self, v: impl AnyValue, ast: z3::Ast<'ctx>) {
+    pub fn add_var(&mut self, v: impl AnyValue + Copy, ast: z3::Ast<'ctx>) {
+        debug!("Adding var {} = {}", get_value_name(v), ast);
         self.vars.insert(v.as_any_value_enum(), ast);
     }
 
     // Look up the z3::Ast previously created for the given value
-    pub fn lookup_var(&self, v: impl AnyValue) -> &z3::Ast<'ctx> {
+    pub fn lookup_var(&self, v: impl AnyValue + Copy) -> &z3::Ast<'ctx> {
+        debug!("Looking up var {}", get_value_name(v));
         self.vars.get(&v.as_any_value_enum()).unwrap_or_else(|| {
             let keys: Vec<&AnyValueEnum> = self.vars.keys().collect();
             panic!("Failed to find value {:?} in map with keys {:?}", v, keys);
@@ -86,7 +100,7 @@ impl<'ctx> State<'ctx> {
     // Convert a Value to the appropriate z3::Ast
     // Should be an operand, that is, an RHS value
     // (that way, we know it's either a constant or a variable we previously added to the state)
-    pub fn operand_to_ast(&self, v: impl BasicValue) -> z3::Ast<'ctx> {
+    pub fn operand_to_ast(&self, v: impl BasicValue + Copy) -> z3::Ast<'ctx> {
         match v.as_basic_value_enum() {
             BasicValueEnum::IntValue(iv) => {
                 if iv.is_const() {
@@ -103,6 +117,7 @@ impl<'ctx> State<'ctx> {
     // again, we require owned BasicBlocks because copy should be cheap.  Caller can clone if necessary.
     // The constraint will be added only if we end up backtracking to this point, and only then
     pub fn save_backtracking_point(&mut self, next_bb: BasicBlock, prev_bb: BasicBlock, constraint: z3::Ast<'ctx>) {
+        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", next_bb.get_name().to_str().unwrap(), constraint);
         self.solver.push();
         self.backtrack_points.push(BacktrackPoint::new(next_bb, prev_bb, constraint));
     }
@@ -112,6 +127,8 @@ impl<'ctx> State<'ctx> {
     pub fn revert_to_backtracking_point(&mut self) -> Option<(BasicBlock, BasicBlock)> {
         self.solver.pop(1);
         if let Some(bp) = self.backtrack_points.pop() {
+            debug!("Reverting to backtracking point {}", bp);
+            debug!("Constraints are now:\n{}", self.solver);
             self.assert(&bp.constraint);
             Some((bp.next_bb, bp.prev_bb))
             // thanks to SSA, we don't need to roll back the VarMap; we'll just overwrite existing entries as needed.

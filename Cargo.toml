@@ -7,6 +7,8 @@ edition = "2018"
 [dependencies]
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "llvm7-0" }
 z3 = "0.3.2"
+log = "0.4.0"
+env_logger = "0.6.1"
 
 # override the git dependency with our locally-patched version, for now
 # see https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#overriding-dependencies
