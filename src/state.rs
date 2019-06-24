@@ -45,7 +45,7 @@ impl<'ctx> BacktrackPoint<'ctx> {
 impl<'ctx> fmt::Display for BacktrackPoint<'ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<BacktrackPoint to execute bb {} with constraint {}>",
-            self.next_bb.get_name().to_str().expect("Failed to convert from CStr"), self.constraint)
+            get_bb_name(self.next_bb), self.constraint)
     }
 }
 
@@ -65,6 +65,7 @@ impl<'ctx> State<'ctx> {
     }
 
     pub fn check(&self) -> bool {
+        debug!("Solving with constraints:\n{}", self.solver);
         self.solver.check()
     }
 
@@ -117,7 +118,7 @@ impl<'ctx> State<'ctx> {
     // again, we require owned BasicBlocks because copy should be cheap.  Caller can clone if necessary.
     // The constraint will be added only if we end up backtracking to this point, and only then
     pub fn save_backtracking_point(&mut self, next_bb: BasicBlock, prev_bb: BasicBlock, constraint: z3::Ast<'ctx>) {
-        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", next_bb.get_name().to_str().unwrap(), constraint);
+        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", get_bb_name(next_bb), constraint);
         self.solver.push();
         self.backtrack_points.push(BacktrackPoint::new(next_bb, prev_bb, constraint));
     }

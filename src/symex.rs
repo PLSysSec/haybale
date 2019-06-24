@@ -9,15 +9,15 @@ use crate::utils::*;
 // Symex the given function and return the new AST representing its return value.
 // Assumes that the function's parameters are already added to the state.
 pub fn symex_function<'ctx>(state: &mut State<'ctx>, func: FunctionValue) -> z3::Ast<'ctx> {
-    debug!("Symexing function {:?}", func.get_name().to_str().unwrap());
-    let bb = func.get_entry_basic_block().unwrap();
+    debug!("Symexing function {}", get_func_name(func));
+    let bb = func.get_entry_basic_block().expect("Failed to get entry basic block");
     symex_from_bb(state, bb, None)
 }
 
 // Symex the given bb, through the rest of the function.
 // Returns the new AST representing the return value of the function.
 fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<BasicBlock>) -> z3::Ast<'ctx> {
-    debug!("Symexing basic block {:?}", bb.get_name().to_str().unwrap());
+    debug!("Symexing basic block {}", get_bb_name(bb));
     let insts = InstructionIterator::new(&bb);
     for inst in insts {
         let opcode = inst.get_opcode();
