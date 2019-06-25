@@ -128,9 +128,9 @@ impl<'ctx> State<'ctx> {
     // returns the BasicBlock where execution should continue and the BasicBlock executed before that
     // or None if there are no saved backtracking points left
     pub fn revert_to_backtracking_point(&mut self) -> Option<(BasicBlock, BasicBlock)> {
-        self.solver.pop(1);
         if let Some(bp) = self.backtrack_points.pop() {
             debug!("Reverting to backtracking point {}", bp);
+            self.solver.pop(1);
             debug!("Constraints are now:\n{}", self.solver);
             self.assert(&bp.constraint);
             Some((bp.next_bb, bp.prev_bb))
