@@ -80,7 +80,9 @@ impl<'ctx> State<'ctx> {
     }
 
     pub fn get_model(&self) -> z3::Model<'ctx> {
-        self.solver.get_model()
+        let model = self.solver.get_model();
+        debug!("Returned model:\n{}", model);
+        model
     }
 
     // Associate the given value with the given z3::Ast

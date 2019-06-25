@@ -9,7 +9,7 @@ mod state;
 use state::State;
 
 mod symex;
-use symex::symex_function;
+use symex::{symex_function, symex_again};
 
 mod utils;
 use utils::get_value_name;
@@ -55,13 +55,18 @@ fn find_zero_of_func(func: FunctionValue) -> Option<Vec<i32>> {
         state.add_var(param, z3param);
     }
 
-    let z3rval = symex_function(&mut state, func);
+    let mut optionz3rval = Some(symex_function(&mut state, func));
     let zero = z3::Ast::bitvector_from_u64(&ctx, 0, 32);
-    state.assert(&z3rval._eq(&zero));
+    loop {
+        let z3rval = optionz3rval.clone().expect("optionz3rval should always be Some at this point in the loop");
+        state.assert(&z3rval._eq(&zero));
+        if state.check() { break; }
+        optionz3rval = symex_again(&mut state);
+        if optionz3rval.is_none() { break; }
+    }
 
-    //println!("Solving constraints:");
-    //state.prettyprint_constraints();
-    if state.check() {
+    if !optionz3rval.is_none() {
+        // in this case state.check() must have passed
         let model = state.get_model();
         let z3params = params.iter().map(|&p| state.lookup_var(p));
         Some(z3params.map(|p| model.eval(&p).unwrap().as_i64().unwrap() as i32).collect())

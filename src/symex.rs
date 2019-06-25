@@ -14,6 +14,18 @@ pub fn symex_function<'ctx>(state: &mut State<'ctx>, func: FunctionValue) -> z3:
     symex_from_bb(state, bb, None)
 }
 
+// TODO: Feels hacky, make better
+// After calling symex_function() on the State once, caller can then call
+// symex_again() to get a different solution (a different State and a
+// different returned AST), or None if there are no more possibilities.
+pub fn symex_again<'ctx>(state: &mut State<'ctx>) -> Option<z3::Ast<'ctx>> {
+    if let Some((bb, prev_bb)) = state.revert_to_backtracking_point() {
+        Some(symex_from_bb(state, bb, Some(prev_bb)))
+    } else {
+        None
+    }
+}
+
 // Symex the given bb, through the rest of the function.
 // Returns the new AST representing the return value of the function.
 fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<BasicBlock>) -> z3::Ast<'ctx> {
