@@ -65,7 +65,7 @@ fn find_zero_of_func(func: FunctionValue) -> Option<Vec<i32>> {
         if optionz3rval.is_none() { break; }
     }
 
-    if !optionz3rval.is_none() {
+    if optionz3rval.is_some() {
         // in this case state.check() must have passed
         let model = state.get_model();
         let z3params = params.iter().map(|&p| state.lookup_var(p));
