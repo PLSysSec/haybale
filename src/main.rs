@@ -21,7 +21,7 @@ fn main() {
     let llvm_mod = Module::parse_bitcode_from_path(&filepath).expect("Failed to parse module");
     let functions: Box<Iterator<Item = FunctionValue>>;
     if let Some(funcname) = firstarg {
-        functions = Box::new(std::iter::once(llvm_mod.get_function(&funcname).expect(&format!("Failed to find function named {}", funcname))));
+        functions = Box::new(std::iter::once(llvm_mod.get_function(&funcname).unwrap_or_else(|| panic!("Failed to find function named {}", funcname))));
     } else {
         functions = Box::new(FunctionIterator::new(&llvm_mod));
     }
