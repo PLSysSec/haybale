@@ -61,8 +61,8 @@ fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&z3::A
 
 fn intpred_to_z3pred<'ctx>(pred: inkwell::IntPredicate) -> Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>> {
     match pred {
-        inkwell::IntPredicate::EQ => Box::new(|a,b| z3::Ast::not(&z3::Ast::_eq(a,b))),
-        inkwell::IntPredicate::NE => Box::new(z3::Ast::_eq),
+        inkwell::IntPredicate::EQ => Box::new(z3::Ast::_eq),
+        inkwell::IntPredicate::NE => Box::new(|a,b| z3::Ast::not(&z3::Ast::_eq(a,b))),
         inkwell::IntPredicate::UGT => Box::new(z3::Ast::bvugt),
         inkwell::IntPredicate::UGE => Box::new(z3::Ast::bvuge),
         inkwell::IntPredicate::ULT => Box::new(z3::Ast::bvult),
