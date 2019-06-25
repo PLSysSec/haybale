@@ -116,16 +116,31 @@ define i32 @conditional_false(i32, i32) local_unnamed_addr #0 {
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
 define i32 @conditional_nozero(i32, i32) local_unnamed_addr #0 {
   %3 = icmp sgt i32 %0, 2
-  br i1 %3, label %8, label %4
+  br i1 %3, label %14, label %4
 
 ; <label>:4:                                      ; preds = %2
-  %5 = icmp eq i32 %1, 0
-  %6 = mul nsw i32 %1, %0
-  %7 = select i1 %5, i32 3, i32 %6
-  ret i32 %7
+  %5 = icmp slt i32 %1, 1
+  br i1 %5, label %6, label %8
 
-; <label>:8:                                      ; preds = %2
-  ret i32 %0
+; <label>:6:                                      ; preds = %4
+  %7 = add nsw i32 %1, -3
+  br label %14
+
+; <label>:8:                                      ; preds = %4
+  %9 = icmp slt i32 %0, 1
+  br i1 %9, label %10, label %12
+
+; <label>:10:                                     ; preds = %8
+  %11 = add nsw i32 %0, -7
+  br label %14
+
+; <label>:12:                                     ; preds = %8
+  %13 = mul nsw i32 %1, %0
+  br label %14
+
+; <label>:14:                                     ; preds = %2, %12, %10, %6
+  %15 = phi i32 [ %7, %6 ], [ %11, %10 ], [ %13, %12 ], [ %0, %2 ]
+  ret i32 %15
 }
 
 attributes #0 = { norecurse nounwind readnone ssp uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="penryn" "target-features"="+cx16,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
