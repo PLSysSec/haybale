@@ -91,12 +91,14 @@ fn symex_binop<'ctx, F>(state: &mut State<'ctx>, inst: InstructionValue, z3op: F
 {
     debug!("Symexing binop {}", &get_value_name(inst));
     assert_eq!(inst.get_num_operands(), 2);
-    let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bitvector_const(&dest, 32);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
     let z3firstop = state.operand_to_ast(firstop);
     let z3secondop = state.operand_to_ast(secondop);
+    let width = firstop.get_type().as_int_type().get_bit_width();
+    assert_eq!(width, secondop.get_type().as_int_type().get_bit_width());
+    let dest = get_dest_name(inst);
+    let z3dest = state.ctx.named_bitvector_const(&dest, width);
     state.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
     state.add_var(inst, z3dest);
 }
@@ -183,14 +185,16 @@ fn symex_phi(state: &mut State, inst: InstructionValue, prev_bb: Option<BasicBlo
 fn symex_select(state: &mut State, inst: InstructionValue) {
     debug!("Symexing select {}", &get_value_name(inst));
     assert_eq!(inst.get_num_operands(), 3);
-    let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bitvector_const(&dest, 32);
     let cond = inst.get_operand(0).unwrap().left().unwrap();
     let firstop = inst.get_operand(1).unwrap().left().unwrap();
     let secondop = inst.get_operand(2).unwrap().left().unwrap();
     let z3cond = state.operand_to_ast(cond);
     let z3firstop = state.operand_to_ast(firstop);
     let z3secondop = state.operand_to_ast(secondop);
+    let width = firstop.get_type().as_int_type().get_bit_width();
+    assert_eq!(width, secondop.get_type().as_int_type().get_bit_width());
+    let dest = get_dest_name(inst);
+    let z3dest = state.ctx.named_bitvector_const(&dest, width);
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
     let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
     if true_feasible && false_feasible {

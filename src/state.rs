@@ -107,8 +107,7 @@ impl<'ctx> State<'ctx> {
         match v.as_basic_value_enum() {
             BasicValueEnum::IntValue(iv) => {
                 if iv.is_const() {
-                    // TODO: don't assume all constants are 32-bit
-                    z3::Ast::bitvector_from_u64(self.ctx, iv.get_zero_extended_constant().unwrap(), 32)
+                    z3::Ast::bitvector_from_u64(self.ctx, iv.get_zero_extended_constant().unwrap(), iv.get_type().get_bit_width())
                 } else {
                     self.lookup_var(v).clone()
                 }

@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 int no_args_zero() {
   return 0;
 }
@@ -61,4 +63,24 @@ int conditional_nozero(int a, int b) {
   } else {
     return a * b;
   }
+}
+
+int8_t int8t(int8_t a, int8_t b) {
+  return a + b - 3;
+}
+
+int16_t int16t(int16_t a, int16_t b) {
+  return a + b - 3;
+}
+
+int32_t int32t(int32_t a, int32_t b) {
+  return a + b - 3;
+}
+
+int64_t int64t(int64_t a, int64_t b) {
+  return a + b - 3;
+}
+
+int64_t mixed_bitwidths(int8_t i8, int16_t i16, int32_t i32, int64_t i64) {
+  return i8 + i16 + i32 + i64 - 3;
 }
