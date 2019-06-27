@@ -128,15 +128,11 @@ fn symex_zext(state: &mut State, inst: InstructionValue) {
     debug!("Symexing zext {}", &get_value_name(inst));
     debug!("(zext as debug is {:?}", inst);
     assert_eq!(inst.get_num_operands(), 1);
-    let dest = get_dest_name(inst);
     let op = inst.get_operand(0).unwrap().left().unwrap();
     let z3op = state.operand_to_bv(op);
-
     let source_size = z3op.get_size();
-    // AFAICT you can't get the destination type from LLVM
-    // hack for now: if source is < 32 bits assume zext to 32 bits,
-    //   else assume zext to 64 bits
-    let dest_size = if source_size < 32 { 32 } else { 64 };
+    let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
+    let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
     state.assert(&z3dest._eq(&z3op.zero_ext(dest_size - source_size)));
     state.add_bv_var(inst, z3dest);
@@ -146,15 +142,11 @@ fn symex_sext(state: &mut State, inst: InstructionValue) {
     debug!("Symexing sext {}", &get_value_name(inst));
     debug!("(sext as debug is {:?}", inst);
     assert_eq!(inst.get_num_operands(), 1);
-    let dest = get_dest_name(inst);
     let op = inst.get_operand(0).unwrap().left().unwrap();
     let z3op = state.operand_to_bv(op);
-
     let source_size = z3op.get_size();
-    // AFAICT you can't get the destination type from LLVM
-    // hack for now: if source is < 32 bits assume sext to 32 bits,
-    //   else assume sext to 64 bits
-    let dest_size = if source_size < 32 { 32 } else { 64 };
+    let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
+    let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
     state.assert(&z3dest._eq(&z3op.sign_ext(dest_size - source_size)));
     state.add_bv_var(inst, z3dest);
@@ -163,11 +155,10 @@ fn symex_sext(state: &mut State, inst: InstructionValue) {
 fn symex_trunc(state: &mut State, inst: InstructionValue) {
     debug!("Symexing trunc {}", &get_value_name(inst));
     assert_eq!(inst.get_num_operands(), 1);
-    let dest = get_dest_name(inst);
     let op = inst.get_operand(0).unwrap().left().unwrap();
     let z3op = state.operand_to_bv(op);
-
     let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
+    let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
     state.assert(&z3dest._eq(&z3op.extract(dest_size-1, 0)));
     state.add_bv_var(inst, z3dest);
