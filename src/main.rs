@@ -117,12 +117,12 @@ fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
         let z3params = params.iter().map(|&p| state.lookup_bv_var(p));
         Some(z3params.map(|p| {
             let param_as_i64 = model.eval(p).unwrap().as_i64().unwrap();
-            match returnwidth {
+            match p.get_size() {
                 8 => IntOfSomeWidth::I8(param_as_i64 as i8),
                 16 => IntOfSomeWidth::I16(param_as_i64 as i16),
                 32 => IntOfSomeWidth::I32(param_as_i64 as i32),
                 64 => IntOfSomeWidth::I64(param_as_i64 as i64),
-                _ => unimplemented!("Return type with bitwidth {}", returnwidth),
+                s => unimplemented!("Parameter with bitwidth {}", s),
             }
         }).collect())
     } else {
@@ -300,7 +300,11 @@ mod tests {
         let func = module.get_function("mixed_bitwidths").expect("Failed to find function");
         let args = find_zero_of_func(func).expect("Failed to find zero of the function");
         assert_eq!(args.len(), 4);
-        let sum: i64 = (args[0].unwrap_to_i8() as i32 + args[1].unwrap_to_i16() as i32 + args[2].unwrap_to_i32()) as i64 + args[3].unwrap_to_i64();
+        let arg1 = args[0].unwrap_to_i8();
+        let arg2 = args[1].unwrap_to_i16();
+        let arg3 = args[2].unwrap_to_i32();
+        let arg4 = args[3].unwrap_to_i64();
+        let sum: i64 = (arg1 as i32 + arg2 as i32 + arg3) as i64 + arg4;
         assert_eq!(sum, 3);
     }
 }

@@ -42,6 +42,8 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_zext(state, inst);
         } else if opcode == InstructionOpcode::SExt {
             symex_sext(state, inst);
+        } else if opcode == InstructionOpcode::Trunc {
+            symex_trunc(state, inst);
         } else if opcode == InstructionOpcode::Phi {
             symex_phi(state, inst, prev_bb);
         } else if opcode == InstructionOpcode::Select {
@@ -155,6 +157,19 @@ fn symex_sext(state: &mut State, inst: InstructionValue) {
     let dest_size = if source_size < 32 { 32 } else { 64 };
     let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
     state.assert(&z3dest._eq(&z3op.sign_ext(dest_size - source_size)));
+    state.add_bv_var(inst, z3dest);
+}
+
+fn symex_trunc(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing trunc {}", &get_value_name(inst));
+    assert_eq!(inst.get_num_operands(), 1);
+    let dest = get_dest_name(inst);
+    let op = inst.get_operand(0).unwrap().left().unwrap();
+    let z3op = state.operand_to_bv(op);
+
+    let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
+    let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
+    state.assert(&z3dest._eq(&z3op.extract(dest_size-1, 0)));
     state.add_bv_var(inst, z3dest);
 }
 
