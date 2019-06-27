@@ -1,14 +1,15 @@
 use inkwell::basic_block::BasicBlock;
 use inkwell::values::*;
 use log::debug;
+use z3::ast::{Ast, BV, Bool};
 
 use crate::iterators::*;
 use crate::state::State;
 use crate::utils::*;
 
-// Symex the given function and return the new AST representing its return value.
+// Symex the given function and return the new BV (AST) representing its return value.
 // Assumes that the function's parameters are already added to the state.
-pub fn symex_function<'ctx>(state: &mut State<'ctx>, func: FunctionValue) -> z3::Ast<'ctx> {
+pub fn symex_function<'ctx>(state: &mut State<'ctx>, func: FunctionValue) -> BV<'ctx> {
     debug!("Symexing function {}", get_func_name(func));
     let bb = func.get_entry_basic_block().expect("Failed to get entry basic block");
     symex_from_bb(state, bb, None)
@@ -17,8 +18,8 @@ pub fn symex_function<'ctx>(state: &mut State<'ctx>, func: FunctionValue) -> z3:
 // TODO: Feels hacky, make better
 // After calling symex_function() on the State once, caller can then call
 // symex_again() to get a different solution (a different State and a
-// different returned AST), or None if there are no more possibilities.
-pub fn symex_again<'ctx>(state: &mut State<'ctx>) -> Option<z3::Ast<'ctx>> {
+// different returned BV), or None if there are no more possibilities.
+pub fn symex_again<'ctx>(state: &mut State<'ctx>) -> Option<BV<'ctx>> {
     if let Some((bb, prev_bb)) = state.revert_to_backtracking_point() {
         Some(symex_from_bb(state, bb, Some(prev_bb)))
     } else {
@@ -27,8 +28,8 @@ pub fn symex_again<'ctx>(state: &mut State<'ctx>) -> Option<z3::Ast<'ctx>> {
 }
 
 // Symex the given bb, through the rest of the function.
-// Returns the new AST representing the return value of the function.
-fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<BasicBlock>) -> z3::Ast<'ctx> {
+// Returns the new BV representing the return value of the function.
+fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<BasicBlock>) -> BV<'ctx> {
     debug!("Symexing basic block {}", get_bb_name(bb));
     let insts = InstructionIterator::new(&bb);
     for inst in insts {
@@ -52,55 +53,55 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
     panic!("No terminator found in function");
 }
 
-fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>>> {
+fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&BV<'ctx>, &BV<'ctx>) -> BV<'ctx>>> {
     match opcode {
-        InstructionOpcode::Add => Some(Box::new(z3::Ast::bvadd)),
-        InstructionOpcode::Sub => Some(Box::new(z3::Ast::bvsub)),
-        InstructionOpcode::Mul => Some(Box::new(z3::Ast::bvmul)),
-        InstructionOpcode::UDiv => Some(Box::new(z3::Ast::bvudiv)),
-        InstructionOpcode::SDiv => Some(Box::new(z3::Ast::bvsdiv)),
-        InstructionOpcode::URem => Some(Box::new(z3::Ast::bvurem)),
-        InstructionOpcode::SRem => Some(Box::new(z3::Ast::bvsrem)),
-        InstructionOpcode::And => Some(Box::new(z3::Ast::bvand)),
-        InstructionOpcode::Or => Some(Box::new(z3::Ast::bvor)),
-        InstructionOpcode::Xor => Some(Box::new(z3::Ast::bvxor)),
-        InstructionOpcode::Shl => Some(Box::new(z3::Ast::bvshl)),
-        InstructionOpcode::LShr => Some(Box::new(z3::Ast::bvlshr)),
-        InstructionOpcode::AShr => Some(Box::new(z3::Ast::bvashr)),
+        InstructionOpcode::Add => Some(Box::new(BV::bvadd)),
+        InstructionOpcode::Sub => Some(Box::new(BV::bvsub)),
+        InstructionOpcode::Mul => Some(Box::new(BV::bvmul)),
+        InstructionOpcode::UDiv => Some(Box::new(BV::bvudiv)),
+        InstructionOpcode::SDiv => Some(Box::new(BV::bvsdiv)),
+        InstructionOpcode::URem => Some(Box::new(BV::bvurem)),
+        InstructionOpcode::SRem => Some(Box::new(BV::bvsrem)),
+        InstructionOpcode::And => Some(Box::new(BV::bvand)),
+        InstructionOpcode::Or => Some(Box::new(BV::bvor)),
+        InstructionOpcode::Xor => Some(Box::new(BV::bvxor)),
+        InstructionOpcode::Shl => Some(Box::new(BV::bvshl)),
+        InstructionOpcode::LShr => Some(Box::new(BV::bvlshr)),
+        InstructionOpcode::AShr => Some(Box::new(BV::bvashr)),
         _ => None,
     }
 }
 
-fn intpred_to_z3pred<'ctx>(pred: inkwell::IntPredicate) -> Box<FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>> {
+fn intpred_to_z3pred<'a>(pred: inkwell::IntPredicate) -> Box<FnOnce(&BV<'a>, &BV<'a>) -> Bool<'a>> {
     match pred {
-        inkwell::IntPredicate::EQ => Box::new(z3::Ast::_eq),
-        inkwell::IntPredicate::NE => Box::new(|a,b| z3::Ast::not(&z3::Ast::_eq(a,b))),
-        inkwell::IntPredicate::UGT => Box::new(z3::Ast::bvugt),
-        inkwell::IntPredicate::UGE => Box::new(z3::Ast::bvuge),
-        inkwell::IntPredicate::ULT => Box::new(z3::Ast::bvult),
-        inkwell::IntPredicate::ULE => Box::new(z3::Ast::bvule),
-        inkwell::IntPredicate::SGT => Box::new(z3::Ast::bvsgt),
-        inkwell::IntPredicate::SGE => Box::new(z3::Ast::bvsge),
-        inkwell::IntPredicate::SLT => Box::new(z3::Ast::bvslt),
-        inkwell::IntPredicate::SLE => Box::new(z3::Ast::bvsle),
+        inkwell::IntPredicate::EQ => Box::new(|a,b| BV::_eq(a,b)),
+        inkwell::IntPredicate::NE => Box::new(|a,b| Bool::not(&BV::_eq(a,b))),
+        inkwell::IntPredicate::UGT => Box::new(BV::bvugt),
+        inkwell::IntPredicate::UGE => Box::new(BV::bvuge),
+        inkwell::IntPredicate::ULT => Box::new(BV::bvult),
+        inkwell::IntPredicate::ULE => Box::new(BV::bvule),
+        inkwell::IntPredicate::SGT => Box::new(BV::bvsgt),
+        inkwell::IntPredicate::SGE => Box::new(BV::bvsge),
+        inkwell::IntPredicate::SLT => Box::new(BV::bvslt),
+        inkwell::IntPredicate::SLE => Box::new(BV::bvsle),
     }
 }
 
 fn symex_binop<'ctx, F>(state: &mut State<'ctx>, inst: InstructionValue, z3op: F)
-    where F: FnOnce(&z3::Ast<'ctx>, &z3::Ast<'ctx>) -> z3::Ast<'ctx>
+    where F: FnOnce(&BV<'ctx>, &BV<'ctx>) -> BV<'ctx>
 {
     debug!("Symexing binop {}", &get_value_name(inst));
     assert_eq!(inst.get_num_operands(), 2);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
-    let z3firstop = state.operand_to_ast(firstop);
-    let z3secondop = state.operand_to_ast(secondop);
+    let z3firstop = state.operand_to_bv(firstop);
+    let z3secondop = state.operand_to_bv(secondop);
     let width = firstop.get_type().as_int_type().get_bit_width();
     assert_eq!(width, secondop.get_type().as_int_type().get_bit_width());
     let dest = get_dest_name(inst);
     let z3dest = state.ctx.named_bitvector_const(&dest, width);
     state.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
-    state.add_var(inst, z3dest);
+    state.add_bv_var(inst, z3dest);
 }
 
 fn symex_icmp(state: &mut State, inst: InstructionValue) {
@@ -110,25 +111,25 @@ fn symex_icmp(state: &mut State, inst: InstructionValue) {
     let z3dest = state.ctx.named_bool_const(&dest);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
-    let z3firstop = state.operand_to_ast(firstop);
-    let z3secondop = state.operand_to_ast(secondop);
+    let z3firstop = state.operand_to_bv(firstop);
+    let z3secondop = state.operand_to_bv(secondop);
     let z3pred = intpred_to_z3pred(inst.get_icmp_predicate().unwrap());
     state.assert(&z3dest._eq(&z3pred(&z3firstop, &z3secondop)));
-    state.add_var(inst, z3dest);
+    state.add_bool_var(inst, z3dest);
 }
 
-// Returns the z3::Ast representing the return value
-fn symex_return<'ctx>(state: &State<'ctx>, inst: InstructionValue) -> z3::Ast<'ctx> {
+// Returns the BV representing the return value
+fn symex_return<'ctx>(state: &State<'ctx>, inst: InstructionValue) -> BV<'ctx> {
     debug!("Symexing return {}", &get_value_name(inst));
     assert_eq!(inst.get_num_operands(), 1);
     let rval = inst.get_operand(0).unwrap().left().unwrap();
-    state.operand_to_ast(rval)
+    state.operand_to_bv(rval)
 }
 
 // Continues to the target of the Br (saving a backtracking point if necessary)
-// and eventually returns the new AST representing the return value of the function
+// and eventually returns the new BV representing the return value of the function
 // (when it reaches the end of the function)
-fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: BasicBlock) -> z3::Ast<'ctx> {
+fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: BasicBlock) -> BV<'ctx> {
     debug!("Symexing branch {}", &get_value_name(inst));
     match inst.get_num_operands() {
         1 => {
@@ -139,7 +140,7 @@ fn symex_br<'ctx>(state: &mut State<'ctx>, inst: InstructionValue, cur_bb: Basic
         3 => {
             // conditional branch
             let cond = inst.get_operand(0).unwrap().left().unwrap();
-            let z3cond = state.operand_to_ast(cond);
+            let z3cond = state.operand_to_bool(cond.into_int_value());
             let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
             let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
             // From empirical evidence, I guess get_operand(1) is the false branch and get_operand(2) is the true branch?
@@ -178,8 +179,8 @@ fn symex_phi(state: &mut State, inst: InstructionValue, prev_bb: Option<BasicBlo
         }
     }
     let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
-    let z3value = state.operand_to_ast(chosen_value);
-    state.add_var(inst, z3value);
+    let z3value = state.operand_to_bv(chosen_value);
+    state.add_bv_var(inst, z3value);
 }
 
 fn symex_select(state: &mut State, inst: InstructionValue) {
@@ -188,9 +189,9 @@ fn symex_select(state: &mut State, inst: InstructionValue) {
     let cond = inst.get_operand(0).unwrap().left().unwrap();
     let firstop = inst.get_operand(1).unwrap().left().unwrap();
     let secondop = inst.get_operand(2).unwrap().left().unwrap();
-    let z3cond = state.operand_to_ast(cond);
-    let z3firstop = state.operand_to_ast(firstop);
-    let z3secondop = state.operand_to_ast(secondop);
+    let z3cond = state.operand_to_bool(cond.into_int_value());
+    let z3firstop = state.operand_to_bv(firstop);
+    let z3secondop = state.operand_to_bv(secondop);
     let width = firstop.get_type().as_int_type().get_bit_width();
     assert_eq!(width, secondop.get_type().as_int_type().get_bit_width());
     let dest = get_dest_name(inst);
@@ -198,7 +199,7 @@ fn symex_select(state: &mut State, inst: InstructionValue) {
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
     let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
     if true_feasible && false_feasible {
-        state.assert(&z3dest._eq(&z3::Ast::ite(&z3cond, &z3firstop, &z3secondop)));
+        state.assert(&z3dest._eq(&Bool::ite(&z3cond, &z3firstop, &z3secondop)));
     } else if true_feasible {
         state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
         state.assert(&z3dest._eq(&z3firstop));
@@ -208,5 +209,5 @@ fn symex_select(state: &mut State, inst: InstructionValue) {
     } else {
         unimplemented!("discovered we're unsat while checking a switch condition");
     }
-    state.add_var(inst, z3dest);
+    state.add_bv_var(inst, z3dest);
 }

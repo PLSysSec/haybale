@@ -128,7 +128,7 @@ dependencies = [
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "inkwell 0.1.0",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "z3 0.3.2 (git+https://github.com/prove-rs/z3.rs)",
+ "z3 0.3.2",
 ]
 
 [[package]]
@@ -317,17 +317,15 @@ dependencies = [
 [[package]]
 name = "z3"
 version = "0.3.2"
-source = "git+https://github.com/prove-rs/z3.rs#83067972b403b57ae6686700192a469498676333"
 dependencies = [
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "z3-sys 0.4.0 (git+https://github.com/prove-rs/z3.rs)",
+ "z3-sys 0.4.0",
 ]
 
 [[package]]
 name = "z3-sys"
 version = "0.4.0"
-source = "git+https://github.com/prove-rs/z3.rs#83067972b403b57ae6686700192a469498676333"
 
 [metadata]
 "checksum aho-corasick 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "e6f484ae0c99fec2e858eb6134949117399f222608d84cadb3f58c1f97c2364c"
@@ -369,5 +367,3 @@ source = "git+https://github.com/prove-rs/z3.rs#83067972b403b57ae6686700192a4694
 "checksum winapi-util 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7168bab6e1daee33b4557efd0e95d5ca70a03706d39fa5f3fe7a236f584b03c9"
 "checksum winapi-x86_64-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 "checksum wincolor 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "561ed901ae465d6185fa7864d63fbd5720d0ef718366c9a4dc83cf6170d7e9ba"
-"checksum z3 0.3.2 (git+https://github.com/prove-rs/z3.rs)" = "<none>"
-"checksum z3-sys 0.4.0 (git+https://github.com/prove-rs/z3.rs)" = "<none>"

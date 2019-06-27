@@ -1,6 +1,7 @@
 use inkwell::module::Module;
 use inkwell::values::*;
 use std::path::Path;
+use z3::ast::{Ast, BV};
 
 mod iterators;
 use iterators::*;
@@ -91,7 +92,7 @@ fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
         assert!(param.is_int_value());
         let width = param.as_int_value().get_type().get_bit_width();
         let z3param = ctx.named_bitvector_const(&get_value_name(param), width);
-        state.add_var(param, z3param);
+        state.add_bv_var(param, z3param);
     }
 
     let returnwidth = func.get_type()
@@ -99,7 +100,7 @@ fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
         .expect("Expected function to have return type")
         .into_int_type()
         .get_bit_width();
-    let zero = z3::Ast::bitvector_from_u64(&ctx, 0, returnwidth);
+    let zero = BV::from_u64(&ctx, 0, returnwidth);
 
     let mut optionz3rval = Some(symex_function(&mut state, func));
     loop {
@@ -113,9 +114,9 @@ fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
     if optionz3rval.is_some() {
         // in this case state.check() must have passed
         let model = state.get_model();
-        let z3params = params.iter().map(|&p| state.lookup_var(p));
+        let z3params = params.iter().map(|&p| state.lookup_bv_var(p));
         Some(z3params.map(|p| {
-            let param_as_i64 = model.eval(&p).unwrap().as_i64().unwrap();
+            let param_as_i64 = model.eval(p).unwrap().as_i64().unwrap();
             match returnwidth {
                 8 => IntOfSomeWidth::I8(param_as_i64 as i8),
                 16 => IntOfSomeWidth::I16(param_as_i64 as i16),
