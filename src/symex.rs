@@ -38,6 +38,10 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_binop(state, inst, z3binop);
         } else if opcode == InstructionOpcode::ICmp {
             symex_icmp(state, inst);
+        } else if opcode == InstructionOpcode::ZExt {
+            symex_zext(state, inst);
+        } else if opcode == InstructionOpcode::SExt {
+            symex_sext(state, inst);
         } else if opcode == InstructionOpcode::Phi {
             symex_phi(state, inst, prev_bb);
         } else if opcode == InstructionOpcode::Select {
@@ -116,6 +120,42 @@ fn symex_icmp(state: &mut State, inst: InstructionValue) {
     let z3pred = intpred_to_z3pred(inst.get_icmp_predicate().unwrap());
     state.assert(&z3dest._eq(&z3pred(&z3firstop, &z3secondop)));
     state.add_bool_var(inst, z3dest);
+}
+
+fn symex_zext(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing zext {}", &get_value_name(inst));
+    debug!("(zext as debug is {:?}", inst);
+    assert_eq!(inst.get_num_operands(), 1);
+    let dest = get_dest_name(inst);
+    let op = inst.get_operand(0).unwrap().left().unwrap();
+    let z3op = state.operand_to_bv(op);
+
+    let source_size = z3op.get_size();
+    // AFAICT you can't get the destination type from LLVM
+    // hack for now: if source is < 32 bits assume zext to 32 bits,
+    //   else assume zext to 64 bits
+    let dest_size = if source_size < 32 { 32 } else { 64 };
+    let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
+    state.assert(&z3dest._eq(&z3op.zero_ext(dest_size - source_size)));
+    state.add_bv_var(inst, z3dest);
+}
+
+fn symex_sext(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing sext {}", &get_value_name(inst));
+    debug!("(sext as debug is {:?}", inst);
+    assert_eq!(inst.get_num_operands(), 1);
+    let dest = get_dest_name(inst);
+    let op = inst.get_operand(0).unwrap().left().unwrap();
+    let z3op = state.operand_to_bv(op);
+
+    let source_size = z3op.get_size();
+    // AFAICT you can't get the destination type from LLVM
+    // hack for now: if source is < 32 bits assume sext to 32 bits,
+    //   else assume sext to 64 bits
+    let dest_size = if source_size < 32 { 32 } else { 64 };
+    let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
+    state.assert(&z3dest._eq(&z3op.sign_ext(dest_size - source_size)));
+    state.add_bv_var(inst, z3dest);
 }
 
 // Returns the BV representing the return value
