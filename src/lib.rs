@@ -85,15 +85,14 @@ pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
 
     if optionz3rval.is_some() {
         // in this case state.check() must have passed
-        let model = state.get_model();
-        let z3params = params.iter().map(|&p| state.lookup_bv_var(p));
-        Some(z3params.map(|p| {
-            let param_as_i64 = model.eval(p).unwrap().as_i64().unwrap();
-            match p.get_size() {
-                8 => IntOfSomeWidth::I8(param_as_i64 as i8),
-                16 => IntOfSomeWidth::I16(param_as_i64 as i16),
-                32 => IntOfSomeWidth::I32(param_as_i64 as i32),
-                64 => IntOfSomeWidth::I64(param_as_i64 as i64),
+        Some(params.iter().map(|&p| {
+            let param_as_u64 = state.get_a_solution_for_bv_llvmval(p)
+                .expect("since state.check() passed, expected a solution for each var");
+            match p.into_int_value().get_type().get_bit_width() {
+                8 => IntOfSomeWidth::I8(param_as_u64 as i8),
+                16 => IntOfSomeWidth::I16(param_as_u64 as i16),
+                32 => IntOfSomeWidth::I32(param_as_u64 as i32),
+                64 => IntOfSomeWidth::I64(param_as_u64 as i64),
                 s => unimplemented!("Parameter with bitwidth {}", s),
             }
         }).collect())
