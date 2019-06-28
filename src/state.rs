@@ -3,7 +3,7 @@ use inkwell::values::*;
 use log::debug;
 use std::collections::HashMap;
 use std::fmt;
-use z3::ast::{Ast, BV, Bool};
+use z3::ast::{BV, Bool};
 
 use crate::utils::*;
 
@@ -235,5 +235,196 @@ impl<'ctx> State<'ctx> {
     // in lieu of an actual Display or Debug for State (for now)
     pub fn prettyprint_constraints(&self) {
         println!("{}", self.solver);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sat() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let state = State::new(&ctx);
+
+        // empty state should be sat
+        assert!(state.check());
+
+        // adding True constraint should still be sat
+        state.assert(&Bool::from_bool(&ctx, true));
+        assert!(state.check());
+
+        // adding x > 0 constraint should still be sat
+        let x = ctx.named_bitvector_const("x", 64);
+        state.assert(&x.bvsgt(&BV::from_i64(&ctx, 0, 64)));
+        assert!(state.check());
+    }
+
+    #[test]
+    fn unsat() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let state = State::new(&ctx);
+
+        // adding False constraint should be unsat
+        state.assert(&Bool::from_bool(&ctx, false));
+        assert!(!state.check());
+    }
+
+    #[test]
+    fn unsat_with_extra_constraints() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let state = State::new(&ctx);
+
+        // adding x > 3 constraint should still be sat
+        let x = ctx.named_bitvector_const("x", 64);
+        state.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
+        assert!(state.check());
+
+        // adding x < 3 constraint should make us unsat
+        let bad_constraint = x.bvult(&BV::from_u64(&ctx, 3, 64));
+        assert!(!state.check_with_extra_constraints(&[&bad_constraint]));
+
+        // the state itself should still be sat, extra constraints weren't permanently added
+        assert!(state.check());
+    }
+
+    #[test]
+    fn get_model() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let state = State::new(&ctx);
+
+        // add x > 3 constraint
+        let x = ctx.named_bitvector_const("x", 64);
+        state.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
+
+        // get model
+        assert!(state.check());
+        let model = state.get_model();
+
+        // check that the computed value of x is > 3
+        let x_value = model.eval(&x).unwrap().as_u64().unwrap();
+        assert!(x_value > 3);
+    }
+
+    #[test]
+    fn lookup_vars() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mut state = State::new(&ctx);
+
+        // create Inkwell values
+        // We need non-constant values, which seem to be
+        // surprisingly hard to create. We use function parameters.
+        // First create the function type itself: (i64, bool) -> i64
+        let valty = inkwell::types::IntType::i64_type();
+        let boolty = inkwell::types::IntType::bool_type();
+        use inkwell::types::BasicType;
+        let functy = valty.fn_type(&[valty.as_basic_type_enum(), boolty.as_basic_type_enum()], false);
+        // Then create a function of that type
+        let inkwellmod = inkwell::module::Module::create("test_mod");
+        let func = inkwellmod.add_function("test_func", functy, None);
+        // Finally, get the parameters of that function
+        let inkwellval = func.get_nth_param(0).unwrap().into_int_value();
+        let inkwellboolval = func.get_nth_param(1).unwrap().into_int_value();
+
+        // create Z3 values
+        let x = ctx.named_bitvector_const("x", 64);
+        let boolvar = ctx.named_bool_const("bool");
+
+        // associate Inkwell values with Z3 values
+        state.add_bv_var(inkwellval, x.clone());  // these clone()s wouldn't normally be necessary but we want to compare against the original values later
+        state.add_bool_var(inkwellboolval, boolvar.clone());
+
+        // check that looking up the Inkwell values gives the correct Z3 ones
+        assert_eq!(state.lookup_bv_var(inkwellval), &x);
+        assert_eq!(state.lookup_bool_var(inkwellboolval), &boolvar);
+
+        // a different way of looking up
+        assert_eq!(state.operand_to_bv(inkwellval), x);
+        assert_eq!(state.operand_to_bool(inkwellboolval), boolvar);
+    }
+
+    #[test]
+    fn const_bv() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let state = State::new(&ctx);
+
+        // create an Inkwell value which is constant 3
+        let constint = inkwell::types::IntType::i64_type().const_int(3, false);
+
+        // this should create a corresponding Z3 value which is also constant 3
+        let bv = state.operand_to_bv(constint);
+
+        // check that the Z3 value was evaluated to 3
+        assert!(state.check());
+        assert_eq!(state.get_model().eval(&bv).unwrap().as_i64().unwrap(), 3);
+    }
+
+    #[test]
+    fn const_bool() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let state = State::new(&ctx);
+
+        // create Inkwell constants true and false
+        let booltype = inkwell::types::IntType::bool_type();
+        let consttrue = booltype.const_int(1, false);
+        let constfalse = booltype.const_int(0, false);
+
+        // this should create Z3 values true and false
+        let bvtrue = state.operand_to_bool(consttrue);
+        let bvfalse = state.operand_to_bool(constfalse);
+
+        // assert the first one, which should be true, so we should still be sat
+        state.assert(&bvtrue);
+        assert!(state.check());
+
+        // assert the second one, which should be false, so we should be unsat
+        state.assert(&bvfalse);
+        assert!(!state.check());
+    }
+
+    #[test]
+    fn backtracking() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mut state = State::new(&ctx);
+
+        // assert x > 11
+        let x = ctx.named_bitvector_const("x", 64);
+        state.assert(&x.bvsgt(&BV::from_i64(&ctx, 11, 64)));
+
+        // create some Inkwell BasicBlocks
+        let inkwellmod = inkwell::module::Module::create("test_mod");
+        let functy = inkwell::types::IntType::i64_type().fn_type(&[], false);
+        let func = inkwellmod.add_function("test_func", functy, None);
+        let bb1 = func.append_basic_block("bb1");
+        let bb2 = func.append_basic_block("bb2");
+
+        // create a backtrack point with constraint y > 5
+        let y = ctx.named_bitvector_const("y", 64);
+        let constraint = y.bvsgt(&BV::from_i64(&ctx, 5, 64));
+        state.save_backtracking_point(bb2, bb1, constraint);
+
+        // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
+        assert!(state.check_with_extra_constraints(&[&y.bvslt(&BV::from_i64(&ctx, 4, 64))]));
+
+        // assert x < 8 to make us unsat
+        state.assert(&x.bvslt(&BV::from_i64(&ctx, 8, 64)));
+        assert!(!state.check());
+
+        // roll back to backtrack point; check that we got the right bbs
+        let (bb_a, bb_b) = state.revert_to_backtracking_point().unwrap();
+        assert_eq!(bb_a, bb2);
+        assert_eq!(bb_b, bb1);
+
+        // check that the constraint x < 8 was removed: we're sat again
+        assert!(state.check());
+
+        // check that the constraint y > 5 was added: y evaluates to something > 5
+        assert!(state.get_model().eval(&y).unwrap().as_i64().unwrap() > 5);
+
+        // check that the first constraint remained in place: x > 11
+        assert!(state.get_model().eval(&x).unwrap().as_u64().unwrap() > 11);
+
+        // check that trying to backtrack again returns None
+        assert_eq!(state.revert_to_backtracking_point(), None);
     }
 }
