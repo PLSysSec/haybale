@@ -139,6 +139,11 @@ impl<'ctx> State<'ctx> {
         }
         let retval = self.solver.check();
         self.solver.pop(1);
+        if retval {
+            debug!("Would be sat with extra constraints {:?}", conds);
+        } else {
+            debug!("Would be unsat with extra constraints {:?}", conds);
+        }
         retval
     }
 
@@ -230,11 +235,6 @@ impl<'ctx> State<'ctx> {
         } else {
             None
         }
-    }
-
-    // in lieu of an actual Display or Debug for State (for now)
-    pub fn prettyprint_constraints(&self) {
-        println!("{}", self.solver);
     }
 }
 
