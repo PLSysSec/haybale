@@ -323,7 +323,7 @@ mod tests {
         assert!(state.check());
 
         // adding x > 0 constraint should still be sat
-        let x = ctx.named_bitvector_const("x", 64);
+        let x = BV::new_const(&ctx, "x", 64);
         state.assert(&x.bvsgt(&BV::from_i64(&ctx, 0, 64)));
         assert!(state.check());
     }
@@ -344,7 +344,7 @@ mod tests {
         let mut state = State::new(&ctx);
 
         // adding x > 3 constraint should still be sat
-        let x = ctx.named_bitvector_const("x", 64);
+        let x = BV::new_const(&ctx, "x", 64);
         state.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
         assert!(state.check());
 
@@ -362,7 +362,7 @@ mod tests {
         let mut state = State::new(&ctx);
 
         // add x > 3 constraint
-        let x = ctx.named_bitvector_const("x", 64);
+        let x = BV::new_const(&ctx, "x", 64);
         state.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
 
         // check that the computed value of x is > 3
@@ -391,8 +391,8 @@ mod tests {
         let inkwellboolval = func.get_nth_param(1).unwrap().into_int_value();
 
         // create Z3 values
-        let x = ctx.named_bitvector_const("x", 64);
-        let boolvar = ctx.named_bool_const("bool");
+        let x = BV::new_const(&ctx, "x", 64);
+        let boolvar = Bool::new_const(&ctx, "bool");
 
         // associate Inkwell values with Z3 values
         state.add_bv_var(inkwellval, x.clone());  // these clone()s wouldn't normally be necessary but we want to compare against the original values later
@@ -451,7 +451,7 @@ mod tests {
         let mut state = State::new(&ctx);
 
         // assert x > 11
-        let x = ctx.named_bitvector_const("x", 64);
+        let x = BV::new_const(&ctx, "x", 64);
         state.assert(&x.bvsgt(&BV::from_i64(&ctx, 11, 64)));
 
         // create some Inkwell BasicBlocks
@@ -462,7 +462,7 @@ mod tests {
         let bb2 = func.append_basic_block("bb2");
 
         // create a backtrack point with constraint y > 5
-        let y = ctx.named_bitvector_const("y", 64);
+        let y = BV::new_const(&ctx, "y", 64);
         let constraint = y.bvsgt(&BV::from_i64(&ctx, 5, 64));
         state.save_backtracking_point(bb2, bb1, constraint);
 

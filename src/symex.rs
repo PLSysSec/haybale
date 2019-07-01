@@ -105,7 +105,7 @@ fn symex_binop<'ctx, F>(state: &mut State<'ctx>, inst: InstructionValue, z3op: F
     let width = firstop.get_type().as_int_type().get_bit_width();
     assert_eq!(width, secondop.get_type().as_int_type().get_bit_width());
     let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bitvector_const(&dest, width);
+    let z3dest = BV::new_const(state.ctx, dest, width);
     state.assert(&z3dest._eq(&z3op(&z3firstop, &z3secondop)));
     state.add_bv_var(inst, z3dest);
 }
@@ -114,7 +114,7 @@ fn symex_icmp(state: &mut State, inst: InstructionValue) {
     debug!("Symexing icmp {}", &get_value_name(inst));
     assert_eq!(inst.get_num_operands(), 2);
     let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bool_const(&dest);
+    let z3dest = Bool::new_const(state.ctx, dest);
     let firstop = inst.get_operand(0).unwrap().left().unwrap();
     let secondop = inst.get_operand(1).unwrap().left().unwrap();
     let z3firstop = state.operand_to_bv(firstop);
@@ -133,7 +133,7 @@ fn symex_zext(state: &mut State, inst: InstructionValue) {
     let source_size = z3op.get_size();
     let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
     let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
+    let z3dest = BV::new_const(state.ctx, dest, dest_size);
     state.assert(&z3dest._eq(&z3op.zero_ext(dest_size - source_size)));
     state.add_bv_var(inst, z3dest);
 }
@@ -147,7 +147,7 @@ fn symex_sext(state: &mut State, inst: InstructionValue) {
     let source_size = z3op.get_size();
     let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
     let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
+    let z3dest = BV::new_const(state.ctx, dest, dest_size);
     state.assert(&z3dest._eq(&z3op.sign_ext(dest_size - source_size)));
     state.add_bv_var(inst, z3dest);
 }
@@ -159,7 +159,7 @@ fn symex_trunc(state: &mut State, inst: InstructionValue) {
     let z3op = state.operand_to_bv(op);
     let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
     let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bitvector_const(&dest, dest_size);
+    let z3dest = BV::new_const(state.ctx, dest, dest_size);
     state.assert(&z3dest._eq(&z3op.extract(dest_size-1, 0)));
     state.add_bv_var(inst, z3dest);
 }
@@ -241,7 +241,7 @@ fn symex_select(state: &mut State, inst: InstructionValue) {
     let width = firstop.get_type().as_int_type().get_bit_width();
     assert_eq!(width, secondop.get_type().as_int_type().get_bit_width());
     let dest = get_dest_name(inst);
-    let z3dest = state.ctx.named_bitvector_const(&dest, width);
+    let z3dest = BV::new_const(state.ctx, dest, width);
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
     let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
     if true_feasible && false_feasible {

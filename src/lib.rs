@@ -63,7 +63,7 @@ pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
     for &param in params.iter() {
         assert!(param.is_int_value());
         let width = param.as_int_value().get_type().get_bit_width();
-        let z3param = ctx.named_bitvector_const(&get_value_name(param), width);
+        let z3param = BV::new_const(&ctx, get_value_name(param), width);
         state.add_bv_var(param, z3param);
     }
 
