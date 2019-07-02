@@ -45,6 +45,8 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_store(state, inst);
         } else if opcode == InstructionOpcode::GetElementPtr {
             symex_gep(state, inst);
+        } else if opcode == InstructionOpcode::Alloca {
+            symex_alloca(state, inst);
         } else if opcode == InstructionOpcode::ZExt {
             symex_zext(state, inst);
         } else if opcode == InstructionOpcode::SExt {
@@ -212,6 +214,20 @@ fn symex_gep(state: &mut State, inst: InstructionValue) {
     let total_offset = z3index.bvmul(&BV::from_u64(state.ctx, size_pointed_to.into(), z3index.get_size()));
     state.assert(&z3dest._eq(&z3base.bvadd(&total_offset)));
     state.add_bv_var(inst, z3dest);
+}
+
+fn symex_alloca(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing alloca {}", &get_value_name(inst));
+    assert_eq!(inst.get_num_operands(), 1);
+    let dest_type = get_dest_type(inst);
+    let type_pointed_to = dest_type.into_pointer_type().get_element_type();
+    let size_pointed_to = match type_pointed_to {
+        AnyTypeEnum::IntType(t) => t.get_bit_width(),
+        AnyTypeEnum::PointerType(_) => 64,
+        _ => unimplemented!("Alloca for type {:?}", type_pointed_to),
+    };
+    let allocated = state.allocate(size_pointed_to.into());
+    state.add_bv_var(inst, allocated);
 }
 
 // Returns the BV representing the return value

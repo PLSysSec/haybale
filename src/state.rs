@@ -10,6 +10,7 @@ use crate::utils::*;
 
 use crate::memory::Memory;
 use crate::solver::Solver;
+use crate::alloc::Alloc;
 
 type VarMap<'ctx> = HashMap<AnyValueEnum, BVorBool<'ctx>>;
 
@@ -80,6 +81,7 @@ pub struct State<'ctx> {
     pub ctx: &'ctx z3::Context,
     vars: VarMap<'ctx>,
     mem: Memory<'ctx>,
+    alloc: Alloc,
     solver: Solver<'ctx>,
     backtrack_points: Vec<BacktrackPoint<'ctx>>,
 }
@@ -123,6 +125,7 @@ impl<'ctx> State<'ctx> {
             ctx,
             vars: HashMap::new(),
             mem: Memory::new(ctx),
+            alloc: Alloc::new(),
             solver: Solver::new(ctx),
             backtrack_points: Vec::new(),
         }
@@ -247,6 +250,12 @@ impl<'ctx> State<'ctx> {
         self.mem.write(addr, val)
     }
 
+    // Allocate a value of size `bits`; return a pointer to the newly allocated object
+    pub fn allocate(&mut self, bits: u64) -> BV<'ctx> {
+        let raw_ptr = self.alloc.alloc(bits);
+        BV::from_u64(self.ctx, raw_ptr, 64)
+    }
+
     // again, we require owned BasicBlocks because copy should be cheap.  Caller can clone if necessary.
     // The constraint will be added only if we end up backtracking to this point, and only then
     pub fn save_backtracking_point(&mut self, next_bb: BasicBlock, prev_bb: BasicBlock, constraint: Bool<'ctx>) {
@@ -277,7 +286,7 @@ impl<'ctx> State<'ctx> {
 mod tests {
     use super::*;
 
-    // we don't include tests here for Solver or Memory; those are tested in their own modules.
+    // we don't include tests here for Solver, Memory, or Alloc; those are tested in their own modules.
     // Instead, here we just test the nontrivial functionality that State has itself.
 
     #[test]

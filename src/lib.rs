@@ -14,6 +14,7 @@ mod utils;
 use utils::get_value_name;
 
 mod memory;
+mod alloc;
 mod solver;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -110,7 +111,7 @@ pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<SolutionValue>> {
                     64 => SolutionValue::I64(param_as_u64 as i64),
                     s => unimplemented!("Integer parameter with bitwidth {}", s),
                 },
-                BasicValueEnum::PointerValue(v) => SolutionValue::Ptr(param_as_u64),
+                BasicValueEnum::PointerValue(_) => SolutionValue::Ptr(param_as_u64),
                 _ => unimplemented!("Function parameter {:?}", p)
             }
         }).collect())
