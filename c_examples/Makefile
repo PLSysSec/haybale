@@ -3,13 +3,19 @@ CFLAGS=-O3
 LLVMAS=llvm-as
 
 .PHONY: all
-all: basic/basic.bc basic/basic.ll
+all: basic/basic.bc basic/basic.ll \
+			memory/memory.bc memory/memory.ll \
+			loop/loop.bc loop/loop.ll
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
 
 %.bc : %.ll
 	$(LLVMAS) $^ -o $@
+
+# use -O0 on loop.c
+loop/loop.ll : loop/loop.c
+	$(CC) -O0 -S -emit-llvm $^ -o $@
 
 .PHONY: clean
 clean:

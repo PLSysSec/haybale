@@ -172,16 +172,15 @@ define i64 @int64t(i64, i64) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
-define signext i8 @mixed_bitwidths(i8 signext, i16 signext, i32, i64) local_unnamed_addr #0 {
-  %5 = zext i8 %0 to i32
-  %6 = zext i16 %1 to i32
-  %7 = add nuw nsw i32 %6, %5
-  %8 = add i32 %7, %2
-  %9 = zext i32 %8 to i64
-  %10 = add i64 %9, %3
-  %11 = trunc i64 %10 to i8
-  %12 = add i8 %11, -3
-  ret i8 %12
+define i64 @mixed_bitwidths(i8 signext, i16 signext, i32, i64) local_unnamed_addr #0 {
+  %5 = sext i8 %0 to i32
+  %6 = sext i16 %1 to i32
+  %7 = add nsw i32 %6, %5
+  %8 = add nsw i32 %7, %2
+  %9 = sext i32 %8 to i64
+  %10 = add i64 %3, -3
+  %11 = add i64 %10, %9
+  ret i64 %11
 }
 
 attributes #0 = { norecurse nounwind readnone ssp uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="penryn" "target-features"="+cx16,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
