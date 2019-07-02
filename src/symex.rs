@@ -1,4 +1,5 @@
 use inkwell::basic_block::BasicBlock;
+use inkwell::types::*;
 use inkwell::values::*;
 use log::debug;
 use z3::ast::{Ast, BV, Bool};
@@ -42,6 +43,8 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_load(state, inst);
         } else if opcode == InstructionOpcode::Store {
             symex_store(state, inst);
+        } else if opcode == InstructionOpcode::GetElementPtr {
+            symex_gep(state, inst);
         } else if opcode == InstructionOpcode::ZExt {
             symex_zext(state, inst);
         } else if opcode == InstructionOpcode::SExt {
@@ -188,6 +191,27 @@ fn symex_store(state: &mut State, inst: InstructionValue) {
     let addr = inst.get_operand(1).unwrap().left().unwrap();
     let z3addr = state.operand_to_bv(addr);
     state.write(&z3addr, z3val);
+}
+
+fn symex_gep(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing gep {}", &get_value_name(inst));
+    assert_eq!(inst.get_num_operands(), 2);
+    let base = inst.get_operand(0).unwrap().left().unwrap();
+    let z3base = state.operand_to_bv(base);
+    let index = inst.get_operand(1).unwrap().left().unwrap();
+    let z3index = state.operand_to_bv(index);
+    let dest = get_dest_name(inst);
+    let z3dest = BV::new_const(state.ctx, dest, 64);  // dest is a pointer, so by our convention is 64 bits
+    let dest_type = get_dest_type(inst);
+    let type_pointed_to = dest_type.into_pointer_type().get_element_type();
+    let size_pointed_to = match type_pointed_to {
+        AnyTypeEnum::IntType(t) => t.get_bit_width(),
+        AnyTypeEnum::PointerType(_) => 64,
+        _ => unimplemented!("GEP with element type {:?}", type_pointed_to),
+    };
+    let total_offset = z3index.bvmul(&BV::from_u64(state.ctx, size_pointed_to.into(), z3index.get_size()));
+    state.assert(&z3dest._eq(&z3base.bvadd(&total_offset)));
+    state.add_bv_var(inst, z3dest);
 }
 
 // Returns the BV representing the return value
