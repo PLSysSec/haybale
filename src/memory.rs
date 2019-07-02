@@ -6,7 +6,6 @@ use log::debug;
 pub struct Memory<'ctx> {
     ctx: &'ctx z3::Context,
     mem: Array<'ctx>,
-    cell_bytes_as_bv: BV<'ctx>,
     log_bits_in_byte_as_bv: BV<'ctx>,
 }
 
@@ -25,7 +24,6 @@ impl<'ctx> Memory<'ctx> {
         Memory {
             ctx,
             mem: Array::new_const(&ctx, "mem", &domain, &range),
-            cell_bytes_as_bv: BV::from_u64(ctx, Self::CELL_BYTES as u64, Self::INDEX_BITS),
             log_bits_in_byte_as_bv: BV::from_u64(ctx, Self::LOG_BITS_IN_BYTE as u64, Self::INDEX_BITS),
         }
     }
