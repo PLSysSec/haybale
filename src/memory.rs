@@ -51,9 +51,8 @@ impl<'ctx> Memory<'ctx> {
     // Read any number of bits of memory, at any alignment, but not crossing cell boundaries.
     // Returned BV will have size `bits`.
     pub fn read(&self, addr: &BV<'ctx>, bits: u32) -> BV<'ctx> {
-        println!("Reading {} bits at {}", bits, addr);
+        debug!("Reading {} bits at {}", bits, addr);
         let cell_contents = self.read_cell(addr);
-        println!("cell_contents is {}", cell_contents);
         assert!(bits <= Self::CELL_BITS);
         let rval = if bits == Self::CELL_BITS {
             cell_contents  // shortcut to avoid more BV operations
@@ -62,21 +61,20 @@ impl<'ctx> Memory<'ctx> {
             let offset = addr.extract(Self::LOG_CELL_BYTES-1, 0)  // the actual offset part of the address
                 .zero_ext(Self::CELL_BITS - Self::LOG_CELL_BYTES)  // zero-extend to CELL_BITS
                 .bvshl(&self.log_bits_in_byte_as_bv);  // offset in bits rather than bytes
-            println!("offset is {}", offset);
 
             // We can't `extract` at a non-const location, but we can shift by a non-const amount
             cell_contents.bvlshr(&offset)  // shift off whatever low-end bits we don't want
                 .extract(bits - 1, 0)  // take just the bits we want, starting from 0
                 .simplify()
         };
-        println!("Value read is {}", rval);
+        debug!("Value read is {}", rval);
         rval
     }
 
     // Write any number of bits of memory, at any alignment, but not crossing cell boundaries.
     // TODO: to enforce concretization, we could just take a u64 address here
     pub fn write(&mut self, addr: &BV<'ctx>, val: BV<'ctx>) {
-        println!("Writing {} to address {}", val, addr);
+        debug!("Writing {} to address {}", val, addr);
         let write_size = val.get_size();
         assert!(write_size <= Self::CELL_BITS);
         let data_to_write = if write_size == Self::CELL_BITS {
@@ -98,13 +96,12 @@ impl<'ctx> Memory<'ctx> {
             // mask_write is the write data in its appropriate bit positions, 0's elsewhere.
             let mask_write = val.zero_ext(Self::CELL_BITS - write_size).bvshl(&offset);
 
-            let existing_contents = self.read_cell(addr);
-            println!("existing_contents is {}", existing_contents);
-            existing_contents.bvand(&mask_clear)  // zero out the section we'll be writing
+            self.read_cell(addr)
+                .bvand(&mask_clear)  // zero out the section we'll be writing
                 .bvor(&mask_write)  // write the data
                 .simplify()
         };
-        println!("Final cell data being written is {}", data_to_write);
+        debug!("Final cell data being written is {}", data_to_write);
         self.write_cell(addr, data_to_write);
     }
 }
