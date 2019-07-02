@@ -14,6 +14,7 @@ mod utils;
 use utils::get_value_name;
 
 mod memory;
+mod solver;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum SolutionValue {

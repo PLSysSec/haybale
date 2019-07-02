@@ -9,6 +9,7 @@ use z3::ast::{BV, Bool};
 use crate::utils::*;
 
 use crate::memory::Memory;
+use crate::solver::Solver;
 
 type VarMap<'ctx> = HashMap<AnyValueEnum, BVorBool<'ctx>>;
 
@@ -77,17 +78,10 @@ impl<'ctx> BVorBool<'ctx> {
 
 pub struct State<'ctx> {
     pub ctx: &'ctx z3::Context,
-    solver: z3::Solver<'ctx>,
     vars: VarMap<'ctx>,
     mem: Memory<'ctx>,
+    solver: Solver<'ctx>,
     backtrack_points: Vec<BacktrackPoint<'ctx>>,
-
-    // Invariants:
-    // if `check_status` is `Some`, then it is a cached value of the last `solver.check()`, which is still valid
-    // if `model` is `Some`, then it is a model for the current solver constraints
-    // if `model` is `Some`, then `check_status` must be as well (but not necessarily vice versa)
-    check_status: Option<bool>,
-    model: Option<z3::Model<'ctx>>,
 }
 
 struct BacktrackPoint<'ctx> {
@@ -125,57 +119,37 @@ impl<'ctx> fmt::Display for BacktrackPoint<'ctx> {
 
 impl<'ctx> State<'ctx> {
     pub fn new(ctx: &'ctx z3::Context) -> Self {
-        State {
+        Self {
             ctx,
-            solver: z3::Solver::new(ctx),
             vars: HashMap::new(),
             mem: Memory::new(ctx),
+            solver: Solver::new(ctx),
             backtrack_points: Vec::new(),
-            check_status: None,
-            model: None,
         }
     }
 
     pub fn assert(&mut self, cond: &Bool<'ctx>) {
-        debug!("asserting {}", cond);
-        // A new assertion invalidates the cached check status and model
-        self.check_status = None;
-        self.model = None;
-        self.solver.assert(cond);
+        self.solver.assert(cond)
     }
 
     pub fn check(&mut self) -> bool {
-        match self.check_status {
-            Some(status) => status,
-            None => {
-                debug!("Solving with constraints:\n{}", self.solver);
-                self.check_status = Some(self.solver.check());
-                self.check_status.unwrap()
-            }
-        }
+        self.solver.check()
     }
 
     pub fn check_with_extra_constraints(&mut self, conds: &[&Bool<'ctx>]) -> bool {
-        // although the check status by itself would not be invalidated by this,
-        // we do need to run check() again before getting the model,
-        // so we indicate that by invalidating the check status if we don't have a model
-        if self.model.is_none() {
-            self.check_status = None;
-        }
+        self.solver.check_with_extra_constraints(conds)
+    }
 
-        self.solver.push();
-        for cond in conds {
-          self.solver.assert(cond);
-        }
-        let retval = self.solver.check();
-        self.solver.pop(1);
+    // Get one possible concrete value for the BV.
+    // Returns None if no possible solution.
+    pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
+        self.solver.get_a_solution_for_bv(bv)
+    }
 
-        if retval {
-            debug!("Would be sat with extra constraints {:?}", conds);
-        } else {
-            debug!("Would be unsat with extra constraints {:?}", conds);
-        }
-        retval
+    // Get one possible concrete value for the Bool.
+    // Returns None if no possible solution.
+    pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Option<bool> {
+        self.solver.get_a_solution_for_bool(b)
     }
 
     // Get one possible concrete value for the Value, which is a bitvector.
@@ -190,38 +164,6 @@ impl<'ctx> State<'ctx> {
     pub fn get_a_solution_for_bool_llvmval(&mut self, v: impl AnyValue + Copy) -> Option<bool> {
         let b = self.lookup_bool_var(v).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
-    }
-
-    // Get one possible concrete value for the BV.
-    // Returns None if no possible solution.
-    pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
-        self.refresh_model();
-        if self.check_status.unwrap() {
-            Some(self.model.as_ref().unwrap().eval(bv).unwrap().as_u64().unwrap())
-        } else {
-            None
-        }
-    }
-
-    // Get one possible concrete value for the Bool.
-    // Returns None if no possible solution.
-    pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Option<bool> {
-        self.refresh_model();
-        if self.check_status.unwrap() {
-            Some(self.model.as_ref().unwrap().eval(b).unwrap().as_bool().unwrap())
-        } else {
-            None
-        }
-    }
-
-    // Private function which ensures that the check status and model are up to date with the current constraints
-    fn refresh_model(&mut self) {
-        if self.model.is_some() { return; }  // nothing to do
-        self.check();
-        if self.check_status.unwrap() {
-            // check() was successful, i.e. we are sat. Generate the model.
-            self.model = Some(self.solver.get_model());
-        }
     }
 
     // Associate the given value with the given BV
@@ -318,8 +260,6 @@ impl<'ctx> State<'ctx> {
     pub fn revert_to_backtracking_point(&mut self) -> Option<(BasicBlock, BasicBlock)> {
         if let Some(bp) = self.backtrack_points.pop() {
             debug!("Reverting to backtracking point {}", bp);
-            self.check_status = None;
-            self.model = None;
             self.solver.pop(1);
             debug!("Constraints are now:\n{}", self.solver);
             self.assert(&bp.constraint);
@@ -337,65 +277,8 @@ impl<'ctx> State<'ctx> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn sat() {
-        let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
-
-        // empty state should be sat
-        assert!(state.check());
-
-        // adding True constraint should still be sat
-        state.assert(&Bool::from_bool(&ctx, true));
-        assert!(state.check());
-
-        // adding x > 0 constraint should still be sat
-        let x = BV::new_const(&ctx, "x", 64);
-        state.assert(&x.bvsgt(&BV::from_i64(&ctx, 0, 64)));
-        assert!(state.check());
-    }
-
-    #[test]
-    fn unsat() {
-        let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
-
-        // adding False constraint should be unsat
-        state.assert(&Bool::from_bool(&ctx, false));
-        assert!(!state.check());
-    }
-
-    #[test]
-    fn unsat_with_extra_constraints() {
-        let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
-
-        // adding x > 3 constraint should still be sat
-        let x = BV::new_const(&ctx, "x", 64);
-        state.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
-        assert!(state.check());
-
-        // adding x < 3 constraint should make us unsat
-        let bad_constraint = x.bvult(&BV::from_u64(&ctx, 3, 64));
-        assert!(!state.check_with_extra_constraints(&[&bad_constraint]));
-
-        // the state itself should still be sat, extra constraints weren't permanently added
-        assert!(state.check());
-    }
-
-    #[test]
-    fn get_model() {
-        let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
-
-        // add x > 3 constraint
-        let x = BV::new_const(&ctx, "x", 64);
-        state.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
-
-        // check that the computed value of x is > 3
-        let x_value = state.get_a_solution_for_bv(&x).expect("Expected a solution for x");
-        assert!(x_value > 3);
-    }
+    // we don't include tests here for Solver or Memory; those are tested in their own modules.
+    // Instead, here we just test the nontrivial functionality that State has itself.
 
     #[test]
     fn lookup_vars() {
