@@ -69,12 +69,10 @@ pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<SolutionValue>> {
 
     let params: Vec<BasicValueEnum> = ParamsIterator::new(func).collect();
     for &param in params.iter() {
-        let width = if param.is_int_value() {
-            param.as_int_value().get_type().get_bit_width()
-        } else if param.is_pointer_value() {
-            64
-        } else {
-            unimplemented!("Function parameter {:?}", param)
+        let width = match param {
+            BasicValueEnum::IntValue(v) => v.get_type().get_bit_width(),
+            BasicValueEnum::PointerValue(_) => 64,
+            _ => unimplemented!("Function parameter {:?}", param)
         };
         let z3param = BV::new_const(&ctx, get_value_name(param), width);
         state.add_bv_var(param, z3param);
@@ -101,18 +99,16 @@ pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<SolutionValue>> {
         Some(params.iter().map(|&p| {
             let param_as_u64 = state.get_a_solution_for_bv_llvmval(p)
                 .expect("since state.check() passed, expected a solution for each var");
-            if p.is_int_value() {
-                match p.into_int_value().get_type().get_bit_width() {
+            match p {
+                BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
                     8 => SolutionValue::I8(param_as_u64 as i8),
                     16 => SolutionValue::I16(param_as_u64 as i16),
                     32 => SolutionValue::I32(param_as_u64 as i32),
                     64 => SolutionValue::I64(param_as_u64 as i64),
                     s => unimplemented!("Integer parameter with bitwidth {}", s),
-                }
-            } else if p.is_pointer_value() {
-                SolutionValue::Ptr(param_as_u64)
-            } else {
-                unimplemented!("Function parameter {:?}", p)
+                },
+                BasicValueEnum::PointerValue(v) => SolutionValue::Ptr(param_as_u64),
+                _ => unimplemented!("Function parameter {:?}", p)
             }
         }).collect())
     } else {
