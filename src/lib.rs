@@ -13,6 +13,8 @@ use symex::{symex_function, symex_again};
 mod utils;
 use utils::get_value_name;
 
+mod memory;
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum SolutionValue {
     I8(i8),

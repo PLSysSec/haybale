@@ -1,4 +1,5 @@
 use inkwell::basic_block::BasicBlock;
+use inkwell::types::*;
 use inkwell::values::*;
 use log::debug;
 use std::collections::HashMap;
@@ -6,6 +7,8 @@ use std::fmt;
 use z3::ast::{BV, Bool};
 
 use crate::utils::*;
+
+use crate::memory::Memory;
 
 type VarMap<'ctx> = HashMap<AnyValueEnum, BVorBool<'ctx>>;
 
@@ -76,6 +79,7 @@ pub struct State<'ctx> {
     pub ctx: &'ctx z3::Context,
     solver: z3::Solver<'ctx>,
     vars: VarMap<'ctx>,
+    mem: Memory<'ctx>,
     backtrack_points: Vec<BacktrackPoint<'ctx>>,
 
     // Invariants:
@@ -125,6 +129,7 @@ impl<'ctx> State<'ctx> {
             ctx,
             solver: z3::Solver::new(ctx),
             vars: HashMap::new(),
+            mem: Memory::new(ctx),
             backtrack_points: Vec::new(),
             check_status: None,
             model: None,
@@ -261,6 +266,14 @@ impl<'ctx> State<'ctx> {
                     self.lookup_bv_var(v).clone()
                 }
             },
+            BasicValueEnum::PointerValue(pv) => {
+                if pv.is_const() {
+                    let ptr_type = IntType::i64_type();
+                    BV::from_u64(self.ctx, pv.const_to_int(ptr_type).get_zero_extended_constant().unwrap(), 64)
+                } else {
+                    self.lookup_bv_var(pv).clone()
+                }
+            },
             v => unimplemented!("operand_to_bv() for {:?}", v)
         }
     }
@@ -276,6 +289,20 @@ impl<'ctx> State<'ctx> {
         } else {
             self.lookup_bool_var(v).clone()
         }
+    }
+
+    // Read a value `bits` bits long from memory at `addr`
+    // Caller is responsible for ensuring that the read does not cross cell boundaries
+    // (see notes in memory.rs)
+    pub fn read(&self, addr: &BV<'ctx>, bits: u32) -> BV<'ctx> {
+        self.mem.read(addr, bits)
+    }
+
+    // Write a value into memory at `addr`
+    // Caller is responsible for ensuring that the write does not cross cell boundaries
+    // (see notes in memory.rs)
+    pub fn write(&mut self, addr: &BV<'ctx>, val: BV<'ctx>) {
+        self.mem.write(addr, val)
     }
 
     // again, we require owned BasicBlocks because copy should be cheap.  Caller can clone if necessary.

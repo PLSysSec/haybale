@@ -38,6 +38,10 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_binop(state, inst, z3binop);
         } else if opcode == InstructionOpcode::ICmp {
             symex_icmp(state, inst);
+        } else if opcode == InstructionOpcode::Load {
+            symex_load(state, inst);
+        } else if opcode == InstructionOpcode::Store {
+            symex_store(state, inst);
         } else if opcode == InstructionOpcode::ZExt {
             symex_zext(state, inst);
         } else if opcode == InstructionOpcode::SExt {
@@ -78,7 +82,7 @@ fn opcode_to_binop<'ctx>(opcode: &InstructionOpcode) -> Option<Box<FnOnce(&BV<'c
     }
 }
 
-fn intpred_to_z3pred<'a>(pred: inkwell::IntPredicate) -> Box<FnOnce(&BV<'a>, &BV<'a>) -> Bool<'a>> {
+fn intpred_to_z3pred<'ctx>(pred: inkwell::IntPredicate) -> Box<FnOnce(&BV<'ctx>, &BV<'ctx>) -> Bool<'ctx>> {
     match pred {
         inkwell::IntPredicate::EQ => Box::new(|a,b| BV::_eq(a,b)),
         inkwell::IntPredicate::NE => Box::new(|a,b| Bool::not(&BV::_eq(a,b))),
@@ -162,6 +166,28 @@ fn symex_trunc(state: &mut State, inst: InstructionValue) {
     let z3dest = BV::new_const(state.ctx, dest, dest_size);
     state.assert(&z3dest._eq(&z3op.extract(dest_size-1, 0)));
     state.add_bv_var(inst, z3dest);
+}
+
+fn symex_load(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing load {}", &get_value_name(inst));
+    assert_eq!(inst.get_num_operands(), 1);
+    let addr = inst.get_operand(0).unwrap().left().unwrap();
+    let z3addr = state.operand_to_bv(addr);
+    let dest_size = get_dest_type(inst).into_int_type().get_bit_width();
+    let dest = get_dest_name(inst);
+    let z3dest = BV::new_const(state.ctx, dest, dest_size);
+    state.assert(&z3dest._eq(&state.read(&z3addr, dest_size)));
+    state.add_bv_var(inst, z3dest);
+}
+
+fn symex_store(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing store {}", &get_value_name(inst));
+    assert_eq!(inst.get_num_operands(), 2);
+    let val = inst.get_operand(0).unwrap().left().unwrap();
+    let z3val = state.operand_to_bv(val);
+    let addr = inst.get_operand(1).unwrap().left().unwrap();
+    let z3addr = state.operand_to_bv(addr);
+    state.write(&z3addr, z3val);
 }
 
 // Returns the BV representing the return value
