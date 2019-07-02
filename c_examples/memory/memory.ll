@@ -57,8 +57,10 @@ define i32 @array(i32*, i32) local_unnamed_addr #0 {
   %3 = add nsw i32 %1, -3
   %4 = getelementptr inbounds i32, i32* %0, i64 10
   store volatile i32 %3, i32* %4, align 4, !tbaa !3
-  %5 = load volatile i32, i32* %4, align 4, !tbaa !3
-  ret i32 %5
+  %5 = add nsw i32 %1, 3
+  store volatile i32 %5, i32* %0, align 4, !tbaa !3
+  %6 = load volatile i32, i32* %4, align 4, !tbaa !3
+  ret i32 %6
 }
 
 ; Function Attrs: norecurse nounwind ssp uwtable

@@ -26,6 +26,7 @@ int load_and_store_mult(volatile int* ptr, int a) {
 
 int array(volatile int* ptr, int a) {
   ptr[10] = a - 3;
+  ptr[0] = a + 3;
   return ptr[10];
 }
 
