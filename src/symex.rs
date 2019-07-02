@@ -53,6 +53,8 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_sext(state, inst);
         } else if opcode == InstructionOpcode::Trunc {
             symex_trunc(state, inst);
+        } else if opcode == InstructionOpcode::BitCast {
+            symex_bitcast(state, inst);
         } else if opcode == InstructionOpcode::Phi {
             symex_phi(state, inst, prev_bb);
         } else if opcode == InstructionOpcode::Select {
@@ -170,6 +172,17 @@ fn symex_trunc(state: &mut State, inst: InstructionValue) {
     let dest = get_dest_name(inst);
     let z3dest = BV::new_const(state.ctx, dest, dest_size);
     state.assert(&z3dest._eq(&z3op.extract(dest_size-1, 0)));
+    state.add_bv_var(inst, z3dest);
+}
+
+fn symex_bitcast(state: &mut State, inst: InstructionValue) {
+    debug!("Symexing bitcast {}", &get_value_name(inst));
+    assert_eq!(inst.get_num_operands(), 1);
+    let op = inst.get_operand(0).unwrap().left().unwrap();
+    let z3op = state.operand_to_bv(op);
+    let dest = get_dest_name(inst);
+    let z3dest = BV::new_const(state.ctx, dest, z3op.get_size());
+    state.assert(&z3dest._eq(&z3op));  // from Z3's perspective the bitcast is simply a no-op; the bit patterns are equal
     state.add_bv_var(inst, z3dest);
 }
 
