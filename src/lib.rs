@@ -14,55 +14,68 @@ mod utils;
 use utils::get_value_name;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum IntOfSomeWidth {
+pub enum SolutionValue {
     I8(i8),
     I16(i16),
     I32(i32),
     I64(i64),
+    Ptr(u64),
 }
 
-impl IntOfSomeWidth {
+impl SolutionValue {
     pub fn unwrap_to_i8(self) -> i8 {
         match self {
-            IntOfSomeWidth::I8(i) => i,
+            SolutionValue::I8(i) => i,
             _ => panic!("unwrap_to_i8 on {:?}", self),
         }
     }
 
     pub fn unwrap_to_i16(self) -> i16 {
         match self {
-            IntOfSomeWidth::I16(i) => i,
+            SolutionValue::I16(i) => i,
             _ => panic!("unwrap_to_i16 on {:?}", self),
         }
     }
 
     pub fn unwrap_to_i32(self) -> i32 {
         match self {
-            IntOfSomeWidth::I32(i) => i,
+            SolutionValue::I32(i) => i,
             _ => panic!("unwrap_to_i32 on {:?}", self),
         }
     }
 
     pub fn unwrap_to_i64(self) -> i64 {
         match self {
-            IntOfSomeWidth::I64(i) => i,
+            SolutionValue::I64(i) => i,
             _ => panic!("unwrap_to_i64 on {:?}", self),
+        }
+    }
+
+    pub fn unwrap_to_ptr(self) -> u64 {
+        match self {
+            SolutionValue::Ptr(u) => u,
+            _ => panic!("unwrap_to_ptr on {:?}", self),
         }
     }
 }
 
 // Given a function, find values of its inputs such that it returns zero
-// Assumes function takes (some number of) integer arguments and returns an integer
+// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer
 // Returns None if there are no values of the inputs such that the function returns zero
-pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
+pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();
     let ctx = z3::Context::new(&cfg);
     let mut state = State::new(&ctx);
 
     let params: Vec<BasicValueEnum> = ParamsIterator::new(func).collect();
     for &param in params.iter() {
-        assert!(param.is_int_value());
-        let width = param.as_int_value().get_type().get_bit_width();
+        let width = if param.is_int_value() {
+            param.as_int_value().get_type().get_bit_width()
+        } else if param.is_pointer_value() {
+            64
+        } else {
+            unimplemented!("Function parameter {:?}", param)
+        };
         let z3param = BV::new_const(&ctx, get_value_name(param), width);
         state.add_bv_var(param, z3param);
     }
@@ -88,12 +101,18 @@ pub fn find_zero_of_func(func: FunctionValue) -> Option<Vec<IntOfSomeWidth>> {
         Some(params.iter().map(|&p| {
             let param_as_u64 = state.get_a_solution_for_bv_llvmval(p)
                 .expect("since state.check() passed, expected a solution for each var");
-            match p.into_int_value().get_type().get_bit_width() {
-                8 => IntOfSomeWidth::I8(param_as_u64 as i8),
-                16 => IntOfSomeWidth::I16(param_as_u64 as i16),
-                32 => IntOfSomeWidth::I32(param_as_u64 as i32),
-                64 => IntOfSomeWidth::I64(param_as_u64 as i64),
-                s => unimplemented!("Parameter with bitwidth {}", s),
+            if p.is_int_value() {
+                match p.into_int_value().get_type().get_bit_width() {
+                    8 => SolutionValue::I8(param_as_u64 as i8),
+                    16 => SolutionValue::I16(param_as_u64 as i16),
+                    32 => SolutionValue::I32(param_as_u64 as i32),
+                    64 => SolutionValue::I64(param_as_u64 as i64),
+                    s => unimplemented!("Integer parameter with bitwidth {}", s),
+                }
+            } else if p.is_pointer_value() {
+                SolutionValue::Ptr(param_as_u64)
+            } else {
+                unimplemented!("Function parameter {:?}", p)
             }
         }).collect())
     } else {
