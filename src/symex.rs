@@ -59,6 +59,8 @@ fn symex_from_bb<'ctx>(state: &mut State<'ctx>, bb: BasicBlock, prev_bb: Option<
             symex_phi(state, inst, prev_bb);
         } else if opcode == InstructionOpcode::Select {
             symex_select(state, inst);
+        } else if opcode == InstructionOpcode::Call {
+            symex_call(state, inst);
         } else if opcode == InstructionOpcode::Return {
             return symex_return(state, inst);
         } else if opcode == InstructionOpcode::Br {
@@ -241,6 +243,17 @@ fn symex_alloca(state: &mut State, inst: InstructionValue) {
     };
     let allocated = state.allocate(size_pointed_to.into());
     state.add_bv_var(inst, allocated);
+}
+
+fn symex_call(state: &mut State, inst: InstructionValue) {
+    let inst: CallSiteValue = unsafe { std::mem::transmute(inst) };  // This InstructionValue is actually a CallSiteValue, but the current inkwell type system doesn't express this (?) so this seems to be the way to do it (?)
+    debug!("Symexing call {}", &get_value_name(inst));
+    let func: FunctionValue = inst.get_called_fn_value();
+    let funcname = func.get_name().to_str().expect("Failed to convert CStr");
+    if funcname.starts_with("llvm.") {
+        return  // We ignore these llvm-internal functions
+    }
+    unimplemented!("Call of a function named {}", funcname);
 }
 
 // Returns the BV representing the return value
