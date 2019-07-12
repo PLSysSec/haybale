@@ -7,6 +7,7 @@ use z3::ast::{Ast, BV, Bool};
 use crate::memory::Memory;
 use crate::solver::Solver;
 use crate::alloc::Alloc;
+use crate::size::size;
 
 type VarMap<'ctx> = HashMap<Name, BVorBool<'ctx>>;
 
@@ -180,12 +181,8 @@ impl<'ctx, 'func> State<'ctx, 'func> {
 
     // Record the result of `thing` to be `resultval`
     pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: BV<'ctx>) {
-        let bits = match thing.get_type() {
-            Type::IntegerType { bits } => bits,
-            Type::PointerType { .. } => 64,  // our convention is that pointers are 64 bits
-            ty => unimplemented!("result with type {:?}", ty),
-        };
-        let result = BV::new_const(self.ctx, name_to_sym(thing.get_result().clone()), bits);
+        let bits = size(&thing.get_type());
+        let result = BV::new_const(self.ctx, name_to_sym(thing.get_result().clone()), bits as u32);
         self.assert(&result._eq(&resultval));
         self.add_bv_var(thing.get_result().clone(), result);
     }

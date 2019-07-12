@@ -8,6 +8,9 @@ use state::name_to_sym;
 mod symex;
 use symex::{symex_function, symex_again};
 
+mod size;
+use size::size;
+
 mod memory;
 mod alloc;
 mod solver;
@@ -68,21 +71,13 @@ pub fn find_zero_of_func(func: &Function) -> Option<Vec<SolutionValue>> {
 
     let params: Vec<function::Parameter> = func.parameters.clone();
     for param in params.iter() {
-        let width = match &param.ty {
-            Type::IntegerType { bits } => *bits,
-            Type::PointerType { .. } => 64,
-            ty => unimplemented!("Function parameter with type {:?}", ty),
-        };
-        let z3param = BV::new_const(&ctx, name_to_sym(param.name.clone()), width);
+        let width = size(&param.ty);
+        let z3param = BV::new_const(&ctx, name_to_sym(param.name.clone()), width as u32);
         state.add_bv_var(param.name.clone(), z3param);
     }
 
-    let returnwidth = match &func.return_type {
-        Type::IntegerType { bits } => *bits,
-        Type::PointerType { .. } => 64,
-        ty => unimplemented!("Function returning type {:?}", ty),
-    };
-    let zero = BV::from_u64(&ctx, 0, returnwidth);
+    let returnwidth = size(&func.return_type);
+    let zero = BV::from_u64(&ctx, 0, returnwidth as u32);
 
     let mut optionz3rval = Some(symex_function(&mut state, &func));
     loop {

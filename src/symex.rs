@@ -5,6 +5,7 @@ use z3::ast::{Ast, BV, Bool};
 use either::Either;
 
 use crate::state::State;
+use crate::size::size;
 
 // Symex the given function and return the new BV (AST) representing its return value, or None if the function returns void.
 // Assumes that the function's parameters are already added to the state.
@@ -184,27 +185,19 @@ fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) {
     let z3index = state.operand_to_bv(&gep.indices[0]);
     let dest_type = gep.get_type();
     let type_pointed_to = if let Type::PointerType { pointee_type, .. } = dest_type {
-        *pointee_type
+        pointee_type
     } else {
         panic!("GEP whose result is not a pointer")
     };
-    let size_pointed_to = match type_pointed_to {
-        Type::IntegerType { bits } => bits,
-        Type::PointerType { .. } => 64,
-        _ => unimplemented!("GEP with element type {:?}", type_pointed_to),
-    };
-    let total_offset = z3index.bvmul(&BV::from_u64(state.ctx, size_pointed_to.into(), z3index.get_size()));
+    let size_pointed_to = size(&type_pointed_to);
+    let total_offset = z3index.bvmul(&BV::from_u64(state.ctx, size_pointed_to as u64, z3index.get_size()));
     state.record_bv_result(gep, z3base.bvadd(&total_offset));
 }
 
 fn symex_alloca(state: &mut State, alloca: &instruction::Alloca) {
     debug!("Symexing alloca {:?}", alloca);
-    let size_pointed_to = match alloca.allocated_type {
-        Type::IntegerType { bits } => bits,
-        Type::PointerType { .. } => 64,
-        _ => unimplemented!("Alloca with allocated_type {:?}", alloca.allocated_type),
-    };
-    let allocated = state.allocate(size_pointed_to.into());
+    let allocation_size = size(&alloca.allocated_type);
+    let allocated = state.allocate(allocation_size as u64);
     state.record_bv_result(alloca, allocated);
 }
 
