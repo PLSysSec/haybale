@@ -1,5 +1,5 @@
 use llvm_ir::*;
-use llvm_ir::instruction::{HasResult, BinaryOp};
+use llvm_ir::instruction::{BinaryOp, HasResult};
 use log::debug;
 use z3::ast::{Ast, BV, Bool};
 use either::Either;
@@ -155,7 +155,6 @@ fn symex_trunc(state: &mut State, trunc: &instruction::Trunc) {
 fn symex_bitcast(state: &mut State, bitcast: &instruction::BitCast) {
     debug!("Symexing bitcast {:?}", bitcast);
     let z3op = state.operand_to_bv(&bitcast.operand);
-    let dest = bitcast.get_result();
     state.record_bv_result(bitcast, z3op);  // from Z3's perspective the bitcast is simply a no-op; the bit patterns are equal
 }
 
@@ -195,7 +194,6 @@ fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) {
         _ => unimplemented!("GEP with element type {:?}", type_pointed_to),
     };
     let total_offset = z3index.bvmul(&BV::from_u64(state.ctx, size_pointed_to.into(), z3index.get_size()));
-    let dest = gep.get_result();
     state.record_bv_result(gep, z3base.bvadd(&total_offset));
 }
 
