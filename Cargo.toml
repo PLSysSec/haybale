@@ -5,16 +5,13 @@ authors = ["Craig Disselkoen <craigdissel@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "llvm7-0" }
+llvm-ir = { path = "../llvm-ir" }
 z3 = "0.3.2"
+either = "1.5.2"
 log = "0.4.0"
 env_logger = "0.6.1"
 
-# override the git dependency with our locally-patched version, for now
+# override the dependency with our locally-patched version, for now
 # see https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#overriding-dependencies
-[patch."https://github.com/TheDan64/inkwell"]
-inkwell = { path = "../inkwell" }
-
-# likewise for z3
 [patch.crates-io]
 z3 = { path = "../z3.rs/z3" }
