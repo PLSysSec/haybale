@@ -82,8 +82,8 @@ impl<'ctx> Solver<'ctx> {
         self.z3_solver.pop(n)
     }
 
-    // Get one possible concrete value for the `BV`.
-    // Returns `None` if no possible solution.
+    /// Get one possible concrete value for the `BV`.
+    /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
         self.refresh_model();
         if self.check() {

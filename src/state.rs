@@ -20,19 +20,19 @@ pub struct State<'ctx, 'func> {
 }
 
 struct BacktrackPoint<'ctx, 'func> {
-    /// Function in which to resume execution
+    /// `Function` in which to resume execution
     in_func: &'func Function,
-    // Name of the BasicBlock to resume execution at
+    /// `Name` of the `BasicBlock` to resume execution at
     next_bb: Name,
-    // Name of the BasicBlock executed just prior to the BacktrackPoint
+    /// `Name` of the `BasicBlock` executed just prior to the `BacktrackPoint`
     prev_bb: Name,
-    // Constraint to add before restarting execution at next_bb
-    // (intended use of this is to constrain the branch in that direction)
-    // We use owned Bools because:
+    /// Constraint to add before restarting execution at `next_bb`.
+    /// (Intended use of this is to constrain the branch in that direction.)
+    // We use owned `Bool`s because:
     //   a) it seems necessary to not use refs, and
-    //   b) it seems reasonable for callers to give us ownership of these Bools.
+    //   b) it seems reasonable for callers to give us ownership of these `Bool`s.
     //       If/when that becomes not reasonable, we should probably use boxed
-    //       Bools here rather than making callers copy.
+    //       `Bool`s here rather than making callers copy.
     constraint: Bool<'ctx>,
 }
 
@@ -65,39 +65,46 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         }
     }
 
+    /// Add `cond` as a constraint, i.e., assert that `cond` must be true
     pub fn assert(&mut self, cond: &Bool<'ctx>) {
         self.solver.assert(cond)
     }
 
+    /// Returns `true` if current constraints are satisfiable, `false` if not.
+    /// This function caches its result and will only call to Z3 if constraints have changed
+    /// since the last call to `check()`.
     pub fn check(&mut self) -> bool {
         self.solver.check()
     }
 
+    /// Returns `true` if the current constraints plus the additional constraints `conds`
+    /// are together satisfiable, or `false` if not.
+    /// Does not permanently add the constraints in `conds` to the solver.
     pub fn check_with_extra_constraints(&mut self, conds: &[&Bool<'ctx>]) -> bool {
         self.solver.check_with_extra_constraints(conds)
     }
 
-    // Get one possible concrete value for the BV.
-    // Returns None if no possible solution.
+    /// Get one possible concrete value for the `BV`.
+    /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
         self.solver.get_a_solution_for_bv(bv)
     }
 
-    // Get one possible concrete value for the Bool.
-    // Returns None if no possible solution.
+    /// Get one possible concrete value for the `Bool`.
+    /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Option<bool> {
         self.solver.get_a_solution_for_bool(b)
     }
 
-    // Get one possible concrete value for the given IR Name, which represents a bitvector.
-    // Returns None if no possible solution.
+    /// Get one possible concrete value for the given IR `Name`, which represents a bitvector.
+    /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bv_by_irname(&mut self, name: &Name) -> Option<u64> {
         let bv = self.varmap.lookup_bv_var(name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bv(&bv)
     }
 
-    // Get one possible concrete value for the given IR Name, which represents a bool.
-    // Returns None if no possible solution.
+    /// Get one possible concrete value for the given IR `Name`, which represents a bool.
+    /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bool_by_irname(&mut self, name: &Name) -> Option<bool> {
         let b = self.varmap.lookup_bool_var(name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
@@ -113,7 +120,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         self.varmap.add_bool_var(name, b)
     }
 
-    // Record the result of `thing` to be `resultval`
+    /// Record the result of `thing` to be `resultval`
     pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: BV<'ctx>) {
         let bits = size(&thing.get_type());
         let result = BV::new_const(self.ctx, name_to_sym(thing.get_result().clone()), bits as u32);
@@ -121,7 +128,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         self.varmap.add_bv_var(thing.get_result().clone(), result);
     }
 
-    // Record the result of `thing` to be `resultval`
+    /// Record the result of `thing` to be `resultval`
     pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: Bool<'ctx>) {
         assert_eq!(thing.get_type(), Type::bool());
         let result = Bool::new_const(self.ctx, name_to_sym(thing.get_result().clone()));
@@ -129,8 +136,8 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         self.varmap.add_bool_var(thing.get_result().clone(), result);
     }
 
-    // Convert an Operand to the appropriate BV
-    // (all Operands should be either a constant or a variable we previously added to the state)
+    /// Convert an `Operand` to the appropriate `BV`
+    /// (all `Operand`s should be either a constant or a variable we previously added to the state).
     pub fn operand_to_bv(&self, op: &Operand) -> BV<'ctx> {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => BV::from_u64(self.ctx, *value, *bits),
@@ -140,9 +147,9 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         }
     }
 
-    // Convert an Operand to the appropriate Bool
-    // (all Operands should be either a constant or a variable we previously added to the state)
-    // This will panic if the Operand doesn't have type Type::bool()
+    /// Convert an `Operand` to the appropriate `Bool`
+    /// (all `Operand`s should be either a constant or a variable we previously added to the state).
+    /// This will panic if the `Operand` doesn't have type `Type::bool()`
     pub fn operand_to_bool(&self, op: &Operand) -> Bool<'ctx> {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => {
@@ -154,27 +161,26 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         }
     }
 
-    // Read a value `bits` bits long from memory at `addr`
-    // Caller is responsible for ensuring that the read does not cross cell boundaries
-    // (see notes in memory.rs)
+    /// Read a value `bits` bits long from memory at `addr`.
+    /// Caller is responsible for ensuring that the read does not cross cell boundaries
+    /// (see notes in memory.rs)
     pub fn read(&self, addr: &BV<'ctx>, bits: u32) -> BV<'ctx> {
         self.mem.read(addr, bits)
     }
 
-    // Write a value into memory at `addr`
-    // Caller is responsible for ensuring that the write does not cross cell boundaries
-    // (see notes in memory.rs)
+    /// Write a value into memory at `addr`.
+    /// Caller is responsible for ensuring that the write does not cross cell boundaries
+    /// (see notes in memory.rs)
     pub fn write(&mut self, addr: &BV<'ctx>, val: BV<'ctx>) {
         self.mem.write(addr, val)
     }
 
-    // Allocate a value of size `bits`; return a pointer to the newly allocated object
+    /// Allocate a value of size `bits`; return a pointer to the newly allocated object
     pub fn allocate(&mut self, bits: impl Into<u64>) -> BV<'ctx> {
         let raw_ptr = self.alloc.alloc(bits);
         BV::from_u64(self.ctx, raw_ptr, 64)
     }
 
-    // again, we require owned BasicBlocks because copy should be cheap.  Caller can clone if necessary.
     // The constraint will be added only if we end up backtracking to this point, and only then
     pub fn save_backtracking_point(&mut self, in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>) {
         debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", next_bb, constraint);
@@ -183,7 +189,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     }
 
     // returns the Function and BasicBlock where execution should continue, and the BasicBlock executed before that
-    // or None if there are no saved backtracking points left
+    // or `None` if there are no saved backtracking points left
     pub fn revert_to_backtracking_point(&mut self) -> Option<(&'func Function, Name, Name)> {
         if let Some(bp) = self.backtrack_points.pop() {
             debug!("Reverting to backtracking point {}", bp);
@@ -200,7 +206,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     }
 }
 
-/// Convert an llvm_ir::Name to a z3::Symbol
+/// Convert an `llvm_ir::Name` to a `z3::Symbol`
 // TODO this probably doesn't belong here
 pub(crate) fn name_to_sym(name: Name) -> z3::Symbol {
     match name {
