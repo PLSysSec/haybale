@@ -14,6 +14,7 @@ use size::size;
 mod memory;
 mod alloc;
 mod solver;
+mod varmap;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum SolutionValue {

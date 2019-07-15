@@ -7,76 +7,12 @@ use z3::ast::{Ast, BV, Bool};
 use crate::memory::Memory;
 use crate::solver::Solver;
 use crate::alloc::Alloc;
+use crate::varmap::VarMap;
 use crate::size::size;
-
-type VarMap<'ctx> = HashMap<Name, BVorBool<'ctx>>;
-
-// Our VarMap stores both BVs and Bools
-#[derive(Clone, PartialEq, Eq)]
-enum BVorBool<'ctx> {
-    BV(BV<'ctx>),
-    Bool(Bool<'ctx>),
-}
-
-impl<'ctx> fmt::Debug for BVorBool<'ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            BVorBool::BV(bv) => write!(f, "BV( {} )", bv),
-            BVorBool::Bool(b) => write!(f, "Bool( {} )", b),
-        }
-    }
-}
-
-impl<'ctx> From<BV<'ctx>> for BVorBool<'ctx> {
-    fn from(bv: BV<'ctx>) -> BVorBool<'ctx> {
-        BVorBool::BV(bv)
-    }
-}
-
-impl<'ctx> From<Bool<'ctx>> for BVorBool<'ctx> {
-    fn from(b: Bool<'ctx>) -> BVorBool<'ctx> {
-        BVorBool::Bool(b)
-    }
-}
-
-impl<'ctx> From<BVorBool<'ctx>> for BV<'ctx> {
-    fn from(b: BVorBool<'ctx>) -> BV<'ctx> {
-        match b {
-            BVorBool::BV(bv) => bv,
-            _ => panic!("Can't convert {:?} to BV", b),
-        }
-    }
-}
-
-impl<'ctx> From<BVorBool<'ctx>> for Bool<'ctx> {
-    fn from(b: BVorBool<'ctx>) -> Bool<'ctx> {
-        match b {
-            BVorBool::Bool(b) => b,
-            _ => panic!("Can't convert {:?} to Bool", b),
-        }
-    }
-}
-
-// these are basically From impls, but for converting ref to ref
-impl<'ctx> BVorBool<'ctx> {
-    fn as_bv(&self) -> &BV<'ctx> {
-        match self {
-            BVorBool::BV(bv) => &bv,
-            _ => panic!("Can't convert {:?} to BV", self),
-        }
-    }
-
-    fn as_bool(&self) -> &Bool<'ctx> {
-        match self {
-            BVorBool::Bool(b) => &b,
-            _ => panic!("Can't convert {:?} to Bool", self),
-        }
-    }
-}
 
 pub struct State<'ctx, 'func> {
     pub ctx: &'ctx z3::Context,
-    vars: VarMap<'ctx>,
+    varmap: VarMap<'ctx>,
     mem: Memory<'ctx>,
     alloc: Alloc,
     solver: Solver<'ctx>,
@@ -121,7 +57,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     pub fn new(ctx: &'ctx z3::Context) -> Self {
         Self {
             ctx,
-            vars: HashMap::new(),
+            varmap: VarMap::new(),
             mem: Memory::new(ctx),
             alloc: Alloc::new(),
             solver: Solver::new(ctx),
@@ -156,27 +92,25 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     // Get one possible concrete value for the given IR Name, which represents a bitvector.
     // Returns None if no possible solution.
     pub fn get_a_solution_for_bv_by_irname(&mut self, name: &Name) -> Option<u64> {
-        let bv = self.lookup_bv_var(name).clone();  // clone() so that the borrow of self is released
+        let bv = self.varmap.lookup_bv_var(name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bv(&bv)
     }
 
     // Get one possible concrete value for the given IR Name, which represents a bool.
     // Returns None if no possible solution.
     pub fn get_a_solution_for_bool_by_irname(&mut self, name: &Name) -> Option<bool> {
-        let b = self.lookup_bool_var(name).clone();  // clone() so that the borrow of self is released
+        let b = self.varmap.lookup_bool_var(name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
     }
 
-    // Associate the given name with the given BV
+    /// Associate the given name with the given `BV`
     pub fn add_bv_var(&mut self, name: Name, bv: BV<'ctx>) {
-        debug!("Adding var {:?} = {}", name, bv);
-        self.vars.insert(name, bv.into());
+        self.varmap.add_bv_var(name, bv)
     }
 
-    // Associate the given value with the given Bool
+    /// Associate the given name with the given `Bool`
     pub fn add_bool_var(&mut self, name: Name, b: Bool<'ctx>) {
-        debug!("Adding var {:?} = {}", name, b);
-        self.vars.insert(name, b.into());
+        self.varmap.add_bool_var(name, b)
     }
 
     // Record the result of `thing` to be `resultval`
@@ -184,7 +118,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         let bits = size(&thing.get_type());
         let result = BV::new_const(self.ctx, name_to_sym(thing.get_result().clone()), bits as u32);
         self.assert(&result._eq(&resultval));
-        self.add_bv_var(thing.get_result().clone(), result);
+        self.varmap.add_bv_var(thing.get_result().clone(), result);
     }
 
     // Record the result of `thing` to be `resultval`
@@ -192,25 +126,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         assert_eq!(thing.get_type(), Type::bool());
         let result = Bool::new_const(self.ctx, name_to_sym(thing.get_result().clone()));
         self.assert(&result._eq(&resultval));
-        self.add_bool_var(thing.get_result().clone(), result);
-    }
-
-    // Look up the BV previously created for the given value
-    pub fn lookup_bv_var(&self, name: &Name) -> &BV<'ctx> {
-        debug!("Looking up var {:?}", name);
-        self.vars.get(name).unwrap_or_else(|| {
-            let keys: Vec<&Name> = self.vars.keys().collect();
-            panic!("Failed to find var {:?} in map with keys {:?}", name, keys);
-        }).as_bv()
-    }
-
-    // Look up the Bool previously created for the given value
-    pub fn lookup_bool_var(&self, name: &Name) -> &Bool<'ctx> {
-        debug!("Looking up var {:?}", name);
-        self.vars.get(name).unwrap_or_else(|| {
-            let keys: Vec<&Name> = self.vars.keys().collect();
-            panic!("Failed to find var {:?} in map with keys {:?}", name, keys);
-        }).as_bool()
+        self.varmap.add_bool_var(thing.get_result().clone(), result);
     }
 
     // Convert an Operand to the appropriate BV
@@ -218,7 +134,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     pub fn operand_to_bv(&self, op: &Operand) -> BV<'ctx> {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => BV::from_u64(self.ctx, *value, *bits),
-            Operand::LocalOperand { name, .. } => self.lookup_bv_var(name).clone(),
+            Operand::LocalOperand { name, .. } => self.varmap.lookup_bv_var(name).clone(),
             Operand::MetadataOperand(_) => panic!("Can't convert {:?} to BV", op),
             _ => unimplemented!("operand_to_bv() for {:?}", op)
         }
@@ -233,7 +149,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
                 assert_eq!(*bits, 1);
                 Bool::from_bool(self.ctx, *value != 0)
             },
-            Operand::LocalOperand { name, .. } => self.lookup_bool_var(name).clone(),
+            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(name).clone(),
             op => panic!("Can't convert {:?} to Bool", op),
         }
     }
@@ -297,11 +213,11 @@ pub(crate) fn name_to_sym(name: Name) -> z3::Symbol {
 mod tests {
     use super::*;
 
-    // we don't include tests here for Solver, Memory, or Alloc; those are tested in their own modules.
+    // we don't include tests here for Solver, Memory, Alloc, or VarMap; those are tested in their own modules.
     // Instead, here we just test the nontrivial functionality that State has itself.
 
     #[test]
-    fn lookup_vars() {
+    fn lookup_vars_via_operand() {
         let ctx = z3::Context::new(&z3::Config::new());
         let mut state = State::new(&ctx);
 
@@ -317,11 +233,7 @@ mod tests {
         state.add_bv_var(val.clone(), x.clone());  // these clone()s wouldn't normally be necessary but we want to compare against the original values later
         state.add_bool_var(boolval.clone(), boolvar.clone());
 
-        // check that looking up the llvm-ir values gives the correct Z3 ones
-        assert_eq!(state.lookup_bv_var(&val), &x);
-        assert_eq!(state.lookup_bool_var(&boolval), &boolvar);
-
-        // a different way of looking up
+        // check that we can look up the correct Z3 values via LocalOperands
         let valop = Operand::LocalOperand { name: val, ty: Type::i32() };
         let boolop = Operand::LocalOperand { name: boolval, ty: Type::bool() };
         assert_eq!(state.operand_to_bv(&valop), x);
@@ -355,6 +267,10 @@ mod tests {
         // this should create Z3 values true and false
         let bvtrue = state.operand_to_bool(&Operand::ConstantOperand(consttrue));
         let bvfalse = state.operand_to_bool(&Operand::ConstantOperand(constfalse));
+
+        // check that the Z3 values are evaluated to true and false respectively
+        assert_eq!(state.get_a_solution_for_bool(&bvtrue), Some(true));
+        assert_eq!(state.get_a_solution_for_bool(&bvfalse), Some(false));
 
         // assert the first one, which should be true, so we should still be sat
         state.assert(&bvtrue);
