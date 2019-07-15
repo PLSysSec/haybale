@@ -253,7 +253,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     }
 
     // Allocate a value of size `bits`; return a pointer to the newly allocated object
-    pub fn allocate(&mut self, bits: u64) -> BV<'ctx> {
+    pub fn allocate(&mut self, bits: impl Into<u64>) -> BV<'ctx> {
         let raw_ptr = self.alloc.alloc(bits);
         BV::from_u64(self.ctx, raw_ptr, 64)
     }

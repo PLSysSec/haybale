@@ -1,6 +1,6 @@
 use log::debug;
 use std::fmt;
-use z3::ast::{BV, Bool};
+use z3::ast::{Ast, BV, Bool};
 
 pub struct Solver<'ctx> {
     z3_solver: z3::Solver<'ctx>,
@@ -14,6 +14,7 @@ pub struct Solver<'ctx> {
 }
 
 impl<'ctx> Solver<'ctx> {
+    /// A new `Solver` with no constraints
     pub fn new(ctx: &'ctx z3::Context) -> Self {
         Self {
             z3_solver: z3::Solver::new(ctx),
@@ -22,6 +23,7 @@ impl<'ctx> Solver<'ctx> {
         }
     }
 
+    /// Add `cond` as a constraint, i.e., assert that `cond` must be true
     pub fn assert(&mut self, cond: &Bool<'ctx>) {
         debug!("asserting {}", cond);
         // A new assertion invalidates the cached check status and model
@@ -30,6 +32,9 @@ impl<'ctx> Solver<'ctx> {
         self.z3_solver.assert(cond);
     }
 
+    /// Returns `true` if current constraints are satisfiable, `false` if not.
+    /// This function caches its result and will only call to Z3 if constraints have changed
+    /// since the last call to `check()`.
     pub fn check(&mut self) -> bool {
         match self.check_status {
             Some(status) => status,
@@ -41,6 +46,9 @@ impl<'ctx> Solver<'ctx> {
         }
     }
 
+    /// Returns `true` if the current constraints plus the additional constraints `conds`
+    /// are together satisfiable, or `false` if not.
+    /// Does not permanently add the constraints in `conds` to the solver.
     pub fn check_with_extra_constraints(&mut self, conds: &[&Bool<'ctx>]) -> bool {
         // although the check status by itself would not be invalidated by this,
         // we do need to run check() again before getting the model,
@@ -74,33 +82,52 @@ impl<'ctx> Solver<'ctx> {
         self.z3_solver.pop(n)
     }
 
-    // Get one possible concrete value for the BV.
-    // Returns None if no possible solution.
+    // Get one possible concrete value for the `BV`.
+    // Returns `None` if no possible solution.
     pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
         self.refresh_model();
-        if self.check_status.unwrap() {
-            Some(self.model.as_ref().unwrap().eval(bv).unwrap().as_u64().unwrap())
+        if self.check() {
+            Some(self.model.as_ref().expect("check_status was true but we don't have a model")
+                .eval(bv).expect("Have model but failed to eval bv")
+                .as_u64().expect("Failed to get u64 value of eval'd bv"))
         } else {
             None
         }
     }
 
-    // Get one possible concrete value for the Bool.
-    // Returns None if no possible solution.
+    /// Get one possible concrete value for specified bits (`high`, `low`) of the `BV`, inclusive on both ends.
+    /// Returns `None` if no possible solution.
+    pub fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &BV<'ctx>, high: u32, low: u32) -> Option<u64> {
+        assert!(high - low <= 63);  // this way the result will fit in a `u64`
+        self.refresh_model();
+        if self.check() {
+            Some(self.model.as_ref().expect("check_status was true but we don't have a model")
+                .eval(bv).expect("Have model but failed to eval bv")
+                .extract(high, low)
+                .simplify()  // apparently necessary so that we get back to a constant rather than an extract expression
+                .as_u64().expect("Failed to get u64 value of extracted bits"))
+        } else {
+            None
+        }
+    }
+
+    /// Get one possible concrete value for the `Bool`.
+    /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Option<bool> {
         self.refresh_model();
         if self.check_status.unwrap() {
-            Some(self.model.as_ref().unwrap().eval(b).unwrap().as_bool().unwrap())
+            Some(self.model.as_ref().expect("check_status was true but we don't have a model")
+                .eval(b).expect("Have model but failed to eval bool")
+                .as_bool().expect("Failed to get value of eval'd bool"))
         } else {
             None
         }
     }
 
-    // Private function which ensures that the check status and model are up to date with the current constraints
+    /// Private function which ensures that the check status and model are up to date with the current constraints
     fn refresh_model(&mut self) {
         if self.model.is_some() { return; }  // nothing to do
-        self.check();
-        if self.check_status.unwrap() {
+        if self.check() {
             // check() was successful, i.e. we are sat. Generate the model.
             self.model = Some(self.z3_solver.get_model());
         }

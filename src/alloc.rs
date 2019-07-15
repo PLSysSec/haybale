@@ -15,10 +15,11 @@ impl Alloc {
     }
 
     /// Allocate the specified number of bits, returning a pointer to the allocated object.
-    pub fn alloc(&mut self, bits: u64) -> u64 {
-        if bits > Memory::CELL_BITS as u64 {
-            unimplemented!("Alloc for {} bits, which is greater than our cell size of {} bits", bits, Memory::CELL_BITS);
-        }
+    // Internal invariants:
+    //   - for sizes <= cell size, allocation never crosses a cell boundary
+    //   - for sizes > cell size, allocation always starts at a cell boundary
+    pub fn alloc(&mut self, bits: impl Into<u64>) -> u64 {
+        let bits: u64 = bits.into();
         if bits % Memory::BITS_IN_BYTE as u64 != 0 {
             unimplemented!("Alloc for {} bits, which is not a multiple of {}", bits, Memory::BITS_IN_BYTE);
         }
