@@ -2,6 +2,11 @@ use llvm_ir::*;
 use pitchfork_rs::*;
 use std::path::Path;
 
+fn init_logging() {
+    // capture log messages with test harness
+    let _ = env_logger::builder().is_test(true).try_init();
+}
+
 fn get_module() -> Module {
     Module::from_bc_path(&Path::new("c_examples/memory/memory.bc"))
         .expect("Failed to parse module")
@@ -9,6 +14,7 @@ fn get_module() -> Module {
 
 #[test]
 fn load_and_store() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("load_and_store").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -18,6 +24,7 @@ fn load_and_store() {
 
 #[test]
 fn local_ptr() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("local_ptr").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -27,6 +34,7 @@ fn local_ptr() {
 
 #[test]
 fn overwrite() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("overwrite").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -36,6 +44,7 @@ fn overwrite() {
 
 #[test]
 fn load_and_store_mult() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("load_and_store_mult").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -45,6 +54,7 @@ fn load_and_store_mult() {
 
 #[test]
 fn array() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("array").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -54,6 +64,7 @@ fn array() {
 
 #[test]
 fn pointer_arith() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("pointer_arith").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");

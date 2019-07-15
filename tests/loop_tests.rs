@@ -2,6 +2,11 @@ use llvm_ir::*;
 use pitchfork_rs::*;
 use std::path::Path;
 
+fn init_logging() {
+    // capture log messages with test harness
+    let _ = env_logger::builder().is_test(true).try_init();
+}
+
 fn get_module() -> Module {
     Module::from_bc_path(&Path::new("c_examples/loop/loop.bc"))
         .expect("Failed to parse module")
@@ -9,6 +14,7 @@ fn get_module() -> Module {
 
 #[test]
 fn while_loop() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("while_loop").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -18,6 +24,7 @@ fn while_loop() {
 
 #[test]
 fn for_loop() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("for_loop").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -27,6 +34,7 @@ fn for_loop() {
 
 #[test]
 fn loop_zero_iterations() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("loop_zero_iterations").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -36,6 +44,7 @@ fn loop_zero_iterations() {
 
 #[test]
 fn loop_with_cond() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("loop_with_cond").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -45,6 +54,7 @@ fn loop_with_cond() {
 
 #[test]
 fn loop_inside_cond() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("loop_inside_cond").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -54,6 +64,7 @@ fn loop_inside_cond() {
 
 #[test]
 fn loop_over_array() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("loop_over_array").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -63,6 +74,7 @@ fn loop_over_array() {
 
 #[test]
 fn sum_of_array() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("sum_of_array").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -72,6 +84,7 @@ fn sum_of_array() {
 
 #[test]
 fn search_array() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("search_array").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");
@@ -81,6 +94,7 @@ fn search_array() {
 
 #[test]
 fn nested_loop() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("nested_loop").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of function");

@@ -3,6 +3,11 @@ use pitchfork_rs::*;
 use std::num::Wrapping;
 use std::path::Path;
 
+fn init_logging() {
+    // capture log messages with test harness
+    let _ = env_logger::builder().is_test(true).try_init();
+}
+
 fn get_module() -> Module {
     Module::from_bc_path(&Path::new("c_examples/basic/basic.bc"))
         .expect("Failed to parse module")
@@ -10,6 +15,7 @@ fn get_module() -> Module {
 
 #[test]
 fn no_args_nozero() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("no_args_nozero").expect("Failed to find function");
     assert_eq!(find_zero_of_func(func), None);
@@ -17,6 +23,7 @@ fn no_args_nozero() {
 
 #[test]
 fn no_args_zero() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("no_args_zero").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -25,6 +32,7 @@ fn no_args_zero() {
 
 #[test]
 fn one_arg() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("one_arg").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -35,6 +43,7 @@ fn one_arg() {
 
 #[test]
 fn two_args() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("two_args").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -45,6 +54,7 @@ fn two_args() {
 
 #[test]
 fn three_args() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("three_args").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -55,6 +65,7 @@ fn three_args() {
 
 #[test]
 fn four_args() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("four_args").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -65,6 +76,7 @@ fn four_args() {
 
 #[test]
 fn five_args() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("five_args").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -75,6 +87,7 @@ fn five_args() {
 
 #[test]
 fn binops() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("binops").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -90,6 +103,7 @@ fn binops() {
 
 #[test]
 fn conditional_true() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("conditional_true").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -103,6 +117,7 @@ fn conditional_true() {
 
 #[test]
 fn conditional_false() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("conditional_false").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -117,6 +132,7 @@ fn conditional_false() {
 
 #[test]
 fn conditional_nozero() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("conditional_nozero").expect("Failed to find function");
     assert_eq!(find_zero_of_func(func), None);
@@ -124,6 +140,7 @@ fn conditional_nozero() {
 
 #[test]
 fn int8t() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("int8t").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -134,6 +151,7 @@ fn int8t() {
 
 #[test]
 fn int16t() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("int16t").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -144,6 +162,7 @@ fn int16t() {
 
 #[test]
 fn int32t() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("int32t").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -154,6 +173,7 @@ fn int32t() {
 
 #[test]
 fn int64t() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("int64t").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
@@ -164,6 +184,7 @@ fn int64t() {
 
 #[test]
 fn mixed_bitwidths() {
+    init_logging();
     let module = get_module();
     let func = module.get_func_by_name("mixed_bitwidths").expect("Failed to find function");
     let args = find_zero_of_func(func).expect("Failed to find zero of the function");
