@@ -9,7 +9,7 @@ fn main() {
     // With 2 args (file then function), finds zero of that function in that file
     let firstarg = std::env::args().nth(1);
     let secondarg = std::env::args().nth(2);
-    let modname = firstarg.unwrap_or("basic".to_owned());
+    let modname = firstarg.unwrap_or_else(|| "basic".to_owned());
     let pathstring: String = format!("c_examples/{}/{}.bc", modname, modname);
     let filepath = Path::new(&pathstring);
     let llvm_mod = Module::from_bc_path(&filepath).unwrap_or_else(|e| panic!("Failed to parse module at path {}: {}", filepath.display(), e));
