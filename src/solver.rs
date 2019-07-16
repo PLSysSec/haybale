@@ -26,7 +26,6 @@ impl<'ctx> Solver<'ctx> {
     /// Add `cond` as a constraint, i.e., assert that `cond` must be true
     pub fn assert(&mut self, cond: &Bool<'ctx>) {
         let cond = cond.simplify();
-        debug!("asserting {}", cond);
         // A new assertion invalidates the cached check status and model
         self.check_status = None;
         self.model = None;
