@@ -37,16 +37,21 @@ struct BacktrackPoint<'ctx, 'func> {
     /// For now, we require making a full copy of the `VarMap` in order to revert
     /// later.
     varmap: VarMap<'ctx>,
+    /// `Memory` representing the state of things at the `BacktrackPoint`.
+    /// Copies of a `Memory` should be cheap (just a Z3 object pointer), so it's
+    /// not a huge concern that we need a full copy here in order to revert later.
+    mem: Memory<'ctx>,
 }
 
 impl<'ctx, 'func> BacktrackPoint<'ctx, 'func> {
-    fn new(in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>, varmap: VarMap<'ctx>) -> Self {
+    fn new(in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>, varmap: VarMap<'ctx>, mem: Memory<'ctx>) -> Self {
         BacktrackPoint{
             in_func,
             next_bb,
             prev_bb,
             constraint,
             varmap,
+            mem,
         }
     }
 }
@@ -206,7 +211,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     pub fn save_backtracking_point(&mut self, in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>) {
         debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", next_bb, constraint);
         self.solver.push();
-        self.backtrack_points.push(BacktrackPoint::new(in_func, next_bb, prev_bb, constraint, self.varmap.clone()));
+        self.backtrack_points.push(BacktrackPoint::new(in_func, next_bb, prev_bb, constraint, self.varmap.clone(), self.mem.clone()));
     }
 
     // returns the Function and BasicBlock where execution should continue, and the BasicBlock executed before that
@@ -218,6 +223,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
             debug!("Constraints are now:\n{}", self.solver);
             self.assert(&bp.constraint);
             self.varmap = bp.varmap;
+            self.mem = bp.mem;
             Some((bp.in_func, bp.next_bb, bp.prev_bb))
             // thanks to SSA, we don't need to roll back the VarMap; we'll just overwrite existing entries as needed.
             // Code on the backtracking path will never reference variables which we assigned on the original path.
