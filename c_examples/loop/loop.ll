@@ -22,7 +22,7 @@ define i32 @while_loop(i32) local_unnamed_addr #0 {
   %9 = load volatile i32, i32* %3, align 4, !tbaa !3
   %10 = add nsw i32 %9, 1
   store volatile i32 %10, i32* %3, align 4, !tbaa !3
-  %11 = icmp slt i32 %9, %0
+  %11 = icmp slt i32 %10, %0
   br i1 %11, label %6, label %12
 
 ; <label>:12:                                     ; preds = %6

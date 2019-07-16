@@ -2,7 +2,7 @@ int while_loop(int end) {
   volatile int a = 0, i = 0;
   do {
     a++;
-  } while (i++ < end);
+  } while (++i < end);
   return a - 3;
 }
 
