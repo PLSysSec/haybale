@@ -16,7 +16,7 @@ int for_loop(int end) {
 
 int loop_zero_iterations(int end) {
   volatile int a = 3;
-  for(int i = 0; i < end && end >= 0; i++) {
+  for(int i = 0; i < end; i++) {
     a++;
   }
   return a - 3;

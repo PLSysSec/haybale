@@ -139,6 +139,20 @@ fn conditional_nozero() {
 }
 
 #[test]
+fn conditional_with_and() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("conditional_with_and").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of the function");
+    assert_eq!(args.len(), 2);
+    let a = args[0].unwrap_to_i32();
+    let b = args[1].unwrap_to_i32();
+    println!("a = {}, b = {}", a, b);
+    assert!(a > 3);
+    assert!(b > 4);
+}
+
+#[test]
 fn int8t() {
     init_logging();
     let module = get_module();

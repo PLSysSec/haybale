@@ -144,6 +144,15 @@ define i32 @conditional_nozero(i32, i32) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @conditional_with_and(i32, i32) local_unnamed_addr #0 {
+  %3 = icmp slt i32 %0, 4
+  %4 = icmp slt i32 %1, 5
+  %5 = or i1 %3, %4
+  %6 = zext i1 %5 to i32
+  ret i32 %6
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
 define signext i8 @int8t(i8 signext, i8 signext) local_unnamed_addr #0 {
   %3 = add i8 %0, -3
   %4 = add i8 %3, %1

@@ -73,26 +73,24 @@ define i32 @loop_zero_iterations(i32) local_unnamed_addr #0 {
   call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %3)
   store volatile i32 3, i32* %2, align 4, !tbaa !3
   %4 = icmp sgt i32 %0, 0
-  %5 = icmp sgt i32 %0, -1
-  %6 = load volatile i32, i32* %2, align 4, !tbaa !3
-  br i1 %4, label %10, label %7
+  %5 = load volatile i32, i32* %2, align 4, !tbaa !3
+  br i1 %4, label %9, label %6
 
-; <label>:7:                                      ; preds = %10, %1
-  %8 = phi i32 [ %6, %1 ], [ %17, %10 ]
-  %9 = add nsw i32 %8, -3
+; <label>:6:                                      ; preds = %9, %1
+  %7 = phi i32 [ %5, %1 ], [ %14, %9 ]
+  %8 = add nsw i32 %7, -3
   call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %3)
-  ret i32 %9
+  ret i32 %8
 
-; <label>:10:                                     ; preds = %1, %10
-  %11 = phi i32 [ %17, %10 ], [ %6, %1 ]
-  %12 = phi i32 [ %14, %10 ], [ 0, %1 ]
-  %13 = add nsw i32 %11, 1
-  store volatile i32 %13, i32* %2, align 4, !tbaa !3
-  %14 = add nuw nsw i32 %12, 1
-  %15 = icmp slt i32 %14, %0
-  %16 = and i1 %5, %15
-  %17 = load volatile i32, i32* %2, align 4, !tbaa !3
-  br i1 %16, label %10, label %7
+; <label>:9:                                      ; preds = %1, %9
+  %10 = phi i32 [ %14, %9 ], [ %5, %1 ]
+  %11 = phi i32 [ %13, %9 ], [ 0, %1 ]
+  %12 = add nsw i32 %10, 1
+  store volatile i32 %12, i32* %2, align 4, !tbaa !3
+  %13 = add nuw nsw i32 %11, 1
+  %14 = load volatile i32, i32* %2, align 4, !tbaa !3
+  %15 = icmp eq i32 %13, %0
+  br i1 %15, label %6, label %9
 }
 
 ; Function Attrs: nounwind ssp uwtable

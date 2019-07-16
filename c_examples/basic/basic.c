@@ -65,6 +65,14 @@ int conditional_nozero(int a, int b) {
   }
 }
 
+int conditional_with_and(int a, int b) {
+  if (a > 3 && b > 4) {
+    return 0;
+  } else {
+    return 1;
+  }
+}
+
 int8_t int8t(int8_t a, int8_t b) {
   return a + b - 3;
 }

@@ -65,6 +65,22 @@ impl<'ctx> From<BVorBool<'ctx>> for Bool<'ctx> {
     }
 }
 
+impl<'ctx> BVorBool<'ctx> {
+    fn is_bv(&self) -> bool {
+        match self {
+            BVorBool::BV(_) => true,
+            _ => false,
+        }
+    }
+
+    fn is_bool(&self) -> bool {
+        match self {
+            BVorBool::Bool(_) => true,
+            _ => false,
+        }
+    }
+}
+
 // these are basically From impls, but for converting ref to ref
 impl<'ctx> BVorBool<'ctx> {
     fn as_bv(&self) -> &BV<'ctx> {
@@ -78,6 +94,30 @@ impl<'ctx> BVorBool<'ctx> {
         match self {
             BVorBool::Bool(b) => &b,
             _ => panic!("Can't convert {:?} to Bool", self),
+        }
+    }
+}
+
+// these are like the From impls, but make more of an effort to convert between
+// types if the wrong type is requested
+impl<'ctx> BVorBool<'ctx> {
+    fn to_bv(self, ctx: &'ctx z3::Context) -> BV<'ctx> {
+        match self {
+            BVorBool::BV(bv) => bv,
+            BVorBool::Bool(b) => b.ite(&BV::from_u64(ctx, 1, 1), &BV::from_u64(ctx, 0, 1)),
+        }
+    }
+
+    fn to_bool(self, ctx: &'ctx z3::Context) -> Bool<'ctx> {
+        match self {
+            BVorBool::Bool(b) => b,
+            BVorBool::BV(bv) => {
+                if bv.get_size() == 1 {
+                    bv._eq(&BV::from_u64(ctx, 1, 1))
+                } else {
+                    panic!("Can't convert BV {:?} of size {} to Bool", bv, bv.get_size())
+                }
+            },
         }
     }
 }
@@ -125,21 +165,21 @@ impl<'ctx> VarMap<'ctx> {
     }
 
     /// Look up the most recent `BV` created for the given `Name`
-    pub fn lookup_bv_var(&self, name: &Name) -> &BV<'ctx> {
+    pub fn lookup_bv_var(&self, name: &Name) -> BV<'ctx> {
         debug!("Looking up var {:?}", name);
         self.latest_version.get(name).unwrap_or_else(|| {
             let keys: Vec<&Name> = self.latest_version.keys().collect();
             panic!("Failed to find var {:?} in map with keys {:?}", name, keys);
-        }).as_bv()
+        }).clone().to_bv(self.ctx)
     }
 
     /// Look up the most recent `Bool` created for the given `Name`
-    pub fn lookup_bool_var(&self, name: &Name) -> &Bool<'ctx> {
+    pub fn lookup_bool_var(&self, name: &Name) -> Bool<'ctx> {
         debug!("Looking up var {:?}", name);
         self.latest_version.get(name).unwrap_or_else(|| {
             let keys: Vec<&Name> = self.latest_version.keys().collect();
             panic!("Failed to find var {:?} in map with keys {:?}", name, keys);
-        }).as_bool()
+        }).clone().to_bool(self.ctx)
     }
 
     /// Given a `Name`, creates a new version of it and returns the corresponding `z3::Symbol`
@@ -180,8 +220,8 @@ mod tests {
         let boolvar = varmap.new_bool_with_name(boolname.clone()).unwrap();  // these clone()s wouldn't normally be necessary but we want to compare against the original values later
 
         // check that looking up the llvm-ir values gives the correct Z3 ones
-        assert_eq!(varmap.lookup_bv_var(&valname), &valvar);
-        assert_eq!(varmap.lookup_bool_var(&boolname), &boolvar);
+        assert_eq!(varmap.lookup_bv_var(&valname), valvar);
+        assert_eq!(varmap.lookup_bool_var(&boolname), boolvar);
     }
 
     #[test]
