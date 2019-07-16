@@ -39,7 +39,7 @@ fn loop_zero_iterations() {
     let func = module.get_func_by_name("loop_zero_iterations").expect("Failed to find function");
     let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
-    assert_eq!(args[0], SolutionValue::I32(3));
+    assert_eq!(args[0], SolutionValue::I32(0));
 }
 
 #[test]
