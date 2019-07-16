@@ -16,6 +16,7 @@ int for_loop(int end) {
 
 int loop_zero_iterations(int end) {
   volatile int a = 3;
+  if(end < 0) return 1;  // this way the function cannot return 0 when end < 0
   for(int i = 0; i < end; i++) {
     a++;
   }
