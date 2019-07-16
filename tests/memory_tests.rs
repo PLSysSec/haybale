@@ -17,7 +17,7 @@ fn load_and_store() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("load_and_store").expect("Failed to find function");
-    let args = find_zero_of_func(func).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -27,7 +27,7 @@ fn local_ptr() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("local_ptr").expect("Failed to find function");
-    let args = find_zero_of_func(func).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -37,7 +37,7 @@ fn overwrite() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("overwrite").expect("Failed to find function");
-    let args = find_zero_of_func(func).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -47,7 +47,7 @@ fn load_and_store_mult() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("load_and_store_mult").expect("Failed to find function");
-    let args = find_zero_of_func(func).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -57,7 +57,7 @@ fn array() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("array").expect("Failed to find function");
-    let args = find_zero_of_func(func).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -67,7 +67,7 @@ fn pointer_arith() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("pointer_arith").expect("Failed to find function");
-    let args = find_zero_of_func(func).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
