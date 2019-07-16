@@ -61,9 +61,9 @@ impl SolutionValue {
     }
 }
 
-// Given a function, find values of its inputs such that it returns zero
-// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer
-// Returns None if there are no values of the inputs such that the function returns zero
+/// Given a function, find values of its inputs such that it returns zero.
+/// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer.
+/// Returns `None` if there are no values of the inputs such that the function returns zero.
 pub fn find_zero_of_func(func: &Function) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();
     let ctx = z3::Context::new(&cfg);
