@@ -128,7 +128,7 @@ define i32 @loop_with_cond(i32) local_unnamed_addr #0 {
   %17 = load volatile i32, i32* %3, align 4, !tbaa !3
   %18 = add nsw i32 %17, 1
   store volatile i32 %18, i32* %3, align 4, !tbaa !3
-  %19 = icmp slt i32 %17, %0
+  %19 = icmp slt i32 %18, %0
   br i1 %19, label %6, label %20
 
 ; <label>:20:                                     ; preds = %16

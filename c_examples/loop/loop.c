@@ -26,7 +26,7 @@ int loop_with_cond(int end) {
   volatile int a = 0, i = 0;
   do {
     if(i % 3 == 0 || i > 6) a++;
-  } while (i++ < end);
+  } while (++i < end);
   return a - 3;
 }
 
