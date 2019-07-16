@@ -1,5 +1,5 @@
 use llvm_ir::*;
-use llvm_ir::instruction::{BinaryOp, HasResult};
+use llvm_ir::instruction::BinaryOp;
 use log::debug;
 use z3::ast::{Ast, BV, Bool};
 use either::Either;
@@ -38,8 +38,8 @@ fn symex_from_bb_by_name<'ctx, 'func>(state: &mut State<'ctx, 'func>, bbname: &N
 fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, cur_func: &'func Function, prev_bb: Option<Name>) -> Option<BV<'ctx>> {
     debug!("Symexing basic block {:?}", bb.name);
     for inst in bb.instrs.iter() {
-        if let Some((binop, z3binop)) = inst_to_binop(&inst) {
-            symex_binop(state, &binop, z3binop);
+        let result = if let Some((binop, z3binop)) = inst_to_binop(&inst) {
+            symex_binop(state, &binop, z3binop)
         } else {
             match inst {
                 Instruction::ICmp(icmp) => symex_icmp(state, &icmp),
@@ -55,7 +55,17 @@ fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, c
                 Instruction::Select(select) => symex_select(state, &select),
                 Instruction::Call(call) => symex_call(state, &call),
                 _ => unimplemented!("instruction {:?}", inst),
-            };
+            }
+        };
+        if result.is_err() {
+            // Having an `Err` here indicates we can't continue down this path,
+            // for instance because we're unsat, or because loop bound was exceeded, etc
+            if let Some((func, bb, prev_bb)) = state.revert_to_backtracking_point() {
+                return symex_from_bb_by_name(state, &bb, func, Some(prev_bb));
+            } else {
+                // can't continue on this path due to error, and we have nowhere to backtrack to
+                panic!("All possible paths seem to be unsat");
+            }
         }
     }
     match &bb.term {
@@ -101,24 +111,24 @@ fn intpred_to_z3pred<'ctx>(pred: IntPredicate) -> Box<FnOnce(&BV<'ctx>, &BV<'ctx
     }
 }
 
-fn symex_binop<'ctx, 'func, F>(state: &mut State<'ctx, 'func>, bop: &instruction::groups::BinaryOp, z3op: F)
+fn symex_binop<'ctx, 'func, F>(state: &mut State<'ctx, 'func>, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<(), &'static str>
     where F: FnOnce(&BV<'ctx>, &BV<'ctx>) -> BV<'ctx>
 {
     debug!("Symexing binop {:?}", bop);
     let z3firstop = state.operand_to_bv(&bop.get_operand0());
     let z3secondop = state.operand_to_bv(&bop.get_operand1());
-    state.record_bv_result(bop, z3op(&z3firstop, &z3secondop));
+    state.record_bv_result(bop, z3op(&z3firstop, &z3secondop))
 }
 
-fn symex_icmp(state: &mut State, icmp: &instruction::ICmp) {
+fn symex_icmp(state: &mut State, icmp: &instruction::ICmp) -> Result<(), &'static str> {
     debug!("Symexing icmp {:?}", icmp);
     let z3firstop = state.operand_to_bv(&icmp.operand0);
     let z3secondop = state.operand_to_bv(&icmp.operand1);
     let z3pred = intpred_to_z3pred(icmp.predicate);
-    state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop));
+    state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
 }
 
-fn symex_zext(state: &mut State, zext: &instruction::ZExt) {
+fn symex_zext(state: &mut State, zext: &instruction::ZExt) -> Result<(), &'static str> {
     debug!("Symexing zext {:?}", zext);
     let z3op = state.operand_to_bv(&zext.operand);
     let source_size = z3op.get_size();
@@ -127,10 +137,10 @@ fn symex_zext(state: &mut State, zext: &instruction::ZExt) {
         Type::VectorType { .. } => unimplemented!("ZExt on vectors"),
         ty => panic!("ZExt result should be integer or vector of integers; got {:?}", ty),
     };
-    state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size));
+    state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
 }
 
-fn symex_sext(state: &mut State, sext: &instruction::SExt) {
+fn symex_sext(state: &mut State, sext: &instruction::SExt) -> Result<(), &'static str> {
     debug!("Symexing sext {:?}", sext);
     let z3op = state.operand_to_bv(&sext.operand);
     let source_size = z3op.get_size();
@@ -139,10 +149,10 @@ fn symex_sext(state: &mut State, sext: &instruction::SExt) {
         Type::VectorType { .. } => unimplemented!("SExt on vectors"),
         ty => panic!("SExt result should be integer or vector of integers; got {:?}", ty),
     };
-    state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size));
+    state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
 }
 
-fn symex_trunc(state: &mut State, trunc: &instruction::Trunc) {
+fn symex_trunc(state: &mut State, trunc: &instruction::Trunc) -> Result<(), &'static str> {
     debug!("Symexing trunc {:?}", trunc);
     let z3op = state.operand_to_bv(&trunc.operand);
     let dest_size = match trunc.get_type() {
@@ -150,33 +160,34 @@ fn symex_trunc(state: &mut State, trunc: &instruction::Trunc) {
         Type::VectorType { .. } => unimplemented!("Trunc on vectors"),
         ty => panic!("Trunc result should be integer or vector of integers; got {:?}", ty),
     };
-    state.record_bv_result(trunc, z3op.extract(dest_size-1, 0));
+    state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
 }
 
-fn symex_bitcast(state: &mut State, bitcast: &instruction::BitCast) {
+fn symex_bitcast(state: &mut State, bitcast: &instruction::BitCast) -> Result<(), &'static str> {
     debug!("Symexing bitcast {:?}", bitcast);
     let z3op = state.operand_to_bv(&bitcast.operand);
-    state.record_bv_result(bitcast, z3op);  // from Z3's perspective the bitcast is simply a no-op; the bit patterns are equal
+    state.record_bv_result(bitcast, z3op)  // from Z3's perspective the bitcast is simply a no-op; the bit patterns are equal
 }
 
-fn symex_load(state: &mut State, load: &instruction::Load) {
+fn symex_load(state: &mut State, load: &instruction::Load) -> Result<(), &'static str> {
     debug!("Symexing load {:?}", load);
     let z3addr = state.operand_to_bv(&load.address);
     let dest_size = match load.get_type() {
         Type::IntegerType { bits } => bits,
         ty => unimplemented!("Load with non-integer result type {:?}", ty),
     };
-    state.record_bv_result(load, state.read(&z3addr, dest_size));
+    state.record_bv_result(load, state.read(&z3addr, dest_size))
 }
 
-fn symex_store(state: &mut State, store: &instruction::Store) {
+fn symex_store(state: &mut State, store: &instruction::Store) -> Result<(), &'static str> {
     debug!("Symexing store {:?}", store);
     let z3val = state.operand_to_bv(&store.value);
     let z3addr = state.operand_to_bv(&store.address);
     state.write(&z3addr, z3val);
+    Ok(())
 }
 
-fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) {
+fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) -> Result<(), &'static str> {
     debug!("Symexing gep {:?}", gep);
     let z3base = state.operand_to_bv(&gep.address);
     if gep.indices.len() > 1 {
@@ -191,17 +202,17 @@ fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) {
     };
     let size_pointed_to = size(&type_pointed_to);
     let total_offset = z3index.bvmul(&BV::from_u64(state.ctx, size_pointed_to as u64, z3index.get_size()));
-    state.record_bv_result(gep, z3base.bvadd(&total_offset));
+    state.record_bv_result(gep, z3base.bvadd(&total_offset))
 }
 
-fn symex_alloca(state: &mut State, alloca: &instruction::Alloca) {
+fn symex_alloca(state: &mut State, alloca: &instruction::Alloca) -> Result<(), &'static str> {
     debug!("Symexing alloca {:?}", alloca);
     let allocation_size = size(&alloca.allocated_type);
     let allocated = state.allocate(allocation_size as u64);
-    state.record_bv_result(alloca, allocated);
+    state.record_bv_result(alloca, allocated)
 }
 
-fn symex_call(state: &mut State, call: &instruction::Call) {
+fn symex_call(state: &mut State, call: &instruction::Call) -> Result<(), &'static str> {
     debug!("Symexing call {:?}", call);
     let funcname = match call.function {
         Either::Right(Operand::ConstantOperand(Constant::GlobalReference { ref name, .. })) => name,
@@ -211,7 +222,7 @@ fn symex_call(state: &mut State, call: &instruction::Call) {
     let errorfuncname = funcname.clone();  // just for possible error reporting
     if let Name::Name(s) = funcname {
         if s.starts_with("llvm.") {
-            return  // We ignore these llvm-internal functions
+            return Ok(())  // We ignore these llvm-internal functions
         }
     }
     unimplemented!("Call of a function named {:?}", errorfuncname);
@@ -253,11 +264,12 @@ fn symex_condbr<'ctx, 'func>(state: &mut State<'ctx, 'func>, condbr: &terminator
     } else if let Some((func, bb, prev_bb)) = state.revert_to_backtracking_point() {
         symex_from_bb_by_name(state, &bb, func, Some(prev_bb))
     } else {
+        // both branches are unsat, and we have nowhere to backtrack to
         panic!("All possible paths seem to be unsat");
     }
 }
 
-fn symex_phi(state: &mut State, phi: &instruction::Phi, prev_bb: Option<&Name>) {
+fn symex_phi(state: &mut State, phi: &instruction::Phi, prev_bb: Option<&Name>) -> Result<(), &'static str> {
     debug!("Symexing phi {:?}", phi);
     let prev_bb = prev_bb.expect("not yet implemented: starting in a block with Phi instructions");
     let mut chosen_value = None;
@@ -268,10 +280,10 @@ fn symex_phi(state: &mut State, phi: &instruction::Phi, prev_bb: Option<&Name>) 
         }
     }
     let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
-    state.record_bv_result(phi, state.operand_to_bv(&chosen_value));
+    state.record_bv_result(phi, state.operand_to_bv(&chosen_value))
 }
 
-fn symex_select(state: &mut State, select: &instruction::Select) {
+fn symex_select(state: &mut State, select: &instruction::Select) -> Result<(), &'static str> {
     debug!("Symexing select {:?}", select);
     let z3cond = state.operand_to_bool(&select.condition);
     let z3trueval = state.operand_to_bv(&select.true_value);
@@ -279,14 +291,15 @@ fn symex_select(state: &mut State, select: &instruction::Select) {
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
     let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
     if true_feasible && false_feasible {
-        state.record_bv_result(select, Bool::ite(&z3cond, &z3trueval, &z3falseval));
+        state.record_bv_result(select, Bool::ite(&z3cond, &z3trueval, &z3falseval))
     } else if true_feasible {
         state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
-        state.record_bv_result(select, z3trueval);
+        state.record_bv_result(select, z3trueval)
     } else if false_feasible {
         state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
-        state.record_bv_result(select, z3falseval);
+        state.record_bv_result(select, z3falseval)
     } else {
-        unimplemented!("discovered we're unsat while checking a switch condition");
+        // returning `Err` marks us unsat and will cause us to backtrack
+        Err("discovered we're unsat while checking a switch condition")
     }
 }

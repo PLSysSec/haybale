@@ -3,7 +3,6 @@ use z3::ast::{Ast, BV};
 
 mod state;
 use state::State;
-use state::name_to_sym;
 
 mod symex;
 use symex::{symex_function, symex_again};
@@ -68,13 +67,12 @@ impl SolutionValue {
 pub fn find_zero_of_func(func: &Function) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();
     let ctx = z3::Context::new(&cfg);
-    let mut state = State::new(&ctx);
+    let mut state = State::new(&ctx, 20);
 
     let params: Vec<function::Parameter> = func.parameters.clone();
     for param in params.iter() {
         let width = size(&param.ty);
-        let z3param = BV::new_const(&ctx, name_to_sym(param.name.clone()), width as u32);
-        state.add_bv_var(param.name.clone(), z3param);
+        let _ = state.new_bv_with_name(param.name.clone(), width as u32);
     }
 
     let returnwidth = size(&func.return_type);

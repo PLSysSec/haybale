@@ -1,6 +1,5 @@
 use llvm_ir::*;
 use log::debug;
-use std::collections::HashMap;
 use std::fmt;
 use z3::ast::{Ast, BV, Bool};
 
@@ -34,15 +33,20 @@ struct BacktrackPoint<'ctx, 'func> {
     //       If/when that becomes not reasonable, we should probably use boxed
     //       `Bool`s here rather than making callers copy.
     constraint: Bool<'ctx>,
+    /// `VarMap` representing the state of things at the `BacktrackPoint`.
+    /// For now, we require making a full copy of the `VarMap` in order to revert
+    /// later.
+    varmap: VarMap<'ctx>,
 }
 
 impl<'ctx, 'func> BacktrackPoint<'ctx, 'func> {
-    fn new(in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>) -> Self {
+    fn new(in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>, varmap: VarMap<'ctx>) -> Self {
         BacktrackPoint{
             in_func,
             next_bb,
             prev_bb,
             constraint,
+            varmap,
         }
     }
 }
@@ -54,10 +58,13 @@ impl<'ctx, 'func> fmt::Display for BacktrackPoint<'ctx, 'func> {
 }
 
 impl<'ctx, 'func> State<'ctx, 'func> {
-    pub fn new(ctx: &'ctx z3::Context) -> Self {
+    /// `max_versions_of_name`: the maximum number of versions allowed of a given `Name`,
+    /// that is, the maximum number of Z3 objects created for a given LLVM SSA value.
+    /// Used for (very crude) loop bounding.
+    pub fn new(ctx: &'ctx z3::Context, max_versions_of_name: usize) -> Self {
         Self {
             ctx,
-            varmap: VarMap::new(),
+            varmap: VarMap::new(ctx, max_versions_of_name),
             mem: Memory::new(ctx),
             alloc: Alloc::new(),
             solver: Solver::new(ctx),
@@ -110,30 +117,44 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         self.get_a_solution_for_bool(&b)
     }
 
-    /// Associate the given name with the given `BV`
-    pub fn add_bv_var(&mut self, name: Name, bv: BV<'ctx>) {
-        self.varmap.add_bv_var(name, bv)
+    /// Create a new `BV` for the given `Name`.
+    /// This function performs uniquing, so if you call it twice
+    /// with the same `Name`, you will get two different `BV`s.
+    /// Returns the new `BV`, or `Err` if it can't be created.
+    /// (As of this writing, the only reason an `Err` might be returned is that
+    /// creating the new `BV` would exceed `max_versions_of_name` -- see
+    /// [`State::new()`](struct.State.html#method.new).)
+    pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<BV<'ctx>, &'static str> {
+        self.varmap.new_bv_with_name(name, bits)
     }
 
-    /// Associate the given name with the given `Bool`
-    pub fn add_bool_var(&mut self, name: Name, b: Bool<'ctx>) {
-        self.varmap.add_bool_var(name, b)
+    /// Create a new `Bool` for the given `Name`.
+    /// This function performs uniquing, so if you call it twice
+    /// with the same `Name`, you will get two different `Bool`s.
+    /// Returns the new `Bool`, or `Err` if it can't be created.
+    /// (As of this writing, the only reason an `Err` might be returned is that
+    /// creating the new `Bool` would exceed `max_versions_of_name` -- see
+    /// [`State::new()`](struct.State.html#method.new).)
+    pub fn new_bool_with_name(&mut self, name: Name) -> Result<Bool<'ctx>, &'static str> {
+        self.varmap.new_bool_with_name(name)
     }
 
-    /// Record the result of `thing` to be `resultval`
-    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: BV<'ctx>) {
+    /// Record the result of `thing` to be `resultval`.
+    /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
+    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: BV<'ctx>) -> Result<(), &'static str> {
         let bits = size(&thing.get_type());
-        let result = BV::new_const(self.ctx, name_to_sym(thing.get_result().clone()), bits as u32);
+        let result = self.varmap.new_bv_with_name(thing.get_result().clone(), bits as u32)?;
         self.assert(&result._eq(&resultval));
-        self.varmap.add_bv_var(thing.get_result().clone(), result);
+        Ok(())
     }
 
-    /// Record the result of `thing` to be `resultval`
-    pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: Bool<'ctx>) {
+    /// Record the result of `thing` to be `resultval`.
+    /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
+    pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: Bool<'ctx>) -> Result<(), &'static str> {
         assert_eq!(thing.get_type(), Type::bool());
-        let result = Bool::new_const(self.ctx, name_to_sym(thing.get_result().clone()));
+        let result = self.varmap.new_bool_with_name(thing.get_result().clone())?;
         self.assert(&result._eq(&resultval));
-        self.varmap.add_bool_var(thing.get_result().clone(), result);
+        Ok(())
     }
 
     /// Convert an `Operand` to the appropriate `BV`
@@ -185,7 +206,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     pub fn save_backtracking_point(&mut self, in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>) {
         debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", next_bb, constraint);
         self.solver.push();
-        self.backtrack_points.push(BacktrackPoint::new(in_func, next_bb, prev_bb, constraint));
+        self.backtrack_points.push(BacktrackPoint::new(in_func, next_bb, prev_bb, constraint, self.varmap.clone()));
     }
 
     // returns the Function and BasicBlock where execution should continue, and the BasicBlock executed before that
@@ -196,6 +217,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
             self.solver.pop(1);
             debug!("Constraints are now:\n{}", self.solver);
             self.assert(&bp.constraint);
+            self.varmap = bp.varmap;
             Some((bp.in_func, bp.next_bb, bp.prev_bb))
             // thanks to SSA, we don't need to roll back the VarMap; we'll just overwrite existing entries as needed.
             // Code on the backtracking path will never reference variables which we assigned on the original path.
@@ -203,15 +225,6 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         } else {
             None
         }
-    }
-}
-
-/// Convert an `llvm_ir::Name` to a `z3::Symbol`
-// TODO this probably doesn't belong here
-pub(crate) fn name_to_sym(name: Name) -> z3::Symbol {
-    match name {
-        Name::Name(s) => z3::Symbol::String(s),
-        Name::Number(n) => z3::Symbol::Int(n as u32),
     }
 }
 
@@ -225,31 +238,27 @@ mod tests {
     #[test]
     fn lookup_vars_via_operand() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
+        let mut state = State::new(&ctx, 20);
 
-        // create llvm-ir values
-        let val = Name::Name("val".to_owned());
-        let boolval = Name::Number(2);
+        // create llvm-ir names
+        let valname = Name::Name("val".to_owned());
+        let boolname = Name::Number(2);
 
-        // create Z3 values
-        let x = BV::new_const(&ctx, "x", 64);
-        let boolvar = Bool::new_const(&ctx, "bool");
-
-        // associate llvm-ir values with Z3 values
-        state.add_bv_var(val.clone(), x.clone());  // these clone()s wouldn't normally be necessary but we want to compare against the original values later
-        state.add_bool_var(boolval.clone(), boolvar.clone());
+        // create corresponding Z3 values
+        let valvar = state.new_bv_with_name(valname.clone(), 64).unwrap();
+        let boolvar = state.new_bool_with_name(boolname.clone()).unwrap();  // these clone()s wouldn't normally be necessary but we want to reuse the names to create `Operand`s later
 
         // check that we can look up the correct Z3 values via LocalOperands
-        let valop = Operand::LocalOperand { name: val, ty: Type::i32() };
-        let boolop = Operand::LocalOperand { name: boolval, ty: Type::bool() };
-        assert_eq!(state.operand_to_bv(&valop), x);
+        let valop = Operand::LocalOperand { name: valname, ty: Type::i32() };
+        let boolop = Operand::LocalOperand { name: boolname, ty: Type::bool() };
+        assert_eq!(state.operand_to_bv(&valop), valvar);
         assert_eq!(state.operand_to_bool(&boolop), boolvar);
     }
 
     #[test]
     fn const_bv() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
+        let mut state = State::new(&ctx, 20);
 
         // create an llvm-ir value which is constant 3
         let constint = Constant::Int { bits: 64, value: 3 };
@@ -264,7 +273,7 @@ mod tests {
     #[test]
     fn const_bool() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
+        let mut state = State::new(&ctx, 20);
 
         // create llvm-ir constants true and false
         let consttrue = Constant::Int { bits: 1, value: 1 };
@@ -290,7 +299,7 @@ mod tests {
     #[test]
     fn backtracking() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut state = State::new(&ctx);
+        let mut state = State::new(&ctx, 20);
 
         // assert x > 11
         let x = BV::new_const(&ctx, "x", 64);

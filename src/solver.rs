@@ -25,11 +25,12 @@ impl<'ctx> Solver<'ctx> {
 
     /// Add `cond` as a constraint, i.e., assert that `cond` must be true
     pub fn assert(&mut self, cond: &Bool<'ctx>) {
+        let cond = cond.simplify();
         debug!("asserting {}", cond);
         // A new assertion invalidates the cached check status and model
         self.check_status = None;
         self.model = None;
-        self.z3_solver.assert(cond);
+        self.z3_solver.assert(&cond);
     }
 
     /// Returns `true` if current constraints are satisfiable, `false` if not.
