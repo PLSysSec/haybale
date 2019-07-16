@@ -97,8 +97,7 @@ impl<'ctx> Memory<'ctx> {
             self.read_cell(addr)
                 .bvand(&mask_clear)  // zero out the section we'll be writing
                 .bvor(&mask_write)  // write the data
-                .simplify()
-        };
+        }.simplify();
         debug!("Final cell data being written is {}", data_to_write);
         self.write_cell(addr, data_to_write);
     }
@@ -117,7 +116,7 @@ impl<'ctx> Memory<'ctx> {
             .enumerate()
             .map(|(i,sz)| {
                 let offset_bytes = i as u64 * u64::from(Self::CELL_BYTES);
-                self.read_within_cell(&addr.bvadd(&BV::from_u64(self.ctx, offset_bytes, Self::INDEX_BITS)), sz)
+                self.read_within_cell(&addr.bvadd(&BV::from_u64(self.ctx, offset_bytes, Self::INDEX_BITS)).simplify(), sz)
             });
         fold_from_first(reads, |a,b| b.concat(&a)).simplify()
     }
