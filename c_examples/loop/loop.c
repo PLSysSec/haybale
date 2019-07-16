@@ -1,5 +1,5 @@
 int while_loop(int end) {
-  int a = 0, i = 0;
+  volatile int a = 0, i = 0;
   do {
     a++;
   } while (i++ < end);
@@ -7,7 +7,7 @@ int while_loop(int end) {
 }
 
 int for_loop(int end) {
-  int a = 0;
+  volatile int a = 0;
   for(int i = 0; i < end; i++) {
     a++;
   }
@@ -15,7 +15,7 @@ int for_loop(int end) {
 }
 
 int loop_zero_iterations(int end) {
-  int a = 3;
+  volatile int a = 3;
   for(int i = 0; i < end; i++) {
     a++;
   }
@@ -23,7 +23,7 @@ int loop_zero_iterations(int end) {
 }
 
 int loop_with_cond(int end) {
-  int a = 0, i = 0;
+  volatile int a = 0, i = 0;
   do {
     if(i % 3 == 0 || i > 6) a++;
   } while (i++ < end);
@@ -31,7 +31,7 @@ int loop_with_cond(int end) {
 }
 
 int loop_inside_cond(int b) {
-  int a = 0;
+  volatile int a = 0;
   if (b > 7) {
     for (int i = 0; i < 3; i++) {
       a++;
@@ -78,7 +78,7 @@ int search_array(int a) {
 }
 
 int nested_loop(int end) {
-  int a = 0;
+  volatile int a = 0;
   for(int i = 0; i < end; i++) {
     for (int j = 0; j < 10; j++) {
       a++;

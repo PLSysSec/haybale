@@ -1,4 +1,4 @@
-CC=clang-7
+CC=clang-8
 CFLAGS=-O3
 LLVMAS=llvm-as
 
@@ -13,9 +13,9 @@ all: basic/basic.bc basic/basic.ll \
 %.bc : %.ll
 	$(LLVMAS) $^ -o $@
 
-# use -O0 on loop.c
+# use -O1 on loop.c
 loop/loop.ll : loop/loop.c
-	$(CC) -O0 -S -emit-llvm $^ -o $@
+	$(CC) -O1 -S -emit-llvm $^ -o $@
 
 .PHONY: clean
 clean:
