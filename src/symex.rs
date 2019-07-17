@@ -186,49 +186,63 @@ fn symex_store(state: &mut State, store: &instruction::Store) -> Result<(), &'st
 
 fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) -> Result<(), &'static str> {
     debug!("Symexing gep {:?}", gep);
-    //let indices = gep.indices.iter().map(|i| match i {
-        //Operand::ConstantOperand(c) => c,
-        //_ => unimplemented!("Non-constant GEP index {:?}", i),
-    //});
-    let offset = get_offset(state, gep.indices.iter(), &gep.address.get_type()).simplify();
     let z3base = state.operand_to_bv(&gep.address);
-    state.record_bv_result(gep, z3base.bvadd(&offset))
+    let offset = get_offset(state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
+    state.record_bv_result(gep, z3base.bvadd(&offset).simplify())
 }
 
-/// Get the offset (in bytes, as a 64-bit `BV`) of the element
-fn get_offset<'ctx, 'm>(state: &mut State<'ctx, '_>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &'m Type) -> BV<'ctx> {
-    match indices.next() {
-        None => BV::from_u64(state.ctx, 0, 64),
-        Some(Operand::ConstantOperand(Constant::Int { value: cur_index, .. })) => {
-            match base_type {
-                Type::PointerType { pointee_type, .. }
-                | Type::ArrayType { element_type: pointee_type, .. }
-                | Type::VectorType { element_type: pointee_type, .. }
-                => {
-                    let el_size_bits = size(pointee_type) as u64;
-                    if el_size_bits % 8 != 0 {
-                        unimplemented!("Type with size {} bits", el_size_bits);
-                    }
-                    let el_size_bytes = el_size_bits / 8;
-                    BV::from_u64(state.ctx, (cur_index * el_size_bytes) as u64, 64)
-                        .bvadd(&get_offset(state, indices, pointee_type))
-                },
-                Type::StructType { element_types, .. } => {
-                    let mut offset_bits = 0;
-                    for ty in element_types.iter().take(*cur_index as usize) {
-                        offset_bits += size(&ty) as u64;
-                    }
-                    if offset_bits % 8 != 0 {
-                        unimplemented!("Struct offset of {} bits", offset_bits);
-                    }
-                    let offset_bytes = offset_bits / 8;
-                    BV::from_u64(state.ctx, offset_bytes, 64)
-                        .bvadd(&get_offset(state, indices, &element_types[*cur_index as usize]))
-                },
-                _ => panic!("Can't get_offset with {:?} base", base_type),
+/// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
+fn get_offset<'ctx, 'm>(state: &mut State<'ctx, '_>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &'m Type, result_bits: u32) -> BV<'ctx> {
+    let index = indices.next();
+    if index.is_none() {
+        return BV::from_u64(state.ctx, 0, result_bits);
+    }
+    let index = index.unwrap();  // we just handled the `None` case, so now it must have been `Some`
+    match base_type {
+        Type::PointerType { pointee_type, .. }
+        | Type::ArrayType { element_type: pointee_type, .. }
+        | Type::VectorType { element_type: pointee_type, .. }
+        => {
+            let el_size_bits = size(pointee_type) as u64;
+            if el_size_bits % 8 != 0 {
+                unimplemented!("Type with size {} bits", el_size_bits);
             }
+            let el_size_bytes = el_size_bits / 8;
+            zero_extend_to_bits(state.operand_to_bv(index), result_bits)
+                .bvmul(&BV::from_u64(state.ctx, el_size_bytes, result_bits))
+                .bvadd(&get_offset(state, indices, pointee_type, result_bits))
         },
-        idx => unimplemented!("get_offset with non-integer index {:?}", idx),
+        Type::StructType { element_types, .. } => match index {
+            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                let mut offset_bits = 0;
+                for ty in element_types.iter().take(*index as usize) {
+                    offset_bits += size(ty) as u64;
+                }
+                if offset_bits % 8 != 0 {
+                    unimplemented!("Struct offset of {} bits", offset_bits);
+                }
+                let offset_bytes = offset_bits / 8;
+                BV::from_u64(state.ctx, offset_bytes, result_bits)
+                    .bvadd(&get_offset(state, indices, &element_types[*index as usize], result_bits))
+            },
+            _ => panic!("Can't get_offset from struct type with index {:?}", index),
+        },
+        _ => panic!("get_offset with base type {:?}", base_type),
+    }
+}
+
+/// Zero-extend a `BV` to the specified number of bits.
+/// The input `BV` can be already the desired size (in which case this function is a no-op)
+/// or smaller (in which case this function will extend),
+/// but not larger (in which case this function will panic).
+fn zero_extend_to_bits(bv: BV, bits: u32) -> BV {
+    let cur_bits = bv.get_size();
+    if cur_bits == bits {
+        bv
+    } else if cur_bits < bits {
+        bv.zero_ext(bits - cur_bits)
+    } else {
+        panic!("tried to zero-extend to {} bits, but already had {} bits", bits, cur_bits)
     }
 }
 
