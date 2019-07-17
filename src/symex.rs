@@ -186,20 +186,20 @@ fn symex_store(state: &mut State, store: &instruction::Store) -> Result<(), &'st
 
 fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) -> Result<(), &'static str> {
     debug!("Symexing gep {:?}", gep);
-    let indices = gep.indices.iter().map(|i| match i {
-        Operand::ConstantOperand(c) => c,
-        _ => unimplemented!("Non-constant GEP index {:?}", i),
-    });
-    let offset = get_offset(indices, &gep.address.get_type());
+    //let indices = gep.indices.iter().map(|i| match i {
+        //Operand::ConstantOperand(c) => c,
+        //_ => unimplemented!("Non-constant GEP index {:?}", i),
+    //});
+    let offset = get_offset(state, gep.indices.iter(), &gep.address.get_type()).simplify();
     let z3base = state.operand_to_bv(&gep.address);
-    state.record_bv_result(gep, z3base.bvadd(&BV::from_u64(state.ctx, offset as u64, z3base.get_size())))
+    state.record_bv_result(gep, z3base.bvadd(&offset))
 }
 
-// Get the offset (in bytes) of the element
-fn get_offset<'m>(mut indices: impl Iterator<Item = &'m Constant>, base_type: &'m Type) -> u64 {
+/// Get the offset (in bytes, as a 64-bit `BV`) of the element
+fn get_offset<'ctx, 'm>(state: &mut State<'ctx, '_>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &'m Type) -> BV<'ctx> {
     match indices.next() {
-        None => 0,
-        Some(Constant::Int { value: cur_index, .. }) => {
+        None => BV::from_u64(state.ctx, 0, 64),
+        Some(Operand::ConstantOperand(Constant::Int { value: cur_index, .. })) => {
             match base_type {
                 Type::PointerType { pointee_type, .. }
                 | Type::ArrayType { element_type: pointee_type, .. }
@@ -210,7 +210,8 @@ fn get_offset<'m>(mut indices: impl Iterator<Item = &'m Constant>, base_type: &'
                         unimplemented!("Type with size {} bits", el_size_bits);
                     }
                     let el_size_bytes = el_size_bits / 8;
-                    cur_index * el_size_bytes + get_offset(indices, pointee_type)
+                    BV::from_u64(state.ctx, (cur_index * el_size_bytes) as u64, 64)
+                        .bvadd(&get_offset(state, indices, pointee_type))
                 },
                 Type::StructType { element_types, .. } => {
                     let mut offset_bits = 0;
@@ -221,7 +222,8 @@ fn get_offset<'m>(mut indices: impl Iterator<Item = &'m Constant>, base_type: &'
                         unimplemented!("Struct offset of {} bits", offset_bits);
                     }
                     let offset_bytes = offset_bits / 8;
-                    offset_bytes + get_offset(indices, &element_types[*cur_index as usize])
+                    BV::from_u64(state.ctx, offset_bytes, 64)
+                        .bvadd(&get_offset(state, indices, &element_types[*cur_index as usize]))
                 },
                 _ => panic!("Can't get_offset with {:?} base", base_type),
             }
