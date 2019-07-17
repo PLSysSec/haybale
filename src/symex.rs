@@ -189,20 +189,48 @@ fn symex_store(state: &mut State, store: &instruction::Store) -> Result<(), &'st
 
 fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) -> Result<(), &'static str> {
     debug!("Symexing gep {:?}", gep);
+    let indices = gep.indices.iter().map(|i| match i {
+        Operand::ConstantOperand(c) => c,
+        _ => unimplemented!("Non-constant GEP index {:?}", i),
+    });
+    let offset = get_offset(indices, &gep.address.get_type());
     let z3base = state.operand_to_bv(&gep.address);
-    if gep.indices.len() > 1 {
-        unimplemented!("GEP with multiple indices");
+    state.record_bv_result(gep, z3base.bvadd(&BV::from_u64(state.ctx, offset as u64, z3base.get_size())))
+}
+
+// Get the offset (in bytes) of the element
+fn get_offset<'m>(mut indices: impl Iterator<Item = &'m Constant>, base_type: &'m Type) -> u64 {
+    match indices.next() {
+        None => 0,
+        Some(Constant::Int { value: cur_index, .. }) => {
+            match base_type {
+                Type::PointerType { pointee_type, .. }
+                | Type::ArrayType { element_type: pointee_type, .. }
+                | Type::VectorType { element_type: pointee_type, .. }
+                => {
+                    let el_size_bits = size(pointee_type) as u64;
+                    if el_size_bits % 8 != 0 {
+                        unimplemented!("Type with size {} bits", el_size_bits);
+                    }
+                    let el_size_bytes = el_size_bits / 8;
+                    cur_index * el_size_bytes + get_offset(indices, pointee_type)
+                },
+                Type::StructType { element_types, .. } => {
+                    let mut offset_bits = 0;
+                    for ty in element_types.iter().take(*cur_index as usize) {
+                        offset_bits += size(&ty) as u64;
+                    }
+                    if offset_bits % 8 != 0 {
+                        unimplemented!("Struct offset of {} bits", offset_bits);
+                    }
+                    let offset_bytes = offset_bits / 8;
+                    offset_bytes + get_offset(indices, &element_types[*cur_index as usize])
+                },
+                _ => panic!("Can't get_offset with {:?} base", base_type),
+            }
+        },
+        idx => unimplemented!("get_offset with non-integer index {:?}", idx),
     }
-    let z3index = state.operand_to_bv(&gep.indices[0]);
-    let dest_type = gep.get_type();
-    let type_pointed_to = if let Type::PointerType { pointee_type, .. } = dest_type {
-        pointee_type
-    } else {
-        panic!("GEP whose result is not a pointer")
-    };
-    let size_pointed_to = size(&type_pointed_to);
-    let total_offset = z3index.bvmul(&BV::from_u64(state.ctx, size_pointed_to as u64, z3index.get_size()));
-    state.record_bv_result(gep, z3base.bvadd(&total_offset))
 }
 
 fn symex_alloca(state: &mut State, alloca: &instruction::Alloca) -> Result<(), &'static str> {
