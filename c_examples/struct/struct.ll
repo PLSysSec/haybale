@@ -139,7 +139,95 @@ define i32 @three_ints(i32, i32) #0 {
 }
 
 ; Function Attrs: noinline nounwind optnone ssp uwtable
-define i32 @mismatched(i8 zeroext, i32) #0 {
+define i32 @zero_initialize(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.ThreeInts, align 4
+  %4 = alloca i32, align 4
+  %5 = alloca i32, align 4
+  %6 = alloca i32, align 4
+  store i32 %0, i32* %2, align 4
+  %7 = bitcast %struct.ThreeInts* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %7, i8 0, i64 12, i1 true)
+  %8 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 0
+  %9 = load volatile i32, i32* %8, align 4
+  %10 = add nsw i32 %9, 2
+  store i32 %10, i32* %4, align 4
+  %11 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 1
+  %12 = load volatile i32, i32* %11, align 4
+  %13 = add nsw i32 %12, 4
+  store i32 %13, i32* %5, align 4
+  %14 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 2
+  %15 = load volatile i32, i32* %14, align 4
+  %16 = add nsw i32 %15, 6
+  store i32 %16, i32* %6, align 4
+  %17 = load i32, i32* %4, align 4
+  %18 = load i32, i32* %5, align 4
+  %19 = add nsw i32 %17, %18
+  %20 = load i32, i32* %6, align 4
+  %21 = add nsw i32 %19, %20
+  %22 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 1
+  store volatile i32 %21, i32* %22, align 4
+  %23 = load i32, i32* %2, align 4
+  %24 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 1
+  %25 = load volatile i32, i32* %24, align 4
+  %26 = sub nsw i32 %23, %25
+  ret i32 %26
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define zeroext i8 @mismatched_first(i8 zeroext) #0 {
+  %2 = alloca i8, align 1
+  %3 = alloca %struct.Mismatched, align 4
+  store i8 %0, i8* %2, align 1
+  %4 = bitcast %struct.Mismatched* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %4, i8 0, i64 12, i1 true)
+  %5 = load i8, i8* %2, align 1
+  %6 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %3, i32 0, i32 0
+  store volatile i8 %5, i8* %6, align 4
+  %7 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %3, i32 0, i32 0
+  %8 = load volatile i8, i8* %7, align 4
+  %9 = zext i8 %8 to i32
+  %10 = sub nsw i32 %9, 3
+  %11 = trunc i32 %10 to i8
+  ret i8 %11
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @mismatched_second(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.Mismatched, align 4
+  store i32 %0, i32* %2, align 4
+  %4 = bitcast %struct.Mismatched* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %4, i8 0, i64 12, i1 true)
+  %5 = load i32, i32* %2, align 4
+  %6 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %3, i32 0, i32 1
+  store volatile i32 %5, i32* %6, align 4
+  %7 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %3, i32 0, i32 1
+  %8 = load volatile i32, i32* %7, align 4
+  %9 = sub i32 %8, 3
+  ret i32 %9
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define zeroext i8 @mismatched_third(i8 zeroext) #0 {
+  %2 = alloca i8, align 1
+  %3 = alloca %struct.Mismatched, align 4
+  store i8 %0, i8* %2, align 1
+  %4 = bitcast %struct.Mismatched* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %4, i8 0, i64 12, i1 true)
+  %5 = load i8, i8* %2, align 1
+  %6 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %3, i32 0, i32 2
+  store volatile i8 %5, i8* %6, align 4
+  %7 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %3, i32 0, i32 2
+  %8 = load volatile i8, i8* %7, align 4
+  %9 = zext i8 %8 to i32
+  %10 = sub nsw i32 %9, 3
+  %11 = trunc i32 %10 to i8
+  ret i8 %11
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @mismatched_all(i8 zeroext, i32) #0 {
   %3 = alloca i8, align 1
   %4 = alloca i32, align 4
   %5 = alloca %struct.Mismatched, align 4
@@ -166,53 +254,99 @@ define i32 @mismatched(i8 zeroext, i32) #0 {
   %21 = trunc i32 %20 to i8
   %22 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
   store volatile i8 %21, i8* %22, align 4
-  %23 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
-  %24 = load volatile i32, i32* %23, align 4
-  %25 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
-  %26 = load volatile i8, i8* %25, align 4
+  %23 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
+  %24 = load volatile i8, i8* %23, align 4
+  %25 = zext i8 %24 to i32
+  %26 = load i8, i8* %3, align 1
   %27 = zext i8 %26 to i32
-  %28 = sub i32 %24, %27
+  %28 = sub nsw i32 %25, %27
   %29 = trunc i32 %28 to i8
   %30 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 0
   store volatile i8 %29, i8* %30, align 4
-  %31 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
-  %32 = load volatile i8, i8* %31, align 4
-  %33 = zext i8 %32 to i32
-  %34 = add nsw i32 %33, 4
-  %35 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
-  store volatile i32 %34, i32* %35, align 4
-  %36 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
-  %37 = load volatile i32, i32* %36, align 4
+  %31 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
+  %32 = load volatile i32, i32* %31, align 4
+  %33 = add i32 %32, 4
+  %34 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
+  store volatile i32 %33, i32* %34, align 4
+  %35 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 0
+  %36 = load volatile i8, i8* %35, align 4
+  %37 = zext i8 %36 to i32
   %38 = load i8, i8* %3, align 1
   %39 = zext i8 %38 to i32
-  %40 = sub i32 %37, %39
+  %40 = sub nsw i32 %37, %39
   %41 = trunc i32 %40 to i8
   %42 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 0
   store volatile i8 %41, i8* %42, align 4
-  %43 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
-  %44 = load volatile i32, i32* %43, align 4
-  %45 = sub i32 %44, 5
-  %46 = trunc i32 %45 to i8
-  %47 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
-  store volatile i8 %46, i8* %47, align 4
-  %48 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 0
-  %49 = load volatile i8, i8* %48, align 4
-  %50 = zext i8 %49 to i32
+  %43 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
+  %44 = load volatile i8, i8* %43, align 4
+  %45 = zext i8 %44 to i32
+  %46 = sub nsw i32 %45, 5
+  %47 = trunc i32 %46 to i8
+  %48 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
+  store volatile i8 %47, i8* %48, align 4
+  %49 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
+  %50 = load volatile i32, i32* %49, align 4
   %51 = load i32, i32* %4, align 4
-  %52 = add nsw i32 %50, %51
+  %52 = add i32 %50, %51
   %53 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
   store volatile i32 %52, i32* %53, align 4
-  %54 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
-  %55 = load volatile i32, i32* %54, align 4
-  %56 = load i8, i8* %3, align 1
-  %57 = zext i8 %56 to i32
-  %58 = mul nsw i32 3, %57
-  %59 = add i32 %55, %58
-  ret i32 %59
+  %54 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 0
+  %55 = load volatile i8, i8* %54, align 4
+  %56 = zext i8 %55 to i32
+  %57 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 1
+  %58 = load volatile i32, i32* %57, align 4
+  %59 = add i32 %56, %58
+  %60 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %5, i32 0, i32 2
+  %61 = load volatile i8, i8* %60, align 4
+  %62 = zext i8 %61 to i32
+  %63 = add i32 %59, %62
+  ret i32 %63
 }
 
 ; Function Attrs: noinline nounwind optnone ssp uwtable
-define i32 @nested(i8 zeroext, i32) #0 {
+define i32 @nested_first(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.Nested, align 4
+  store i32 %0, i32* %2, align 4
+  %4 = bitcast %struct.Nested* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %4, i8 0, i64 20, i1 true)
+  %5 = load i32, i32* %2, align 4
+  %6 = getelementptr inbounds %struct.Nested, %struct.Nested* %3, i32 0, i32 0
+  %7 = getelementptr inbounds %struct.TwoInts, %struct.TwoInts* %6, i32 0, i32 0
+  store volatile i32 %5, i32* %7, align 4
+  %8 = getelementptr inbounds %struct.Nested, %struct.Nested* %3, i32 0, i32 0
+  %9 = getelementptr inbounds %struct.TwoInts, %struct.TwoInts* %8, i32 0, i32 1
+  store volatile i32 3, i32* %9, align 4
+  %10 = getelementptr inbounds %struct.Nested, %struct.Nested* %3, i32 0, i32 0
+  %11 = getelementptr inbounds %struct.TwoInts, %struct.TwoInts* %10, i32 0, i32 0
+  %12 = load volatile i32, i32* %11, align 4
+  %13 = getelementptr inbounds %struct.Nested, %struct.Nested* %3, i32 0, i32 0
+  %14 = getelementptr inbounds %struct.TwoInts, %struct.TwoInts* %13, i32 0, i32 1
+  %15 = load volatile i32, i32* %14, align 4
+  %16 = sub nsw i32 %12, %15
+  ret i32 %16
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @nested_second(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.Nested, align 4
+  store i32 %0, i32* %2, align 4
+  %4 = bitcast %struct.Nested* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %4, i8 0, i64 20, i1 true)
+  %5 = load i32, i32* %2, align 4
+  %6 = getelementptr inbounds %struct.Nested, %struct.Nested* %3, i32 0, i32 1
+  %7 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %6, i32 0, i32 1
+  store volatile i32 %5, i32* %7, align 4
+  %8 = getelementptr inbounds %struct.Nested, %struct.Nested* %3, i32 0, i32 1
+  %9 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %8, i32 0, i32 1
+  %10 = load volatile i32, i32* %9, align 4
+  %11 = sub i32 %10, 3
+  ret i32 %11
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @nested_all(i8 zeroext, i32) #0 {
   %3 = alloca i8, align 1
   %4 = alloca i32, align 4
   %5 = alloca %struct.Nested, align 4
@@ -288,7 +422,31 @@ define i32 @with_array(i32) #0 {
   %4 = bitcast %struct.WithArray* %3 to i8*
   call void @llvm.memset.p0i8.i64(i8* align 4 %4, i8 0, i64 64, i1 true)
   %5 = load i32, i32* %2, align 4
-  %6 = add nsw i32 %5, 4
+  %6 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 1
+  %7 = getelementptr inbounds [10 x i32], [10 x i32]* %6, i64 0, i64 4
+  store volatile i32 %5, i32* %7, align 4
+  %8 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 1
+  %9 = getelementptr inbounds [10 x i32], [10 x i32]* %8, i64 0, i64 7
+  store volatile i32 3, i32* %9, align 4
+  %10 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 1
+  %11 = getelementptr inbounds [10 x i32], [10 x i32]* %10, i64 0, i64 4
+  %12 = load volatile i32, i32* %11, align 4
+  %13 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 1
+  %14 = getelementptr inbounds [10 x i32], [10 x i32]* %13, i64 0, i64 7
+  %15 = load volatile i32, i32* %14, align 4
+  %16 = sub nsw i32 %12, %15
+  ret i32 %16
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @with_array_all(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.WithArray, align 4
+  store i32 %0, i32* %2, align 4
+  %4 = bitcast %struct.WithArray* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %4, i8 0, i64 64, i1 true)
+  %5 = load i32, i32* %2, align 4
+  %6 = sub nsw i32 %5, 4
   %7 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 1
   %8 = getelementptr inbounds [10 x i32], [10 x i32]* %7, i64 0, i64 2
   store volatile i32 %6, i32* %8, align 4
@@ -310,17 +468,18 @@ define i32 @with_array(i32) #0 {
   %22 = load volatile i32, i32* %21, align 4
   %23 = load i32, i32* %2, align 4
   %24 = add nsw i32 %22, %23
-  %25 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 2
-  %26 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %25, i32 0, i32 1
-  store volatile i32 %24, i32* %26, align 4
-  %27 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 1
-  %28 = getelementptr inbounds [10 x i32], [10 x i32]* %27, i64 0, i64 4
-  %29 = load volatile i32, i32* %28, align 4
-  %30 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 2
-  %31 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %30, i32 0, i32 1
-  %32 = load volatile i32, i32* %31, align 4
-  %33 = sub i32 %29, %32
-  ret i32 %33
+  %25 = add nsw i32 %24, 1
+  %26 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 2
+  %27 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %26, i32 0, i32 1
+  store volatile i32 %25, i32* %27, align 4
+  %28 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 1
+  %29 = getelementptr inbounds [10 x i32], [10 x i32]* %28, i64 0, i64 4
+  %30 = load volatile i32, i32* %29, align 4
+  %31 = getelementptr inbounds %struct.WithArray, %struct.WithArray* %3, i32 0, i32 2
+  %32 = getelementptr inbounds %struct.Mismatched, %struct.Mismatched* %31, i32 0, i32 1
+  %33 = load volatile i32, i32* %32, align 4
+  %34 = add i32 %30, %33
+  ret i32 %34
 }
 
 ; Function Attrs: noinline nounwind optnone ssp uwtable

@@ -32,28 +32,28 @@ struct WithArray {
   struct Mismatched mm2;
 };
 
-// ensure we can read and write from OneInt
+// read and write from OneInt
 int one_int(int x) {
   volatile struct OneInt oi = { 0 };
   oi.el1 = x;
   return oi.el1 - 3;
 }
 
-// ensure we can read and write from first field in TwoInts
+// read and write from first field in TwoInts
 int two_ints_first(int x) {
   volatile struct TwoInts ti = { 0 };
   ti.el1 = x;
   return ti.el1 - 3;
 }
 
-// ensure we can read and write from second field in TwoInts
+// read and write from second field in TwoInts
 int two_ints_second(int x) {
   volatile struct TwoInts ti = { 0 };
   ti.el2 = x;
   return ti.el2 - 3;
 }
 
-// ensure we can read and write from both TwoInts fields without getting them confused
+// read and write from both TwoInts fields without getting them confused
 int two_ints_both(int x) {
   volatile struct TwoInts ti = { 0 };
   ti.el1 = x + 2;
@@ -63,7 +63,7 @@ int two_ints_both(int x) {
   return ti.el2 - 3;
 }
 
-// ensure we can read and write from all fields in ThreeInts
+// read and write from all fields in ThreeInts without getting them confused
 int three_ints(int x, int y) {
   volatile struct ThreeInts ti = { 0 };
   ti.el1 = x + y;
@@ -74,22 +74,68 @@ int three_ints(int x, int y) {
   return ti.el1 - 3;
 }
 
-// ensure we can read and write from all fields in Mismatched
-int mismatched(uint8_t x, int y) {
+// ensure that zero-initializing a struct works properly
+int zero_initialize(int x) {
+  volatile struct ThreeInts ti = { 0 };
+  int a = ti.el1 + 2;
+  int b = ti.el2 + 4;
+  int c = ti.el3 + 6;
+  ti.el2 = a + b + c;
+  return x - ti.el2;
+}
+
+// read and write from the first field in Mismatched
+uint8_t mismatched_first(uint8_t x) {
+  volatile struct Mismatched mm = { 0 };
+  mm.el1 = x;
+  return mm.el1 - 3;
+}
+
+// read and write from the second field in Mismatched
+int mismatched_second(int x) {
+  volatile struct Mismatched mm = { 0 };
+  mm.el2 = x;
+  return mm.el2 - 3;
+}
+
+// read and write from the third field in Mismatched
+uint8_t mismatched_third(uint8_t x) {
+  volatile struct Mismatched mm = { 0 };
+  mm.el3 = x;
+  return mm.el3 - 3;
+}
+
+// read and write from all fields in Mismatched without getting them confused
+int mismatched_all(uint8_t x, int y) {
   volatile struct Mismatched mm = { 0 };
   mm.el1 = x + 3;
   mm.el2 = y - 3;
   mm.el3 = mm.el1 - x;
-  mm.el1 = mm.el2 - mm.el3;
-  mm.el2 = mm.el3 + 4;
-  mm.el1 = mm.el2 - x;
-  mm.el3 = mm.el2 - 5;
-  mm.el2 = mm.el1 + y;
-  return mm.el2 + 3*x;
+  mm.el1 = mm.el3 - x;
+  mm.el2 = mm.el2 + 4;
+  mm.el1 = mm.el1 - x;
+  mm.el3 = mm.el3 - 5;
+  mm.el2 = mm.el2 + y;
+  return mm.el1 + mm.el2 + mm.el3;
 }
 
-// ensure we can read and write from all fields in Nested
-int nested(uint8_t x, int y) {
+// read and write from the first struct in Nested
+int nested_first(int x) {
+  volatile struct Nested n = { 0 };
+  n.ti.el1 = x;
+  n.ti.el2 = 3;
+  return n.ti.el1 - n.ti.el2;
+}
+
+// read and write from the second struct in Nested
+int nested_second(int x) {
+  volatile struct Nested n = { 0 };
+  n.mm.el2 = x;
+  return n.mm.el2 - 3;
+}
+
+// read and write from all fields in Nested without getting them confused
+int nested_all(uint8_t x, int y) {
   volatile struct Nested n = { 0 };
   n.ti.el2 = y + 3;
   n.mm.el1 = x - 4;
@@ -100,14 +146,22 @@ int nested(uint8_t x, int y) {
   return n.ti.el2 - y;
 }
 
-// ensure we can read and write from all fields in WithArray
+// read and write from the array field in WithArray
 int with_array(int x) {
   volatile struct WithArray wa = { 0 };
-  wa.arr[2] = x + 4;
+  wa.arr[4] = x;
+  wa.arr[7] = 3;
+  return wa.arr[4] - wa.arr[7];
+}
+
+// read and write from all fields in WithArray without getting them confused
+int with_array_all(int x) {
+  volatile struct WithArray wa = { 0 };
+  wa.arr[2] = x - 4;
   wa.arr[4] = wa.arr[5] - 3;
   wa.mm.el2 = wa.arr[2];
-  wa.mm2.el2 = wa.arr[2] + x;
-  return wa.arr[4] - wa.mm2.el2;
+  wa.mm2.el2 = wa.arr[2] + x + 1;
+  return wa.arr[4] + wa.mm2.el2;
 }
 
 // manipulate a struct through a pointer

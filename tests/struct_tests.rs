@@ -80,35 +80,102 @@ fn three_ints() {
 }
 
 #[test]
-fn mismatched() {
+fn zero_initialize() {
     init_logging();
     let module = get_module();
-    let func = module.get_func_by_name("mismatched").expect("Failed to find function");
+    let func = module.get_func_by_name("zero_initialize").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    let x = Wrapping(args[0].unwrap_to_i32());
+    let a = Wrapping(2);
+    let b = Wrapping(4);
+    let c = Wrapping(6);
+    let tiel2 = a + b + c;
+    let result: Wrapping<i32> = x - tiel2;
+    assert_eq!(result.0, 0);
+}
+
+#[test]
+fn mismatched_first() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("mismatched_first").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I8(3));
+}
+
+#[test]
+fn mismatched_second() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("mismatched_second").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(3));
+}
+
+#[test]
+fn mismatched_third() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("mismatched_third").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I8(3));
+}
+
+#[test]
+fn mismatched_all() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("mismatched_all").expect("Failed to find function");
     let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
-    let x = Wrapping(args[0].unwrap_to_i8());
+    let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
     println!("x = {}, y = {}", x, y);
     let mmel1 = x + Wrapping(3);
     let mmel2 = y - Wrapping(3);
     let mmel3 = mmel1 - x;
-    let _mmel1 = Wrapping((mmel2 - Wrapping(i32::from(mmel3.0))).0 as i8);
-    let mmel2 = mmel3 + Wrapping(4);
-    let mmel1 = mmel2 - x;
-    let _mmel3 = mmel2 - Wrapping(5);
-    let mmel2 = Wrapping(i32::from(mmel1.0)) + y;
-    let result = mmel2 + Wrapping(3) * Wrapping(i32::from(x.0));
+    let mmel1 = mmel3 - x;
+    let mmel2 = mmel2 + Wrapping(4);
+    let mmel1 = mmel1 - x;
+    let mmel3 = mmel3 - Wrapping(5);
+    let mmel2 = mmel2 + y;
+    println!("mmel1 = {}, mmel2 = {}, mmel3 = {}", mmel1, mmel2, mmel3);
+    let result = Wrapping(i32::from(mmel1.0)) + mmel2 + Wrapping(i32::from(mmel3.0));
     assert_eq!(result.0, 0);
 }
 
 #[test]
-fn nested() {
+fn nested_first() {
     init_logging();
     let module = get_module();
-    let func = module.get_func_by_name("nested").expect("Failed to find function");
+    let func = module.get_func_by_name("nested_first").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(3));
+}
+
+#[test]
+fn nested_second() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("nested_second").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(3));
+}
+
+#[test]
+fn nested_all() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("nested_all").expect("Failed to find function");
     let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
-    let x = Wrapping(args[0].unwrap_to_i8());
+    let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
     println!("x = {}, y = {}", x, y);
     let nmmel2 = Wrapping(0);
@@ -129,13 +196,23 @@ fn with_array() {
     let func = module.get_func_by_name("with_array").expect("Failed to find function");
     let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(3));
+}
+
+#[test]
+fn with_array_all() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("with_array_all").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
-    let waarr2 = x + Wrapping(4);
+    let waarr2 = x - Wrapping(4);
     let waarr4 = Wrapping(-3);
     let _wammel2 = waarr2;
-    let wamm2el2 = waarr2 + x;
-    let result = waarr4 - wamm2el2;
+    let wamm2el2 = waarr2 + x + Wrapping(1);
+    let result = waarr4 + wamm2el2;
     assert_eq!(result.0, 0);
 }
 

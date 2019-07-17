@@ -262,8 +262,24 @@ fn symex_call(state: &mut State, call: &instruction::Call) -> Result<(), &'stati
     };
     let errorfuncname = funcname.clone();  // just for possible error reporting
     if let Name::Name(s) = funcname {
-        if s.starts_with("llvm.") {
-            return Ok(())  // We ignore these llvm-internal functions
+        if s.starts_with("llvm.memset") {
+            assert_eq!(call.arguments.len(), 4);
+            assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
+            assert_eq!(call.arguments[1].0.get_type(), Type::i8());
+            assert_eq!(call.get_type(), Type::VoidType);
+            if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = call.arguments[2].0 {
+                let addr = state.operand_to_bv(&call.arguments[0].0);
+                let val = state.operand_to_bv(&call.arguments[1].0);
+                // TODO: this isn't necessarily efficient. But without knowing alignment of addr we can't do better
+                for i in 0 .. num_bytes {
+                    state.write(&addr.bvadd(&BV::from_u64(state.ctx, i, addr.get_size())), val.clone());
+                }
+                return Ok(());
+            } else {
+                unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", call.arguments[2]);
+            }
+        } else if s.starts_with("llvm.") {
+            return Ok(()); // We ignore other llvm-internal functions
         }
     }
     unimplemented!("Call of a function named {:?}", errorfuncname);
