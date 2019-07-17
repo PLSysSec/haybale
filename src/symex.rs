@@ -172,11 +172,8 @@ fn symex_bitcast(state: &mut State, bitcast: &instruction::BitCast) -> Result<()
 fn symex_load(state: &mut State, load: &instruction::Load) -> Result<(), &'static str> {
     debug!("Symexing load {:?}", load);
     let z3addr = state.operand_to_bv(&load.address);
-    let dest_size = match load.get_type() {
-        Type::IntegerType { bits } => bits,
-        ty => unimplemented!("Load with non-integer result type {:?}", ty),
-    };
-    state.record_bv_result(load, state.read(&z3addr, dest_size))
+    let dest_size = size(&load.get_type());
+    state.record_bv_result(load, state.read(&z3addr, dest_size as u32))
 }
 
 fn symex_store(state: &mut State, store: &instruction::Store) -> Result<(), &'static str> {
