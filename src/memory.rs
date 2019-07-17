@@ -24,7 +24,7 @@ impl<'ctx> Memory<'ctx> {
         Memory {
             ctx,
             mem: Array::new_const(&ctx, "mem", &domain, &range),
-            log_bits_in_byte_as_bv: BV::from_u64(ctx, Self::LOG_BITS_IN_BYTE as u64, Self::INDEX_BITS),
+            log_bits_in_byte_as_bv: BV::from_u64(ctx, u64::from(Self::LOG_BITS_IN_BYTE), Self::INDEX_BITS),
         }
     }
 
