@@ -192,7 +192,7 @@ fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) -> Result<(), 
 }
 
 /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-fn get_offset<'ctx, 'm>(state: &mut State<'ctx, '_>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &'m Type, result_bits: u32) -> BV<'ctx> {
+fn get_offset<'ctx, 'm>(state: &'m mut State<'ctx, '_>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &'m Type, result_bits: u32) -> BV<'ctx> {
     let index = indices.next();
     if index.is_none() {
         return BV::from_u64(state.ctx, 0, result_bits);
@@ -227,6 +227,29 @@ fn get_offset<'ctx, 'm>(state: &mut State<'ctx, '_>, mut indices: impl Iterator<
             },
             _ => panic!("Can't get_offset from struct type with index {:?}", index),
         },
+        Type::NamedStructType { ty, .. } => {
+            let actual_ty = ty.as_ref().expect("get_offset on an opaque struct type");
+            if let Type::StructType { ref element_types, .. } = **actual_ty {
+                // this code copied from the StructType case, unfortunately
+                match index {
+                    Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                        let mut offset_bits = 0;
+                        for ty in element_types.iter().take(*index as usize) {
+                            offset_bits += size(ty) as u64;
+                        }
+                        if offset_bits % 8 != 0 {
+                            unimplemented!("Struct offset of {} bits", offset_bits);
+                        }
+                        let offset_bytes = offset_bits / 8;
+                        BV::from_u64(state.ctx, offset_bytes, result_bits)
+                            .bvadd(&get_offset(state, indices, &element_types[*index as usize], result_bits))
+                    },
+                    _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                }
+            } else {
+                panic!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)
+            }
+        }
         _ => panic!("get_offset with base type {:?}", base_type),
     }
 }

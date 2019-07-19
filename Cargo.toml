@@ -5,7 +5,7 @@ authors = ["Craig Disselkoen <craigdissel@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-llvm-ir = { path = "../llvm-ir" }
+llvm-ir = { git = "https://github.com/cdisselkoen/llvm-ir" }
 z3 = "0.3.2"
 either = "1.5.2"
 itertools = "0.8.0"

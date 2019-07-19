@@ -168,7 +168,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => BV::from_u64(self.ctx, *value, *bits),
             Operand::LocalOperand { name, .. } => self.varmap.lookup_bv_var(name).clone(),
-            Operand::MetadataOperand(_) => panic!("Can't convert {:?} to BV", op),
+            Operand::MetadataOperand => panic!("Can't convert {:?} to BV", op),
             _ => unimplemented!("operand_to_bv() for {:?}", op)
         }
     }
