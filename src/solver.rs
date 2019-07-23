@@ -130,8 +130,19 @@ impl<'ctx> Solver<'ctx> {
         if self.check() {
             // check() was successful, i.e. we are sat. Generate the model.
             self.model = Some(self.z3_solver.get_model());
-            debug!("Generated model:\n{}", self.model.as_ref().unwrap());
+            debug!("Generated model:\n{}", self.current_model_to_pretty_string());
         }
+    }
+
+    pub fn current_model_to_pretty_string(&self) -> String {
+        if let Some(model) = &self.model {
+            let displayed = model.to_string();
+            let sorted = itertools::sorted(displayed.lines());
+            sorted.fold(String::new(), |s, line| s + "\n" + line)
+        } else {
+            "<no model generated>".to_owned()
+        }
+
     }
 }
 
