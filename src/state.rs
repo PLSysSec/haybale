@@ -167,6 +167,10 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     pub fn operand_to_bv(&self, op: &Operand) -> BV<'ctx> {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => BV::from_u64(self.ctx, *value, *bits),
+            Operand::ConstantOperand(Constant::Null(ty))
+            | Operand::ConstantOperand(Constant::AggregateZero(ty))
+            | Operand::ConstantOperand(Constant::Undef(ty))
+                => BV::from_u64(self.ctx, 0, size(ty) as u32),
             Operand::LocalOperand { name, .. } => self.varmap.lookup_bv_var(name).clone(),
             Operand::MetadataOperand => panic!("Can't convert {:?} to BV", op),
             _ => unimplemented!("operand_to_bv() for {:?}", op)
