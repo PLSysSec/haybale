@@ -1,5 +1,5 @@
-; ModuleID = 'memory/memory.c'
-source_filename = "memory/memory.c"
+; ModuleID = 'memory.c'
+source_filename = "memory.c"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.14.0"
 

@@ -9,7 +9,7 @@ fn init_logging() {
 }
 
 fn get_module() -> Module {
-    Module::from_bc_path(&Path::new("c_examples/struct/struct.bc"))
+    Module::from_bc_path(&Path::new("tests/bcfiles/struct.bc"))
         .expect("Failed to parse module")
 }
 
