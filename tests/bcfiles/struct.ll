@@ -514,6 +514,66 @@ define i32 @structptr(i32) #0 {
 }
 
 ; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @structelptr(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.ThreeInts, align 4
+  %4 = alloca %struct.ThreeInts*, align 8
+  %5 = alloca i32*, align 8
+  store i32 %0, i32* %2, align 4
+  %6 = bitcast %struct.ThreeInts* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %6, i8 0, i64 12, i1 true)
+  store %struct.ThreeInts* %3, %struct.ThreeInts** %4, align 8
+  %7 = load %struct.ThreeInts*, %struct.ThreeInts** %4, align 8
+  %8 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %7, i32 0, i32 1
+  store i32* %8, i32** %5, align 8
+  %9 = load i32*, i32** %5, align 8
+  store volatile i32 3, i32* %9, align 4
+  %10 = load i32, i32* %2, align 4
+  %11 = load i32*, i32** %5, align 8
+  %12 = load volatile i32, i32* %11, align 4
+  %13 = sub nsw i32 %10, %12
+  %14 = load i32*, i32** %5, align 8
+  store volatile i32 %13, i32* %14, align 4
+  %15 = load i32*, i32** %5, align 8
+  %16 = load volatile i32, i32* %15, align 4
+  ret i32 %16
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @changeptr(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.ThreeInts, align 4
+  %4 = alloca %struct.ThreeInts, align 4
+  %5 = alloca %struct.ThreeInts*, align 8
+  store i32 %0, i32* %2, align 4
+  %6 = bitcast %struct.ThreeInts* %3 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %6, i8 0, i64 12, i1 true)
+  %7 = bitcast %struct.ThreeInts* %4 to i8*
+  call void @llvm.memset.p0i8.i64(i8* align 4 %7, i8 0, i64 12, i1 true)
+  store %struct.ThreeInts* %3, %struct.ThreeInts** %5, align 8
+  %8 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  %9 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %8, i32 0, i32 1
+  store volatile i32 7, i32* %9, align 4
+  store %struct.ThreeInts* %4, %struct.ThreeInts** %5, align 8
+  %10 = load i32, i32* %2, align 4
+  %11 = sub nsw i32 %10, 3
+  %12 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  %13 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %12, i32 0, i32 1
+  %14 = load volatile i32, i32* %13, align 4
+  %15 = sub nsw i32 %11, %14
+  %16 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  %17 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %16, i32 0, i32 1
+  store volatile i32 %15, i32* %17, align 4
+  store %struct.ThreeInts* %3, %struct.ThreeInts** %5, align 8
+  %18 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  %19 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %18, i32 0, i32 1
+  store volatile i32 100, i32* %19, align 4
+  %20 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %4, i32 0, i32 1
+  %21 = load volatile i32, i32* %20, align 4
+  ret i32 %21
+}
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
 define i32 @ptrs(i32) #0 {
   %2 = alloca i32, align 4
   %3 = alloca %struct.WithArray, align 4

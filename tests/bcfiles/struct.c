@@ -174,21 +174,25 @@ int structptr(int x) {
   return ti->el1;
 }
 
-// tons of pointer shenanigans
-int ptrs(int x) {
-  volatile struct WithArray wa1 = { 0 };
-  volatile struct WithArray wa2 = { 0 };
-  volatile struct WithArray* waptr = &wa1;
-  waptr->arr[3] = x + 4;
-  waptr = &wa2;
-  waptr->arr[4] = x + 7;
-  waptr->mm2.el2 = wa1.mm.el2 + 3;
-  volatile int* arrptr = &wa1.arr[0];
-  arrptr[7] = waptr->arr[4] + wa1.arr[3];
-  volatile int* arrptr2 = &waptr->arr[0];
-  arrptr2[1] = waptr->arr[7] - wa2.mm2.el2;
-  arrptr2 = arrptr;
-  arrptr2[5] = wa1.mm.el2 + wa1.arr[3];
-  wa2.mm.el2 = waptr->mm2.el2 + 3;
-  return wa2.mm.el2 + waptr->arr[1] + arrptr2[5] + wa1.arr[5];
+// pointer to a particular element of a struct
+int structelptr(int x) {
+  volatile struct ThreeInts _ti = { 0 };
+  volatile struct ThreeInts* ti = &_ti;
+  volatile int* iptr = &ti->el2;
+  *iptr = 3;
+  *iptr = x - *iptr;
+  return *iptr;
+}
+
+// change the target of a pointer
+int changeptr(int x) {
+  volatile struct ThreeInts _ti1 = { 0 };
+  volatile struct ThreeInts _ti2 = { 0 };
+  volatile struct ThreeInts* ti = &_ti1;
+  ti->el2 = 7;
+  ti = &_ti2;
+  ti->el2 = x - 3 - ti->el2;
+  ti = &_ti1;
+  ti->el2 = 100;
+  return _ti2.el2;
 }

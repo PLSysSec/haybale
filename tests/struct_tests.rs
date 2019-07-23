@@ -233,23 +233,27 @@ fn structptr() {
 }
 
 #[test]
-fn ptrs() {
+fn structelptr() {
     init_logging();
     let module = get_module();
-    let func = module.get_func_by_name("ptrs").expect("Failed to find function");
+    let func = module.get_func_by_name("structelptr").expect("Failed to find function");
+    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(3));
+}
+
+#[test]
+fn changeptr() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("changeptr").expect("Failed to find function");
     let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
-    let wa1mmel2 = Wrapping(0);
-    let wa2arr7 = Wrapping(0);
-    let wa1arr3 = x + Wrapping(4);
-    let wa2arr4 = x + Wrapping(7);
-    let wa2mm2el2 = wa1mmel2 + Wrapping(3);
-    let _wa1arr7 = wa2arr4 + wa1arr3;
-    let wa2arr1 = wa2arr7 - wa2mm2el2;
-    let wa1arr5 = wa1mmel2 + wa1arr3;
-    let wa2mmel2 = wa2mm2el2 + Wrapping(3);
-    let result = wa2mmel2 + wa2arr1 + wa1arr5 + wa1arr5;
+    let _ti1el2 = Wrapping(7);
+    let ti2el2 = x - Wrapping(3) - Wrapping(0);
+    let _ti1el2 = Wrapping(100);
+    let result = ti2el2;
     assert_eq!(result.0, 0);
 }
