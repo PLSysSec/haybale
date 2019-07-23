@@ -3,6 +3,8 @@ use llvm_ir::instruction::BinaryOp;
 use log::debug;
 use z3::ast::{Ast, BV, Bool};
 use either::Either;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use crate::state::State;
 use crate::size::size;
@@ -192,7 +194,7 @@ fn symex_gep(state: &mut State, gep: &instruction::GetElementPtr) -> Result<(), 
 }
 
 /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-fn get_offset<'ctx, 'm>(state: &'m mut State<'ctx, '_>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &'m Type, result_bits: u32) -> BV<'ctx> {
+fn get_offset<'ctx, 'm>(state: &mut State<'ctx, '_>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &Type, result_bits: u32) -> BV<'ctx> {
     let index = indices.next();
     if index.is_none() {
         return BV::from_u64(state.ctx, 0, result_bits);
@@ -228,8 +230,12 @@ fn get_offset<'ctx, 'm>(state: &'m mut State<'ctx, '_>, mut indices: impl Iterat
             _ => panic!("Can't get_offset from struct type with index {:?}", index),
         },
         Type::NamedStructType { ty, .. } => {
-            let actual_ty = ty.as_ref().expect("get_offset on an opaque struct type");
-            if let Type::StructType { ref element_types, .. } = **actual_ty {
+            let rc: Rc<RefCell<Type>> = ty.as_ref()
+                .expect("get_offset on an opaque struct type")
+                .upgrade()
+                .expect("Failed to upgrade weak reference");
+            let actual_ty: &Type = &rc.borrow();
+            if let Type::StructType { ref element_types, .. } = actual_ty {
                 // this code copied from the StructType case, unfortunately
                 match index {
                     Operand::ConstantOperand(Constant::Int { value: index, .. }) => {

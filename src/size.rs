@@ -8,7 +8,12 @@ pub fn size(ty: &Type) -> usize {
         Type::ArrayType { element_type, num_elements } => num_elements * size(element_type),
         Type::VectorType { element_type, num_elements } => num_elements * size(element_type),
         Type::StructType { element_types, .. } => element_types.iter().map(size).sum(),
-        Type::NamedStructType { ty, .. } => size(ty.as_ref().expect("Can't get size of an opaque struct type")),
+        Type::NamedStructType { ty, .. } => size(&ty.as_ref()
+            .expect("Can't get size of an opaque struct type")
+            .upgrade()
+            .expect("Failed to upgrade weak reference")
+            .borrow()
+        ),
         Type::FPType(fpt) => fp_size(*fpt),
         ty => panic!("Not sure how to get the size of {:?}", ty),
     }
