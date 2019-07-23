@@ -7,6 +7,7 @@ all: basic.bc basic.ll \
 			memory.bc memory.ll \
 			loop.bc loop.ll \
 			struct.bc struct.ll \
+			linkedlist.bc linkedlist.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
@@ -18,8 +19,10 @@ all: basic.bc basic.ll \
 loop.ll : loop.c
 	$(CC) -O1 -S -emit-llvm $^ -o $@
 
-# use -O0 on struct.c
+# use -O0 on struct.c and linkedlist.c
 struct.ll : struct.c
+	$(CC) -O0 -S -emit-llvm $^ -o $@
+linkedlist.ll : linkedlist.c
 	$(CC) -O0 -S -emit-llvm $^ -o $@
 
 .PHONY: clean
