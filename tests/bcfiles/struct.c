@@ -166,11 +166,12 @@ int with_array_all(int x) {
 
 // manipulate a struct through a pointer
 int structptr(int x) {
-  volatile struct Mismatched _mm = { 0 };
-  volatile struct Mismatched* mm = &_mm;
-  mm->el2 = x + 4;
-  mm->el1 = mm->el3 + x;
-  return mm->el2 + mm->el1;
+  volatile struct TwoInts _ti = { 0 };
+  volatile struct TwoInts* ti = &_ti;
+  ti->el2 = x - 6;
+  ti->el1 = ti->el2 + x;
+  ti->el2 = 100;
+  return ti->el1;
 }
 
 // tons of pointer shenanigans

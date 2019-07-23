@@ -225,10 +225,10 @@ fn structptr() {
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
-    let mmel3 = Wrapping(0);
-    let mmel2 = x + Wrapping(4);
-    let mmel1 = mmel3 + x;
-    let result = mmel2 + mmel1;
+    let tiel2 = x - Wrapping(6);
+    let tiel1 = tiel2 + x;
+    let _tiel2 = 100;
+    let result = tiel1;
     assert_eq!(result.0, 0);
 }
 
