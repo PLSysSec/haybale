@@ -306,6 +306,60 @@ mod tests {
     }
 
     #[test]
+    fn write_different_cells() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mut mem = Memory::new(&ctx);
+        let mut solver = Solver::new(&ctx);
+
+        // Store 32 bits of data to a cell
+        let data_val = 0x1234_5678;
+        let data = BV::from_u64(&ctx, data_val, 32);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::INDEX_BITS);
+        mem.write(&addr, data);
+
+        // Store a different 32 bits of data to a different cell
+        let data_val_2 = 0xfedc_ba98;
+        let data_2 = BV::from_u64(&ctx, data_val_2, 32);
+        let addr_2 = BV::from_u64(&ctx, 0x10008, Memory::INDEX_BITS);
+        mem.write(&addr_2, data_2);
+
+        // Ensure that we can read them both individually
+        let read_bv = mem.read(&addr, 32);
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        assert_eq!(read_val, data_val);
+        let read_bv = mem.read(&addr_2, 32);
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        assert_eq!(read_val, data_val_2);
+    }
+
+    #[test]
+    fn write_different_places_within_cell() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mut mem = Memory::new(&ctx);
+        let mut solver = Solver::new(&ctx);
+
+        // Store 32 bits of data to a cell
+        let data_val = 0x1234_5678;
+        let data = BV::from_u64(&ctx, data_val, 32);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::INDEX_BITS);
+        mem.write(&addr, data);
+
+        // Store a different 32 bits of data to the other half of the cell
+        let data_val_2 = 0xfedc_ba98;
+        let data_2 = BV::from_u64(&ctx, data_val_2, 32);
+        let addr_2 = BV::from_u64(&ctx, 0x10004, Memory::INDEX_BITS);
+        mem.write(&addr_2, data_2);
+
+        // Ensure that we can read them both individually
+        let read_bv = mem.read(&addr, 32);
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        assert_eq!(read_val, data_val);
+        let read_bv = mem.read(&addr_2, 32);
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        assert_eq!(read_val, data_val_2);
+    }
+
+    #[test]
     fn write_small_read_big() {
         let ctx = z3::Context::new(&z3::Config::new());
         let mut mem = Memory::new(&ctx);
