@@ -9,23 +9,70 @@ use std::cell::RefCell;
 use crate::state::State;
 use crate::size::size;
 
-// Symex the given function and return the new BV (AST) representing its return value, or None if the function returns void.
-// Assumes that the function's parameters are already added to the state.
-pub fn symex_function<'ctx, 'func>(state: &mut State<'ctx, 'func>, func: &'func Function) -> Option<BV<'ctx>> {
+/// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
+/// `func` is the `Function` to symbolically execute, and `state` is the initial `State`.
+/// `symex_function()` assumes that the function's parameters are already added to the `State`.
+pub fn symex_function<'ctx, 'func>(state: State<'ctx, 'func>, func: &'func Function) -> ExecutionManager<'ctx, 'func> {
     debug!("Symexing function {}", func.name);
-    let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
-    symex_from_bb(state, bb, func, None)
+    ExecutionManager::new(state, func)
 }
 
-// TODO: Feels hacky, make better
-// After calling symex_function() on the State once, caller can then call
-// symex_again() to get a different solution (a different State and a
-// different returned Option<BV>), or None if there are no more possibilities.
-pub fn symex_again<'ctx, 'func>(state: &mut State<'ctx, 'func>) -> Option<Option<BV<'ctx>>> {
-    if let Some((func, bb, prev_bb)) = state.revert_to_backtracking_point() {
-        Some(symex_from_bb_by_name(state, &bb, func, Some(prev_bb)))
-    } else {
-        None
+/// An `ExecutionManager` allows you to symbolically explore executions of a function.
+/// Conceptually, it is an `Iterator` over possible paths through the function.
+/// Calling `next()` on an `ExecutionManager` explores another possible path,
+/// returning a `BV` (AST) representing the function's symbolic return value at
+/// the end of that path, or `None` if the function returns void.
+/// Importantly, after any call to `next()`, you can access the `State` resulting
+/// from the end of that path using the `state()` or `mut_state()` methods.
+/// When `next()` returns `None`, there are no more possible paths through the
+/// function.
+pub struct ExecutionManager<'ctx, 'func> {
+    state: State<'ctx, 'func>,
+    func: &'func Function,
+    executed_first_time: bool,
+}
+
+impl<'ctx, 'func> ExecutionManager<'ctx, 'func> {
+    fn new(state: State<'ctx, 'func>, func: &'func Function) -> Self {
+        Self {
+            state,
+            func,
+            executed_first_time: false,
+        }
+    }
+
+    /// Provides access to the `State` resulting from the end of the most recently
+    /// explored path (or, if `next()` has never been called on this `ExecutionManager`,
+    /// then simply the initial `State` which was passed in).
+    pub fn state(&self) -> &State<'ctx, 'func> {
+        &self.state
+    }
+
+    /// Provides mutable access to the underlying `State` (see notes on `state()`).
+    /// Changes made to the initial state (before the first call to `next()`) are
+    /// "sticky", and will persist through all executions of the function.
+    /// However, changes made to a final state (after a call to `next()`) will be
+    /// completely wiped away the next time that `next()` is called.
+    pub fn mut_state(&mut self) -> &mut State<'ctx, 'func> {
+        &mut self.state
+    }
+}
+
+impl<'ctx, 'func> Iterator for ExecutionManager<'ctx, 'func> {
+    type Item = Option<BV<'ctx>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.executed_first_time {
+            if let Some((func, bb, prev_bb)) = self.state.revert_to_backtracking_point() {
+                Some(symex_from_bb_by_name(&mut self.state, &bb, func, Some(prev_bb)))
+            } else {
+                None
+            }
+        } else {
+            self.executed_first_time = true;
+            let bb = self.func.basic_blocks.get(0).expect("Failed to get entry basic block");
+            Some(symex_from_bb(&mut self.state, bb, self.func, None))
+        }
     }
 }
 

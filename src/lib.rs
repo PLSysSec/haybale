@@ -5,7 +5,7 @@ mod state;
 use state::State;
 
 mod symex;
-use symex::{symex_function, symex_again};
+use symex::{symex_function, ExecutionManager};
 
 mod size;
 use size::size;
@@ -81,18 +81,20 @@ pub fn find_zero_of_func(func: &Function, loop_bound: usize) -> Option<Vec<Solut
     let returnwidth = size(&func.return_type);
     let zero = BV::from_u64(&ctx, 0, returnwidth as u32);
 
-    let mut optionz3rval = Some(symex_function(&mut state, &func));
-    loop {
-        let z3rval = optionz3rval.clone()
-            .expect("optionz3rval should always be Some at this point in the loop")
-            .expect("Function shouldn't return void");
+    let mut found = false;
+    let mut em: ExecutionManager = symex_function(state, &func);
+    while let Some(z3rval) = em.next() {
+        let z3rval = z3rval.expect("Function shouldn't return void");
+        let state = em.mut_state();
         state.assert(&z3rval._eq(&zero));
-        if state.check() { break; }
-        optionz3rval = symex_again(&mut state);
-        if optionz3rval.is_none() { break; }
+        if state.check() {
+            found = true;
+            break;
+        }
     }
 
-    if optionz3rval.is_some() {
+    let state = em.mut_state();
+    if found {
         // in this case state.check() must have passed
         Some(params.iter().map(|p| {
             let param_as_u64 = state.get_a_solution_for_bv_by_irname(&p.name)
