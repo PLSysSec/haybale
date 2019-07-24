@@ -1,15 +1,13 @@
-use llvm_ir::{function, Function, Type};
+use llvm_ir::{Function, Type};
 use z3::ast::{Ast, BV};
 
-mod state;
-use state::State;
-
 mod symex;
-use symex::*;
+pub use symex::*;
 
 mod size;
 use size::size;
 
+mod state;
 mod memory;
 mod alloc;
 mod solver;
@@ -77,12 +75,16 @@ pub fn find_zero_of_func(func: &Function, loop_bound: usize) -> Option<Vec<Solut
     let mut found = false;
     let mut em: ExecutionManager = symex_function(&ctx, func, loop_bound);
     while let Some(z3rval) = em.next() {
-        let z3rval = z3rval.expect("Function shouldn't return void");
-        let state = em.mut_state();
-        state.assert(&z3rval._eq(&zero));
-        if state.check() {
-            found = true;
-            break;
+        match z3rval {
+            SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),
+            SymexResult::Returned(z3rval) => {
+                let state = em.mut_state();
+                state.assert(&z3rval._eq(&zero));
+                if state.check() {
+                    found = true;
+                    break;
+                }
+            },
         }
     }
 

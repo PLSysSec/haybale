@@ -6,7 +6,7 @@ use either::Either;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::state::State;
+pub use crate::state::{State, QualifiedBB};
 use crate::size::size;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
@@ -71,33 +71,42 @@ impl<'ctx, 'func> ExecutionManager<'ctx, 'func> {
 }
 
 impl<'ctx, 'func> Iterator for ExecutionManager<'ctx, 'func> {
-    type Item = Option<BV<'ctx>>;
+    type Item = SymexResult<'ctx>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.executed_first_time {
             if let Some((func, bb, prev_bb)) = self.state.revert_to_backtracking_point() {
-                Some(symex_from_bb_by_name(&mut self.state, &bb, func, Some(prev_bb)))
+                symex_from_bb_by_name(&mut self.state, &bb, func, Some(prev_bb))
             } else {
                 None
             }
         } else {
             self.executed_first_time = true;
             let bb = self.func.basic_blocks.get(0).expect("Failed to get entry basic block");
-            Some(symex_from_bb(&mut self.state, bb, self.func, None))
+            symex_from_bb(&mut self.state, bb, self.func, None)
         }
     }
 }
 
+pub enum SymexResult<'ctx> {
+    Returned(BV<'ctx>),
+    ReturnedVoid,
+}
+
 // Like `symex_from_bb`, but looks up the bb by name
-fn symex_from_bb_by_name<'ctx, 'func>(state: &mut State<'ctx, 'func>, bbname: &Name, cur_func: &'func Function, prev_bb: Option<Name>) -> Option<BV<'ctx>> {
+fn symex_from_bb_by_name<'ctx, 'func>(state: &mut State<'ctx, 'func>, bbname: &Name, cur_func: &'func Function, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
     let bb = cur_func.get_bb_by_name(bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function", bbname));
     symex_from_bb(state, bb, cur_func, prev_bb)
 }
 
 // Symex the given bb, through the rest of the function.
-// Returns the new BV representing the return value of the function, or None if the function returns void.
-fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, cur_func: &'func Function, prev_bb: Option<Name>) -> Option<BV<'ctx>> {
+// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
+fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, cur_func: &'func Function, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
     debug!("Symexing basic block {:?}", bb.name);
+    state.record_in_path(QualifiedBB {
+        funcname: cur_func.name.clone(),
+        bbname: bb.name.clone(),
+    });
     for inst in bb.instrs.iter() {
         let result = if let Some((binop, z3binop)) = inst_to_binop(&inst) {
             symex_binop(state, &binop, z3binop)
@@ -125,12 +134,12 @@ fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, c
                 return symex_from_bb_by_name(state, &bb, func, Some(prev_bb));
             } else {
                 // can't continue on this path due to error, and we have nowhere to backtrack to
-                panic!("All possible paths seem to be unsat");
+                return None;
             }
         }
     }
     match &bb.term {
-        Terminator::Ret(ret) => symex_return(state, ret),
+        Terminator::Ret(ret) => Some(symex_return(state, ret)),
         Terminator::Br(br) => symex_br(state, br, cur_func, bb.name.clone()),
         Terminator::CondBr(condbr) => symex_condbr(state, condbr, cur_func, bb.name.clone()),
         term => unimplemented!("terminator {:?}", term),
@@ -373,24 +382,28 @@ fn symex_call(state: &mut State, call: &instruction::Call) -> Result<(), &'stati
     unimplemented!("Call of a function named {:?}", errorfuncname);
 }
 
-// Returns the BV representing the return value, or None if the function returns void
-fn symex_return<'ctx, 'func>(state: &State<'ctx, 'func>, ret: &terminator::Ret) -> Option<BV<'ctx>> {
+// Returns the `SymexResult` representing the return value
+fn symex_return<'ctx, 'func>(state: &State<'ctx, 'func>, ret: &terminator::Ret) -> SymexResult<'ctx> {
     debug!("Symexing return {:?}", ret);
-    ret.return_operand.as_ref().map(|op| state.operand_to_bv(op))
+    ret.return_operand
+        .as_ref()
+        .map(|op| SymexResult::Returned(state.operand_to_bv(op)))
+        .unwrap_or(SymexResult::ReturnedVoid)
 }
 
-// Continues to the target of the Br and eventually returns the new Option<BV>
-//   representing the return value of the function
-// (when it reaches the end of the function)
-fn symex_br<'ctx, 'func>(state: &mut State<'ctx, 'func>, br: &terminator::Br, cur_func: &'func Function, cur_bb: Name) -> Option<BV<'ctx>> {
+// Continues to the target of the `Br` and eventually returns the new `SymexResult`
+// representing the return value of the function (when it reaches the end of the
+// function), or `None` if no possible paths were found.
+fn symex_br<'ctx, 'func>(state: &mut State<'ctx, 'func>, br: &terminator::Br, cur_func: &'func Function, cur_bb: Name) -> Option<SymexResult<'ctx>> {
     debug!("Symexing branch {:?}", br);
     symex_from_bb_by_name(state, &br.dest, cur_func, Some(cur_bb))
 }
 
-// Continues to the target(s) of the CondBr (saving a backtracking point if necessary)
-//   and eventually returns the new Option<BV> representing the return value of the function
-// (when it reaches the end of the function)
-fn symex_condbr<'ctx, 'func>(state: &mut State<'ctx, 'func>, condbr: &terminator::CondBr, cur_func: &'func Function, cur_bb: Name) -> Option<BV<'ctx>> {
+// Continues to the target(s) of the `CondBr` (saving a backtracking point if
+// necessary) and eventually returns the new `SymexResult` representing the
+// return value of the function (when it reaches the end of the function), or
+// `None` if no possible paths were found.
+fn symex_condbr<'ctx, 'func>(state: &mut State<'ctx, 'func>, condbr: &terminator::CondBr, cur_func: &'func Function, cur_bb: Name) -> Option<SymexResult<'ctx>> {
     // conditional branch
     let z3cond = state.operand_to_bool(&condbr.condition);
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
