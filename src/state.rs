@@ -229,9 +229,6 @@ impl<'ctx, 'func> State<'ctx, 'func> {
             self.varmap = bp.varmap;
             self.mem = bp.mem;
             Some((bp.in_func, bp.next_bb, bp.prev_bb))
-            // thanks to SSA, we don't need to roll back the VarMap; we'll just overwrite existing entries as needed.
-            // Code on the backtracking path will never reference variables which we assigned on the original path.
-            // This will become not true when we get to loops, but we don't support loops yet anyway
         } else {
             None
         }
