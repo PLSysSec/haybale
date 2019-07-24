@@ -10,9 +10,21 @@ use crate::state::State;
 use crate::size::size;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
-/// `func` is the `Function` to symbolically execute, and `state` is the initial `State`.
-/// `symex_function()` assumes that the function's parameters are already added to the `State`.
-pub fn symex_function<'ctx, 'func>(state: State<'ctx, 'func>, func: &'func Function) -> ExecutionManager<'ctx, 'func> {
+/// `loop_bound`: maximum number of times to execute any given line of LLVM IR
+/// (so, bounds the number of iterations of loops; for inner loops, this bounds the number
+/// of total iterations across all invocations of the loop).
+pub fn symex_function<'ctx, 'func>(ctx: &'ctx z3::Context, func: &'func Function, loop_bound: usize) -> ExecutionManager<'ctx, 'func> {
+    let mut state = State::new(ctx, loop_bound);
+    for param in func.parameters.iter() {
+        let _ = state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32);
+    }
+    symex_function_from_initial_state(func, state)
+}
+
+/// Like `symex_function`, but starting from the specified initial `State`.
+/// `symex_function_from_initial_state()` assumes that the function's parameters
+/// are already added to the initial `State`.
+pub fn symex_function_from_initial_state<'ctx, 'func>(func: &'func Function, state: State<'ctx, 'func>) -> ExecutionManager<'ctx, 'func> {
     debug!("Symexing function {}", func.name);
     ExecutionManager::new(state, func)
 }

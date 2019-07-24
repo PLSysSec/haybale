@@ -5,7 +5,7 @@ mod state;
 use state::State;
 
 mod symex;
-use symex::{symex_function, ExecutionManager};
+use symex::*;
 
 mod size;
 use size::size;
@@ -70,19 +70,12 @@ impl SolutionValue {
 pub fn find_zero_of_func(func: &Function, loop_bound: usize) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();
     let ctx = z3::Context::new(&cfg);
-    let mut state = State::new(&ctx, loop_bound);
-
-    let params: Vec<function::Parameter> = func.parameters.clone();
-    for param in params.iter() {
-        let width = size(&param.ty);
-        let _ = state.new_bv_with_name(param.name.clone(), width as u32);
-    }
 
     let returnwidth = size(&func.return_type);
     let zero = BV::from_u64(&ctx, 0, returnwidth as u32);
 
     let mut found = false;
-    let mut em: ExecutionManager = symex_function(state, &func);
+    let mut em: ExecutionManager = symex_function(&ctx, func, loop_bound);
     while let Some(z3rval) = em.next() {
         let z3rval = z3rval.expect("Function shouldn't return void");
         let state = em.mut_state();
@@ -96,7 +89,7 @@ pub fn find_zero_of_func(func: &Function, loop_bound: usize) -> Option<Vec<Solut
     let state = em.mut_state();
     if found {
         // in this case state.check() must have passed
-        Some(params.iter().map(|p| {
+        Some(func.parameters.iter().map(|p| {
             let param_as_u64 = state.get_a_solution_for_bv_by_irname(&p.name)
                 .expect("since state.check() passed, expected a solution for each var");
             match &p.ty {
