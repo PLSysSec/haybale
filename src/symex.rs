@@ -14,19 +14,17 @@ use crate::size::size;
 /// (so, bounds the number of iterations of loops; for inner loops, this bounds the number
 /// of total iterations across all invocations of the loop).
 pub fn symex_function<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, loop_bound: usize) -> ExecutionManager<'ctx, 'm> {
-    let mut state = State::new(ctx, loop_bound);
+    let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
+    let start_loc = Location {
+        module,
+        func,
+        bbname: bb.name.clone(),
+    };
+    let mut state = State::new(ctx, start_loc, loop_bound);
     for param in func.parameters.iter() {
         let _ = state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32);
     }
-    symex_function_from_initial_state(module, func, state)
-}
-
-/// Like `symex_function`, but starting from the specified initial `State`.
-/// `symex_function_from_initial_state()` assumes that the function's parameters
-/// are already added to the initial `State`.
-pub fn symex_function_from_initial_state<'ctx, 'm>(module: &'m Module, func: &'m Function, state: State<'ctx, 'm>) -> ExecutionManager<'ctx, 'm> {
-    debug!("Symexing function {}", func.name);
-    ExecutionManager::new(state, module, func)
+    ExecutionManager::new(state, &bb)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a function.
@@ -40,18 +38,19 @@ pub fn symex_function_from_initial_state<'ctx, 'm>(module: &'m Module, func: &'m
 /// function.
 pub struct ExecutionManager<'ctx, 'm> {
     state: State<'ctx, 'm>,
-    module: &'m Module,
-    start_func: &'m Function,
-    executed_first_time: bool,
+    start_bb: &'m BasicBlock,
+    /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
+    /// has not yet produced its first path, i.e., `next()` has not been called
+    /// on it yet.
+    fresh: bool,
 }
 
 impl<'ctx, 'm> ExecutionManager<'ctx, 'm> {
-    fn new(state: State<'ctx, 'm>, module: &'m Module, start_func: &'m Function) -> Self {
+    fn new(state: State<'ctx, 'm>, start_bb: &'m BasicBlock) -> Self {
         Self {
             state,
-            module,
-            start_func,
-            executed_first_time: false,
+            start_bb,
+            fresh: true,
         }
     }
 
@@ -76,21 +75,14 @@ impl<'ctx, 'm> Iterator for ExecutionManager<'ctx, 'm> {
     type Item = SymexResult<'ctx>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.executed_first_time {
-            if let Some((loc, prev_bb)) = self.state.revert_to_backtracking_point() {
-                symex_from_loc(&mut self.state, loc, Some(prev_bb))
-            } else {
-                None
-            }
+        if self.fresh {
+            self.fresh = false;
+            symex_from_bb(&mut self.state, self.start_bb)
+        } else if self.state.revert_to_backtracking_point() {
+            symex_from_cur_loc(&mut self.state)
         } else {
-            self.executed_first_time = true;
-            let bb = self.start_func.basic_blocks.get(0).expect("Failed to get entry basic block");
-            let start_loc = Location {
-                module: self.module,
-                func: self.start_func,
-                bbname: bb.name.clone(),
-            };
-            symex_from_bb(&mut self.state, &bb, start_loc, None)
+            // no paths left to explore
+            None
         }
     }
 }
@@ -100,20 +92,20 @@ pub enum SymexResult<'ctx> {
     ReturnedVoid,
 }
 
-/// Symex from the given `Location` through the rest of the function.
+/// Symex from the current `Location` through the rest of the function.
 /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>, cur_loc: Location<'m>, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
-    let bb = cur_loc.func.get_bb_by_name(&cur_loc.bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function", cur_loc.bbname));
-    symex_from_bb(state, bb, cur_loc, prev_bb)
+fn symex_from_cur_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>) -> Option<SymexResult<'ctx>> {
+    let bb = state.cur_loc.func.get_bb_by_name(&state.cur_loc.bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function", state.cur_loc.bbname));
+    symex_from_bb(state, bb)
 }
 
 /// Symex the given bb, through the rest of the function.
 /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, cur_loc: Location<'m>, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
-    assert_eq!(bb.name, cur_loc.bbname);
+fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock) -> Option<SymexResult<'ctx>> {
+    assert_eq!(bb.name, state.cur_loc.bbname);
     debug!("Symexing basic block {:?}", bb.name);
     state.record_in_path(QualifiedBB {
-        funcname: cur_loc.func.name.clone(),
+        funcname: state.cur_loc.func.name.clone(),
         bbname: bb.name.clone(),
     });
     for inst in bb.instrs.iter() {
@@ -130,7 +122,7 @@ fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, cur_
                 Instruction::SExt(sext) => symex_sext(state, &sext),
                 Instruction::Trunc(trunc) => symex_trunc(state, &trunc),
                 Instruction::BitCast(bitcast) => symex_bitcast(state, &bitcast),
-                Instruction::Phi(phi) => symex_phi(state, &phi, prev_bb.as_ref()),
+                Instruction::Phi(phi) => symex_phi(state, &phi),
                 Instruction::Select(select) => symex_select(state, &select),
                 Instruction::Call(call) => symex_call(state, &call),
                 _ => unimplemented!("instruction {:?}", inst),
@@ -139,8 +131,8 @@ fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, cur_
         if result.is_err() {
             // Having an `Err` here indicates we can't continue down this path,
             // for instance because we're unsat, or because loop bound was exceeded, etc
-            if let Some((loc, prev_bb)) = state.revert_to_backtracking_point() {
-                return symex_from_loc(state, loc, Some(prev_bb));
+            if state.revert_to_backtracking_point() {
+                return symex_from_cur_loc(state);
             } else {
                 // can't continue on this path due to error, and we have nowhere to backtrack to
                 return None;
@@ -149,8 +141,8 @@ fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, cur_
     }
     match &bb.term {
         Terminator::Ret(ret) => Some(symex_return(state, ret)),
-        Terminator::Br(br) => symex_br(state, br, cur_loc),
-        Terminator::CondBr(condbr) => symex_condbr(state, condbr, cur_loc),
+        Terminator::Br(br) => symex_br(state, br),
+        Terminator::CondBr(condbr) => symex_condbr(state, condbr),
         term => unimplemented!("terminator {:?}", term),
     }
 }
@@ -403,52 +395,49 @@ fn symex_return<'ctx, 'm>(state: &State<'ctx, 'm>, ret: &terminator::Ret) -> Sym
 // Continues to the target of the `Br` and eventually returns the new `SymexResult`
 // representing the return value of the function (when it reaches the end of the
 // function), or `None` if no possible paths were found.
-fn symex_br<'ctx, 'm>(state: &mut State<'ctx, 'm>, br: &'m terminator::Br, mut cur_loc: Location<'m>) -> Option<SymexResult<'ctx>> {
+fn symex_br<'ctx, 'm>(state: &mut State<'ctx, 'm>, br: &'m terminator::Br) -> Option<SymexResult<'ctx>> {
     debug!("Symexing branch {:?}", br);
-    let prev_bbname = cur_loc.bbname;
-    cur_loc.bbname = br.dest.clone();
-    symex_from_loc(state, cur_loc, Some(prev_bbname.clone()))
+    state.prev_bb_name = Some(state.cur_loc.bbname.clone());
+    state.cur_loc.bbname = br.dest.clone();
+    symex_from_cur_loc(state)
 }
 
 // Continues to the target(s) of the `CondBr` (saving a backtracking point if
 // necessary) and eventually returns the new `SymexResult` representing the
 // return value of the function (when it reaches the end of the function), or
 // `None` if no possible paths were found.
-fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::CondBr, mut cur_loc: Location<'m>) -> Option<SymexResult<'ctx>> {
+fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::CondBr) -> Option<SymexResult<'ctx>> {
     let z3cond = state.operand_to_bool(&condbr.condition);
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
     let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
-    let prev_bb = cur_loc.bbname;
     if true_feasible && false_feasible {
         // for now we choose to explore true first, and backtrack to false if necessary
-        let backtrack_loc = Location {
-            module: cur_loc.module,
-            func: cur_loc.func,
-            bbname: condbr.false_dest.clone(),
-        };
-        state.save_backtracking_point(backtrack_loc, prev_bb.clone(), z3cond.not());
+        state.save_backtracking_point(condbr.false_dest.clone(), z3cond.not());
         state.assert(&z3cond);
-        cur_loc.bbname = condbr.true_dest.clone();
-        symex_from_loc(state, cur_loc, Some(prev_bb))
+        state.prev_bb_name = Some(state.cur_loc.bbname.clone());
+        state.cur_loc.bbname = condbr.true_dest.clone();
+        symex_from_cur_loc(state)
     } else if true_feasible {
         state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
-        cur_loc.bbname = condbr.true_dest.clone();
-        symex_from_loc(state, cur_loc, Some(prev_bb))
+        state.prev_bb_name = Some(state.cur_loc.bbname.clone());
+        state.cur_loc.bbname = condbr.true_dest.clone();
+        symex_from_cur_loc(state)
     } else if false_feasible {
         state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
-        cur_loc.bbname = condbr.false_dest.clone();
-        symex_from_loc(state, cur_loc, Some(prev_bb))
-    } else if let Some((loc, prev_bb)) = state.revert_to_backtracking_point() {
-        symex_from_loc(state, loc, Some(prev_bb))
+        state.prev_bb_name = Some(state.cur_loc.bbname.clone());
+        state.cur_loc.bbname = condbr.false_dest.clone();
+        symex_from_cur_loc(state)
+    } else if state.revert_to_backtracking_point() {
+        symex_from_cur_loc(state)
     } else {
         // both branches are unsat, and we have nowhere to backtrack to
         panic!("All possible paths seem to be unsat");
     }
 }
 
-fn symex_phi(state: &mut State, phi: &instruction::Phi, prev_bb: Option<&Name>) -> Result<(), &'static str> {
+fn symex_phi(state: &mut State, phi: &instruction::Phi) -> Result<(), &'static str> {
     debug!("Symexing phi {:?}", phi);
-    let prev_bb = prev_bb.expect("not yet implemented: starting in a block with Phi instructions");
+    let prev_bb = state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions");
     let mut chosen_value = None;
     for (op, bbname) in phi.incoming_values.iter() {
         if bbname == prev_bb {
