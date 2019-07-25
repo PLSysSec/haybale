@@ -1,4 +1,4 @@
-use llvm_ir::{Function, Type};
+use llvm_ir::{Function, Module, Type};
 use z3::ast::{Ast, BV};
 
 mod symex;
@@ -65,7 +65,7 @@ impl SolutionValue {
 /// (so, bounds the number of iterations of loops; for inner loops, this bounds the number
 /// of total iterations across all invocations of the loop).
 /// Returns `None` if there are no values of the inputs such that the function returns zero.
-pub fn find_zero_of_func(func: &Function, loop_bound: usize) -> Option<Vec<SolutionValue>> {
+pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();
     let ctx = z3::Context::new(&cfg);
 
@@ -73,7 +73,7 @@ pub fn find_zero_of_func(func: &Function, loop_bound: usize) -> Option<Vec<Solut
     let zero = BV::from_u64(&ctx, 0, returnwidth as u32);
 
     let mut found = false;
-    let mut em: ExecutionManager = symex_function(&ctx, func, loop_bound);
+    let mut em: ExecutionManager = symex_function(&ctx, module, func, loop_bound);
     while let Some(z3rval) = em.next() {
         match z3rval {
             SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),

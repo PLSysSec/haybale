@@ -18,7 +18,7 @@ fn one_int() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("one_int").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -28,7 +28,7 @@ fn two_ints_first() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("two_ints_first").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -38,7 +38,7 @@ fn two_ints_second() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("two_ints_second").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -48,7 +48,7 @@ fn two_ints_both() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("two_ints_both").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -65,7 +65,7 @@ fn three_ints() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("three_ints").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -84,7 +84,7 @@ fn zero_initialize() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("zero_initialize").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     let a = Wrapping(2);
@@ -100,7 +100,7 @@ fn mismatched_first() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("mismatched_first").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I8(3));
 }
@@ -110,7 +110,7 @@ fn mismatched_second() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("mismatched_second").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -120,7 +120,7 @@ fn mismatched_third() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("mismatched_third").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I8(3));
 }
@@ -130,7 +130,7 @@ fn mismatched_all() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("mismatched_all").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -153,7 +153,7 @@ fn nested_first() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("nested_first").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -163,7 +163,7 @@ fn nested_second() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("nested_second").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -173,7 +173,7 @@ fn nested_all() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("nested_all").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -194,7 +194,7 @@ fn with_array() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("with_array").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -204,7 +204,7 @@ fn with_array_all() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("with_array_all").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -221,7 +221,7 @@ fn structptr() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("structptr").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -237,7 +237,7 @@ fn structelptr() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("structelptr").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -247,7 +247,7 @@ fn changeptr() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("changeptr").expect("Failed to find function");
-    let args = find_zero_of_func(func, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);

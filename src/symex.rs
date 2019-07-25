@@ -13,20 +13,20 @@ use crate::size::size;
 /// `loop_bound`: maximum number of times to execute any given line of LLVM IR
 /// (so, bounds the number of iterations of loops; for inner loops, this bounds the number
 /// of total iterations across all invocations of the loop).
-pub fn symex_function<'ctx, 'func>(ctx: &'ctx z3::Context, func: &'func Function, loop_bound: usize) -> ExecutionManager<'ctx, 'func> {
+pub fn symex_function<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, loop_bound: usize) -> ExecutionManager<'ctx, 'm> {
     let mut state = State::new(ctx, loop_bound);
     for param in func.parameters.iter() {
         let _ = state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32);
     }
-    symex_function_from_initial_state(func, state)
+    symex_function_from_initial_state(module, func, state)
 }
 
 /// Like `symex_function`, but starting from the specified initial `State`.
 /// `symex_function_from_initial_state()` assumes that the function's parameters
 /// are already added to the initial `State`.
-pub fn symex_function_from_initial_state<'ctx, 'func>(func: &'func Function, state: State<'ctx, 'func>) -> ExecutionManager<'ctx, 'func> {
+pub fn symex_function_from_initial_state<'ctx, 'm>(module: &'m Module, func: &'m Function, state: State<'ctx, 'm>) -> ExecutionManager<'ctx, 'm> {
     debug!("Symexing function {}", func.name);
-    ExecutionManager::new(state, func)
+    ExecutionManager::new(state, module, func)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a function.
@@ -38,17 +38,19 @@ pub fn symex_function_from_initial_state<'ctx, 'func>(func: &'func Function, sta
 /// from the end of that path using the `state()` or `mut_state()` methods.
 /// When `next()` returns `None`, there are no more possible paths through the
 /// function.
-pub struct ExecutionManager<'ctx, 'func> {
-    state: State<'ctx, 'func>,
-    func: &'func Function,
+pub struct ExecutionManager<'ctx, 'm> {
+    state: State<'ctx, 'm>,
+    module: &'m Module,
+    start_func: &'m Function,
     executed_first_time: bool,
 }
 
-impl<'ctx, 'func> ExecutionManager<'ctx, 'func> {
-    fn new(state: State<'ctx, 'func>, func: &'func Function) -> Self {
+impl<'ctx, 'm> ExecutionManager<'ctx, 'm> {
+    fn new(state: State<'ctx, 'm>, module: &'m Module, start_func: &'m Function) -> Self {
         Self {
             state,
-            func,
+            module,
+            start_func,
             executed_first_time: false,
         }
     }
@@ -56,7 +58,7 @@ impl<'ctx, 'func> ExecutionManager<'ctx, 'func> {
     /// Provides access to the `State` resulting from the end of the most recently
     /// explored path (or, if `next()` has never been called on this `ExecutionManager`,
     /// then simply the initial `State` which was passed in).
-    pub fn state(&self) -> &State<'ctx, 'func> {
+    pub fn state(&self) -> &State<'ctx, 'm> {
         &self.state
     }
 
@@ -65,25 +67,35 @@ impl<'ctx, 'func> ExecutionManager<'ctx, 'func> {
     /// "sticky", and will persist through all executions of the function.
     /// However, changes made to a final state (after a call to `next()`) will be
     /// completely wiped away the next time that `next()` is called.
-    pub fn mut_state(&mut self) -> &mut State<'ctx, 'func> {
+    pub fn mut_state(&mut self) -> &mut State<'ctx, 'm> {
         &mut self.state
     }
 }
 
-impl<'ctx, 'func> Iterator for ExecutionManager<'ctx, 'func> {
+impl<'ctx, 'm> Iterator for ExecutionManager<'ctx, 'm> {
     type Item = SymexResult<'ctx>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.executed_first_time {
             if let Some((func, bb, prev_bb)) = self.state.revert_to_backtracking_point() {
-                symex_from_bb_by_name(&mut self.state, &bb, func, Some(prev_bb))
+                let loc = Location {
+                    module: self.module,
+                    func,
+                    bbname: bb,
+                };
+                symex_from_loc(&mut self.state, loc, Some(prev_bb))
             } else {
                 None
             }
         } else {
             self.executed_first_time = true;
-            let bb = self.func.basic_blocks.get(0).expect("Failed to get entry basic block");
-            symex_from_bb(&mut self.state, bb, self.func, None)
+            let bb = self.start_func.basic_blocks.get(0).expect("Failed to get entry basic block");
+            let start_loc = Location {
+                module: self.module,
+                func: self.start_func,
+                bbname: bb.name.clone(),
+            };
+            symex_from_bb(&mut self.state, &bb, start_loc, None)
         }
     }
 }
@@ -93,18 +105,26 @@ pub enum SymexResult<'ctx> {
     ReturnedVoid,
 }
 
-// Like `symex_from_bb`, but looks up the bb by name
-fn symex_from_bb_by_name<'ctx, 'func>(state: &mut State<'ctx, 'func>, bbname: &Name, cur_func: &'func Function, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
-    let bb = cur_func.get_bb_by_name(bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function", bbname));
-    symex_from_bb(state, bb, cur_func, prev_bb)
+struct Location<'m> {
+    module: &'m Module,
+    func: &'m Function,
+    bbname: Name,
 }
 
-// Symex the given bb, through the rest of the function.
-// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, cur_func: &'func Function, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
+/// Symex from the given `Location` through the rest of the function.
+/// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
+fn symex_from_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>, cur_loc: Location<'m>, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
+    let bb = cur_loc.func.get_bb_by_name(&cur_loc.bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function", cur_loc.bbname));
+    symex_from_bb(state, bb, cur_loc, prev_bb)
+}
+
+/// Symex the given bb, through the rest of the function.
+/// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
+fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, mut cur_loc: Location<'m>, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
+    assert_eq!(bb.name, cur_loc.bbname);
     debug!("Symexing basic block {:?}", bb.name);
     state.record_in_path(QualifiedBB {
-        funcname: cur_func.name.clone(),
+        funcname: cur_loc.func.name.clone(),
         bbname: bb.name.clone(),
     });
     for inst in bb.instrs.iter() {
@@ -131,7 +151,9 @@ fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, c
             // Having an `Err` here indicates we can't continue down this path,
             // for instance because we're unsat, or because loop bound was exceeded, etc
             if let Some((func, bb, prev_bb)) = state.revert_to_backtracking_point() {
-                return symex_from_bb_by_name(state, &bb, func, Some(prev_bb));
+                cur_loc.func = func;
+                cur_loc.bbname = bb;
+                return symex_from_loc(state, cur_loc, Some(prev_bb));
             } else {
                 // can't continue on this path due to error, and we have nowhere to backtrack to
                 return None;
@@ -140,8 +162,8 @@ fn symex_from_bb<'ctx, 'func>(state: &mut State<'ctx, 'func>, bb: &BasicBlock, c
     }
     match &bb.term {
         Terminator::Ret(ret) => Some(symex_return(state, ret)),
-        Terminator::Br(br) => symex_br(state, br, cur_func, bb.name.clone()),
-        Terminator::CondBr(condbr) => symex_condbr(state, condbr, cur_func, bb.name.clone()),
+        Terminator::Br(br) => symex_br(state, br, cur_loc),
+        Terminator::CondBr(condbr) => symex_condbr(state, condbr, cur_loc),
         term => unimplemented!("terminator {:?}", term),
     }
 }
@@ -181,7 +203,7 @@ fn intpred_to_z3pred<'ctx>(pred: IntPredicate) -> Box<FnOnce(&BV<'ctx>, &BV<'ctx
     }
 }
 
-fn symex_binop<'ctx, 'func, F>(state: &mut State<'ctx, 'func>, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<(), &'static str>
+fn symex_binop<'ctx, 'm, F>(state: &mut State<'ctx, 'm>, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<(), &'static str>
     where F: FnOnce(&BV<'ctx>, &BV<'ctx>) -> BV<'ctx>
 {
     debug!("Symexing binop {:?}", bop);
@@ -383,7 +405,7 @@ fn symex_call(state: &mut State, call: &instruction::Call) -> Result<(), &'stati
 }
 
 // Returns the `SymexResult` representing the return value
-fn symex_return<'ctx, 'func>(state: &State<'ctx, 'func>, ret: &terminator::Ret) -> SymexResult<'ctx> {
+fn symex_return<'ctx, 'm>(state: &State<'ctx, 'm>, ret: &terminator::Ret) -> SymexResult<'ctx> {
     debug!("Symexing return {:?}", ret);
     ret.return_operand
         .as_ref()
@@ -394,33 +416,40 @@ fn symex_return<'ctx, 'func>(state: &State<'ctx, 'func>, ret: &terminator::Ret) 
 // Continues to the target of the `Br` and eventually returns the new `SymexResult`
 // representing the return value of the function (when it reaches the end of the
 // function), or `None` if no possible paths were found.
-fn symex_br<'ctx, 'func>(state: &mut State<'ctx, 'func>, br: &terminator::Br, cur_func: &'func Function, cur_bb: Name) -> Option<SymexResult<'ctx>> {
+fn symex_br<'ctx, 'm>(state: &mut State<'ctx, 'm>, br: &'m terminator::Br, mut cur_loc: Location<'m>) -> Option<SymexResult<'ctx>> {
     debug!("Symexing branch {:?}", br);
-    symex_from_bb_by_name(state, &br.dest, cur_func, Some(cur_bb))
+    let prev_bbname = cur_loc.bbname;
+    cur_loc.bbname = br.dest.clone();
+    symex_from_loc(state, cur_loc, Some(prev_bbname.clone()))
 }
 
 // Continues to the target(s) of the `CondBr` (saving a backtracking point if
 // necessary) and eventually returns the new `SymexResult` representing the
 // return value of the function (when it reaches the end of the function), or
 // `None` if no possible paths were found.
-fn symex_condbr<'ctx, 'func>(state: &mut State<'ctx, 'func>, condbr: &terminator::CondBr, cur_func: &'func Function, cur_bb: Name) -> Option<SymexResult<'ctx>> {
-    // conditional branch
+fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::CondBr, mut cur_loc: Location<'m>) -> Option<SymexResult<'ctx>> {
     let z3cond = state.operand_to_bool(&condbr.condition);
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
     let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
+    let prev_bb = cur_loc.bbname;
     if true_feasible && false_feasible {
         // for now we choose to explore true first, and backtrack to false if necessary
-        state.save_backtracking_point(cur_func, condbr.false_dest.clone(), cur_bb.clone(), z3cond.not());
+        state.save_backtracking_point(cur_loc.func, condbr.false_dest.clone(), prev_bb.clone(), z3cond.not());
         state.assert(&z3cond);
-        symex_from_bb_by_name(state, &condbr.true_dest, cur_func, Some(cur_bb))
+        cur_loc.bbname = condbr.true_dest.clone();
+        symex_from_loc(state, cur_loc, Some(prev_bb))
     } else if true_feasible {
         state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
-        symex_from_bb_by_name(state, &condbr.true_dest, cur_func, Some(cur_bb))
+        cur_loc.bbname = condbr.true_dest.clone();
+        symex_from_loc(state, cur_loc, Some(prev_bb))
     } else if false_feasible {
         state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
-        symex_from_bb_by_name(state, &condbr.false_dest, cur_func, Some(cur_bb))
+        cur_loc.bbname = condbr.false_dest.clone();
+        symex_from_loc(state, cur_loc, Some(prev_bb))
     } else if let Some((func, bb, prev_bb)) = state.revert_to_backtracking_point() {
-        symex_from_bb_by_name(state, &bb, func, Some(prev_bb))
+        cur_loc.func = func;
+        cur_loc.bbname = bb;
+        symex_from_loc(state, cur_loc, Some(prev_bb))
     } else {
         // both branches are unsat, and we have nowhere to backtrack to
         panic!("All possible paths seem to be unsat");
@@ -476,7 +505,7 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    type Path<'func> = Vec<QualifiedBB>;
+    type Path<'m> = Vec<QualifiedBB>;
 
     fn path_from_bbnames(funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path {
         let mut vec = vec![];
@@ -491,18 +520,18 @@ mod tests {
     }
 
     /// Iterator over the paths through a function
-    struct PathIterator<'ctx, 'func> {
-        em: ExecutionManager<'ctx, 'func>,
+    struct PathIterator<'ctx, 'm> {
+        em: ExecutionManager<'ctx, 'm>,
     }
 
-    impl<'ctx, 'func> PathIterator<'ctx, 'func> {
-        pub fn new(ctx: &'ctx z3::Context, func: &'func Function, loop_bound: usize) -> Self {
-            Self { em: symex_function(ctx, func, loop_bound) }
+    impl<'ctx, 'm> PathIterator<'ctx, 'm> {
+        pub fn new(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, loop_bound: usize) -> Self {
+            Self { em: symex_function(ctx, module, func, loop_bound) }
         }
     }
 
-    impl<'ctx, 'func> Iterator for PathIterator<'ctx, 'func> {
-        type Item = Path<'func>;
+    impl<'ctx, 'm> Iterator for PathIterator<'ctx, 'm> {
+        type Item = Path<'m>;
 
         fn next(&mut self) -> Option<Self::Item> {
             self.em.next().map(|_| self.em.state().path.clone())
@@ -516,7 +545,7 @@ mod tests {
             .expect("Failed to parse basic.bc module");
         let func = module.get_func_by_name("one_arg").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = PathIterator::new(&ctx, func, 5).collect();
+        let paths: Vec<Path> = PathIterator::new(&ctx, &module, func, 5).collect();
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1]));
     }
@@ -528,7 +557,7 @@ mod tests {
             .expect("Failed to parse basic.bc module");
         let func = module.get_func_by_name("conditional_true").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 5)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths.len(), 2);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![2, 4, 12]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 8, 12]));
@@ -541,7 +570,7 @@ mod tests {
             .expect("Failed to parse basic.bc module");
         let func = module.get_func_by_name("conditional_nozero").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 5)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths.len(), 4);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![2, 4, 6, 14]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 4, 8, 10, 14]));
@@ -556,7 +585,7 @@ mod tests {
             .expect("Failed to parse loop.bc module");
         let func = module.get_func_by_name("while_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 5)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths.len(), 5);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 6, 6, 12]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 6, 12]));
@@ -572,7 +601,7 @@ mod tests {
             .expect("Failed to parse loop.bc module");
         let func = module.get_func_by_name("for_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 5)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths.len(), 6);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 9, 6]));
@@ -589,7 +618,7 @@ mod tests {
             .expect("Failed to parse loop.bc module");
         let func = module.get_func_by_name("loop_zero_iterations").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 5)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths.len(), 7);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 5, 8, 18]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 5, 11, 8, 18]));
@@ -607,7 +636,7 @@ mod tests {
             .expect("Failed to parse loop.bc module");
         let func = module.get_func_by_name("loop_with_cond").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 5)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths.len(), 5);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6, 13, 16,
                                                                 6, 10, 16,
@@ -633,7 +662,7 @@ mod tests {
             .expect("Failed to parse loop.bc module");
         let func = module.get_func_by_name("sum_of_array").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 30)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 30)).collect();
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
                                                             11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
@@ -646,7 +675,7 @@ mod tests {
             .expect("Failed to parse loop.bc module");
         let func = module.get_func_by_name("nested_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
-        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, func, 30)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 30)).collect();
         assert_eq!(paths.len(), 4);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                             10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
