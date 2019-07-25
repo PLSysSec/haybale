@@ -6,7 +6,7 @@ use either::Either;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub use crate::state::{State, QualifiedBB};
+pub use crate::state::{State, Location, QualifiedBB};
 use crate::size::size;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
@@ -77,12 +77,7 @@ impl<'ctx, 'm> Iterator for ExecutionManager<'ctx, 'm> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.executed_first_time {
-            if let Some((func, bb, prev_bb)) = self.state.revert_to_backtracking_point() {
-                let loc = Location {
-                    module: self.module,
-                    func,
-                    bbname: bb,
-                };
+            if let Some((loc, prev_bb)) = self.state.revert_to_backtracking_point() {
                 symex_from_loc(&mut self.state, loc, Some(prev_bb))
             } else {
                 None
@@ -105,12 +100,6 @@ pub enum SymexResult<'ctx> {
     ReturnedVoid,
 }
 
-struct Location<'m> {
-    module: &'m Module,
-    func: &'m Function,
-    bbname: Name,
-}
-
 /// Symex from the given `Location` through the rest of the function.
 /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
 fn symex_from_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>, cur_loc: Location<'m>, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
@@ -120,7 +109,7 @@ fn symex_from_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>, cur_loc: Location<'m>, 
 
 /// Symex the given bb, through the rest of the function.
 /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, mut cur_loc: Location<'m>, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
+fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, cur_loc: Location<'m>, prev_bb: Option<Name>) -> Option<SymexResult<'ctx>> {
     assert_eq!(bb.name, cur_loc.bbname);
     debug!("Symexing basic block {:?}", bb.name);
     state.record_in_path(QualifiedBB {
@@ -150,10 +139,8 @@ fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, mut 
         if result.is_err() {
             // Having an `Err` here indicates we can't continue down this path,
             // for instance because we're unsat, or because loop bound was exceeded, etc
-            if let Some((func, bb, prev_bb)) = state.revert_to_backtracking_point() {
-                cur_loc.func = func;
-                cur_loc.bbname = bb;
-                return symex_from_loc(state, cur_loc, Some(prev_bb));
+            if let Some((loc, prev_bb)) = state.revert_to_backtracking_point() {
+                return symex_from_loc(state, loc, Some(prev_bb));
             } else {
                 // can't continue on this path due to error, and we have nowhere to backtrack to
                 return None;
@@ -434,7 +421,12 @@ fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::C
     let prev_bb = cur_loc.bbname;
     if true_feasible && false_feasible {
         // for now we choose to explore true first, and backtrack to false if necessary
-        state.save_backtracking_point(cur_loc.func, condbr.false_dest.clone(), prev_bb.clone(), z3cond.not());
+        let backtrack_loc = Location {
+            module: cur_loc.module,
+            func: cur_loc.func,
+            bbname: condbr.false_dest.clone(),
+        };
+        state.save_backtracking_point(backtrack_loc, prev_bb.clone(), z3cond.not());
         state.assert(&z3cond);
         cur_loc.bbname = condbr.true_dest.clone();
         symex_from_loc(state, cur_loc, Some(prev_bb))
@@ -446,10 +438,8 @@ fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::C
         state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
         cur_loc.bbname = condbr.false_dest.clone();
         symex_from_loc(state, cur_loc, Some(prev_bb))
-    } else if let Some((func, bb, prev_bb)) = state.revert_to_backtracking_point() {
-        cur_loc.func = func;
-        cur_loc.bbname = bb;
-        symex_from_loc(state, cur_loc, Some(prev_bb))
+    } else if let Some((loc, prev_bb)) = state.revert_to_backtracking_point() {
+        symex_from_loc(state, loc, Some(prev_bb))
     } else {
         // both branches are unsat, and we have nowhere to backtrack to
         panic!("All possible paths seem to be unsat");

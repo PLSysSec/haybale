@@ -9,14 +9,14 @@ use crate::alloc::Alloc;
 use crate::varmap::VarMap;
 use crate::size::size;
 
-pub struct State<'ctx, 'func> {
+pub struct State<'ctx, 'm> {
     pub ctx: &'ctx z3::Context,
     varmap: VarMap<'ctx>,
     mem: Memory<'ctx>,
     alloc: Alloc,
     solver: Solver<'ctx>,
     pub path: Vec<QualifiedBB>,
-    backtrack_points: Vec<BacktrackPoint<'ctx, 'func>>,
+    backtrack_points: Vec<BacktrackPoint<'ctx, 'm>>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
@@ -25,12 +25,25 @@ pub struct QualifiedBB {
     pub bbname: Name,
 }
 
-struct BacktrackPoint<'ctx, 'func> {
-    /// `Function` in which to resume execution
-    in_func: &'func Function,
-    /// `Name` of the `BasicBlock` to resume execution at
-    next_bb: Name,
-    /// `Name` of the `BasicBlock` executed just prior to the `BacktrackPoint`
+#[derive(Clone)]
+pub struct Location<'m> {
+    pub module: &'m Module,
+    pub func: &'m Function,
+    pub bbname: Name,
+}
+
+impl<'m> fmt::Debug for Location<'m> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<Location: module {:?}, func {:?}, bb {:?}", self.module.name, self.func.name, self.bbname)
+    }
+}
+
+struct BacktrackPoint<'ctx, 'm> {
+    /// Where to resume execution
+    loc: Location<'m>,
+    /// `Name` of the `BasicBlock` executed just prior to the `BacktrackPoint`.
+    /// Assumed to be in the same `Module` and `Function` as `loc` (which is
+    /// always true for how we currently use `BacktrackPoint`s as of this writing)
     prev_bb: Name,
     /// Constraint to add before restarting execution at `next_bb`.
     /// (Intended use of this is to constrain the branch in that direction.)
@@ -54,11 +67,10 @@ struct BacktrackPoint<'ctx, 'func> {
     path_len: usize,
 }
 
-impl<'ctx, 'func> BacktrackPoint<'ctx, 'func> {
-    fn new(in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>, varmap: VarMap<'ctx>, mem: Memory<'ctx>, path_len: usize) -> Self {
+impl<'ctx, 'm> BacktrackPoint<'ctx, 'm> {
+    fn new(loc: Location<'m>, prev_bb: Name, constraint: Bool<'ctx>, varmap: VarMap<'ctx>, mem: Memory<'ctx>, path_len: usize) -> Self {
         BacktrackPoint{
-            in_func,
-            next_bb,
+            loc,
             prev_bb,
             constraint,
             varmap,
@@ -68,13 +80,13 @@ impl<'ctx, 'func> BacktrackPoint<'ctx, 'func> {
     }
 }
 
-impl<'ctx, 'func> fmt::Display for BacktrackPoint<'ctx, 'func> {
+impl<'ctx, 'm> fmt::Display for BacktrackPoint<'ctx, 'm> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<BacktrackPoint to execute bb {:?} with constraint {}>", self.next_bb, self.constraint)
+        write!(f, "<BacktrackPoint to execute bb {:?} with constraint {}>", self.loc.bbname, self.constraint)
     }
 }
 
-impl<'ctx, 'func> State<'ctx, 'func> {
+impl<'ctx, 'm> State<'ctx, 'm> {
     /// `max_versions_of_name`: the maximum number of versions allowed of a given `Name`,
     /// that is, the maximum number of Z3 objects created for a given LLVM SSA value.
     /// Used for (very crude) loop bounding.
@@ -230,15 +242,15 @@ impl<'ctx, 'func> State<'ctx, 'func> {
     }
 
     // The constraint will be added only if we end up backtracking to this point, and only then
-    pub fn save_backtracking_point(&mut self, in_func: &'func Function, next_bb: Name, prev_bb: Name, constraint: Bool<'ctx>) {
-        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", next_bb, constraint);
+    pub fn save_backtracking_point(&mut self, loc: Location<'m>, prev_bb: Name, constraint: Bool<'ctx>) {
+        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", loc.bbname, constraint);
         self.solver.push();
-        self.backtrack_points.push(BacktrackPoint::new(in_func, next_bb, prev_bb, constraint, self.varmap.clone(), self.mem.clone(), self.path.len()));
+        self.backtrack_points.push(BacktrackPoint::new(loc, prev_bb, constraint, self.varmap.clone(), self.mem.clone(), self.path.len()));
     }
 
-    // returns the Function and BasicBlock where execution should continue, and the BasicBlock executed before that
-    // or `None` if there are no saved backtracking points left
-    pub fn revert_to_backtracking_point(&mut self) -> Option<(&'func Function, Name, Name)> {
+    /// returns the `Location` where execution should continue, and the `BasicBlock` executed before that;
+    /// or `None` if there are no saved backtracking points left
+    pub fn revert_to_backtracking_point(&mut self) -> Option<(Location<'m>, Name)> {
         if let Some(bp) = self.backtrack_points.pop() {
             debug!("Reverting to backtracking point {}", bp);
             self.solver.pop(1);
@@ -247,7 +259,7 @@ impl<'ctx, 'func> State<'ctx, 'func> {
             self.varmap = bp.varmap;
             self.mem = bp.mem;
             self.path.truncate(bp.path_len);
-            Some((bp.in_func, bp.next_bb, bp.prev_bb))
+            Some((bp.loc, bp.prev_bb))
         } else {
             None
         }
@@ -322,6 +334,22 @@ mod tests {
         assert!(!state.check());
     }
 
+    /// utility that creates a technically valid (but functionally useless) `Module` for testing
+    fn blank_module(name: impl Into<String>) -> Module {
+        use std::collections::HashMap;
+        Module {
+            name: name.into(),
+            source_file_name: String::new(),
+            data_layout: String::new(),
+            target_triple: None,
+            functions: vec![],
+            global_vars: vec![],
+            global_aliases: vec![],
+            named_struct_types: HashMap::new(),
+            inline_assembly: String::new(),
+        }
+    }
+
     #[test]
     fn backtracking() {
         let ctx = z3::Context::new(&z3::Config::new());
@@ -331,7 +359,8 @@ mod tests {
         let x = BV::new_const(&ctx, "x", 64);
         state.assert(&x.bvsgt(&BV::from_i64(&ctx, 11, 64)));
 
-        // create a Function and some BasicBlocks
+        // create a Module, a Function, and some BasicBlocks
+        let module = blank_module("test_mod");
         let func = Function::new("test_func");
         let bb1 = BasicBlock::new(Name::Name("bb1".to_owned()));
         let bb2 = BasicBlock::new(Name::Name("bb2".to_owned()));
@@ -339,7 +368,12 @@ mod tests {
         // create a backtrack point with constraint y > 5
         let y = BV::new_const(&ctx, "y", 64);
         let constraint = y.bvsgt(&BV::from_i64(&ctx, 5, 64));
-        state.save_backtracking_point(&func, bb2.name.clone(), bb1.name.clone(), constraint);
+        let backtrackloc = Location {
+            module: &module,
+            func: &func,
+            bbname: bb2.name.clone(),
+        };
+        state.save_backtracking_point(backtrackloc, bb1.name.clone(), constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
         assert!(state.check_with_extra_constraints(&[&y.bvslt(&BV::from_i64(&ctx, 4, 64))]));
@@ -348,11 +382,11 @@ mod tests {
         state.assert(&x.bvslt(&BV::from_i64(&ctx, 8, 64)));
         assert!(!state.check());
 
-        // roll back to backtrack point; check that we got the right func and bbs
-        let (new_func, bb_a, bb_b) = state.revert_to_backtracking_point().unwrap();
-        assert_eq!(new_func, &func);
-        assert_eq!(bb_a, bb2.name);
-        assert_eq!(bb_b, bb1.name);
+        // roll back to backtrack point; check that we got the right loc and prev_bb
+        let (loc, prev_bb) = state.revert_to_backtracking_point().unwrap();
+        assert_eq!(loc.func, &func);
+        assert_eq!(loc.bbname, bb2.name);
+        assert_eq!(prev_bb, bb1.name);
 
         // check that the constraint x < 8 was removed: we're sat again
         assert!(state.check());
@@ -364,6 +398,6 @@ mod tests {
         assert!(state.get_a_solution_for_bv(&x).unwrap() > 11);
 
         // check that trying to backtrack again returns None
-        assert_eq!(state.revert_to_backtracking_point(), None);
+        assert!(state.revert_to_backtracking_point().is_none());
     }
 }
