@@ -51,9 +51,9 @@ pub struct Location<'m> {
 /// Implementation of `PartialEq` assumes that module and function names are unique
 impl<'m> PartialEq for Location<'m> {
     fn eq(&self, other: &Self) -> bool {
-        self.module.name == other.module.name &&
-        self.func.name == other.func.name &&
-        self.bbname == other.bbname
+        self.module.name == other.module.name
+            && self.func.name == other.func.name
+            && self.bbname == other.bbname
     }
 }
 

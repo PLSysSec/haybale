@@ -59,7 +59,7 @@ impl<'ctx> Solver<'ctx> {
 
         self.z3_solver.push();
         for cond in conds {
-          self.z3_solver.assert(cond);
+            self.z3_solver.assert(cond);
         }
         let retval = self.z3_solver.check();
         self.z3_solver.pop(1);
@@ -142,7 +142,6 @@ impl<'ctx> Solver<'ctx> {
         } else {
             "<no model generated>".to_owned()
         }
-
     }
 }
 
