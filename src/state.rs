@@ -26,6 +26,12 @@ pub struct State<'ctx, 'm> {
     mem: Memory<'ctx>,
     alloc: Alloc,
     solver: Solver<'ctx>,
+    /// This tracks the call stack of the symbolic execution.
+    /// The first entry is the top-level caller, while the last entry is the
+    /// caller of the current function.
+    callsites: Vec<Callsite<'m>>,
+    /// These backtrack points are places where execution can be resumed later
+    /// (efficiently, thanks to the incremental solving capabilities of Z3).
     backtrack_points: Vec<BacktrackPoint<'ctx, 'm>>,
 }
 
@@ -42,10 +48,30 @@ pub struct Location<'m> {
     pub bbname: Name,
 }
 
+/// Implementation of `PartialEq` assumes that module and function names are unique
+impl<'m> PartialEq for Location<'m> {
+    fn eq(&self, other: &Self) -> bool {
+        self.module.name == other.module.name &&
+        self.func.name == other.func.name &&
+        self.bbname == other.bbname
+    }
+}
+
+/// Our implementation of `PartialEq` satisfies the requirements of `Eq`
+impl<'m> Eq for Location<'m> {}
+
 impl<'m> fmt::Debug for Location<'m> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<Location: module {:?}, func {:?}, bb {:?}", self.module.name, self.func.name, self.bbname)
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Callsite<'m> {
+    /// `Module`, `Function`, and `BasicBlock` of the callsite
+    pub loc: Location<'m>,
+    /// Index of the `Call` instruction within the `BasicBlock`
+    pub inst: usize,
 }
 
 struct BacktrackPoint<'ctx, 'm> {
@@ -55,6 +81,10 @@ struct BacktrackPoint<'ctx, 'm> {
     /// Assumed to be in the same `Module` and `Function` as `loc` (which is
     /// always true for how we currently use `BacktrackPoint`s as of this writing)
     prev_bb: Name,
+    /// Call stack at the `BacktrackPoint`.
+    /// This is a vector of `Callsite`s where the first entry is the top-level
+    /// caller, and the last entry is the caller of the `BacktrackPoint`'s function.
+    callsites: Vec<Callsite<'m>>,
     /// Constraint to add before restarting execution at `next_bb`.
     /// (Intended use of this is to constrain the branch in that direction.)
     // We use owned `Bool`s because:
@@ -75,19 +105,6 @@ struct BacktrackPoint<'ctx, 'm> {
     /// If we ever revert to this `BacktrackPoint`, we will truncate the `path` to
     /// its first `path_len` entries.
     path_len: usize,
-}
-
-impl<'ctx, 'm> BacktrackPoint<'ctx, 'm> {
-    fn new(loc: Location<'m>, prev_bb: Name, constraint: Bool<'ctx>, varmap: VarMap<'ctx>, mem: Memory<'ctx>, path_len: usize) -> Self {
-        BacktrackPoint{
-            loc,
-            prev_bb,
-            constraint,
-            varmap,
-            mem,
-            path_len,
-        }
-    }
 }
 
 impl<'ctx, 'm> fmt::Display for BacktrackPoint<'ctx, 'm> {
@@ -113,6 +130,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
             mem: Memory::new(ctx),
             alloc: Alloc::new(),
             solver: Solver::new(ctx),
+            callsites: Vec::new(),
             backtrack_points: Vec::new(),
         }
     }
@@ -148,62 +166,67 @@ impl<'ctx, 'm> State<'ctx, 'm> {
         self.solver.get_a_solution_for_bool(b)
     }
 
-    /// Get one possible concrete value for the given IR `Name`, which represents a bitvector.
+    /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.
     /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bv_by_irname(&mut self, name: &Name) -> Option<u64> {
-        let bv = self.varmap.lookup_bv_var(name).clone();  // clone() so that the borrow of self is released
+    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Option<u64> {
+        let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bv(&bv)
     }
 
-    /// Get one possible concrete value for the given IR `Name`, which represents a bool.
+    /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bool.
     /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bool_by_irname(&mut self, name: &Name) -> Option<bool> {
-        let b = self.varmap.lookup_bool_var(name).clone();  // clone() so that the borrow of self is released
+    pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Option<bool> {
+        let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
     }
 
-    /// Create a new `BV` for the given `Name`.
+    /// Create a new `BV` for the given `Name` (in the current function).
     /// This function performs uniquing, so if you call it twice
-    /// with the same `Name`, you will get two different `BV`s.
+    /// with the same `Name`-`Function` pair, you will get two different `BV`s.
     /// Returns the new `BV`, or `Err` if it can't be created.
     /// (As of this writing, the only reason an `Err` might be returned is that
     /// creating the new `BV` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
+    /// Also, we assume that no two `Function`s share the same name.
     pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<BV<'ctx>, &'static str> {
-        self.varmap.new_bv_with_name(name, bits)
+        self.varmap.new_bv_with_name(self.cur_loc.func.name.clone(), name, bits)
     }
 
-    /// Create a new `Bool` for the given `Name`.
+    /// Create a new `Bool` for the given `Name` (in the current function).
     /// This function performs uniquing, so if you call it twice
-    /// with the same `Name`, you will get two different `Bool`s.
+    /// with the same `Name`-`Function` pair, you will get two different `Bool`s.
     /// Returns the new `Bool`, or `Err` if it can't be created.
     /// (As of this writing, the only reason an `Err` might be returned is that
     /// creating the new `Bool` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
+    /// Also, we assume that no two `Function`s share the same name.
     pub fn new_bool_with_name(&mut self, name: Name) -> Result<Bool<'ctx>, &'static str> {
-        self.varmap.new_bool_with_name(name)
+        self.varmap.new_bool_with_name(self.cur_loc.func.name.clone(), name)
     }
 
     /// Record the result of `thing` to be `resultval`.
+    /// Assumes `thing` is in the current function.
     /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
     pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: BV<'ctx>) -> Result<(), &'static str> {
         let bits = size(&thing.get_type());
-        let result = self.varmap.new_bv_with_name(thing.get_result().clone(), bits as u32)?;
+        let result = self.new_bv_with_name(thing.get_result().clone(), bits as u32)?;
         self.assert(&result._eq(&resultval));
         Ok(())
     }
 
     /// Record the result of `thing` to be `resultval`.
+    /// Assumes `thing` is in the current function.
     /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
     pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: Bool<'ctx>) -> Result<(), &'static str> {
         assert_eq!(thing.get_type(), Type::bool());
-        let result = self.varmap.new_bool_with_name(thing.get_result().clone())?;
+        let result = self.new_bool_with_name(thing.get_result().clone())?;
         self.assert(&result._eq(&resultval));
         Ok(())
     }
 
-    /// Convert an `Operand` to the appropriate `BV`
-    /// (all `Operand`s should be either a constant or a variable we previously added to the state).
+    /// Convert an `Operand` to the appropriate `BV`.
+    /// Assumes the `Operand` is in the current function.
+    /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
     pub fn operand_to_bv(&self, op: &Operand) -> BV<'ctx> {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => BV::from_u64(self.ctx, *value, *bits),
@@ -211,14 +234,15 @@ impl<'ctx, 'm> State<'ctx, 'm> {
             | Operand::ConstantOperand(Constant::AggregateZero(ty))
             | Operand::ConstantOperand(Constant::Undef(ty))
                 => BV::from_u64(self.ctx, 0, size(ty) as u32),
-            Operand::LocalOperand { name, .. } => self.varmap.lookup_bv_var(name).clone(),
+            Operand::LocalOperand { name, .. } => self.varmap.lookup_bv_var(&self.cur_loc.func.name, name).clone(),
             Operand::MetadataOperand => panic!("Can't convert {:?} to BV", op),
             _ => unimplemented!("operand_to_bv() for {:?}", op)
         }
     }
 
-    /// Convert an `Operand` to the appropriate `Bool`
-    /// (all `Operand`s should be either a constant or a variable we previously added to the state).
+    /// Convert an `Operand` to the appropriate `Bool`.
+    /// Assumes the `Operand` is in the current function.
+    /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
     /// This will panic if the `Operand` doesn't have type `Type::bool()`
     pub fn operand_to_bool(&self, op: &Operand) -> Bool<'ctx> {
         match op {
@@ -226,7 +250,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
                 assert_eq!(*bits, 1);
                 Bool::from_bool(self.ctx, *value != 0)
             },
-            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(name).clone(),
+            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).clone(),
             op => panic!("Can't convert {:?} to Bool", op),
         }
     }
@@ -253,7 +277,23 @@ impl<'ctx, 'm> State<'ctx, 'm> {
 
     /// Record having visited the given `QualifiedBB` on the current path.
     pub fn record_in_path(&mut self, bb: QualifiedBB) {
+        debug!("Recording a path entry {:?}", bb);
         self.path.push(bb);
+    }
+
+    /// Record entering a call at the given `inst` in the current location's `BasicBlock`
+    pub fn push_callsite(&mut self, inst: usize) {
+        self.callsites.push(Callsite {
+            loc: self.cur_loc.clone(),
+            inst,
+        })
+    }
+
+    /// Record leaving the current function. Returns the `Callsite` at which the
+    /// current function was called, or `None` if the current function was the
+    /// top-level function.
+    pub fn pop_callsite(&mut self) -> Option<Callsite<'m>> {
+        self.callsites.pop()
     }
 
     /// Save the current state, about to enter the `BasicBlock` with the given `Name` (which must be
@@ -267,14 +307,15 @@ impl<'ctx, 'm> State<'ctx, 'm> {
             func: self.cur_loc.func,
             bbname: bb_to_enter,
         };
-        self.backtrack_points.push(BacktrackPoint::new(
-            backtrack_loc,
-            self.cur_loc.bbname.clone(),
+        self.backtrack_points.push(BacktrackPoint {
+            loc: backtrack_loc,
+            prev_bb: self.cur_loc.bbname.clone(),
+            callsites: self.callsites.clone(),
             constraint,
-            self.varmap.clone(),
-            self.mem.clone(),
-            self.path.len(),
-        ));
+            varmap: self.varmap.clone(),
+            mem: self.mem.clone(),
+            path_len: self.path.len(),
+        });
     }
 
     /// returns `true` if the operation was successful, or `false` if there are
@@ -284,9 +325,9 @@ impl<'ctx, 'm> State<'ctx, 'm> {
             debug!("Reverting to backtracking point {}", bp);
             self.solver.pop(1);
             self.assert(&bp.constraint);
-            debug!("Constraints are now:\n{}", self.solver);
             self.varmap = bp.varmap;
             self.mem = bp.mem;
+            self.callsites = bp.callsites;
             self.path.truncate(bp.path_len);
             self.cur_loc = bp.loc;
             self.prev_bb_name = Some(bp.prev_bb);

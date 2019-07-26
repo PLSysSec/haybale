@@ -13,6 +13,8 @@ mod alloc;
 mod solver;
 mod varmap;
 
+mod double_keyed_map;
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum SolutionValue {
     I8(i8),
@@ -92,7 +94,7 @@ pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) ->
     if found {
         // in this case state.check() must have passed
         Some(func.parameters.iter().map(|p| {
-            let param_as_u64 = state.get_a_solution_for_bv_by_irname(&p.name)
+            let param_as_u64 = state.get_a_solution_for_bv_by_irname(&func.name, &p.name)
                 .expect("since state.check() passed, expected a solution for each var");
             match &p.ty {
                 Type::IntegerType { bits: 8 } => SolutionValue::I8(param_as_u64 as i8),

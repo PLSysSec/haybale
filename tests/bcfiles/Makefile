@@ -8,6 +8,7 @@ all: basic.bc basic.ll \
 			loop.bc loop.ll \
 			struct.bc struct.ll \
 			linkedlist.bc linkedlist.ll \
+			call.bc call.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@

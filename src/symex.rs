@@ -6,7 +6,7 @@ use either::Either;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub use crate::state::{State, Location, QualifiedBB};
+pub use crate::state::{State, Callsite, Location, QualifiedBB};
 use crate::size::size;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
@@ -14,6 +14,7 @@ use crate::size::size;
 /// (so, bounds the number of iterations of loops; for inner loops, this bounds the number
 /// of total iterations across all invocations of the loop).
 pub fn symex_function<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, loop_bound: usize) -> ExecutionManager<'ctx, 'm> {
+    debug!("Symexing function {}", func.name);
     let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
     let start_loc = Location {
         module,
@@ -77,11 +78,13 @@ impl<'ctx, 'm> Iterator for ExecutionManager<'ctx, 'm> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.fresh {
             self.fresh = false;
-            symex_from_bb(&mut self.state, self.start_bb)
+            symex_from_bb_through_end_of_function(&mut self.state, self.start_bb)
         } else if self.state.revert_to_backtracking_point() {
-            symex_from_cur_loc(&mut self.state)
+            debug!("ExecutionManager: requesting next path");
+            continue_from_backtrack_point(&mut self.state)
         } else {
             // no paths left to explore
+            debug!("ExecutionManager: no paths left");
             None
         }
     }
@@ -94,21 +97,27 @@ pub enum SymexResult<'ctx> {
 
 /// Symex from the current `Location` through the rest of the function.
 /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_cur_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>) -> Option<SymexResult<'ctx>> {
+fn symex_from_cur_loc_through_end_of_function<'ctx, 'm>(state: &mut State<'ctx, 'm>) -> Option<SymexResult<'ctx>> {
     let bb = state.cur_loc.func.get_bb_by_name(&state.cur_loc.bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function", state.cur_loc.bbname));
-    symex_from_bb(state, bb)
+    symex_from_bb_through_end_of_function(state, bb)
 }
 
 /// Symex the given bb, through the rest of the function.
 /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock) -> Option<SymexResult<'ctx>> {
+fn symex_from_bb_through_end_of_function<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock) -> Option<SymexResult<'ctx>> {
+    symex_from_inst_in_bb_through_end_of_function(state, bb, 0)
+}
+
+/// Symex starting from the given `inst` index in the given bb, through the rest of the function.
+/// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
+fn symex_from_inst_in_bb_through_end_of_function<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<'ctx>> {
     assert_eq!(bb.name, state.cur_loc.bbname);
-    debug!("Symexing basic block {:?}", bb.name);
+    debug!("Symexing basic block {:?} in function {}", bb.name, state.cur_loc.func.name);
     state.record_in_path(QualifiedBB {
         funcname: state.cur_loc.func.name.clone(),
         bbname: bb.name.clone(),
     });
-    for inst in bb.instrs.iter() {
+    for (instnum, inst) in bb.instrs.iter().skip(inst).enumerate() {
         let result = if let Some((binop, z3binop)) = inst_to_binop(&inst) {
             symex_binop(state, &binop, z3binop)
         } else {
@@ -124,7 +133,11 @@ fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock) -> O
                 Instruction::BitCast(bitcast) => symex_bitcast(state, &bitcast),
                 Instruction::Phi(phi) => symex_phi(state, &phi),
                 Instruction::Select(select) => symex_select(state, &select),
-                Instruction::Call(call) => symex_call(state, &call),
+                Instruction::Call(call) => match symex_call(state, &call, instnum) {
+                    Err(e) => Err(e),
+                    Ok(None) => Ok(()),
+                    Ok(Some(symexresult)) => return Some(symexresult),
+                },
                 _ => unimplemented!("instruction {:?}", inst),
             }
         };
@@ -132,7 +145,7 @@ fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock) -> O
             // Having an `Err` here indicates we can't continue down this path,
             // for instance because we're unsat, or because loop bound was exceeded, etc
             if state.revert_to_backtracking_point() {
-                return symex_from_cur_loc(state);
+                return continue_from_backtrack_point(state);
             } else {
                 // can't continue on this path due to error, and we have nowhere to backtrack to
                 return None;
@@ -144,6 +157,96 @@ fn symex_from_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock) -> O
         Terminator::Br(br) => symex_br(state, br),
         Terminator::CondBr(condbr) => symex_condbr(state, condbr),
         term => unimplemented!("terminator {:?}", term),
+    }
+}
+
+/// Symex from the current `Location`, returning through the various `Callsite`s.
+/// That is, when we reach the end of the current function, we will follow
+/// its return and continue in its caller, if given the `Callsite` of the caller.
+/// This will only work if we have actually previously executed the caller up to
+/// the point of the `Callsite`.
+/// Basically this function is only meant for continuing from backtrack points.
+///
+/// The `Callsite`s should be given in order, with the top-level `Callsite` first,
+/// and the caller of the current function last.
+///
+/// Returns the `SymexResult` representing the final return value, or `None` if
+/// no possible paths were found.
+fn continue_from_backtrack_point<'ctx, 'm>(state: &mut State<'ctx, 'm>) -> Option<SymexResult<'ctx>> {
+    debug!("Reverted to backtrack point and continuing");
+    symex_from_inst_in_cur_loc(state, 0)
+}
+
+/// Symex starting from the given `inst` index in the current bb, returning
+/// through the various `Callsite`s.
+///
+/// `callsites`: see notes on `continue_from_backtrack_point()`, except this
+/// function expects the `Callsite`s in the reverse order: with the caller of
+/// the current function first, and the top-level `Callsite` last.
+///
+/// Returns the `SymexResult` representing the final return value, or `None` if
+/// no possible paths were found.
+fn symex_from_inst_in_cur_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>, inst: usize) -> Option<SymexResult<'ctx>> {
+    let bb = state.cur_loc.func.get_bb_by_name(&state.cur_loc.bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", state.cur_loc.bbname, state.cur_loc.func.name));
+    symex_from_inst_in_bb(state, &bb, inst)
+}
+
+/// Symex starting from the given `inst` index in the given bb, returning up the
+/// callstack to the top-level function (wherever symbolic execution started).
+///
+/// Returns the `SymexResult` representing the final return value, or `None` if
+/// no possible paths were found.
+fn symex_from_inst_in_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<'ctx>> {
+    match symex_from_inst_in_bb_through_end_of_function(state, bb, inst) {
+        Some(symexresult) => match state.pop_callsite() {
+            Some(callsite) => {
+                // Return to callsite
+                state.cur_loc = callsite.loc.clone();
+                // Assign the returned value as the result of the caller's call instruction
+                match symexresult {
+                    SymexResult::Returned(bv) => {
+                        let call: &Instruction = callsite.loc.func
+                            .get_bb_by_name(&callsite.loc.bbname)
+                            .expect("Malformed callsite (bb not found)")
+                            .instrs
+                            .get(callsite.inst)
+                            .expect("Malformed callsite (inst out of range)");
+                        let call: &instruction::Call = match call {
+                            Instruction::Call(call) => call,
+                            _ => panic!("Malformed callsite: expected a Call, got {:?}", call),
+                        };
+                        match state.new_bv_with_name(call.dest.as_ref().unwrap().clone(), size(&call.get_type()) as u32) {
+                            Ok(result) => state.assert(&result._eq(&bv)),
+                            Err(_) => {
+                                // This path is dead, try backtracking again
+                                if state.revert_to_backtracking_point() {
+                                    return continue_from_backtrack_point(state);
+                                } else {
+                                    // This path is dead, and we have nowhere to backtrack to
+                                    return None;
+                                }
+                            }
+                        };
+                    },
+                    SymexResult::ReturnedVoid => { },
+                };
+                // Continue execution in caller, with the instruction after the call instruction
+                symex_from_inst_in_cur_loc(state, callsite.inst + 1)
+            },
+            None => {
+                // No callsite to return to, so we're done
+                Some(symexresult)
+            }
+        },
+        None => {
+            // This path is dead, try backtracking again
+            if state.revert_to_backtracking_point() {
+                continue_from_backtrack_point(state)
+            } else {
+                // This path is dead, and we have nowhere to backtrack to
+                None
+            }
+        },
     }
 }
 
@@ -351,7 +454,10 @@ fn symex_alloca(state: &mut State, alloca: &instruction::Alloca) -> Result<(), &
     state.record_bv_result(alloca, allocated)
 }
 
-fn symex_call(state: &mut State, call: &instruction::Call) -> Result<(), &'static str> {
+/// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
+/// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
+/// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
+fn symex_call<'ctx, 'm>(state: &mut State<'ctx, 'm>, call: &'m instruction::Call, instnum: usize) -> Result<Option<SymexResult<'ctx>>, &'static str> {
     debug!("Symexing call {:?}", call);
     let funcname = match call.function {
         Either::Right(Operand::ConstantOperand(Constant::GlobalReference { ref name, .. })) => name,
@@ -360,7 +466,41 @@ fn symex_call(state: &mut State, call: &instruction::Call) -> Result<(), &'stati
     };
     let errorfuncname = funcname.clone();  // just for possible error reporting
     if let Name::Name(s) = funcname {
-        if s.starts_with("llvm.memset") {
+        if let Some(callee) = state.cur_loc.module.get_func_by_name(s) {
+            assert_eq!(call.arguments.len(), callee.parameters.len());
+            let z3args: Vec<_> = call.arguments.iter().map(|arg| state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+            let saved_loc = state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
+            state.push_callsite(instnum);
+            let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
+            state.cur_loc.func = callee;
+            state.cur_loc.bbname = bb.name.clone();
+            for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
+                let z3param = state.new_bv_with_name(param.name.clone(), size(&param.get_type()) as u32)?;  // have to do the new_bv_with_name calls after changing state.cur_loc, so that the variables are created in the callee function
+                state.assert(&z3param._eq(&z3arg));
+            }
+            let returned_bv = symex_from_bb_through_end_of_function(state, &bb).ok_or("No more valid paths through callee")?;
+            match state.pop_callsite() {
+                None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
+                Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
+                    state.cur_loc = saved_loc;
+                    state.record_in_path(QualifiedBB {
+                        funcname: state.cur_loc.func.name.clone(),
+                        bbname: state.cur_loc.bbname.clone(),
+                    });
+                    match returned_bv {
+                        SymexResult::Returned(bv) => {
+                            // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
+                            let result = state.new_bv_with_name(call.dest.as_ref().unwrap().clone(), size(&call.get_type()) as u32)?;
+                            state.assert(&result._eq(&bv));
+                        },
+                        SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
+                    };
+                    debug!("Completed ordinary return to caller");
+                    Ok(None)
+                },
+                Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
+            }
+        } else if s.starts_with("llvm.memset") {
             assert_eq!(call.arguments.len(), 4);
             assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
             assert_eq!(call.arguments[1].0.get_type(), Type::i8());
@@ -372,15 +512,18 @@ fn symex_call(state: &mut State, call: &instruction::Call) -> Result<(), &'stati
                 for i in 0 .. num_bytes {
                     state.write(&addr.bvadd(&BV::from_u64(state.ctx, i, addr.get_size())), val.clone());
                 }
-                return Ok(());
+                Ok(None)
             } else {
-                unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", call.arguments[2]);
+                unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", call.arguments[2])
             }
         } else if s.starts_with("llvm.") {
-            return Ok(()); // We ignore other llvm-internal functions
+            Ok(None)  // We ignore other llvm-internal functions
+        } else {
+            unimplemented!("Call of a function named {:?}", errorfuncname)
         }
+    } else {
+        panic!("Function with a numbered name, {:?}", funcname)
     }
-    unimplemented!("Call of a function named {:?}", errorfuncname);
 }
 
 // Returns the `SymexResult` representing the return value
@@ -396,10 +539,10 @@ fn symex_return<'ctx, 'm>(state: &State<'ctx, 'm>, ret: &terminator::Ret) -> Sym
 // representing the return value of the function (when it reaches the end of the
 // function), or `None` if no possible paths were found.
 fn symex_br<'ctx, 'm>(state: &mut State<'ctx, 'm>, br: &'m terminator::Br) -> Option<SymexResult<'ctx>> {
-    debug!("Symexing branch {:?}", br);
+    debug!("Symexing br {:?}", br);
     state.prev_bb_name = Some(state.cur_loc.bbname.clone());
     state.cur_loc.bbname = br.dest.clone();
-    symex_from_cur_loc(state)
+    symex_from_cur_loc_through_end_of_function(state)
 }
 
 // Continues to the target(s) of the `CondBr` (saving a backtracking point if
@@ -407,6 +550,7 @@ fn symex_br<'ctx, 'm>(state: &mut State<'ctx, 'm>, br: &'m terminator::Br) -> Op
 // return value of the function (when it reaches the end of the function), or
 // `None` if no possible paths were found.
 fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::CondBr) -> Option<SymexResult<'ctx>> {
+    debug!("Symexing condbr {:?}", condbr);
     let z3cond = state.operand_to_bool(&condbr.condition);
     let true_feasible = state.check_with_extra_constraints(&[&z3cond]);
     let false_feasible = state.check_with_extra_constraints(&[&z3cond.not()]);
@@ -416,19 +560,19 @@ fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::C
         state.assert(&z3cond);
         state.prev_bb_name = Some(state.cur_loc.bbname.clone());
         state.cur_loc.bbname = condbr.true_dest.clone();
-        symex_from_cur_loc(state)
+        symex_from_cur_loc_through_end_of_function(state)
     } else if true_feasible {
         state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
         state.prev_bb_name = Some(state.cur_loc.bbname.clone());
         state.cur_loc.bbname = condbr.true_dest.clone();
-        symex_from_cur_loc(state)
+        symex_from_cur_loc_through_end_of_function(state)
     } else if false_feasible {
         state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
         state.prev_bb_name = Some(state.cur_loc.bbname.clone());
         state.cur_loc.bbname = condbr.false_dest.clone();
-        symex_from_cur_loc(state)
+        symex_from_cur_loc_through_end_of_function(state)
     } else if state.revert_to_backtracking_point() {
-        symex_from_cur_loc(state)
+        continue_from_backtrack_point(state)
     } else {
         // both branches are unsat, and we have nowhere to backtrack to
         panic!("All possible paths seem to be unsat");
@@ -437,7 +581,7 @@ fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::C
 
 fn symex_phi(state: &mut State, phi: &instruction::Phi) -> Result<(), &'static str> {
     debug!("Symexing phi {:?}", phi);
-    let prev_bb = state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions");
+    let prev_bb = state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block");
     let mut chosen_value = None;
     for (op, bbname) in phi.incoming_values.iter() {
         if bbname == prev_bb {
@@ -525,8 +669,8 @@ mod tests {
         let func = module.get_func_by_name("one_arg").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = PathIterator::new(&ctx, &module, func, 5).collect();
-        assert_eq!(paths.len(), 1);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1]));
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
     #[test]
@@ -537,9 +681,9 @@ mod tests {
         let func = module.get_func_by_name("conditional_true").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
-        assert_eq!(paths.len(), 2);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![2, 4, 12]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 8, 12]));
+        assert_eq!(paths.len(), 2);  // ensure there are no more paths
     }
 
     #[test]
@@ -550,11 +694,11 @@ mod tests {
         let func = module.get_func_by_name("conditional_nozero").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
-        assert_eq!(paths.len(), 4);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![2, 4, 6, 14]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 4, 8, 10, 14]));
         assert_eq!(paths[2], path_from_bbnums(&func.name, vec![2, 4, 8, 12, 14]));
         assert_eq!(paths[3], path_from_bbnums(&func.name, vec![2, 14]));
+        assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
 
     #[test]
@@ -565,12 +709,12 @@ mod tests {
         let func = module.get_func_by_name("while_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
-        assert_eq!(paths.len(), 5);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 6, 6, 12]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 6, 12]));
         assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 12]));
         assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 6, 6, 12]));
         assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 6, 12]));
+        assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
     #[test]
@@ -581,13 +725,13 @@ mod tests {
         let func = module.get_func_by_name("for_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
-        assert_eq!(paths.len(), 6);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 9, 6]));
         assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 9, 9, 6]));
         assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 9, 9, 9, 6]));
         assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 9, 9, 9, 9, 6]));
         assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 9, 9, 9, 9, 9, 6]));
+        assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
 
     #[test]
@@ -598,7 +742,6 @@ mod tests {
         let func = module.get_func_by_name("loop_zero_iterations").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
-        assert_eq!(paths.len(), 7);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 5, 8, 18]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 5, 11, 8, 18]));
         assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 11, 11, 8, 18]));
@@ -606,6 +749,7 @@ mod tests {
         assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 5, 11, 11, 11, 11, 8, 18]));
         assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
         assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 18]));
+        assert_eq!(paths.len(), 7);  // ensure there are no more paths
     }
 
     #[test]
@@ -616,7 +760,6 @@ mod tests {
         let func = module.get_func_by_name("loop_with_cond").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
-        assert_eq!(paths.len(), 5);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6, 13, 16,
                                                                 6, 10, 16,
                                                                 6, 10, 16,
@@ -632,6 +775,7 @@ mod tests {
         assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 6, 13, 16,
                                                                 6, 10, 16, 20]));
         assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 6, 13, 16, 20]));
+        assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
     #[test]
@@ -642,9 +786,9 @@ mod tests {
         let func = module.get_func_by_name("sum_of_array").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 30)).collect();
-        assert_eq!(paths.len(), 1);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
                                                             11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
     #[test]
@@ -655,7 +799,6 @@ mod tests {
         let func = module.get_func_by_name("nested_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 30)).collect();
-        assert_eq!(paths.len(), 4);
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                             10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                             10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
@@ -666,5 +809,359 @@ mod tests {
         assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                             10, 7]));
         assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 7]));
+        assert_eq!(paths.len(), 4);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn simple_call() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("simple_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn conditional_call() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("conditional_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
+            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(8) },
+        ]);
+        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 6, 8]));
+        assert_eq!(paths.len(), 2);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn call_twice() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("twice_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn nested_call() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("nested_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
+        ]);
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn call_of_loop() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("caller_of_loop").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths[1], vec![
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths[2], vec![
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths[3], vec![
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths[4], vec![
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths[5], vec![
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+        ]);
+        assert_eq!(paths.len(), 6);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn call_in_loop() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("caller_with_loop").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 3)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths[1], vec![
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths[2], vec![
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths[3], vec![
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths.len(), 4);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn recursive_simple() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("recursive_simple").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 5)).collect();
+        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 4, 1, 4, 1, 7, 4, 4, 4, 4]));
+        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 4, 1, 7, 4, 4, 4]));
+        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 7, 4, 4]));
+        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 1, 7, 4]));
+        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 7]));
+        assert_eq!(paths.len(), 5);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn recursive_more_complicated() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("recursive_more_complicated").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 4)).collect();
+        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 4, 1, 8, 14, 4, 4, 4]));
+        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 8, 10, 1, 8, 14, 10, 4, 4]));
+        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 8, 14, 4, 4]));
+        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 10, 1, 4, 1, 8, 14, 4, 10, 4]));
+        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10, 4]));
+        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 10, 1, 8, 14, 10, 4]));
+        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 14, 4]));
+        assert_eq!(paths[7], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 4, 1, 8, 14, 4, 4, 10]));
+        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 10, 1, 8, 14, 10, 4, 10]));
+        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 14, 4, 10]));
+        assert_eq!(paths[10], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 4, 1, 8, 14, 4, 10, 10]));
+        assert_eq!(paths[11], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10, 10]));
+        assert_eq!(paths[12], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10]));
+        assert_eq!(paths[13], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 14, 10]));
+        assert_eq!(paths[14], path_from_bbnums(&func.name, vec![1, 8, 14]));
+        assert_eq!(paths.len(), 15);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn recursive_not_tail() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("recursive_not_tail").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 3)).collect();
+        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 3, 15]));
+        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 5, 1, 3, 15, 5, 10, 15]));
+        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 1, 3, 15, 5, 13, 15]));
+        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 10, 15]));
+        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 13, 15]));
+        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 13, 15, 5, 10, 15]));
+        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 13, 15, 5, 13, 15]));
+        assert_eq!(paths.len(), 7);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn recursive_and_normal_call() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("recursive_and_normal_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 3)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
+        ]);
+        assert_eq!(paths[1], vec![
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+        ]);
+        assert_eq!(paths[2], vec![
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+        ]);
+        assert_eq!(paths.len(), 3);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn mutually_recursive_functions() {
+        init_logging();
+        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let func = module.get_func_by_name("mutually_recursive_a").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 3)).collect();
+        assert_eq!(paths[0], vec![
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths[1], vec![
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths[2], vec![
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths[3], vec![
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths[4], vec![
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+        ]);
+        assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 }
