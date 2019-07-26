@@ -35,10 +35,20 @@ pub struct State<'ctx, 'm> {
     backtrack_points: Vec<BacktrackPoint<'ctx, 'm>>,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct QualifiedBB {
     pub funcname: String,
     pub bbname: Name,
+}
+
+impl fmt::Debug for QualifiedBB {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let pretty_name = match self.bbname {
+            Name::Name(ref s) => format!("{:?}", s),
+            Name::Number(n) => format!("%{}", n),
+        };
+        write!(f, "{{{} {}}}", self.funcname, pretty_name)
+    }
 }
 
 #[derive(Clone)]
