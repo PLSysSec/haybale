@@ -494,8 +494,18 @@ fn symex_call<'ctx, 'm>(state: &mut State<'ctx, 'm>, call: &'m instruction::Call
             } else {
                 unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", call.arguments[2])
             }
-        } else if s.starts_with("llvm.") {
-            Ok(None)  // We ignore other llvm-internal functions
+        } else if s.starts_with("llvm.memcpy") {
+            unimplemented!("LLVM memcpy")
+        } else if s.starts_with("llvm.memmove") {
+            unimplemented!("LLVM memmove")
+        } else if s.starts_with("llvm.lifetime") {
+            Ok(None)  // safe to ignore
+        } else if s.starts_with("llvm.invariant") {
+            Ok(None)  // safe to ignore
+        } else if s.starts_with("llvm.launder.invariant") {
+            Ok(None)  // safe to ignore
+        } else if s.starts_with("llvm.strip.invariant") {
+            Ok(None)  // safe to ignore
         } else {
             unimplemented!("Call of a function named {:?}", errorfuncname)
         }
