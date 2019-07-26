@@ -79,13 +79,9 @@ impl<'ctx, 'm> Iterator for ExecutionManager<'ctx, 'm> {
         if self.fresh {
             self.fresh = false;
             symex_from_bb_through_end_of_function(&mut self.state, self.start_bb)
-        } else if self.state.revert_to_backtracking_point() {
-            debug!("ExecutionManager: requesting next path");
-            continue_from_backtrack_point(&mut self.state)
         } else {
-            // no paths left to explore
-            debug!("ExecutionManager: no paths left");
-            None
+            debug!("ExecutionManager: requesting next path");
+            backtrack_and_continue(&mut self.state)
         }
     }
 }
@@ -144,12 +140,7 @@ fn symex_from_inst_in_bb_through_end_of_function<'ctx, 'm>(state: &mut State<'ct
         if result.is_err() {
             // Having an `Err` here indicates we can't continue down this path,
             // for instance because we're unsat, or because loop bound was exceeded, etc
-            if state.revert_to_backtracking_point() {
-                return continue_from_backtrack_point(state);
-            } else {
-                // can't continue on this path due to error, and we have nowhere to backtrack to
-                return None;
-            }
+            return backtrack_and_continue(state);
         }
     }
     match &bb.term {
@@ -160,29 +151,25 @@ fn symex_from_inst_in_bb_through_end_of_function<'ctx, 'm>(state: &mut State<'ct
     }
 }
 
-/// Symex from the current `Location`, returning through the various `Callsite`s.
-/// That is, when we reach the end of the current function, we will follow
-/// its return and continue in its caller, if given the `Callsite` of the caller.
-/// This will only work if we have actually previously executed the caller up to
-/// the point of the `Callsite`.
-/// Basically this function is only meant for continuing from backtrack points.
-///
-/// The `Callsite`s should be given in order, with the top-level `Callsite` first,
-/// and the caller of the current function last.
+/// Revert to the most recent backtrack point, then continue execution from that point.
+/// Will continue not just to the end of the function containing the backtrack point,
+/// but (using the saved callstack) all the way back to the end of the top-level function.
 ///
 /// Returns the `SymexResult` representing the final return value, or `None` if
 /// no possible paths were found.
-fn continue_from_backtrack_point<'ctx, 'm>(state: &mut State<'ctx, 'm>) -> Option<SymexResult<'ctx>> {
-    debug!("Reverted to backtrack point and continuing");
-    symex_from_inst_in_cur_loc(state, 0)
+fn backtrack_and_continue<'ctx, 'm>(state: &mut State<'ctx, 'm>) -> Option<SymexResult<'ctx>> {
+    if state.revert_to_backtracking_point() {
+        debug!("Reverted to backtrack point and continuing");
+        symex_from_inst_in_cur_loc(state, 0)
+    } else {
+        // No backtrack points (and therefore no paths) remain
+        None
+    }
 }
 
 /// Symex starting from the given `inst` index in the current bb, returning
-/// through the various `Callsite`s.
-///
-/// `callsites`: see notes on `continue_from_backtrack_point()`, except this
-/// function expects the `Callsite`s in the reverse order: with the caller of
-/// the current function first, and the top-level `Callsite` last.
+/// (using the saved callstack) all the way back to the end of the top-level
+/// function.
 ///
 /// Returns the `SymexResult` representing the final return value, or `None` if
 /// no possible paths were found.
@@ -191,8 +178,9 @@ fn symex_from_inst_in_cur_loc<'ctx, 'm>(state: &mut State<'ctx, 'm>, inst: usize
     symex_from_inst_in_bb(state, &bb, inst)
 }
 
-/// Symex starting from the given `inst` index in the given bb, returning up the
-/// callstack to the top-level function (wherever symbolic execution started).
+/// Symex starting from the given `inst` index in the given bb, returning
+/// (using the saved callstack) all the way back to the end of the top-level
+/// function.
 ///
 /// Returns the `SymexResult` representing the final return value, or `None` if
 /// no possible paths were found.
@@ -219,12 +207,7 @@ fn symex_from_inst_in_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlo
                             Ok(result) => state.assert(&result._eq(&bv)),
                             Err(_) => {
                                 // This path is dead, try backtracking again
-                                if state.revert_to_backtracking_point() {
-                                    return continue_from_backtrack_point(state);
-                                } else {
-                                    // This path is dead, and we have nowhere to backtrack to
-                                    return None;
-                                }
+                                return backtrack_and_continue(state);
                             }
                         };
                     },
@@ -240,12 +223,7 @@ fn symex_from_inst_in_bb<'ctx, 'm>(state: &mut State<'ctx, 'm>, bb: &'m BasicBlo
         },
         None => {
             // This path is dead, try backtracking again
-            if state.revert_to_backtracking_point() {
-                continue_from_backtrack_point(state)
-            } else {
-                // This path is dead, and we have nowhere to backtrack to
-                None
-            }
+            backtrack_and_continue(state)
         },
     }
 }
@@ -571,11 +549,8 @@ fn symex_condbr<'ctx, 'm>(state: &mut State<'ctx, 'm>, condbr: &'m terminator::C
         state.prev_bb_name = Some(state.cur_loc.bbname.clone());
         state.cur_loc.bbname = condbr.false_dest.clone();
         symex_from_cur_loc_through_end_of_function(state)
-    } else if state.revert_to_backtracking_point() {
-        continue_from_backtrack_point(state)
     } else {
-        // both branches are unsat, and we have nowhere to backtrack to
-        panic!("All possible paths seem to be unsat");
+        backtrack_and_continue(state)
     }
 }
 
