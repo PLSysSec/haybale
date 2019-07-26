@@ -87,11 +87,6 @@ struct BacktrackPoint<'ctx, 'm> {
     callsites: Vec<Callsite<'m>>,
     /// Constraint to add before restarting execution at `next_bb`.
     /// (Intended use of this is to constrain the branch in that direction.)
-    // We use owned `Bool`s because:
-    //   a) it seems necessary to not use refs, and
-    //   b) it seems reasonable for callers to give us ownership of these `Bool`s.
-    //       If/when that becomes not reasonable, we should probably use boxed
-    //       `Bool`s here rather than making callers copy.
     constraint: Bool<'ctx>,
     /// `VarMap` representing the state of things at the `BacktrackPoint`.
     /// For now, we require making a full copy of the `VarMap` in order to revert
