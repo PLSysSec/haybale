@@ -938,37 +938,40 @@ mod tests {
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 3)).collect();
         assert_eq!(paths[0], vec![
             QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths[1], vec![
             QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths[2], vec![
             QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths[3], vec![
             QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
             QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }

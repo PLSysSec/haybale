@@ -65,8 +65,8 @@ define i32 @callee_with_loop(i32, i32) local_unnamed_addr #2 {
 ; <label>:9:                                      ; preds = %13, %2
   call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %6)
   %10 = load volatile i32, i32* %3, align 4, !tbaa !3
-  %11 = mul i32 %1, -10
-  %12 = add i32 %10, %11
+  %11 = sub i32 -27, %1
+  %12 = add i32 %11, %10
   call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %5)
   ret i32 %12
 
@@ -102,23 +102,28 @@ define i32 @caller_with_loop(i32) local_unnamed_addr #4 {
   store volatile i32 0, i32* %2, align 4, !tbaa !3
   %4 = load volatile i32, i32* %2, align 4, !tbaa !3
   %5 = icmp slt i32 %4, %0
-  br i1 %5, label %8, label %6
+  br i1 %5, label %10, label %8
 
-; <label>:6:                                      ; preds = %8, %1
-  %7 = phi i32 [ 0, %1 ], [ %11, %8 ]
+; <label>:6:                                      ; preds = %10
+  %7 = add i32 %14, -14
+  br label %8
+
+; <label>:8:                                      ; preds = %6, %1
+  %9 = phi i32 [ -14, %1 ], [ %7, %6 ]
   call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %3)
-  ret i32 %7
+  ret i32 %9
 
-; <label>:8:                                      ; preds = %1, %8
-  %9 = phi i32 [ %11, %8 ], [ 0, %1 ]
-  %10 = tail call i32 @simple_callee(i32 %9, i32 3)
-  %11 = add nsw i32 %10, %9
-  %12 = load volatile i32, i32* %2, align 4, !tbaa !3
-  %13 = add nsw i32 %12, 1
-  store volatile i32 %13, i32* %2, align 4, !tbaa !3
-  %14 = load volatile i32, i32* %2, align 4, !tbaa !3
-  %15 = icmp slt i32 %14, %0
-  br i1 %15, label %8, label %6
+; <label>:10:                                     ; preds = %1, %10
+  %11 = phi i32 [ %14, %10 ], [ 0, %1 ]
+  %12 = add nsw i32 %11, 3
+  %13 = tail call i32 @simple_callee(i32 %12, i32 1)
+  %14 = add nsw i32 %13, %11
+  %15 = load volatile i32, i32* %2, align 4, !tbaa !3
+  %16 = add nsw i32 %15, 1
+  store volatile i32 %16, i32* %2, align 4, !tbaa !3
+  %17 = load volatile i32, i32* %2, align 4, !tbaa !3
+  %18 = icmp slt i32 %17, %0
+  br i1 %18, label %10, label %6
 }
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
@@ -129,7 +134,7 @@ define i32 @recursive_simple(i32) local_unnamed_addr #5 {
 
 ; <label>:4:                                      ; preds = %1
   %5 = tail call i32 @recursive_simple(i32 %2)
-  %6 = add nsw i32 %5, -20
+  %6 = add nsw i32 %5, -38
   ret i32 %6
 
 ; <label>:7:                                      ; preds = %1
@@ -159,7 +164,8 @@ define i32 @recursive_more_complicated(i32) local_unnamed_addr #5 {
   ret i32 %13
 
 ; <label>:14:                                     ; preds = %8
-  ret i32 %2
+  %15 = add nsw i32 %2, -14
+  ret i32 %15
 }
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
@@ -201,7 +207,7 @@ define i32 @recursive_and_normal_caller(i32) local_unnamed_addr #5 {
 
 ; <label>:5:                                      ; preds = %1
   %6 = tail call i32 @recursive_and_normal_caller(i32 %2)
-  %7 = add nsw i32 %6, -20
+  %7 = add nsw i32 %6, -38
   ret i32 %7
 
 ; <label>:8:                                      ; preds = %1
@@ -211,31 +217,33 @@ define i32 @recursive_and_normal_caller(i32) local_unnamed_addr #5 {
 ; Function Attrs: noinline nounwind readnone ssp uwtable
 define i32 @mutually_recursive_a(i32) local_unnamed_addr #5 {
   %2 = icmp sgt i32 %0, 3
-  br i1 %2, label %6, label %3
+  br i1 %2, label %7, label %3
 
 ; <label>:3:                                      ; preds = %1
   %4 = sdiv i32 %0, 2
   %5 = tail call i32 @mutually_recursive_b(i32 %4)
-  br label %6
+  %6 = add nsw i32 %5, -1
+  br label %7
 
-; <label>:6:                                      ; preds = %1, %3
-  %7 = phi i32 [ %5, %3 ], [ %0, %1 ]
-  ret i32 %7
+; <label>:7:                                      ; preds = %1, %3
+  %8 = phi i32 [ %6, %3 ], [ %0, %1 ]
+  ret i32 %8
 }
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
 define i32 @mutually_recursive_b(i32) local_unnamed_addr #5 {
   %2 = icmp slt i32 %0, 0
-  br i1 %2, label %6, label %3
+  br i1 %2, label %7, label %3
 
 ; <label>:3:                                      ; preds = %1
   %4 = add nsw i32 %0, 5
   %5 = tail call i32 @mutually_recursive_a(i32 %4)
-  br label %6
+  %6 = add nsw i32 %5, -9
+  br label %7
 
-; <label>:6:                                      ; preds = %1, %3
-  %7 = phi i32 [ %5, %3 ], [ %0, %1 ]
-  ret i32 %7
+; <label>:7:                                      ; preds = %1, %3
+  %8 = phi i32 [ %6, %3 ], [ %0, %1 ]
+  ret i32 %8
 }
 
 attributes #0 = { noinline norecurse nounwind readnone ssp uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="penryn" "target-features"="+cx16,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
