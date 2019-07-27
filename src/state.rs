@@ -6,7 +6,7 @@ use z3::ast::{Ast, BV, Bool};
 use crate::memory::Memory;
 use crate::solver::Solver;
 use crate::alloc::Alloc;
-use crate::varmap::VarMap;
+use crate::varmap::{VarMap, RestoreInfo};
 use crate::size::size;
 
 pub struct State<'ctx, 'm> {
@@ -29,7 +29,11 @@ pub struct State<'ctx, 'm> {
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
-    callsites: Vec<Callsite<'m>>,
+    ///
+    /// We won't have a `StackFrame` for the current function here, only each of
+    /// its callers. For instance, while we are executing the top-level function,
+    /// this stack will be empty.
+    stack: Vec<StackFrame<'ctx, 'm>>,
     /// These backtrack points are places where execution can be resumed later
     /// (efficiently, thanks to the incremental solving capabilities of Z3).
     backtrack_points: Vec<BacktrackPoint<'ctx, 'm>>,
@@ -76,12 +80,22 @@ impl<'m> fmt::Debug for Location<'m> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Callsite<'m> {
     /// `Module`, `Function`, and `BasicBlock` of the callsite
     pub loc: Location<'m>,
     /// Index of the `Call` instruction within the `BasicBlock`
     pub inst: usize,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+struct StackFrame<'ctx, 'm> {
+    /// Indicates the call instruction which was responsible for the call
+    callsite: Callsite<'m>,
+    /// Caller's local variables, so they can be restored when we return to the caller.
+    /// This is necessary in the case of (direct or indirect) recursion.
+    /// See notes on `VarMap.get_restore_info_for_fn()`.
+    restore_info: RestoreInfo<'ctx>,
 }
 
 struct BacktrackPoint<'ctx, 'm> {
@@ -92,9 +106,9 @@ struct BacktrackPoint<'ctx, 'm> {
     /// always true for how we currently use `BacktrackPoint`s as of this writing)
     prev_bb: Name,
     /// Call stack at the `BacktrackPoint`.
-    /// This is a vector of `Callsite`s where the first entry is the top-level
+    /// This is a vector of `StackFrame`s where the first entry is the top-level
     /// caller, and the last entry is the caller of the `BacktrackPoint`'s function.
-    callsites: Vec<Callsite<'m>>,
+    stack: Vec<StackFrame<'ctx, 'm>>,
     /// Constraint to add before restarting execution at `next_bb`.
     /// (Intended use of this is to constrain the branch in that direction.)
     constraint: Bool<'ctx>,
@@ -114,7 +128,7 @@ struct BacktrackPoint<'ctx, 'm> {
 
 impl<'ctx, 'm> fmt::Display for BacktrackPoint<'ctx, 'm> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<BacktrackPoint to execute bb {:?} with constraint {}>", self.loc.bbname, self.constraint)
+        write!(f, "<BacktrackPoint to execute bb {:?} with constraint {} and {} frames on the callstack>", self.loc.bbname, self.constraint, self.stack.len())
     }
 }
 
@@ -135,7 +149,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
             mem: Memory::new(ctx),
             alloc: Alloc::new(),
             solver: Solver::new(ctx),
-            callsites: Vec::new(),
+            stack: Vec::new(),
             backtrack_points: Vec::new(),
         }
     }
@@ -288,17 +302,33 @@ impl<'ctx, 'm> State<'ctx, 'm> {
 
     /// Record entering a call at the given `inst` in the current location's `BasicBlock`
     pub fn push_callsite(&mut self, inst: usize) {
-        self.callsites.push(Callsite {
-            loc: self.cur_loc.clone(),
-            inst,
+        self.stack.push(StackFrame {
+            callsite: Callsite {
+                loc: self.cur_loc.clone(),
+                inst,
+            },
+            // TODO: taking this `restore_info` every time a callsite is pushed
+            // may be expensive, and is only necessary if the call we're going
+            // to make will eventually (directly or indirectly) recurse. In the
+            // future we could check the LLVM 'norecurse' attribute to know when
+            // this is not necessary.
+            restore_info: self.varmap.get_restore_info_for_fn(self.cur_loc.func.name.clone()),
         })
     }
 
     /// Record leaving the current function. Returns the `Callsite` at which the
     /// current function was called, or `None` if the current function was the
     /// top-level function.
+    ///
+    /// Also restores the caller's local variables.
     pub fn pop_callsite(&mut self) -> Option<Callsite<'m>> {
-        self.callsites.pop()
+        if let Some(StackFrame { callsite, restore_info }) = self.stack.pop() {
+            self.varmap.restore_fn_vars(restore_info);
+            Some(callsite)
+        } else {
+            None
+        }
+
     }
 
     /// Save the current state, about to enter the `BasicBlock` with the given `Name` (which must be
@@ -315,7 +345,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
         self.backtrack_points.push(BacktrackPoint {
             loc: backtrack_loc,
             prev_bb: self.cur_loc.bbname.clone(),
-            callsites: self.callsites.clone(),
+            stack: self.stack.clone(),
             constraint,
             varmap: self.varmap.clone(),
             mem: self.mem.clone(),
@@ -332,7 +362,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
             self.assert(&bp.constraint);
             self.varmap = bp.varmap;
             self.mem = bp.mem;
-            self.callsites = bp.callsites;
+            self.stack = bp.stack;
             self.path.truncate(bp.path_len);
             self.cur_loc = bp.loc;
             self.prev_bb_name = Some(bp.prev_bb);

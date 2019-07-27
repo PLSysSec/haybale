@@ -148,7 +148,7 @@ define i32 @recursive_more_complicated(i32) local_unnamed_addr #5 {
   br i1 %3, label %4, label %8
 
 ; <label>:4:                                      ; preds = %1
-  %5 = srem i32 %2, 7
+  %5 = add nsw i32 %2, 7
   %6 = tail call i32 @recursive_more_complicated(i32 %5)
   %7 = add nsw i32 %6, 1
   ret i32 %7
@@ -170,7 +170,7 @@ define i32 @recursive_more_complicated(i32) local_unnamed_addr #5 {
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
 define i32 @recursive_not_tail(i32) local_unnamed_addr #5 {
-  %2 = icmp sgt i32 %0, 7
+  %2 = icmp sgt i32 %0, 100
   br i1 %2, label %3, label %5
 
 ; <label>:3:                                      ; preds = %1
@@ -178,23 +178,23 @@ define i32 @recursive_not_tail(i32) local_unnamed_addr #5 {
   br label %15
 
 ; <label>:5:                                      ; preds = %1
-  %6 = add nsw i32 %0, 2
+  %6 = add nsw i32 %0, 20
   %7 = tail call i32 @recursive_not_tail(i32 %6)
   %8 = and i32 %7, 1
   %9 = icmp eq i32 %8, 0
-  br i1 %9, label %10, label %13
+  br i1 %9, label %10, label %12
 
 ; <label>:10:                                     ; preds = %5
-  %11 = sdiv i32 %7, 6
-  %12 = add nsw i32 %11, -3
+  %11 = srem i32 %7, 3
   br label %15
 
-; <label>:13:                                     ; preds = %5
-  %14 = add nsw i32 %7, -8
+; <label>:12:                                     ; preds = %5
+  %13 = srem i32 %7, 5
+  %14 = add nsw i32 %13, -8
   br label %15
 
-; <label>:15:                                     ; preds = %10, %13, %3
-  %16 = phi i32 [ %4, %3 ], [ %12, %10 ], [ %14, %13 ]
+; <label>:15:                                     ; preds = %10, %12, %3
+  %16 = phi i32 [ %4, %3 ], [ %11, %10 ], [ %14, %12 ]
   ret i32 %16
 }
 
@@ -216,11 +216,11 @@ define i32 @recursive_and_normal_caller(i32) local_unnamed_addr #5 {
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
 define i32 @mutually_recursive_a(i32) local_unnamed_addr #5 {
-  %2 = icmp sgt i32 %0, 3
+  %2 = icmp sgt i32 %0, 5
   br i1 %2, label %7, label %3
 
 ; <label>:3:                                      ; preds = %1
-  %4 = sdiv i32 %0, 2
+  %4 = shl nsw i32 %0, 1
   %5 = tail call i32 @mutually_recursive_b(i32 %4)
   %6 = add nsw i32 %5, -1
   br label %7
@@ -236,9 +236,9 @@ define i32 @mutually_recursive_b(i32) local_unnamed_addr #5 {
   br i1 %2, label %7, label %3
 
 ; <label>:3:                                      ; preds = %1
-  %4 = add nsw i32 %0, 5
+  %4 = add nsw i32 %0, -2
   %5 = tail call i32 @mutually_recursive_a(i32 %4)
-  %6 = add nsw i32 %5, -9
+  %6 = add nsw i32 %5, -2
   br label %7
 
 ; <label>:7:                                      ; preds = %1, %3

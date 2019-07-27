@@ -90,11 +90,12 @@ pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) ->
         }
     }
 
+    let param_bvs: Vec<_> = em.param_bvs().cloned().collect();
     let state = em.mut_state();
     if found {
         // in this case state.check() must have passed
-        Some(func.parameters.iter().map(|p| {
-            let param_as_u64 = state.get_a_solution_for_bv_by_irname(&func.name, &p.name)
+        Some(func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
+            let param_as_u64 = state.get_a_solution_for_bv(bv)
                 .expect("since state.check() passed, expected a solution for each var");
             match &p.ty {
                 Type::IntegerType { bits: 8 } => SolutionValue::I8(param_as_u64 as i8),

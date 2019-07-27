@@ -22,10 +22,10 @@ pub fn symex_function<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func
         bbname: bb.name.clone(),
     };
     let mut state = State::new(ctx, start_loc, loop_bound);
-    for param in func.parameters.iter() {
-        let _ = state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32);
-    }
-    ExecutionManager::new(state, &bb)
+    let z3params: Vec<_> = func.parameters.iter().map(|param| {
+        state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
+    }).collect();
+    ExecutionManager::new(state, z3params, &bb)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a function.
@@ -39,6 +39,7 @@ pub fn symex_function<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func
 /// function.
 pub struct ExecutionManager<'ctx, 'm> {
     state: State<'ctx, 'm>,
+    z3params: Vec<BV<'ctx>>,
     start_bb: &'m BasicBlock,
     /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
     /// has not yet produced its first path, i.e., `next()` has not been called
@@ -47,9 +48,10 @@ pub struct ExecutionManager<'ctx, 'm> {
 }
 
 impl<'ctx, 'm> ExecutionManager<'ctx, 'm> {
-    fn new(state: State<'ctx, 'm>, start_bb: &'m BasicBlock) -> Self {
+    fn new(state: State<'ctx, 'm>, z3params: Vec<BV<'ctx>>, start_bb: &'m BasicBlock) -> Self {
         Self {
             state,
+            z3params,
             start_bb,
             fresh: true,
         }
@@ -69,6 +71,12 @@ impl<'ctx, 'm> ExecutionManager<'ctx, 'm> {
     /// completely wiped away the next time that `next()` is called.
     pub fn mut_state(&mut self) -> &mut State<'ctx, 'm> {
         &mut self.state
+    }
+
+    /// Provides access to the `BV` objects representing each of the function's
+    /// parameters, in order
+    pub fn param_bvs(&self) -> impl Iterator<Item = &BV<'ctx>> {
+        self.z3params.iter()
     }
 }
 
@@ -1008,14 +1016,14 @@ mod tests {
         assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 10, 1, 8, 14, 10, 4]));
         assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 14, 4]));
         assert_eq!(paths[7], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 4, 1, 8, 14, 4, 4, 10]));
-        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 10, 1, 8, 14, 10, 4, 10]));
-        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 14, 4, 10]));
-        assert_eq!(paths[10], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 4, 1, 8, 14, 4, 10, 10]));
-        assert_eq!(paths[11], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10, 10]));
-        assert_eq!(paths[12], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10]));
-        assert_eq!(paths[13], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 14, 10]));
-        assert_eq!(paths[14], path_from_bbnums(&func.name, vec![1, 8, 14]));
-        assert_eq!(paths.len(), 15);  // ensure there are no more paths
+        // not possible due to math: assert_eq!(paths[], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 10, 1, 8, 14, 10, 4, 10]));
+        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 14, 4, 10]));
+        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 4, 1, 8, 14, 4, 10, 10]));
+        assert_eq!(paths[10], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10, 10]));
+        assert_eq!(paths[11], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10]));
+        assert_eq!(paths[12], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 14, 10]));
+        assert_eq!(paths[13], path_from_bbnums(&func.name, vec![1, 8, 14]));
+        assert_eq!(paths.len(), 14);  // ensure there are no more paths
     }
 
     #[test]
@@ -1028,11 +1036,11 @@ mod tests {
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 3)).collect();
         assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 3, 15]));
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 5, 1, 3, 15, 5, 10, 15]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 1, 3, 15, 5, 13, 15]));
+        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 1, 3, 15, 5, 12, 15]));
         assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 10, 15]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 13, 15]));
-        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 13, 15, 5, 10, 15]));
-        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 13, 15, 5, 13, 15]));
+        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 12, 15]));
+        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 10, 15]));
+        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 12, 15]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
     }
 
@@ -1048,7 +1056,17 @@ mod tests {
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
         ]);
         assert_eq!(paths[1], vec![
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
@@ -1065,17 +1083,7 @@ mod tests {
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
         ]);
         assert_eq!(paths.len(), 3);  // ensure there are no more paths
     }
@@ -1098,15 +1106,19 @@ mod tests {
             QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[1], vec![
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
@@ -1116,13 +1128,17 @@ mod tests {
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
             QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[2], vec![
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
@@ -1130,24 +1146,40 @@ mod tests {
             QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[3], vec![
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[4], vec![
             QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(6) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
-        assert_eq!(paths.len(), 5);  // ensure there are no more paths
+        assert_eq!(paths[5], vec![
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+        ]);
+        assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
 }

@@ -8,14 +8,18 @@ use llvm_ir::Name;
 #[derive(Clone)]
 pub struct VarMap<'ctx> {
     ctx: &'ctx z3::Context,
-    /// Maps a `Name` to the Z3 object corresponding to the latest version of that `Name`.
+    /// Maps a `Name` to the Z3 object corresponding to the active version of that `Name`.
     /// Different variables in different functions can have the same `Name` but different
     /// values, so we actually have (String, Name) as the key type where the String is the
     /// function name. We assume no two functions have the same name.
-    latest_version: DoubleKeyedMap<String, Name, BVorBool<'ctx>>,
+    active_version: DoubleKeyedMap<String, Name, BVorBool<'ctx>>,
     /// Maps a `Name` to the version number of the latest version of that `Name`.
     /// E.g., for `Name`s that have been created once, we have 0 here.
-    /// Like with the `latest_version` map, the key type here includes the function name.
+    /// Like with the `active_version` map, the key type here includes the function name.
+    /// The version number here may not correspond to the active version in the
+    /// presence of recursion: when we return from a recursive call, the caller's
+    /// versions of the variables are active, even though the callee's versions
+    /// are the most recently created.
     version_num: DoubleKeyedMap<String, Name, usize>,
     /// Maximum version number of any given `Name`.
     /// This bounds the maximum number of distinct versions of any given `Name`,
@@ -138,7 +142,7 @@ impl<'ctx> VarMap<'ctx> {
     pub fn new(ctx: &'ctx z3::Context, max_versions_of_name: usize) -> Self {
         Self {
             ctx,
-            latest_version: DoubleKeyedMap::new(),
+            active_version: DoubleKeyedMap::new(),
             version_num: DoubleKeyedMap::new(),
             max_version_num: max_versions_of_name - 1,  // because 0 is a version
         }
@@ -155,7 +159,7 @@ impl<'ctx> VarMap<'ctx> {
         let new_version = self.new_version_of_name(&funcname, &name)?;
         let bv = BV::new_const(self.ctx, new_version, bits);
         debug!("Adding bv var {:?} = {}", name, bv);
-        self.latest_version.insert(funcname, name, bv.clone().into());
+        self.active_version.insert(funcname, name, bv.clone().into());
         Ok(bv)
     }
 
@@ -170,15 +174,15 @@ impl<'ctx> VarMap<'ctx> {
         let new_version = self.new_version_of_name(&funcname, &name)?;
         let b = Bool::new_const(self.ctx, new_version);
         debug!("Adding bool var {:?} = {}", name, b);
-        self.latest_version.insert(funcname, name, b.clone().into());
+        self.active_version.insert(funcname, name, b.clone().into());
         Ok(b)
     }
 
     /// Look up the most recent `BV` created for the given `(String, Name)` pair
     pub fn lookup_bv_var(&self, funcname: &String, name: &Name) -> BV<'ctx> {
         debug!("Looking up var {:?} from function {:?}", name, funcname);
-        self.latest_version.get(funcname, name).unwrap_or_else(|| {
-            let keys: Vec<(&String, &Name)> = self.latest_version.keys().collect();
+        self.active_version.get(funcname, name).unwrap_or_else(|| {
+            let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
         }).clone().to_bv(self.ctx)
     }
@@ -186,8 +190,8 @@ impl<'ctx> VarMap<'ctx> {
     /// Look up the most recent `Bool` created for the given `(String, Name)` pair
     pub fn lookup_bool_var(&self, funcname: &String, name: &Name) -> Bool<'ctx> {
         debug!("Looking up var {:?} from function {:?}", name, funcname);
-        self.latest_version.get(funcname, name).unwrap_or_else(|| {
-            let keys: Vec<(&String, &Name)> = self.latest_version.keys().collect();
+        self.active_version.get(funcname, name).unwrap_or_else(|| {
+            let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
         }).clone().to_bool(self.ctx)
     }
@@ -213,6 +217,44 @@ impl<'ctx> VarMap<'ctx> {
         //funcname_prefix.push_str(&suffix);
         Ok(z3::Symbol::String("@".to_owned() + funcname + "_" + name_prefix + &stem + "_" + &new_version_num.to_string()))
     }
+
+    /// Get a `RestoreInfo` which can later be used with `restore_fn_vars()` to
+    /// restore all of the given function's variables (in their current active
+    /// versions) back to active.
+    ///
+    /// This is intended to support recursion. A `RestoreInfo` can be generated
+    /// before a recursive call, and then once the call returns, the restore
+    /// operation ensures the caller still has access to the correct versions of
+    /// its local variables (not the callee's versions, which are technically
+    /// more recent).
+    pub fn get_restore_info_for_fn(&self, funcname: String) -> RestoreInfo<'ctx> {
+        let pairs_to_restore: Vec<_> = self.active_version.iter()
+            .filter(|(f,_,_)| f == &&funcname)
+            .map(|(_,n,v)| (n.clone(), v.clone()))
+            .collect();
+        RestoreInfo {
+            funcname,
+            pairs_to_restore,
+        }
+    }
+
+    /// Restore all of the variables in a `RestoreInfo` to their versions which
+    /// were active at the time the `RestoreInfo` was generated
+    pub fn restore_fn_vars(&mut self, rinfo: RestoreInfo<'ctx>) {
+        let funcname = rinfo.funcname.clone();
+        for pair in rinfo.pairs_to_restore {
+            let val = self.active_version
+                .get_mut(&funcname, &pair.0)
+                .unwrap_or_else(|| panic!("Malformed RestoreInfo: key {:?}", (&funcname, &pair.0)));
+            *val = pair.1;
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct RestoreInfo<'ctx> {
+    funcname: String,
+    pairs_to_restore: Vec<(Name, BVorBool<'ctx>)>,
 }
 
 #[cfg(test)]
@@ -287,6 +329,13 @@ mod tests {
         let name = Name::Number(7);
         for _ in 0 .. 10 {
             let bv = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64);
+            assert!(bv.is_ok());
+        }
+
+        // Check that we can create another 10 versions of that `Name` in a different function
+        let funcname2 = "bar".to_owned();
+        for _ in 0 .. 10 {
+            let bv = varmap.new_bv_with_name(funcname2.clone(), name.clone(), 64);
             assert!(bv.is_ok());
         }
 
