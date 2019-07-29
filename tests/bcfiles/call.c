@@ -45,17 +45,21 @@ int caller_with_loop(int x) {
 __attribute__((noinline)) int recursive_simple(int x) {
   int y = x * 2;
   if (y > 25) return y;
-  return recursive_simple(y) - 38;
+  return recursive_simple(y) - 44;
 }
 
-__attribute__((noinline)) int recursive_more_complicated(int x) {
+__attribute__((noinline)) int recursive_double(int x) {
   int y = x * 2;
-  if (y > 25) {
-    return recursive_more_complicated(y + 7) + 1;
+  if (x < -1000) {
+    return -1;
+  } else if (y > 1000) {
+    return y;
+  } else if (y > 25) {
+    return recursive_double(y + 7) + 1;
   } else if (y < -10) {
-    return recursive_more_complicated(-y) - 1;
+    return recursive_double(-y) - 1;
   } else {
-    return y - 14;
+    return y - 23;
   }
 }
 
@@ -67,9 +71,10 @@ __attribute__((noinline)) int recursive_not_tail(int x) {
 }
 
 __attribute__((noinline)) int recursive_and_normal_caller(int x) {
+  if (x < 0) return -1;
   int y = x * 2;
   if (simple_callee(y, 3) > 25) return y;
-  return recursive_and_normal_caller(y) - 38;
+  return recursive_and_normal_caller(y) - 44;
 }
 
 __attribute__((noinline)) int mutually_recursive_b(int x);

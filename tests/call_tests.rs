@@ -87,7 +87,7 @@ fn recursive_simple() {
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x.0);
     assert_eq!(recursive_simple_dummy(x).0, 0);
-    assert_eq!(args[0], SolutionValue::I32(19));
+    assert_eq!(args[0], SolutionValue::I32(11));
 }
 
 fn recursive_simple_dummy(x: Wrapping<i32>) -> Wrapping<i32> {
@@ -95,18 +95,18 @@ fn recursive_simple_dummy(x: Wrapping<i32>) -> Wrapping<i32> {
     if y > Wrapping(25) {
         y
     } else {
-        recursive_simple_dummy(y) - Wrapping(38)
+        recursive_simple_dummy(y) - Wrapping(44)
     }
 }
 
 #[test]
-fn recursive_more_complicated() {
+fn recursive_double() {
     init_logging();
     let module = get_module();
-    let func = module.get_func_by_name("recursive_more_complicated").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
+    let func = module.get_func_by_name("recursive_double").expect("Failed to find function");
+    let args = find_zero_of_func(func, &module, 5).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
-    assert_eq!(args[0], SolutionValue::I32(-15));
+    assert_eq!(args[0], SolutionValue::I32(-6));
 }
 
 #[test]
@@ -139,9 +139,9 @@ fn recursive_and_normal_call() {
     init_logging();
     let module = get_module();
     let func = module.get_func_by_name("recursive_and_normal_caller").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
+    let args = find_zero_of_func(func, &module, 10).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
-    assert_eq!(args[0], SolutionValue::I32(19));
+    assert_eq!(args[0], SolutionValue::I32(11));
 }
 
 #[test]

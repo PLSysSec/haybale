@@ -134,7 +134,7 @@ define i32 @recursive_simple(i32) local_unnamed_addr #5 {
 
 ; <label>:4:                                      ; preds = %1
   %5 = tail call i32 @recursive_simple(i32 %2)
-  %6 = add nsw i32 %5, -38
+  %6 = add nsw i32 %5, -44
   ret i32 %6
 
 ; <label>:7:                                      ; preds = %1
@@ -142,30 +142,42 @@ define i32 @recursive_simple(i32) local_unnamed_addr #5 {
 }
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
-define i32 @recursive_more_complicated(i32) local_unnamed_addr #5 {
+define i32 @recursive_double(i32) local_unnamed_addr #5 {
   %2 = shl nsw i32 %0, 1
-  %3 = icmp sgt i32 %0, 12
-  br i1 %3, label %4, label %8
+  %3 = icmp slt i32 %0, -1000
+  br i1 %3, label %20, label %4
 
 ; <label>:4:                                      ; preds = %1
-  %5 = add nsw i32 %2, 7
-  %6 = tail call i32 @recursive_more_complicated(i32 %5)
-  %7 = add nsw i32 %6, 1
-  ret i32 %7
+  %5 = icmp sgt i32 %0, 500
+  br i1 %5, label %20, label %6
 
-; <label>:8:                                      ; preds = %1
-  %9 = icmp slt i32 %0, -5
-  br i1 %9, label %10, label %14
+; <label>:6:                                      ; preds = %4
+  %7 = icmp sgt i32 %0, 12
+  br i1 %7, label %8, label %12
 
-; <label>:10:                                     ; preds = %8
-  %11 = sub nsw i32 0, %2
-  %12 = tail call i32 @recursive_more_complicated(i32 %11)
-  %13 = add nsw i32 %12, -1
-  ret i32 %13
+; <label>:8:                                      ; preds = %6
+  %9 = add nsw i32 %2, 7
+  %10 = tail call i32 @recursive_double(i32 %9)
+  %11 = add nsw i32 %10, 1
+  ret i32 %11
 
-; <label>:14:                                     ; preds = %8
-  %15 = add nsw i32 %2, -14
-  ret i32 %15
+; <label>:12:                                     ; preds = %6
+  %13 = icmp slt i32 %0, -5
+  br i1 %13, label %14, label %18
+
+; <label>:14:                                     ; preds = %12
+  %15 = sub nsw i32 0, %2
+  %16 = tail call i32 @recursive_double(i32 %15)
+  %17 = add nsw i32 %16, -1
+  ret i32 %17
+
+; <label>:18:                                     ; preds = %12
+  %19 = add nsw i32 %2, -23
+  br label %20
+
+; <label>:20:                                     ; preds = %4, %1, %18
+  %21 = phi i32 [ %19, %18 ], [ -1, %1 ], [ %2, %4 ]
+  ret i32 %21
 }
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
@@ -200,18 +212,23 @@ define i32 @recursive_not_tail(i32) local_unnamed_addr #5 {
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable
 define i32 @recursive_and_normal_caller(i32) local_unnamed_addr #5 {
-  %2 = shl nsw i32 %0, 1
-  %3 = tail call i32 @simple_callee(i32 %2, i32 3)
-  %4 = icmp sgt i32 %3, 25
-  br i1 %4, label %8, label %5
+  %2 = icmp slt i32 %0, 0
+  br i1 %2, label %10, label %3
 
-; <label>:5:                                      ; preds = %1
-  %6 = tail call i32 @recursive_and_normal_caller(i32 %2)
-  %7 = add nsw i32 %6, -38
-  ret i32 %7
+; <label>:3:                                      ; preds = %1
+  %4 = shl nsw i32 %0, 1
+  %5 = tail call i32 @simple_callee(i32 %4, i32 3)
+  %6 = icmp sgt i32 %5, 25
+  br i1 %6, label %10, label %7
 
-; <label>:8:                                      ; preds = %1
-  ret i32 %2
+; <label>:7:                                      ; preds = %3
+  %8 = tail call i32 @recursive_and_normal_caller(i32 %4)
+  %9 = add nsw i32 %8, -44
+  ret i32 %9
+
+; <label>:10:                                     ; preds = %3, %1
+  %11 = phi i32 [ -1, %1 ], [ %4, %3 ]
+  ret i32 %11
 }
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable

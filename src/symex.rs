@@ -1001,29 +1001,24 @@ mod tests {
     }
 
     #[test]
-    fn recursive_more_complicated() {
+    fn recursive_double() {
         init_logging();
         let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
             .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("recursive_more_complicated").expect("Failed to find function");
+        let func = module.get_func_by_name("recursive_double").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 4)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 4, 1, 8, 14, 4, 4, 4]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 8, 10, 1, 8, 14, 10, 4, 4]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 8, 14, 4, 4]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 10, 1, 4, 1, 8, 14, 4, 10, 4]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10, 4]));
-        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 10, 1, 8, 14, 10, 4]));
-        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 4, 1, 8, 14, 4]));
-        assert_eq!(paths[7], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 4, 1, 8, 14, 4, 4, 10]));
-        // not possible due to math: assert_eq!(paths[], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 10, 1, 8, 14, 10, 4, 10]));
-        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 4, 1, 8, 14, 4, 10]));
-        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 4, 1, 8, 14, 4, 10, 10]));
-        assert_eq!(paths[10], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10, 10]));
-        assert_eq!(paths[11], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 10, 1, 8, 14, 10, 10]));
-        assert_eq!(paths[12], path_from_bbnums(&func.name, vec![1, 8, 10, 1, 8, 14, 10]));
-        assert_eq!(paths[13], path_from_bbnums(&func.name, vec![1, 8, 14]));
-        assert_eq!(paths.len(), 14);  // ensure there are no more paths
+        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
+        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
+        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 6, 8, 1, 4, 20, 8]));
+        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 14]));
+        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 20, 8, 14]));
+        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 12, 18, 20, 14]));
+        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 20, 14]));
+        assert_eq!(paths[7], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 18, 20]));
+        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 4, 20]));
+        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 20]));
+        assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
     #[test]
@@ -1054,38 +1049,58 @@ mod tests {
         let paths: Vec<Path> = itertools::sorted(PathIterator::new(&ctx, &module, func, 3)).collect();
         assert_eq!(paths[0], vec![
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[1], vec![
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(5) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[2], vec![
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
             QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
             QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(8) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
         ]);
-        assert_eq!(paths.len(), 3);  // ensure there are no more paths
+        assert_eq!(paths[3], vec![
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+        ]);
+        assert_eq!(paths[4], vec![
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+        ]);
+        assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
     #[test]
