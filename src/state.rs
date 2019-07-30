@@ -138,7 +138,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     ///   will have problems.
     /// `max_versions_of_name`: the maximum number of versions allowed of a given `Name`,
     ///   that is, the maximum number of Z3 objects created for a given LLVM SSA value.
-    ///   Used for (very crude) loop bounding.
+    ///   Used to bound both loop iterations and recursion depth.
     pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, max_versions_of_name: usize) -> Self {
         Self {
             ctx,

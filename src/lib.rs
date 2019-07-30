@@ -63,9 +63,11 @@ impl SolutionValue {
 
 /// Given a function, find values of its inputs such that it returns zero.
 /// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer.
-/// `loop_bound`: maximum number of times to execute any given line of LLVM IR
-/// (so, bounds the number of iterations of loops; for inner loops, this bounds the number
-/// of total iterations across all invocations of the loop).
+///
+/// `loop_bound`: maximum number of times to execute any given line of LLVM IR.
+/// This bounds both the number of iterations of loops, and also the depth of recursion.
+/// For inner loops, this bounds the number of total iterations across all invocations of the loop.
+///
 /// Returns `None` if there are no values of the inputs such that the function returns zero.
 pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();

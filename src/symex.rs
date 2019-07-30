@@ -10,9 +10,10 @@ pub use crate::state::{State, Callsite, Location, QualifiedBB};
 use crate::size::size;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
-/// `loop_bound`: maximum number of times to execute any given line of LLVM IR
-/// (so, bounds the number of iterations of loops; for inner loops, this bounds the number
-/// of total iterations across all invocations of the loop).
+///
+/// `loop_bound`: maximum number of times to execute any given line of LLVM IR.
+/// This bounds both the number of iterations of loops, and also the depth of recursion.
+/// For inner loops, this bounds the number of total iterations across all invocations of the loop.
 pub fn symex_function<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, loop_bound: usize) -> ExecutionManager<'ctx, 'm> {
     debug!("Symexing function {}", func.name);
     let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");

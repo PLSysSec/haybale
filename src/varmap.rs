@@ -10,12 +10,13 @@ pub struct VarMap<'ctx> {
     ctx: &'ctx z3::Context,
     /// Maps a `Name` to the Z3 object corresponding to the active version of that `Name`.
     /// Different variables in different functions can have the same `Name` but different
-    /// values, so we actually have (String, Name) as the key type where the String is the
+    /// values, so we actually have `(String, Name)` as the key type where the `String` is the
     /// function name. We assume no two functions have the same name.
     active_version: DoubleKeyedMap<String, Name, BVorBool<'ctx>>,
     /// Maps a `Name` to the version number of the latest version of that `Name`.
     /// E.g., for `Name`s that have been created once, we have 0 here.
     /// Like with the `active_version` map, the key type here includes the function name.
+    ///
     /// The version number here may not correspond to the active version in the
     /// presence of recursion: when we return from a recursive call, the caller's
     /// versions of the variables are active, even though the callee's versions
@@ -23,7 +24,8 @@ pub struct VarMap<'ctx> {
     version_num: DoubleKeyedMap<String, Name, usize>,
     /// Maximum version number of any given `Name`.
     /// This bounds the maximum number of distinct versions of any given `Name`,
-    /// and thus can be used to bound loops, really crudely.
+    /// and thus can be used to bound both loop iterations and recursion depth.
+    ///
     /// Variables with the same `Name` in different functions do not share
     /// counters for this purpose - they can each have versions up to the
     /// `max_version_num`.
