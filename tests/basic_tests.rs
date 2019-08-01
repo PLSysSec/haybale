@@ -1,5 +1,5 @@
 use llvm_ir::*;
-use pitchfork_rs::*;
+use haybale::*;
 use std::num::Wrapping;
 use std::path::Path;
 

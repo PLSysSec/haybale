@@ -1,5 +1,5 @@
 use llvm_ir::{Function, Module};
-use pitchfork_rs::*;
+use haybale::*;
 use std::path::Path;
 
 fn main() {
