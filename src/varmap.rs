@@ -109,14 +109,14 @@ impl<'ctx, V, B> BVorBool<'ctx, V, B>
 impl<'ctx, V, B> BVorBool<'ctx, V, B>
     where V: BV<'ctx, AssociatedBool = B>, B: Bool<'ctx, AssociatedBV = V>
 {
-    fn to_bv(self, ctx: &'ctx z3::Context) -> V {
+    fn into_bv(self, ctx: &'ctx z3::Context) -> V {
         match self {
             BVorBool::BV(bv, _) => bv,
             BVorBool::Bool(b, _) => b.bvite(&V::from_u64(ctx, 1, 1), &V::from_u64(ctx, 0, 1)),
         }
     }
 
-    fn to_bool(self, ctx: &'ctx z3::Context) -> B {
+    fn into_bool(self, ctx: &'ctx z3::Context) -> B {
         match self {
             BVorBool::Bool(b, _) => b,
             BVorBool::BV(bv, _) => {
@@ -184,7 +184,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
-        }).clone().to_bv(self.ctx)
+        }).clone().into_bv(self.ctx)
     }
 
     /// Look up the most recent `Bool` created for the given `(String, Name)` pair
@@ -193,7 +193,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
-        }).clone().to_bool(self.ctx)
+        }).clone().into_bool(self.ctx)
     }
 
     /// Given a `Name` (from a particular function), creates a new version of it
