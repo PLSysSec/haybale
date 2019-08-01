@@ -343,4 +343,48 @@ mod tests {
         let bv = varmap.new_bv_with_name(funcname, name, 64);
         assert!(bv.is_err());
     }
+
+    #[test]
+    fn restore_info() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mut varmap: VarMap<z3::ast::BV, z3::ast::Bool> = VarMap::new(&ctx, 10);
+
+        // create a var named "foo" in function "func"
+        let fooname = Name::Name("foo".to_owned());
+        let foo1 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+
+        // save restore info for "func"
+        let rinfo = varmap.get_restore_info_for_fn("func".to_owned());
+
+        // create another var named "foo" in function "func"
+        let foo2 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+
+        // check that a lookup gives the most recent var
+        assert_eq!(varmap.lookup_bv_var(&"func".to_owned(), &fooname), foo2);
+
+        // restore, and check that a lookup now gives the first var
+        varmap.restore_fn_vars(rinfo);
+        assert_eq!(varmap.lookup_bv_var(&"func".to_owned(), &fooname), foo1);
+    }
+
+    #[test]
+    fn restore_different_function() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mut varmap: VarMap<z3::ast::BV, z3::ast::Bool> = VarMap::new(&ctx, 10);
+
+        // create a var named "foo" in function "func"
+        let fooname = Name::Name("foo".to_owned());
+        let _foo1 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+
+        // save restore info for function "blah"
+        let rinfo_blah = varmap.get_restore_info_for_fn("blah".to_owned());
+
+        // create another var named "foo" in function "func"
+        let foo2 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+
+        // restore function "blah", and check that lookups in function "func" are unaffected
+        assert_eq!(varmap.lookup_bv_var(&"func".to_owned(), &fooname), foo2);
+        varmap.restore_fn_vars(rinfo_blah);
+        assert_eq!(varmap.lookup_bv_var(&"func".to_owned(), &fooname), foo2);
+    }
 }
