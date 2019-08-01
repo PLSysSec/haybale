@@ -1,15 +1,14 @@
 use llvm_ir::*;
 use log::debug;
 use std::fmt;
-use z3::ast::{Ast, BV, Bool};
 
 use crate::memory::Memory;
-use crate::solver::Solver;
 use crate::alloc::Alloc;
 use crate::varmap::{VarMap, RestoreInfo};
 use crate::size::size;
+use crate::backend::*;
 
-pub struct State<'ctx, 'm> {
+pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// Reference to the Z3 context being used
     pub ctx: &'ctx z3::Context,
     /// Indicates the `BasicBlock` which is currently being executed
@@ -22,10 +21,10 @@ pub struct State<'ctx, 'm> {
     pub path: Vec<QualifiedBB>,
 
     // Private members
-    varmap: VarMap<'ctx>,
-    mem: Memory<'ctx>,
+    varmap: VarMap<'ctx, B::BV, B::Bool>,
+    mem: Memory<'ctx, B::Array, B::BV>,
     alloc: Alloc,
-    solver: Solver<'ctx>,
+    solver: B::Solver,
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
@@ -33,10 +32,10 @@ pub struct State<'ctx, 'm> {
     /// We won't have a `StackFrame` for the current function here, only each of
     /// its callers. For instance, while we are executing the top-level function,
     /// this stack will be empty.
-    stack: Vec<StackFrame<'ctx, 'm>>,
+    stack: Vec<StackFrame<'ctx, 'm, B::BV, B::Bool>>,
     /// These backtrack points are places where execution can be resumed later
     /// (efficiently, thanks to the incremental solving capabilities of Z3).
-    backtrack_points: Vec<BacktrackPoint<'ctx, 'm>>,
+    backtrack_points: Vec<BacktrackPoint<'ctx, 'm, B>>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
@@ -89,16 +88,16 @@ pub struct Callsite<'m> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-struct StackFrame<'ctx, 'm> {
+struct StackFrame<'ctx, 'm, V, B> where V: BV<'ctx, AssociatedBool = B>, B: Bool<'ctx, AssociatedBV = V> {
     /// Indicates the call instruction which was responsible for the call
     callsite: Callsite<'m>,
     /// Caller's local variables, so they can be restored when we return to the caller.
     /// This is necessary in the case of (direct or indirect) recursion.
     /// See notes on `VarMap.get_restore_info_for_fn()`.
-    restore_info: RestoreInfo<'ctx>,
+    restore_info: RestoreInfo<'ctx, V, B>,
 }
 
-struct BacktrackPoint<'ctx, 'm> {
+struct BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
     /// Where to resume execution
     loc: Location<'m>,
     /// `Name` of the `BasicBlock` executed just prior to the `BacktrackPoint`.
@@ -108,31 +107,31 @@ struct BacktrackPoint<'ctx, 'm> {
     /// Call stack at the `BacktrackPoint`.
     /// This is a vector of `StackFrame`s where the first entry is the top-level
     /// caller, and the last entry is the caller of the `BacktrackPoint`'s function.
-    stack: Vec<StackFrame<'ctx, 'm>>,
+    stack: Vec<StackFrame<'ctx, 'm, B::BV, B::Bool>>,
     /// Constraint to add before restarting execution at `next_bb`.
     /// (Intended use of this is to constrain the branch in that direction.)
-    constraint: Bool<'ctx>,
+    constraint: B::Bool,
     /// `VarMap` representing the state of things at the `BacktrackPoint`.
     /// For now, we require making a full copy of the `VarMap` in order to revert
     /// later.
-    varmap: VarMap<'ctx>,
+    varmap: VarMap<'ctx, B::BV, B::Bool>,
     /// `Memory` representing the state of things at the `BacktrackPoint`.
     /// Copies of a `Memory` should be cheap (just a Z3 object pointer), so it's
     /// not a huge concern that we need a full copy here in order to revert later.
-    mem: Memory<'ctx>,
+    mem: Memory<'ctx, B::Array, B::BV>,
     /// The length of `path` at the `BacktrackPoint`.
     /// If we ever revert to this `BacktrackPoint`, we will truncate the `path` to
     /// its first `path_len` entries.
     path_len: usize,
 }
 
-impl<'ctx, 'm> fmt::Display for BacktrackPoint<'ctx, 'm> {
+impl<'ctx, 'm, B> fmt::Display for BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<BacktrackPoint to execute bb {:?} with constraint {} and {} frames on the callstack>", self.loc.bbname, self.constraint, self.stack.len())
+        write!(f, "<BacktrackPoint to execute bb {:?} with constraint {:?} and {} frames on the callstack>", self.loc.bbname, self.constraint, self.stack.len())
     }
 }
 
-impl<'ctx, 'm> State<'ctx, 'm> {
+impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// `start_loc`: the `Location` where the `State` should begin executing.
     ///   As of this writing, this should be the entry point of a function, or you
     ///   will have problems.
@@ -148,14 +147,14 @@ impl<'ctx, 'm> State<'ctx, 'm> {
             varmap: VarMap::new(ctx, max_versions_of_name),
             mem: Memory::new(ctx),
             alloc: Alloc::new(),
-            solver: Solver::new(ctx),
+            solver: B::Solver::new(ctx),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
         }
     }
 
     /// Add `cond` as a constraint, i.e., assert that `cond` must be true
-    pub fn assert(&mut self, cond: &Bool<'ctx>) {
+    pub fn assert(&mut self, cond: &B::Bool) {
         self.solver.assert(cond)
     }
 
@@ -169,19 +168,19 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// Returns `true` if the current constraints plus the additional constraints `conds`
     /// are together satisfiable, or `false` if not.
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn check_with_extra_constraints(&mut self, conds: &[&Bool<'ctx>]) -> bool {
+    pub fn check_with_extra_constraints<'a>(&'a mut self, conds: impl Iterator<Item = &'a B::Bool>) -> bool {
         self.solver.check_with_extra_constraints(conds)
     }
 
     /// Get one possible concrete value for the `BV`.
     /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
+    pub fn get_a_solution_for_bv(&mut self, bv: &B::BV) -> Option<u64> {
         self.solver.get_a_solution_for_bv(bv)
     }
 
     /// Get one possible concrete value for the `Bool`.
     /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Option<bool> {
+    pub fn get_a_solution_for_bool(&mut self, b: &B::Bool) -> Option<bool> {
         self.solver.get_a_solution_for_bool(b)
     }
 
@@ -207,7 +206,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// creating the new `BV` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
     /// Also, we assume that no two `Function`s share the same name.
-    pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<BV<'ctx>, &'static str> {
+    pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<B::BV, &'static str> {
         self.varmap.new_bv_with_name(self.cur_loc.func.name.clone(), name, bits)
     }
 
@@ -219,14 +218,14 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// creating the new `Bool` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
     /// Also, we assume that no two `Function`s share the same name.
-    pub fn new_bool_with_name(&mut self, name: Name) -> Result<Bool<'ctx>, &'static str> {
+    pub fn new_bool_with_name(&mut self, name: Name) -> Result<B::Bool, &'static str> {
         self.varmap.new_bool_with_name(self.cur_loc.func.name.clone(), name)
     }
 
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
     /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
-    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: BV<'ctx>) -> Result<(), &'static str> {
+    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<(), &'static str> {
         let bits = size(&thing.get_type());
         let result = self.new_bv_with_name(thing.get_result().clone(), bits as u32)?;
         self.assert(&result._eq(&resultval));
@@ -236,7 +235,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
     /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
-    pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: Bool<'ctx>) -> Result<(), &'static str> {
+    pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: B::Bool) -> Result<(), &'static str> {
         assert_eq!(thing.get_type(), Type::bool());
         let result = self.new_bool_with_name(thing.get_result().clone())?;
         self.assert(&result._eq(&resultval));
@@ -246,7 +245,7 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// Convert an `Operand` to the appropriate `BV`.
     /// Assumes the `Operand` is in the current function.
     /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
-    pub fn operand_to_bv(&self, op: &Operand) -> BV<'ctx> {
+    pub fn operand_to_bv(&self, op: &Operand) -> B::BV {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => BV::from_u64(self.ctx, *value, *bits),
             Operand::ConstantOperand(Constant::Null(ty))
@@ -263,11 +262,11 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// Assumes the `Operand` is in the current function.
     /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
     /// This will panic if the `Operand` doesn't have type `Type::bool()`
-    pub fn operand_to_bool(&self, op: &Operand) -> Bool<'ctx> {
+    pub fn operand_to_bool(&self, op: &Operand) -> B::Bool {
         match op {
             Operand::ConstantOperand(Constant::Int { bits, value }) => {
                 assert_eq!(*bits, 1);
-                Bool::from_bool(self.ctx, *value != 0)
+                B::Bool::from_bool(self.ctx, *value != 0)
             },
             Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).clone(),
             op => panic!("Can't convert {:?} to Bool", op),
@@ -277,19 +276,19 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// Read a value `bits` bits long from memory at `addr`.
     /// Caller is responsible for ensuring that the read does not cross cell boundaries
     /// (see notes in memory.rs)
-    pub fn read(&self, addr: &BV<'ctx>, bits: u32) -> BV<'ctx> {
+    pub fn read(&self, addr: &B::BV, bits: u32) -> B::BV {
         self.mem.read(addr, bits)
     }
 
     /// Write a value into memory at `addr`.
     /// Caller is responsible for ensuring that the write does not cross cell boundaries
     /// (see notes in memory.rs)
-    pub fn write(&mut self, addr: &BV<'ctx>, val: BV<'ctx>) {
+    pub fn write(&mut self, addr: &B::BV, val: B::BV) {
         self.mem.write(addr, val)
     }
 
     /// Allocate a value of size `bits`; return a pointer to the newly allocated object
-    pub fn allocate(&mut self, bits: impl Into<u64>) -> BV<'ctx> {
+    pub fn allocate(&mut self, bits: impl Into<u64>) -> B::BV {
         let raw_ptr = self.alloc.alloc(bits);
         BV::from_u64(self.ctx, raw_ptr, 64)
     }
@@ -334,8 +333,8 @@ impl<'ctx, 'm> State<'ctx, 'm> {
     /// Save the current state, about to enter the `BasicBlock` with the given `Name` (which must be
     /// in the same `Module` and `Function` as `state.cur_loc`), as a backtracking point.
     /// The constraint will be added only if we end up backtracking to this point, and only then.
-    pub fn save_backtracking_point(&mut self, bb_to_enter: Name, constraint: Bool<'ctx>) {
-        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {}", bb_to_enter, constraint);
+    pub fn save_backtracking_point(&mut self, bb_to_enter: Name, constraint: B::Bool) {
+        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {:?}", bb_to_enter, constraint);
         self.solver.push();
         let backtrack_loc = Location {
             module: self.cur_loc.module,
@@ -381,7 +380,7 @@ mod tests {
     // Instead, here we just test the nontrivial functionality that State has itself.
 
     /// utility to initialize a `State` out of a `z3::Context`, a `Module`, and a `Function`
-    fn blank_state<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function) -> State<'ctx, 'm> {
+    fn blank_state<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function) -> State<'ctx, 'm, Z3Backend<'ctx>> {
         let start_loc = Location {
             module,
             func,
@@ -486,17 +485,17 @@ mod tests {
         let mut state = blank_state(&ctx, &module, &func);
 
         // assert x > 11
-        let x = BV::new_const(&ctx, "x", 64);
+        let x = z3::ast::BV::new_const(&ctx, "x", 64);
         state.assert(&x.bvsgt(&BV::from_i64(&ctx, 11, 64)));
 
         // create a backtrack point with constraint y > 5
-        let y = BV::new_const(&ctx, "y", 64);
+        let y = z3::ast::BV::new_const(&ctx, "y", 64);
         let constraint = y.bvsgt(&BV::from_i64(&ctx, 5, 64));
         let bb = BasicBlock::new(Name::Name("bb_target".to_owned()));
         state.save_backtracking_point(bb.name.clone(), constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
-        assert!(state.check_with_extra_constraints(&[&y.bvslt(&BV::from_i64(&ctx, 4, 64))]));
+        assert!(state.check_with_extra_constraints(std::iter::once(&y.bvslt(&BV::from_i64(&ctx, 4, 64)))));
 
         // assert x < 8 to make us unsat
         state.assert(&x.bvslt(&BV::from_i64(&ctx, 8, 64)));

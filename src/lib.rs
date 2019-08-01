@@ -1,5 +1,4 @@
 use llvm_ir::{Function, Module, Type};
-use z3::ast::{Ast, BV};
 
 mod symex;
 pub use symex::*;
@@ -12,8 +11,10 @@ mod memory;
 mod alloc;
 mod solver;
 mod varmap;
-
 mod double_keyed_map;
+
+mod backend;
+use backend::*;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum SolutionValue {
@@ -74,10 +75,10 @@ pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) ->
     let ctx = z3::Context::new(&cfg);
 
     let returnwidth = size(&func.return_type);
-    let zero = BV::from_u64(&ctx, 0, returnwidth as u32);
+    let zero = z3::ast::BV::from_u64(&ctx, 0, returnwidth as u32);
 
     let mut found = false;
-    let mut em: ExecutionManager = symex_function(&ctx, module, func, loop_bound);
+    let mut em: ExecutionManager<Z3Backend> = symex_function(&ctx, module, func, loop_bound);
     while let Some(z3rval) = em.next() {
         match z3rval {
             SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),
@@ -92,7 +93,7 @@ pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) ->
         }
     }
 
-    let param_bvs: Vec<_> = em.param_bvs().cloned().collect();
+    let param_bvs: Vec<_> = em.param_bvs().clone();
     let state = em.mut_state();
     if found {
         // in this case state.check() must have passed

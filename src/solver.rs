@@ -49,7 +49,7 @@ impl<'ctx> Solver<'ctx> {
     /// Returns `true` if the current constraints plus the additional constraints `conds`
     /// are together satisfiable, or `false` if not.
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn check_with_extra_constraints(&mut self, conds: &[&Bool<'ctx>]) -> bool {
+    pub fn check_with_extra_constraints<'b>(&'b mut self, conds: impl Iterator<Item = &'b Bool<'ctx>>) -> bool {
         // although the check status by itself would not be invalidated by this,
         // we do need to run check() again before getting the model,
         // so we indicate that by invalidating the check status if we don't have a model
@@ -63,12 +63,6 @@ impl<'ctx> Solver<'ctx> {
         }
         let retval = self.z3_solver.check();
         self.z3_solver.pop(1);
-
-        if retval {
-            debug!("Would be sat with extra constraints {:?}", conds);
-        } else {
-            debug!("Would be unsat with extra constraints {:?}", conds);
-        }
         retval
     }
 
@@ -76,10 +70,10 @@ impl<'ctx> Solver<'ctx> {
         self.z3_solver.push()
     }
 
-    pub fn pop(&mut self, n: u32) {
+    pub fn pop(&mut self, n: usize) {
         self.check_status = None;
         self.model = None;
-        self.z3_solver.pop(n)
+        self.z3_solver.pop(n as u32)
     }
 
     /// Get one possible concrete value for the `BV`.
@@ -189,7 +183,7 @@ mod tests {
 
         // adding x < 3 constraint should make us unsat
         let bad_constraint = x.bvult(&BV::from_u64(&ctx, 3, 64));
-        assert!(!solver.check_with_extra_constraints(&[&bad_constraint]));
+        assert!(!solver.check_with_extra_constraints(std::iter::once(&bad_constraint)));
 
         // the solver itself should still be sat, extra constraints weren't permanently added
         assert!(solver.check());

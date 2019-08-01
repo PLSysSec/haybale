@@ -1,6 +1,9 @@
 //! This implementation is taken almost entirely from
 //! https://stackoverflow.com/questions/45786717/how-to-implement-hashmap-with-two-keys/45795699.
 
+// we have some methods on `DoubleKeyedMap` that may not currently be used by callers, but they still make sense to be part of `DoubleKeyedMap`
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::borrow::Borrow;
