@@ -10,8 +10,10 @@ fn main() {
     let firstarg = std::env::args().nth(1);
     let secondarg = std::env::args().nth(2);
     let modname = firstarg.unwrap_or_else(|| "basic".to_owned());
-    let pathstring: String = format!("c_examples/{}/{}.bc", modname, modname);
-    let filepath = Path::new(&pathstring);
+    let filepath = Path::new("tests")
+        .join(Path::new("bcfiles"))
+        .join(Path::new(&modname))
+        .with_extension("bc");
     let llvm_mod = Module::from_bc_path(&filepath).unwrap_or_else(|e| panic!("Failed to parse module at path {}: {}", filepath.display(), e));
     let functions: Box<Iterator<Item = &Function>>;
     if let Some(funcname) = secondarg {
