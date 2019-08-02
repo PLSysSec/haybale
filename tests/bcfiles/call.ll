@@ -129,16 +129,21 @@ define i32 @caller_with_loop(i32) local_unnamed_addr #4 {
 ; Function Attrs: noinline nounwind readnone ssp uwtable
 define i32 @recursive_simple(i32) local_unnamed_addr #5 {
   %2 = shl nsw i32 %0, 1
-  %3 = icmp sgt i32 %0, 12
-  br i1 %3, label %7, label %4
+  %3 = icmp slt i32 %0, -1000
+  br i1 %3, label %9, label %4
 
 ; <label>:4:                                      ; preds = %1
-  %5 = tail call i32 @recursive_simple(i32 %2)
-  %6 = add nsw i32 %5, -44
-  ret i32 %6
+  %5 = icmp sgt i32 %0, 12
+  br i1 %5, label %9, label %6
 
-; <label>:7:                                      ; preds = %1
-  ret i32 %2
+; <label>:6:                                      ; preds = %4
+  %7 = tail call i32 @recursive_simple(i32 %2)
+  %8 = add nsw i32 %7, -44
+  ret i32 %8
+
+; <label>:9:                                      ; preds = %4, %1
+  %10 = phi i32 [ -1, %1 ], [ %2, %4 ]
+  ret i32 %10
 }
 
 ; Function Attrs: noinline nounwind readnone ssp uwtable

@@ -185,6 +185,56 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
         Ok(b)
     }
 
+    /// Assign the given `(String, Name)` pair to map to the given `BV`.
+    ///
+    /// This function performs uniquing, so it creates a new version of the
+    /// variable represented by the `(String, Name)` pair rather than overwriting
+    /// the current version.
+    ///
+    /// Returns `Err` if the assignment can't be performed.
+    /// (As of this writing, the only reason an `Err` might be returned is that
+    /// creating the new version of the `BV` would exceed `max_versions_of_name`
+    /// -- see [`VarMap::new()`](struct.VarMap.html#method.new).)
+    pub fn assign_bv_to_name(&mut self, funcname: String, name: Name, bv: V) -> Result<(), &'static str> {
+        let new_version_num = self.version_num.entry(funcname.clone(), name.clone())
+            .and_modify(|v| *v += 1)  // increment if it already exists in map
+            .or_insert(0);  // insert a 0 if it didn't exist in map
+        if *new_version_num > self.max_version_num {
+            Err("Exceeded maximum number of versions of that `Name`")
+        } else {
+            // We don't actually use the new_version_num except for the above check,
+            // since we aren't creating a new BV that needs a versioned name
+            debug!("Assigning bv var {:?} = {:?}", name, bv);
+            self.active_version.insert(funcname, name, BVorBool::bv(bv));
+            Ok(())
+        }
+    }
+
+    /// Assign the given `(String, Name)` pair to map to the given `Bool`.
+    ///
+    /// This function performs uniquing, so it creates a new version of the
+    /// variable represented by the `(String, Name)` pair rather than overwriting
+    /// the current version.
+    ///
+    /// Returns `Err` if the assignment can't be performed.
+    /// (As of this writing, the only reason an `Err` might be returned is that
+    /// creating the new version of the `Bool` would exceed `max_versions_of_name`
+    /// -- see [`VarMap::new()`](struct.VarMap.html#method.new).)
+    pub fn assign_bool_to_name(&mut self, funcname: String, name: Name, b: B) -> Result<(), &'static str> {
+        let new_version_num = self.version_num.entry(funcname.clone(), name.clone())
+            .and_modify(|v| *v += 1)  // increment if it already exists in map
+            .or_insert(0);  // insert a 0 if it didn't exist in map
+        if *new_version_num > self.max_version_num {
+            Err("Exceeded maximum number of versions of that `Name`")
+        } else {
+            // We don't actually use the new_version_num except for the above check,
+            // since we aren't creating a new BV that needs a versioned name
+            debug!("Assigning bool var {:?} = {:?}", name, b);
+            self.active_version.insert(funcname, name, BVorBool::bool(b));
+            Ok(())
+        }
+    }
+
     /// Look up the most recent `BV` created for the given `(String, Name)` pair
     pub fn lookup_bv_var(&self, funcname: &String, name: &Name) -> V {
         debug!("Looking up var {:?} from function {:?}", name, funcname);
@@ -201,6 +251,24 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
         }).clone().into_bool(self.ctx)
+    }
+
+    /// Overwrite the latest version of the given `(String, Name)` pair to instead be `bv`.
+    /// The `(String, Name)` pair must have already been previously assigned a value.
+    pub fn overwrite_latest_version_of_bv(&mut self, funcname: &String, name: &Name, bv: V) {
+        let mapvalue: &mut BVorBool<V, B> = self.active_version
+            .get_mut(funcname, name)
+            .expect("failed to find current active version in map");
+        *mapvalue = BVorBool::bv(bv);
+    }
+
+    /// Overwrite the latest version of the given `(String, Name)` pair to instead be `b`.
+    /// The `(String, Name)` pair must have already been previously assigned a value.
+    pub fn overwrite_latest_version_of_bool(&mut self, funcname: &String, name: &Name, b: B) {
+        let mapvalue: &mut BVorBool<V, B> = self.active_version
+            .get_mut(funcname, name)
+            .expect("failed to find current active version in map");
+        *mapvalue = BVorBool::bool(b);
     }
 
     /// Given a `Name` (from a particular function), creates a new version of it

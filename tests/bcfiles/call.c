@@ -44,8 +44,13 @@ int caller_with_loop(int x) {
 
 __attribute__((noinline)) int recursive_simple(int x) {
   int y = x * 2;
-  if (y > 25) return y;
-  return recursive_simple(y) - 44;
+  if (x < -1000) {
+    return -1;
+  } else if (y > 25) {
+    return y;
+  } else {
+    return recursive_simple(y) - 44;
+  }
 }
 
 __attribute__((noinline)) int recursive_double(int x) {

@@ -198,48 +198,88 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
         self.get_a_solution_for_bool(&b)
     }
 
-    /// Create a new `BV` for the given `Name` (in the current function).
+    /// Create a new (unconstrained) `BV` for the given `Name` (in the current function).
+    ///
     /// This function performs uniquing, so if you call it twice
     /// with the same `Name`-`Function` pair, you will get two different `BV`s.
+    ///
     /// Returns the new `BV`, or `Err` if it can't be created.
     /// (As of this writing, the only reason an `Err` might be returned is that
     /// creating the new `BV` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
+    ///
     /// Also, we assume that no two `Function`s share the same name.
     pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<B::BV, &'static str> {
         self.varmap.new_bv_with_name(self.cur_loc.func.name.clone(), name, bits)
     }
 
-    /// Create a new `Bool` for the given `Name` (in the current function).
+    /// Create a new (unconstrained) `Bool` for the given `Name` (in the current function).
+    ///
     /// This function performs uniquing, so if you call it twice
     /// with the same `Name`-`Function` pair, you will get two different `Bool`s.
+    ///
     /// Returns the new `Bool`, or `Err` if it can't be created.
     /// (As of this writing, the only reason an `Err` might be returned is that
     /// creating the new `Bool` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
+    ///
     /// Also, we assume that no two `Function`s share the same name.
     pub fn new_bool_with_name(&mut self, name: Name) -> Result<B::Bool, &'static str> {
         self.varmap.new_bool_with_name(self.cur_loc.func.name.clone(), name)
+    }
+
+    /// Assign the given `BV` to the given `Name` (in the current function).
+    ///
+    /// This function performs uniquing, so it creates a new version of the
+    /// variable represented by the `(String, Name)` pair rather than overwriting
+    /// the current version.
+    ///
+    /// Returns `Err` if the assignment can't be performed.
+    /// (As of this writing, the only reason an `Err` might be returned is that
+    /// creating the new version of the `BV` would exceed `max_versions_of_name`
+    /// -- see [`State::new()`](struct.State.html#method.new).)
+    pub fn assign_bv_to_name(&mut self, name: Name, bv: B::BV) -> Result<(), &'static str> {
+        self.varmap.assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
+    }
+
+    /// Assign the given `Bool` to the given `Name` (in the current function).
+    ///
+    /// This function performs uniquing, so it creates a new version of the
+    /// variable represented by the `(String, Name)` pair rather than overwriting
+    /// the current version.
+    ///
+    /// Returns `Err` if the assignment can't be performed.
+    /// (As of this writing, the only reason an `Err` might be returned is that
+    /// creating the new version of the `Bool` would exceed `max_versions_of_name`
+    /// -- see [`State::new()`](struct.State.html#method.new).)
+    pub fn assign_bool_to_name(&mut self, name: Name, b: B::Bool) -> Result<(), &'static str> {
+        self.varmap.assign_bool_to_name(self.cur_loc.func.name.clone(), name, b)
     }
 
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
     /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
     pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<(), &'static str> {
-        let bits = size(&thing.get_type());
-        let result = self.new_bv_with_name(thing.get_result().clone(), bits as u32)?;
-        self.assert(&result._eq(&resultval));
-        Ok(())
+        self.assign_bv_to_name(thing.get_result().clone(), resultval)
     }
 
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
     /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
     pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: B::Bool) -> Result<(), &'static str> {
-        assert_eq!(thing.get_type(), Type::bool());
-        let result = self.new_bool_with_name(thing.get_result().clone())?;
-        self.assert(&result._eq(&resultval));
-        Ok(())
+        self.assign_bool_to_name(thing.get_result().clone(), resultval)
+    }
+
+    /// Overwrite the latest version of the given `Name` to instead be `bv`.
+    /// Assumes `Name` is in the current function.
+    pub fn overwrite_latest_version_of_bv(&mut self, name: &Name, bv: B::BV) {
+        self.varmap.overwrite_latest_version_of_bv(&self.cur_loc.func.name, name, bv)
+    }
+
+    /// Overwrite the latest version of the given `Name` to instead be `b`.
+    /// Assumes `Name` is in the current function.
+    pub fn overwrite_latest_version_of_bool(&mut self, name: &Name, b: B::Bool) {
+        self.varmap.overwrite_latest_version_of_bool(&self.cur_loc.func.name, name, b)
     }
 
     /// Convert an `Operand` to the appropriate `BV`.

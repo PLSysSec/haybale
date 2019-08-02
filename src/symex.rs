@@ -212,12 +212,9 @@ fn symex_from_inst_in_bb<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, bb: &'m Ba
                             Instruction::Call(call) => call,
                             _ => panic!("Malformed callsite: expected a Call, got {:?}", call),
                         };
-                        match state.new_bv_with_name(call.dest.as_ref().unwrap().clone(), size(&call.get_type()) as u32) {
-                            Ok(result) => state.assert(&result._eq(&bv)),
-                            Err(_) => {
-                                // This path is dead, try backtracking again
-                                return backtrack_and_continue(state);
-                            }
+                        if state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv).is_err() {
+                            // This path is dead, try backtracking again
+                            return backtrack_and_continue(state);
                         };
                     },
                     SymexResult::ReturnedVoid => { },
@@ -462,8 +459,7 @@ fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction
             state.cur_loc.func = callee;
             state.cur_loc.bbname = bb.name.clone();
             for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
-                let z3param = state.new_bv_with_name(param.name.clone(), size(&param.get_type()) as u32)?;  // have to do the new_bv_with_name calls after changing state.cur_loc, so that the variables are created in the callee function
-                state.assert(&z3param._eq(&z3arg));
+                state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
             }
             let returned_bv = symex_from_bb_through_end_of_function(state, &bb).ok_or("No more valid paths through callee")?;
             match state.pop_callsite() {
@@ -477,8 +473,7 @@ fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction
                     match returned_bv {
                         SymexResult::Returned(bv) => {
                             // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
-                            let result = state.new_bv_with_name(call.dest.as_ref().unwrap().clone(), size(&call.get_type()) as u32)?;
-                            state.assert(&result._eq(&bv));
+                            state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
                         },
                         SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
                     };
@@ -993,12 +988,17 @@ mod tests {
         let func = module.get_func_by_name("recursive_simple").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 5)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 4, 1, 4, 1, 7, 4, 4, 4, 4]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 4, 1, 7, 4, 4, 4]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 1, 4, 1, 7, 4, 4]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 1, 7, 4]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 7]));
-        assert_eq!(paths.len(), 5);  // ensure there are no more paths
+        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
+        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
+        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
+        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6]));
+        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6]));
+        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 9, 6, 6]));
+        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 9, 6]));
+        assert_eq!(paths[7], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 9, 6]));
+        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 4, 9]));
+        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 9]));
+        assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
     #[test]
