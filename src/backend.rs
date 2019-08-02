@@ -300,7 +300,7 @@ impl<'ctx> Array<'ctx> for z3::ast::Array<'ctx> {
     type Value = z3::ast::BV<'ctx>;
 
     fn new(ctx: &'ctx z3::Context, name: impl Into<z3::Symbol>, indexbits: u32, valuebits: u32) -> Self {
-        Self::new_const(ctx, name, &ctx.bitvector_sort(indexbits), &ctx.bitvector_sort(valuebits))
+        Self::new_const(ctx, name, &z3::Sort::bitvector(ctx, indexbits), &z3::Sort::bitvector(ctx, valuebits))
     }
     fn select(&self, index: Self::Index) -> Self::Value {
         self.select(&index.into()).try_into().unwrap()
