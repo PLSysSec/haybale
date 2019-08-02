@@ -4,16 +4,16 @@ mod symex;
 pub use symex::*;
 
 mod size;
-use size::size;
+pub use size::size;
 
 mod state;
 mod memory;
 mod alloc;
-mod solver;
+pub mod solver;
 mod varmap;
 mod double_keyed_map;
 
-mod backend;
+pub mod backend;
 use backend::*;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
