@@ -124,7 +124,7 @@ impl<'ctx> Solver<'ctx> {
         if self.check() {
             // check() was successful, i.e. we are sat. Generate the model.
             self.model = Some(self.z3_solver.get_model());
-            debug!("Generated model:\n{}", self.current_model_to_pretty_string());
+            debug!("Generated model:\n{}\n", self.current_model_to_pretty_string());
         }
     }
 
