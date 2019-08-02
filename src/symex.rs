@@ -10,6 +10,7 @@ use crate::size::size;
 use crate::backend::*;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
+/// The function's parameters will start completely unconstrained.
 ///
 /// `loop_bound`: maximum number of times to execute any given line of LLVM IR.
 /// This bounds both the number of iterations of loops, and also the depth of recursion.
@@ -74,8 +75,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
         &mut self.state
     }
 
-    /// Provides access to the `BV` objects representing each of the function's
-    /// parameters, in order
+    /// Provides access to the `BV` objects representing each of the function's parameters
     pub fn param_bvs(&self) -> &Vec<B::BV> {
         &self.z3params
     }

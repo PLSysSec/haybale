@@ -70,6 +70,10 @@ impl SolutionValue {
 /// For inner loops, this bounds the number of total iterations across all invocations of the loop.
 ///
 /// Returns `None` if there are no values of the inputs such that the function returns zero.
+///
+/// Note: `find_zero_of_func()` may be of some use itself, but is included in the
+/// crate more as an example of how you can use the other public functions in the
+/// crate.
 pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();
     let ctx = z3::Context::new(&cfg);

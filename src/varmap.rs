@@ -1,4 +1,5 @@
-// we have some methods on `VarMap` that may not currently be used by callers, but they still make sense to be part of `VarMap`
+// we have some methods on `VarMap` and/or `BVorBool` that may not currently be
+// used by callers, but they still make sense to be part of `VarMap`/`BVorBool`
 #![allow(dead_code)]
 
 use crate::double_keyed_map::DoubleKeyedMap;
@@ -147,10 +148,13 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
         }
     }
 
-    /// Create a new `BV` for the given `(String, Name)` pair.
+    /// Create a new (unconstrained) `BV` for the given `(String, Name)` pair.
+    ///
     /// This function performs uniquing, so if you call it twice
     /// with the same `(String, Name)` pair, you will get two different `BV`s.
+    ///
     /// Returns the new `BV`, or `Err` if it can't be created.
+    ///
     /// (As of this writing, the only reason an `Err` might be returned is that
     /// creating the new `BV` would exceed `max_versions_of_name` -- see
     /// [`VarMap::new()`](struct.VarMap.html#method.new).)
@@ -162,10 +166,13 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
         Ok(bv)
     }
 
-    /// Create a new `Bool` for the given `(String, Name)` pair.
+    /// Create a new (unconstrained) `Bool` for the given `(String, Name)` pair.
+    ///
     /// This function performs uniquing, so if you call it twice
     /// with the same `(String, Name)` pair, you will get two different `Bool`s.
+    ///
     /// Returns the new `Bool`, or `Err` if it can't be created.
+    ///
     /// (As of this writing, the only reason an `Err` might be returned is that
     /// creating the new `Bool` would exceed `max_versions_of_name` -- see
     /// [`VarMap::new()`](struct.VarMap.html#method.new).)
@@ -204,18 +211,22 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
             .and_modify(|v| *v += 1)  // increment if it already exists in map
             .or_insert(0);  // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
-            return Err("Exceeded maximum number of versions of that `Name`");
+            Err("Exceeded maximum number of versions of that `Name`")
+        } else {
+            Ok(Self::build_versioned_name(funcname, name, *new_version_num))
         }
-        //let mut suffix = "_".to_string();
-        //suffix.push_str(&new_version_num.to_string());
-        //let funcname_prefix: String = "@".to_owned() + funcname;
+    }
+
+    /// Given a `Name` (from a particular function) and a version number, build the corresponding
+    /// `z3::Symbol`.
+    ///
+    /// This function does not modify (or even use) the current state of the `VarMap`.
+    fn build_versioned_name(funcname: &str, name: &Name, version_num: usize) -> z3::Symbol {
         let (name_prefix, stem): (&str, String) = match name {
             Name::Name(s) => ("name_", s.clone()),
             Name::Number(n) => ("%", n.to_string()),
         };
-        //funcname_prefix.push_str(&stem);
-        //funcname_prefix.push_str(&suffix);
-        Ok(z3::Symbol::String("@".to_owned() + funcname + "_" + name_prefix + &stem + "_" + &new_version_num.to_string()))
+        z3::Symbol::String("@".to_owned() + funcname + "_" + name_prefix + &stem + "_" + &version_num.to_string())
     }
 
     /// Get a `RestoreInfo` which can later be used with `restore_fn_vars()` to
