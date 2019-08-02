@@ -282,7 +282,7 @@ fn symex_icmp<'ctx, B>(state: &mut State<'ctx, '_, B>, icmp: &instruction::ICmp)
     debug!("Symexing icmp {:?}", icmp);
     let z3firstop = state.operand_to_bv(&icmp.operand0);
     let z3secondop = state.operand_to_bv(&icmp.operand1);
-    let z3pred: Box<FnOnce(&B::BV, &B::BV) -> B::Bool + 'ctx> = intpred_to_z3pred::<B>(icmp.predicate);
+    let z3pred = intpred_to_z3pred::<B>(icmp.predicate);
     state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
 }
 
