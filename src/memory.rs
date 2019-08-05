@@ -1,9 +1,11 @@
 use crate::backend::*;
 use std::convert::TryInto;
+use std::rc::Rc;
+use std::cell::RefCell;
 use log::debug;
 
 #[derive(Clone)]
-pub struct Memory<'ctx, A, V> where A: Array<'ctx, Index=V, Value=V>, V: BV<'ctx> {
+pub struct Memory<'ctx, A, V, S> where A: Array<'ctx, Index=V, Value=V, BackendState=S>, V: BV<'ctx> {
     ctx: &'ctx z3::Context,
     mem: A,
     cell_bytes_as_bv: V,
@@ -11,7 +13,7 @@ pub struct Memory<'ctx, A, V> where A: Array<'ctx, Index=V, Value=V>, V: BV<'ctx
     log_bits_in_byte_as_wide_bv: V,
 }
 
-impl<'ctx, A, V> Memory<'ctx, A, V> where A: Array<'ctx, Index=V, Value=V>, V: BV<'ctx> {
+impl<'ctx, A, V, S> Memory<'ctx, A, V, S> where A: Array<'ctx, Index=V, Value=V, BackendState=S>, V: BV<'ctx> {
     pub const INDEX_BITS: u32 = 64;  // memory takes 64-bit indices
     pub const CELL_BITS: u32 = 64;  // memory "cells" are also 64-bit sized; we will mask if smaller operations are needed
     pub const BITS_IN_BYTE: u32 = 8;
@@ -19,11 +21,11 @@ impl<'ctx, A, V> Memory<'ctx, A, V> where A: Array<'ctx, Index=V, Value=V>, V: B
     pub const CELL_BYTES: u32 = Self::CELL_BITS / Self::BITS_IN_BYTE;  // how many bytes in a cell
     pub const LOG_CELL_BYTES: u32 = 3;  // log base 2 of CELL_BYTES. This many of the bottom index bits determine cell offset.
 
-    pub fn new(ctx: &'ctx z3::Context) -> Self {
+    pub fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<S>>) -> Self {
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
         Self {
             ctx,
-            mem: A::new(&ctx, "mem", log_num_cells, Self::CELL_BITS),
+            mem: A::new(&ctx, backend_state, "mem", log_num_cells, Self::CELL_BITS),
             cell_bytes_as_bv: V::from_u64(ctx, u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
             log_bits_in_byte_as_bv: V::from_u64(ctx, u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
             log_bits_in_byte_as_wide_bv: V::from_u64(ctx, u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
@@ -227,21 +229,27 @@ mod tests {
     use super::Memory;
     use crate::solver::Solver;
     use z3::ast::{Array, BV};
+    use std::rc::Rc;
+    use std::cell::RefCell;
+
+    fn blank_mem(ctx: &z3::Context) -> Memory<Array, BV, ()> {
+        Memory::<Array, BV, ()>::new(&ctx, Rc::new(RefCell::new(())))
+    }
 
     #[test]
     fn read_and_write_to_cell_zero() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store data to address 0
         let data_val = 0x12345678;
-        let data = BV::from_u64(&ctx, data_val, Memory::<Array, BV>::CELL_BITS);
-        let zero = BV::from_u64(&ctx, 0, Memory::<Array, BV>::INDEX_BITS);
+        let data = BV::from_u64(&ctx, data_val, Memory::<Array, BV, ()>::CELL_BITS);
+        let zero = BV::from_u64(&ctx, 0, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&zero, data);
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&zero, Memory::<Array, BV>::CELL_BITS);
+        let read_bv = mem.read(&zero, Memory::<Array, BV, ()>::CELL_BITS);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, data_val);
     }
@@ -249,17 +257,17 @@ mod tests {
     #[test]
     fn read_and_write_cell_aligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store data to a nonzero, but aligned, address
         let data_val = 0x12345678;
-        let data = BV::from_u64(&ctx, data_val, Memory::<Array, BV>::CELL_BITS);
-        let aligned = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let data = BV::from_u64(&ctx, data_val, Memory::<Array, BV, ()>::CELL_BITS);
+        let aligned = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&aligned, data);
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&aligned, Memory::<Array, BV>::CELL_BITS);
+        let read_bv = mem.read(&aligned, Memory::<Array, BV, ()>::CELL_BITS);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, data_val);
     }
@@ -268,13 +276,13 @@ mod tests {
     fn read_and_write_small() {
         let _ = env_logger::builder().is_test(true).try_init();
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data
         let data_val = 0x4F;
         let data = BV::from_u64(&ctx, data_val, 8);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, data);
 
         // Ensure that we can read it back again
@@ -286,13 +294,13 @@ mod tests {
     #[test]
     fn read_and_write_unaligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
         let data = BV::from_u64(&ctx, data_val, 8);
-        let unaligned = BV::from_u64(&ctx, 0x10001, Memory::<Array, BV>::INDEX_BITS);
+        let unaligned = BV::from_u64(&ctx, 0x10001, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&unaligned, data);
 
         // Ensure that we can read it back again
@@ -304,17 +312,17 @@ mod tests {
     #[test]
     fn read_and_write_across_cell_boundaries() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 64 bits of data such that half is in one cell and half in the next
         let data_val: u64 = 0x12345678_9abcdef0;
-        let data = BV::from_u64(&ctx, data_val, Memory::<Array, BV>::CELL_BITS);
-        let addr = BV::from_u64(&ctx, 0x10004, Memory::<Array, BV>::INDEX_BITS);
+        let data = BV::from_u64(&ctx, data_val, Memory::<Array, BV, ()>::CELL_BITS);
+        let addr = BV::from_u64(&ctx, 0x10004, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, data);
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, Memory::<Array, BV>::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::<Array, BV, ()>::CELL_BITS);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, data_val);
     }
@@ -322,15 +330,15 @@ mod tests {
     #[test]
     fn read_and_write_twocells() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store two cells' worth of data
         let data_val_0: u64 = 0x12345678_9abcdef0;
         let data_val_1: u64 = 0x2468ace0_13579bdf;
         let write_val = BV::from_u64(&ctx, data_val_1, 64).concat(&BV::from_u64(&ctx, data_val_0, 64));
-        assert_eq!(write_val.get_size(), 2*Memory::<Array, BV>::CELL_BITS);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        assert_eq!(write_val.get_size(), 2*Memory::<Array, BV, ()>::CELL_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, write_val);
 
         // Ensure that we can read it back again
@@ -344,7 +352,7 @@ mod tests {
     #[test]
     fn read_and_write_200bits() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 200 bits of data
@@ -357,7 +365,7 @@ mod tests {
             .concat(&BV::from_u64(&ctx, data_val_1, 64))
             .concat(&BV::from_u64(&ctx, data_val_0, 64));
         assert_eq!(write_val.get_size(), 200);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, write_val);
 
         // Ensure that we can read it back again
@@ -375,13 +383,13 @@ mod tests {
     #[test]
     fn write_twice_read_once() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data
         let data_val = 0x4F;
         let data = BV::from_u64(&ctx, data_val, 8);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, data);
 
         // Store a different 8 bits of data to the same address
@@ -398,19 +406,19 @@ mod tests {
     #[test]
     fn write_different_cells() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
         let data = BV::from_u64(&ctx, data_val, 32);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, data);
 
         // Store a different 32 bits of data to a different cell
         let data_val_2 = 0xfedc_ba98;
         let data_2 = BV::from_u64(&ctx, data_val_2, 32);
-        let addr_2 = BV::from_u64(&ctx, 0x10008, Memory::<Array, BV>::INDEX_BITS);
+        let addr_2 = BV::from_u64(&ctx, 0x10008, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr_2, data_2);
 
         // Ensure that we can read them both individually
@@ -425,19 +433,19 @@ mod tests {
     #[test]
     fn write_different_places_within_cell() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
         let data = BV::from_u64(&ctx, data_val, 32);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, data);
 
         // Store a different 32 bits of data to the other half of the cell
         let data_val_2 = 0xfedc_ba98;
         let data_2 = BV::from_u64(&ctx, data_val_2, 32);
-        let addr_2 = BV::from_u64(&ctx, 0x10004, Memory::<Array, BV>::INDEX_BITS);
+        let addr_2 = BV::from_u64(&ctx, 0x10004, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr_2, data_2);
 
         // Ensure that we can read them both individually
@@ -452,18 +460,18 @@ mod tests {
     #[test]
     fn write_small_read_big() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
         let data = BV::from_u64(&ctx, data_val, 8);
-        let unaligned = BV::from_u64(&ctx, 0x10001, Memory::<Array, BV>::INDEX_BITS);
+        let unaligned = BV::from_u64(&ctx, 0x10001, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&unaligned, data.clone());
 
         // Ensure that reading from beginning of the cell adds zeroed low-order bits
         // (we are little-endian)
-        let aligned = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let aligned = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         let read_bv = mem.read(&aligned, 16);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, 0x4F00);
@@ -474,8 +482,8 @@ mod tests {
         assert_eq!(read_val, 0x004F);
 
         // Ensure that reading elsewhere gives all zeroes
-        let garbage_addr_1 = BV::from_u64(&ctx, 0x10004, Memory::<Array, BV>::INDEX_BITS);
-        let garbage_addr_2 = BV::from_u64(&ctx, 0x10008, Memory::<Array, BV>::INDEX_BITS);
+        let garbage_addr_1 = BV::from_u64(&ctx, 0x10004, Memory::<Array, BV, ()>::INDEX_BITS);
+        let garbage_addr_2 = BV::from_u64(&ctx, 0x10008, Memory::<Array, BV, ()>::INDEX_BITS);
         let read_bv_1 = mem.read(&garbage_addr_1, 8);
         let read_bv_2 = mem.read(&garbage_addr_2, 8);
         let read_val_1 = solver.get_a_solution_for_bv(&read_bv_1).unwrap();
@@ -487,13 +495,13 @@ mod tests {
     #[test]
     fn write_big_read_small() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 32 bits of data to offset 2 in a cell
         let data_val = 0x12345678;
         let data = BV::from_u64(&ctx, data_val, 32);
-        let offset_2 = BV::from_u64(&ctx, 0x10002, Memory::<Array, BV>::INDEX_BITS);
+        let offset_2 = BV::from_u64(&ctx, 0x10002, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&offset_2, data.clone());
 
         // Ensure that reading 8 bits from offset 2 gives the low-order byte
@@ -504,13 +512,13 @@ mod tests {
 
         // Ensure that reading 8 bits from offset 5 gives the high-order byte
         // (we are little-endian)
-        let offset_5 = BV::from_u64(&ctx, 0x10005, Memory::<Array, BV>::INDEX_BITS);
+        let offset_5 = BV::from_u64(&ctx, 0x10005, Memory::<Array, BV, ()>::INDEX_BITS);
         let read_bv = mem.read(&offset_5, 8);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, 0x12);
 
         // Ensure that reading 16 bits from offset 3 gives the middle two bytes
-        let offset_3 = BV::from_u64(&ctx, 0x10003, Memory::<Array, BV>::INDEX_BITS);
+        let offset_3 = BV::from_u64(&ctx, 0x10003, Memory::<Array, BV, ()>::INDEX_BITS);
         let read_bv = mem.read(&offset_3, 16);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, 0x3456);
@@ -519,12 +527,12 @@ mod tests {
     #[test]
     fn partial_overwrite_aligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Write an entire cell
-        let data = BV::from_u64(&ctx, 0x12345678_12345678, Memory::<Array, BV>::CELL_BITS);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let data = BV::from_u64(&ctx, 0x12345678_12345678, Memory::<Array, BV, ()>::CELL_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, data);
 
         // Write over just the first part
@@ -538,7 +546,7 @@ mod tests {
         assert_eq!(read_val, overwrite_data_val);
 
         // Ensure that reading the whole cell back reflects the partial overwrite
-        let read_bv = mem.read(&addr, Memory::<Array, BV>::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::<Array, BV, ()>::CELL_BITS);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, 0x12345678_1234dcba);
     }
@@ -546,16 +554,16 @@ mod tests {
     #[test]
     fn partial_overwrite_unaligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::<Array, BV>::new(&ctx);
+        let mut mem = blank_mem(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Write an entire cell
-        let data = BV::from_u64(&ctx, 0x12345678_12345678, Memory::<Array, BV>::CELL_BITS);
-        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV>::INDEX_BITS);
+        let data = BV::from_u64(&ctx, 0x12345678_12345678, Memory::<Array, BV, ()>::CELL_BITS);
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::<Array, BV, ()>::INDEX_BITS);
         mem.write(&addr, data);
 
         // Write over just part of the middle
-        let overwrite_addr = BV::from_u64(&ctx, 0x10002, Memory::<Array, BV>::INDEX_BITS);
+        let overwrite_addr = BV::from_u64(&ctx, 0x10002, Memory::<Array, BV, ()>::INDEX_BITS);
         let overwrite_data_val = 0xdcba;
         let overwrite_data = BV::from_u64(&ctx, overwrite_data_val, 16);
         mem.write(&overwrite_addr, overwrite_data);
@@ -566,12 +574,12 @@ mod tests {
         assert_eq!(read_val, overwrite_data_val);
 
         // Ensure that reading the whole cell back reflects the partial overwrite
-        let read_bv = mem.read(&addr, Memory::<Array, BV>::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::<Array, BV, ()>::CELL_BITS);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, 0x12345678_dcba5678);
 
         // Now a different partial read with some original data and some overwritten
-        let new_addr = BV::from_u64(&ctx, 0x10003, Memory::<Array, BV>::INDEX_BITS);
+        let new_addr = BV::from_u64(&ctx, 0x10003, Memory::<Array, BV, ()>::INDEX_BITS);
         let read_bv = mem.read(&new_addr, 16);
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert_eq!(read_val, 0x78dc);

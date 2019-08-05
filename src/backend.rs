@@ -1,12 +1,20 @@
 use std::convert::TryInto;
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 /// A `Backend` is just a collection of types which together implement the necessary traits
 pub trait Backend<'ctx> : 'ctx {
     type BV: BV<'ctx, AssociatedBool = Self::Bool> + 'ctx;
     type Bool: Bool<'ctx, AssociatedBV = Self::BV> + 'ctx;
-    type Array: Array<'ctx, Index=Self::BV, Value=Self::BV> + 'ctx;
-    type Solver: Solver<'ctx, Constraint=Self::Bool, Value=Self::BV> + 'ctx;
+    type Array: Array<'ctx, Index=Self::BV, Value=Self::BV, BackendState=Self::State> + 'ctx;
+    type Solver: Solver<'ctx, Constraint=Self::Bool, Value=Self::BV, BackendState=Self::State> + 'ctx;
+    /// Any additional state that the `Backend` needs. This will be stored in the
+    /// `state::State` struct.
+    ///
+    /// Must be `Default`, and the `default()` method will be used to construct
+    /// the initial backend state when a blank `state::State` is constructed.
+    type State: Clone + Default;
 }
 
 /// Trait for things which can act like bitvectors
@@ -91,8 +99,9 @@ pub trait Bool<'ctx> : Clone + PartialEq + Eq + fmt::Debug {
 pub trait Array<'ctx> : Clone + PartialEq + Eq {
     type Index: BV<'ctx>;
     type Value: BV<'ctx>;
+    type BackendState;
 
-    fn new(ctx: &'ctx z3::Context, name: impl Into<z3::Symbol>, indexbits: u32, valuebits: u32) -> Self;
+    fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>, name: impl Into<z3::Symbol>, indexbits: u32, valuebits: u32) -> Self;
     fn select(&self, index: Self::Index) -> Self::Value;
     fn store(&self, index: Self::Index, value: Self::Value) -> Self;
     fn simplify(&self) -> Self {
@@ -104,8 +113,9 @@ pub trait Array<'ctx> : Clone + PartialEq + Eq {
 pub trait Solver<'ctx> {
     type Constraint: Bool<'ctx>;
     type Value: BV<'ctx>;
+    type BackendState;
 
-    fn new(ctx: &'ctx z3::Context) -> Self;
+    fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
     fn assert(&mut self, constraint: &Self::Constraint);
     fn check(&mut self) -> bool;
     fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> bool where Self::Constraint: 'a;
@@ -298,8 +308,9 @@ impl<'ctx> Bool<'ctx> for z3::ast::Bool<'ctx> {
 impl<'ctx> Array<'ctx> for z3::ast::Array<'ctx> {
     type Index = z3::ast::BV<'ctx>;
     type Value = z3::ast::BV<'ctx>;
+    type BackendState = ();
 
-    fn new(ctx: &'ctx z3::Context, name: impl Into<z3::Symbol>, indexbits: u32, valuebits: u32) -> Self {
+    fn new(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>, name: impl Into<z3::Symbol>, indexbits: u32, valuebits: u32) -> Self {
         Self::new_const(ctx, name, &z3::Sort::bitvector(ctx, indexbits), &z3::Sort::bitvector(ctx, valuebits))
     }
     fn select(&self, index: Self::Index) -> Self::Value {
@@ -316,8 +327,9 @@ impl<'ctx> Array<'ctx> for z3::ast::Array<'ctx> {
 impl<'ctx> Solver<'ctx> for crate::solver::Solver<'ctx> {
     type Constraint = z3::ast::Bool<'ctx>;
     type Value = z3::ast::BV<'ctx>;
+    type BackendState = ();
 
-    fn new(ctx: &'ctx z3::Context) -> Self {
+    fn new(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
         crate::solver::Solver::new(ctx)
     }
     fn assert(&mut self, constraint: &Self::Constraint) {
@@ -358,4 +370,5 @@ impl<'ctx> Backend<'ctx> for Z3Backend<'ctx> {
     type Bool = z3::ast::Bool<'ctx>;
     type Array = z3::ast::Array<'ctx>;
     type Solver = crate::solver::Solver<'ctx>;
+    type State = ();
 }

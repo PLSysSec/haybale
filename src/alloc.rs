@@ -20,10 +20,10 @@ impl Alloc {
     //   - for sizes > cell size, allocation always starts at a cell boundary
     pub fn alloc(&mut self, bits: impl Into<u64>) -> u64 {
         let bits: u64 = bits.into();
-        let bits_in_byte: u64 = Memory::<z3::ast::Array, z3::ast::BV>::BITS_IN_BYTE.into();
-        let cell_bytes: u64 = Memory::<z3::ast::Array, z3::ast::BV>::CELL_BYTES.into();
+        let bits_in_byte: u64 = Memory::<z3::ast::Array, z3::ast::BV, ()>::BITS_IN_BYTE.into();
+        let cell_bytes: u64 = Memory::<z3::ast::Array, z3::ast::BV, ()>::CELL_BYTES.into();
         if bits % bits_in_byte != 0 {
-            unimplemented!("Alloc for {} bits, which is not a multiple of {}", bits, Memory::<z3::ast::Array, z3::ast::BV>::BITS_IN_BYTE);
+            unimplemented!("Alloc for {} bits, which is not a multiple of {}", bits, Memory::<z3::ast::Array, z3::ast::BV, ()>::BITS_IN_BYTE);
         }
         let bytes = bits / bits_in_byte;
         let current_offset_bytes = self.cursor % cell_bytes;

@@ -1,6 +1,8 @@
 use llvm_ir::*;
 use log::debug;
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use crate::memory::Memory;
 use crate::alloc::Alloc;
@@ -19,10 +21,13 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     pub prev_bb_name: Option<Name>,
     /// Log of the basic blocks which have been executed to get to this point
     pub path: Vec<QualifiedBB>,
+    /// A place where `Backend`s can put any additional state they need for
+    /// themselves
+    pub backend_state: Rc<RefCell<B::State>>,
 
     // Private members
     varmap: VarMap<'ctx, B::BV, B::Bool>,
-    mem: Memory<'ctx, B::Array, B::BV>,
+    mem: Memory<'ctx, B::Array, B::BV, B::State>,
     alloc: Alloc,
     solver: B::Solver,
     /// This tracks the call stack of the symbolic execution.
@@ -118,11 +123,13 @@ struct BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
     /// `Memory` representing the state of things at the `BacktrackPoint`.
     /// Copies of a `Memory` should be cheap (just a Z3 object pointer), so it's
     /// not a huge concern that we need a full copy here in order to revert later.
-    mem: Memory<'ctx, B::Array, B::BV>,
+    mem: Memory<'ctx, B::Array, B::BV, B::State>,
     /// The length of `path` at the `BacktrackPoint`.
     /// If we ever revert to this `BacktrackPoint`, we will truncate the `path` to
     /// its first `path_len` entries.
     path_len: usize,
+    /// The backend state at the `BacktrackPoint`.
+    backend_state: B::State,
 }
 
 impl<'ctx, 'm, B> fmt::Display for BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
@@ -139,15 +146,17 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     ///   that is, the maximum number of Z3 objects created for a given LLVM SSA value.
     ///   Used to bound both loop iterations and recursion depth.
     pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, max_versions_of_name: usize) -> Self {
+        let backend_state = Rc::new(RefCell::new(B::State::default()));
         Self {
             ctx,
             cur_loc: start_loc,
             prev_bb_name: None,
             path: Vec::new(),
+            backend_state: backend_state.clone(),
             varmap: VarMap::new(ctx, max_versions_of_name),
-            mem: Memory::new(ctx),
+            mem: Memory::new(ctx, backend_state.clone()),
             alloc: Alloc::new(),
-            solver: B::Solver::new(ctx),
+            solver: B::Solver::new(ctx, backend_state.clone()),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
         }
@@ -389,6 +398,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             varmap: self.varmap.clone(),
             mem: self.mem.clone(),
             path_len: self.path.len(),
+            backend_state: self.backend_state.borrow().clone(),
         });
     }
 
@@ -403,6 +413,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             self.mem = bp.mem;
             self.stack = bp.stack;
             self.path.truncate(bp.path_len);
+            *self.backend_state.borrow_mut() = bp.backend_state;
             self.cur_loc = bp.loc;
             self.prev_bb_name = Some(bp.prev_bb);
             true
