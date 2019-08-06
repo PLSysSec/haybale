@@ -84,6 +84,16 @@ int zero_initialize(int x) {
   return x - ti.el2;
 }
 
+// ensure that non-zero-initializing a struct works properly
+int nonzero_initialize(int x) {
+  volatile struct ThreeInts ti = { 1, 3, 87 };
+  int a = ti.el1 + 2;
+  int b = ti.el2 + 4;
+  int c = ti.el3 + 6;
+  ti.el2 = a + b + c;
+  return x - ti.el2;
+}
+
 // read and write from the first field in Mismatched
 uint8_t mismatched_first(uint8_t x) {
   volatile struct Mismatched mm = { 0 };

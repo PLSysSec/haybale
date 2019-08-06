@@ -96,6 +96,16 @@ fn zero_initialize() {
 }
 
 #[test]
+fn nonzero_initialize() {
+    init_logging();
+    let module = get_module();
+    let func = module.get_func_by_name("nonzero_initialize").expect("Failed to find function");
+    let args = find_zero_of_func(func, &module, 20).expect("Failed to find zero of function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(103));
+}
+
+#[test]
 fn mismatched_first() {
     init_logging();
     let module = get_module();

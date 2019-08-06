@@ -3,12 +3,14 @@ source_filename = "struct.c"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.14.0"
 
+%struct.ThreeInts = type { i32, i32, i32 }
 %struct.OneInt = type { i32 }
 %struct.TwoInts = type { i32, i32 }
-%struct.ThreeInts = type { i32, i32, i32 }
 %struct.Mismatched = type { i8, i32, i8 }
 %struct.Nested = type { %struct.TwoInts, %struct.Mismatched }
 %struct.WithArray = type { %struct.Mismatched, [10 x i32], %struct.Mismatched }
+
+@__const.nonzero_initialize.ti = private unnamed_addr constant %struct.ThreeInts { i32 1, i32 3, i32 87 }, align 4
 
 ; Function Attrs: noinline nounwind optnone ssp uwtable
 define i32 @one_int(i32) #0 {
@@ -173,6 +175,45 @@ define i32 @zero_initialize(i32) #0 {
   %26 = sub nsw i32 %23, %25
   ret i32 %26
 }
+
+; Function Attrs: noinline nounwind optnone ssp uwtable
+define i32 @nonzero_initialize(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca %struct.ThreeInts, align 4
+  %4 = alloca i32, align 4
+  %5 = alloca i32, align 4
+  %6 = alloca i32, align 4
+  store i32 %0, i32* %2, align 4
+  %7 = bitcast %struct.ThreeInts* %3 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %7, i8* align 4 bitcast (%struct.ThreeInts* @__const.nonzero_initialize.ti to i8*), i64 12, i1 true)
+  %8 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 0
+  %9 = load volatile i32, i32* %8, align 4
+  %10 = add nsw i32 %9, 2
+  store i32 %10, i32* %4, align 4
+  %11 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 1
+  %12 = load volatile i32, i32* %11, align 4
+  %13 = add nsw i32 %12, 4
+  store i32 %13, i32* %5, align 4
+  %14 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 2
+  %15 = load volatile i32, i32* %14, align 4
+  %16 = add nsw i32 %15, 6
+  store i32 %16, i32* %6, align 4
+  %17 = load i32, i32* %4, align 4
+  %18 = load i32, i32* %5, align 4
+  %19 = add nsw i32 %17, %18
+  %20 = load i32, i32* %6, align 4
+  %21 = add nsw i32 %19, %20
+  %22 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 1
+  store volatile i32 %21, i32* %22, align 4
+  %23 = load i32, i32* %2, align 4
+  %24 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %3, i32 0, i32 1
+  %25 = load volatile i32, i32* %24, align 4
+  %26 = sub nsw i32 %23, %25
+  ret i32 %26
+}
+
+; Function Attrs: argmemonly nounwind
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture writeonly, i8* nocapture readonly, i64, i1) #1
 
 ; Function Attrs: noinline nounwind optnone ssp uwtable
 define zeroext i8 @mismatched_first(i8 zeroext) #0 {
