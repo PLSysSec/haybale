@@ -1,6 +1,5 @@
 CC=clang-8
 CFLAGS=-O3
-LLVMAS=llvm-as
 
 .PHONY: all
 all: basic.bc basic.ll \
@@ -13,18 +12,24 @@ all: basic.bc basic.ll \
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
 
-%.bc : %.ll
-	$(LLVMAS) $^ -o $@
+%.bc : %.c
+	$(CC) $(CFLAGS) -c -emit-llvm $^ -o $@
 
 # use -O1 on loop.c
 loop.ll : loop.c
 	$(CC) -O1 -S -emit-llvm $^ -o $@
+loop.bc : loop.c
+	$(CC) -O1 -c -emit-llvm $^ -o $@
 
 # use -O0 on struct.c and linkedlist.c
 struct.ll : struct.c
 	$(CC) -O0 -S -emit-llvm $^ -o $@
+struct.bc : struct.c
+	$(CC) -O0 -c -emit-llvm $^ -o $@
 linkedlist.ll : linkedlist.c
 	$(CC) -O0 -S -emit-llvm $^ -o $@
+linkedlist.bc : linkedlist.c
+	$(CC) -O0 -c -emit-llvm $^ -o $@
 
 .PHONY: clean
 clean:
