@@ -4,7 +4,6 @@ use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::memory::Memory;
 use crate::alloc::Alloc;
 use crate::varmap::{VarMap, RestoreInfo};
 use crate::size::size;
@@ -27,7 +26,7 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
 
     // Private members
     varmap: VarMap<'ctx, B::BV, B::Bool>,
-    mem: Memory<'ctx, B::Array, B::BV, B::State>,
+    mem: B::Memory,
     alloc: Alloc,
     solver: B::Solver,
     /// This tracks the call stack of the symbolic execution.
@@ -123,7 +122,7 @@ struct BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
     /// `Memory` representing the state of things at the `BacktrackPoint`.
     /// Copies of a `Memory` should be cheap (just a Z3 object pointer), so it's
     /// not a huge concern that we need a full copy here in order to revert later.
-    mem: Memory<'ctx, B::Array, B::BV, B::State>,
+    mem: B::Memory,
     /// The length of `path` at the `BacktrackPoint`.
     /// If we ever revert to this `BacktrackPoint`, we will truncate the `path` to
     /// its first `path_len` entries.

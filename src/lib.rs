@@ -7,7 +7,7 @@ mod size;
 pub use size::size;
 
 mod state;
-mod memory;
+pub mod memory;
 mod alloc;
 pub mod solver;
 mod varmap;

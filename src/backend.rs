@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -7,7 +6,7 @@ use std::cell::RefCell;
 pub trait Backend<'ctx> : 'ctx {
     type BV: BV<'ctx, AssociatedBool = Self::Bool> + 'ctx;
     type Bool: Bool<'ctx, AssociatedBV = Self::BV> + 'ctx;
-    type Array: Array<'ctx, Index=Self::BV, Value=Self::BV, BackendState=Self::State> + 'ctx;
+    type Memory: Memory<'ctx, Index=Self::BV, Value=Self::BV, BackendState=Self::State> + 'ctx;
     type Solver: Solver<'ctx, Constraint=Self::Bool, Value=Self::BV, BackendState=Self::State> + 'ctx;
     /// Any additional state that the `Backend` needs. This will be stored in the
     /// `state::State` struct.
@@ -95,19 +94,15 @@ pub trait Bool<'ctx> : Clone + PartialEq + Eq + fmt::Debug {
     */
 }
 
-/// Trait for things which can act like arrays of bitvectors, indexed by bitvectors
-pub trait Array<'ctx> : Clone + PartialEq + Eq {
+/// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)
+pub trait Memory<'ctx> : Clone + PartialEq + Eq {
     type Index: BV<'ctx>;
     type Value: BV<'ctx>;
     type BackendState;
 
-    fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>, name: impl Into<z3::Symbol>, indexbits: u32, valuebits: u32) -> Self;
-    fn select(&self, index: Self::Index) -> Self::Value;
-    fn store(&self, index: Self::Index, value: Self::Value) -> Self;
-    fn simplify(&self) -> Self {
-        // default implementation, many implementors will do better
-        self.clone()
-    }
+    fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+    fn read(&self, index: &Self::Index, bits: u32) -> Self::Value;
+    fn write(&mut self, index: &Self::Index, value: Self::Value);
 }
 
 pub trait Solver<'ctx> {
@@ -127,8 +122,8 @@ pub trait Solver<'ctx> {
     fn current_model_to_pretty_string(&self) -> String;
 }
 
-/// The prototypical `BV`, `Bool`, `Array`, and `Solver` implementations:
-///   `z3::ast::BV`, `z3::ast::Bool`, `z3::ast::Array`, and `crate::solver::Solver`
+/// The prototypical `BV`, `Bool`, `Memory`, and `Solver` implementations:
+///   `z3::ast::BV`, `z3::ast::Bool`, `crate::memory::Memory`, and `crate::solver::Solver`
 
 impl<'ctx> BV<'ctx> for z3::ast::BV<'ctx> {
     type AssociatedBool = z3::ast::Bool<'ctx>;
@@ -305,22 +300,19 @@ impl<'ctx> Bool<'ctx> for z3::ast::Bool<'ctx> {
     }
 }
 
-impl<'ctx> Array<'ctx> for z3::ast::Array<'ctx> {
+impl<'ctx> Memory<'ctx> for crate::memory::Memory<'ctx> {
     type Index = z3::ast::BV<'ctx>;
     type Value = z3::ast::BV<'ctx>;
     type BackendState = ();
 
-    fn new(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>, name: impl Into<z3::Symbol>, indexbits: u32, valuebits: u32) -> Self {
-        Self::new_const(ctx, name, &z3::Sort::bitvector(ctx, indexbits), &z3::Sort::bitvector(ctx, valuebits))
+    fn new(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
+        crate::memory::Memory::new(ctx)
     }
-    fn select(&self, index: Self::Index) -> Self::Value {
-        self.select(&index.into()).try_into().unwrap()
+    fn read(&self, index: &Self::Index, bits: u32) -> Self::Value {
+        self.read(index, bits)
     }
-    fn store(&self, index: Self::Index, value: Self::Value) -> Self {
-        self.store(&index.into(), &value.into())
-    }
-    fn simplify(&self) -> Self {
-        z3::ast::Ast::simplify(self)
+    fn write(&mut self, index: &Self::Index, value: Self::Value) {
+        self.write(index, value)
     }
 }
 
@@ -368,7 +360,7 @@ pub struct Z3Backend<'ctx> {
 impl<'ctx> Backend<'ctx> for Z3Backend<'ctx> {
     type BV = z3::ast::BV<'ctx>;
     type Bool = z3::ast::Bool<'ctx>;
-    type Array = z3::ast::Array<'ctx>;
+    type Memory = crate::memory::Memory<'ctx>;
     type Solver = crate::solver::Solver<'ctx>;
     type State = ();
 }
