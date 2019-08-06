@@ -483,25 +483,12 @@ fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction
                 Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
             }
         } else if s.starts_with("llvm.memset") {
-            assert_eq!(call.arguments.len(), 4);
-            assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
-            assert_eq!(call.arguments[1].0.get_type(), Type::i8());
-            assert_eq!(call.get_type(), Type::VoidType);
-            if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = call.arguments[2].0 {
-                let addr = state.operand_to_bv(&call.arguments[0].0);
-                let val = state.operand_to_bv(&call.arguments[1].0);
-                // TODO: this isn't necessarily efficient. But without knowing alignment of addr we can't do better
-                for i in 0 .. num_bytes {
-                    state.write(&addr.add(&BV::from_u64(state.ctx, i, addr.get_size())), val.clone());
-                }
-                Ok(None)
-            } else {
-                unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", call.arguments[2])
-            }
-        } else if s.starts_with("llvm.memcpy") {
-            unimplemented!("LLVM memcpy")
-        } else if s.starts_with("llvm.memmove") {
-            unimplemented!("LLVM memmove")
+            symex_memset(state, call);
+            Ok(None)
+        } else if s.starts_with("llvm.memcpy") || s.starts_with("llvm.memmove") {
+            // Our memcpy implementation also works for memmove
+            symex_memcpy(state, call);
+            Ok(None)
         } else if s.starts_with("llvm.lifetime")
             || s.starts_with("llvm.invariant")
             || s.starts_with("llvm.launder.invariant")
@@ -513,6 +500,41 @@ fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction
         }
     } else {
         panic!("Function with a numbered name, {:?}", funcname)
+    }
+}
+
+fn symex_memset<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call) where B: Backend<'ctx> {
+    assert_eq!(call.arguments.len(), 4);
+    assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
+    assert_eq!(call.arguments[1].0.get_type(), Type::i8());
+    assert_eq!(call.get_type(), Type::VoidType);
+    if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = call.arguments[2].0 {
+        let addr = state.operand_to_bv(&call.arguments[0].0);
+        let val = state.operand_to_bv(&call.arguments[1].0);
+        // TODO: this isn't necessarily efficient
+        for i in 0 .. num_bytes {
+            state.write(&addr.add(&BV::from_u64(state.ctx, i, addr.get_size())), val.clone());
+        }
+    } else {
+        unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", call.arguments[2].0)
+    }
+}
+
+fn symex_memcpy<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call) where B: Backend<'ctx> {
+    assert_eq!(call.arguments.len(), 4);
+    assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
+    assert_eq!(call.arguments[1].0.get_type(), Type::pointer_to(Type::i8()));
+    assert_eq!(call.get_type(), Type::VoidType);
+    if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = call.arguments[2].0 {
+        let dest = state.operand_to_bv(&call.arguments[0].0);
+        let src = state.operand_to_bv(&call.arguments[1].0);
+        // TODO: this isn't necessarily efficient
+        for i in 0 .. num_bytes {
+            let val = state.read(&src.add(&BV::from_u64(state.ctx, i, src.get_size())), 8);
+            state.write(&dest.add(&BV::from_u64(state.ctx, i, dest.get_size())), val);
+        }
+    } else {
+        unimplemented!("LLVM memcpy or memmove with non-constant-int num_bytes {:?}", call.arguments[2].0)
     }
 }
 
