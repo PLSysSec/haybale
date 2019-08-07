@@ -8,6 +8,7 @@ use std::cell::RefCell;
 pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::size::size;
 use crate::backend::*;
+use crate::extend::*;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
 /// The function's parameters will start completely unconstrained.
@@ -413,21 +414,6 @@ fn get_offset<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, mut indices: impl Ite
             }
         }
         _ => panic!("get_offset with base type {:?}", base_type),
-    }
-}
-
-/// Zero-extend a `BV` to the specified number of bits.
-/// The input `BV` can be already the desired size (in which case this function is a no-op)
-/// or smaller (in which case this function will extend),
-/// but not larger (in which case this function will panic).
-fn zero_extend_to_bits<'ctx, V>(bv: V, bits: u32) -> V where V: BV<'ctx> {
-    let cur_bits = bv.get_size();
-    if cur_bits == bits {
-        bv
-    } else if cur_bits < bits {
-        bv.zero_ext(bits - cur_bits)
-    } else {
-        panic!("tried to zero-extend to {} bits, but already had {} bits", bits, cur_bits)
     }
 }
 

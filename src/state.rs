@@ -1,5 +1,7 @@
 use llvm_ir::*;
 use log::debug;
+use reduce::Reduce;
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -8,6 +10,7 @@ use crate::alloc::Alloc;
 use crate::varmap::{VarMap, RestoreInfo};
 use crate::size::size;
 use crate::backend::*;
+use crate::extend::*;
 
 pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// Reference to the Z3 context being used
@@ -29,6 +32,8 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     mem: B::Memory,
     alloc: Alloc,
     solver: B::Solver,
+    /// Map from `Name`s of global variables, to addresses at which they are allocated
+    allocated_globals: HashMap<Name, B::BV>,
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
@@ -146,7 +151,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     ///   Used to bound both loop iterations and recursion depth.
     pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, max_versions_of_name: usize) -> Self {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
-        Self {
+        let mut state = Self {
             ctx,
             cur_loc: start_loc,
             prev_bb_name: None,
@@ -156,9 +161,23 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
             solver: B::Solver::new(ctx, backend_state.clone()),
+            allocated_globals: HashMap::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
+        };
+        // Here we do initialization of the global variables in the Module
+        for var in &state.cur_loc.module.global_vars {
+            if let Type::PointerType { pointee_type, .. } = &var.ty {
+                let addr = state.allocate(size(&*pointee_type) as u64);
+                if let Some(ref c) = var.initializer {
+                    state.write(&addr, state.const_to_bv(c));
+                }
+                state.allocated_globals.insert(var.name.clone(), addr);
+            } else {
+                panic!("Global variable has non-pointer type {:?}", &var.ty);
+            }
         }
+        state
     }
 
     /// Add `cond` as a constraint, i.e., assert that `cond` must be true
@@ -295,14 +314,129 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
     pub fn operand_to_bv(&self, op: &Operand) -> B::BV {
         match op {
-            Operand::ConstantOperand(Constant::Int { bits, value }) => BV::from_u64(self.ctx, *value, *bits),
-            Operand::ConstantOperand(Constant::Null(ty))
-            | Operand::ConstantOperand(Constant::AggregateZero(ty))
-            | Operand::ConstantOperand(Constant::Undef(ty))
-                => BV::from_u64(self.ctx, 0, size(ty) as u32),
+            Operand::ConstantOperand(c) => self.const_to_bv(c),
             Operand::LocalOperand { name, .. } => self.varmap.lookup_bv_var(&self.cur_loc.func.name, name).clone(),
             Operand::MetadataOperand => panic!("Can't convert {:?} to BV", op),
-            _ => unimplemented!("operand_to_bv() for {:?}", op)
+        }
+    }
+
+    /// Convert a `Constant` to the appropriate `BV`.
+    fn const_to_bv(&self, c: &Constant) -> B::BV {
+        match c {
+            Constant::Int { bits, value } => BV::from_u64(self.ctx, *value, *bits),
+            Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty)
+                => BV::from_u64(self.ctx, 0, size(ty) as u32),
+            Constant::Struct { values, .. } => values.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
+            Constant::Array { elements, .. } => elements.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
+            Constant::Vector(elements) => elements.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
+            Constant::GlobalReference { name, .. } => {
+                if let Some(addr) = self.allocated_globals.get(name) {
+                    addr.clone()
+                } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
+                    self.const_to_bv(&alias.aliasee)
+                } else {
+                    panic!("const_to_bv on a GlobalReference but couldn't find {:?} in the module's globals", name)
+                }
+            },
+            Constant::Add(a) => self.const_to_bv(&a.operand0).add(&self.const_to_bv(&a.operand1)),
+            Constant::Sub(s) => self.const_to_bv(&s.operand0).sub(&self.const_to_bv(&s.operand1)),
+            Constant::Mul(m) => self.const_to_bv(&m.operand0).mul(&self.const_to_bv(&m.operand1)),
+            Constant::UDiv(u) => self.const_to_bv(&u.operand0).udiv(&self.const_to_bv(&u.operand1)),
+            Constant::SDiv(s) => self.const_to_bv(&s.operand0).sdiv(&self.const_to_bv(&s.operand1)),
+            Constant::URem(u) => self.const_to_bv(&u.operand0).urem(&self.const_to_bv(&u.operand1)),
+            Constant::SRem(s) => self.const_to_bv(&s.operand0).srem(&self.const_to_bv(&s.operand1)),
+            Constant::And(a) => self.const_to_bv(&a.operand0).and(&self.const_to_bv(&a.operand1)),
+            Constant::Or(o) => self.const_to_bv(&o.operand0).or(&self.const_to_bv(&o.operand1)),
+            Constant::Xor(x) => self.const_to_bv(&x.operand0).xor(&self.const_to_bv(&x.operand1)),
+            Constant::Shl(s) => self.const_to_bv(&s.operand0).shl(&self.const_to_bv(&s.operand1)),
+            Constant::LShr(s) => self.const_to_bv(&s.operand0).lshr(&self.const_to_bv(&s.operand1)),
+            Constant::AShr(s) => self.const_to_bv(&s.operand0).ashr(&self.const_to_bv(&s.operand1)),
+            Constant::ExtractElement(ee) => match &ee.index {
+                Constant::Int { value: index, .. } => match &ee.vector {
+                    Constant::Vector(els) => self.const_to_bv(&els.get(*index as usize).expect("Constant::ExtractElement index out of range")),
+                    c => panic!("Expected ExtractElement.vector to be a Constant::Vector, got {:?}", c),
+                },
+                index => unimplemented!("ExtractElement.index is not a Constant::Int, instead it is {:?}", index),
+            },
+            Constant::InsertElement(ie) => match &ie.index {
+                Constant::Int { value: index, .. } => match &ie.vector {
+                    Constant::Vector(els) => {
+                        let mut els = els.clone();
+                        *els.get_mut(*index as usize).expect("Constant::InsertElement index out of range") = ie.element.clone();
+                        self.const_to_bv(&Constant::Vector(els))
+                    },
+                    c => panic!("Expected InsertElement.vector to be a Constant::Vector, got {:?}", c),
+                },
+                index => unimplemented!("InsertElement.index is not a Constant::Int, instead it is {:?}", index),
+            }
+            Constant::ExtractValue(ev) => self.const_to_bv(Self::simplify_const_ev(&ev.aggregate, ev.indices.iter().copied())),
+            Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(iv.aggregate.clone(), iv.element.clone(), iv.indices.iter().copied())),
+            Constant::Trunc(t) => self.const_to_bv(&t.operand).extract(size(&t.to_type) as u32 - 1, 0),
+            Constant::ZExt(z) => zero_extend_to_bits(self.const_to_bv(&z.operand), size(&z.to_type) as u32),
+            Constant::SExt(s) => sign_extend_to_bits(self.const_to_bv(&s.operand), size(&s.to_type) as u32),
+            Constant::PtrToInt(pti) => {
+                let bv = self.const_to_bv(&pti.operand);
+                assert_eq!(bv.get_size(), size(&pti.to_type) as u32);
+                bv  // just a cast, it's the same bits underneath
+            },
+            Constant::IntToPtr(itp) => {
+                let bv = self.const_to_bv(&itp.operand);
+                assert_eq!(bv.get_size(), size(&itp.to_type) as u32);
+                bv  // just a cast, it's the same bits underneath
+            },
+            Constant::BitCast(bc) => {
+                let bv = self.const_to_bv(&bc.operand);
+                assert_eq!(bv.get_size(), size(&bc.to_type) as u32);
+                bv  // just a cast, it's the same bits underneath
+            },
+            Constant::AddrSpaceCast(ac) => {
+                let bv = self.const_to_bv(&ac.operand);
+                assert_eq!(bv.get_size(), size(&ac.to_type) as u32);
+                bv  // just a cast, it's the same bits underneath
+            },
+            Constant::Select(s) => {
+                let b = self.const_to_bool(&s.condition).simplify().as_bool().expect("Constant::Select: Expected a constant condition");
+                if b {
+                    self.const_to_bv(&s.true_value)
+                } else {
+                    self.const_to_bv(&s.false_value)
+                }
+            },
+            _ => unimplemented!("const_to_bv for {:?}", c),
+        }
+    }
+
+    /// Given a `Constant::Struct` and a series of `ExtractValue` indices, get the
+    /// final `Constant` referred to
+    fn simplify_const_ev(s: &Constant, mut indices: impl Iterator<Item = u32>) -> &Constant {
+        match indices.next() {
+            None => s,
+            Some(index) => {
+                if let Constant::Struct { values, .. } = s {
+                    let val = values.get(index as usize).expect("Constant::ExtractValue index out of range");
+                    Self::simplify_const_ev(val, indices)
+                } else {
+                    panic!("simplify_const_ev: not a Constant::Struct: {:?}", s)
+                }
+            }
+        }
+
+    }
+
+    /// Given a `Constant::Struct`, a value to insert, and a series of
+    /// `InsertValue` indices, get the final `Constant` referred to
+    fn simplify_const_iv(s: Constant, val: Constant, mut indices: impl Iterator<Item = u32>) -> Constant {
+        match indices.next() {
+            None => val,
+            Some(index) => {
+                if let Constant::Struct { name, mut values, is_packed } = s {
+                    let to_replace = values.get(index as usize).expect("Constant::InsertValue index out of range").clone();
+                    values[index as usize] = Self::simplify_const_iv(to_replace, val, indices);
+                    Constant::Struct { name, values, is_packed }
+                } else {
+                    panic!("simplify_const_iv: not a Constant::Struct: {:?}", s)
+                }
+            }
         }
     }
 
@@ -312,12 +446,47 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// This will panic if the `Operand` doesn't have type `Type::bool()`
     pub fn operand_to_bool(&self, op: &Operand) -> B::Bool {
         match op {
-            Operand::ConstantOperand(Constant::Int { bits, value }) => {
+            Operand::ConstantOperand(c) => self.const_to_bool(c),
+            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).clone(),
+            op => panic!("Can't convert {:?} to Bool", op),
+        }
+    }
+
+    /// Convert a `Constant` to the appropriate `Bool`.
+    fn const_to_bool(&self, c: &Constant) -> B::Bool {
+        match c {
+            Constant::Int { bits, value } => {
                 assert_eq!(*bits, 1);
                 B::Bool::from_bool(self.ctx, *value != 0)
             },
-            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).clone(),
-            op => panic!("Can't convert {:?} to Bool", op),
+            Constant::And(a) => self.const_to_bool(&a.operand0).and(&[&self.const_to_bool(&a.operand1)]),
+            Constant::Or(o) => self.const_to_bool(&o.operand0).or(&[&self.const_to_bool(&o.operand1)]),
+            Constant::Xor(x) => self.const_to_bool(&x.operand0).xor(&self.const_to_bool(&x.operand1)),
+            Constant::ICmp(icmp) => {
+                let bv0 = self.const_to_bv(&icmp.operand0);
+                let bv1 = self.const_to_bv(&icmp.operand1);
+                match icmp.predicate {
+                    IntPredicate::EQ => bv0._eq(&bv1),
+                    IntPredicate::NE => bv0._eq(&bv1).not(),
+                    IntPredicate::UGT => bv0.ugt(&bv1),
+                    IntPredicate::UGE => bv0.uge(&bv1),
+                    IntPredicate::ULT => bv0.ult(&bv1),
+                    IntPredicate::ULE => bv0.ule(&bv1),
+                    IntPredicate::SGT => bv0.sgt(&bv1),
+                    IntPredicate::SGE => bv0.sge(&bv1),
+                    IntPredicate::SLT => bv0.slt(&bv1),
+                    IntPredicate::SLE => bv0.sle(&bv1),
+                }
+            },
+            Constant::Select(s) => {
+                let b = self.const_to_bool(&s.condition).simplify().as_bool().expect("Constant::Select: Expected a constant condition");
+                if b {
+                    self.const_to_bool(&s.true_value)
+                } else {
+                    self.const_to_bool(&s.false_value)
+                }
+            },
+            _ => unimplemented!("const_to_bool for {:?}", c),
         }
     }
 
@@ -441,7 +610,6 @@ mod tests {
 
     /// utility that creates a technically valid (but functionally useless) `Module` for testing
     fn blank_module(name: impl Into<String>) -> Module {
-        use std::collections::HashMap;
         Module {
             name: name.into(),
             source_file_name: String::new(),

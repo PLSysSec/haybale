@@ -74,6 +74,7 @@ pub trait Bool<'ctx> : Clone + PartialEq + Eq + fmt::Debug {
 
     fn new(ctx: &'ctx z3::Context, name: impl Into<z3::Symbol>) -> Self;
     fn from_bool(ctx: &'ctx z3::Context, b: bool) -> Self;
+    fn as_bool(&self) -> Option<bool>;
     fn bvite(&self, a: &Self::AssociatedBV, b: &Self::AssociatedBV) -> Self::AssociatedBV;
     fn boolite(&self, a: &Self, b: &Self) -> Self;
     fn and(&self, other: &[&Self]) -> Self;
@@ -87,11 +88,6 @@ pub trait Bool<'ctx> : Clone + PartialEq + Eq + fmt::Debug {
         // default implementation, many implementors will do better
         self.clone()
     }
-
-    /*
-    /// for the purposes of `assert()`ing in a solver
-    fn as_assertion(&self) -> &z3::ast::Bool<'ctx>;
-    */
 }
 
 /// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)
@@ -268,6 +264,9 @@ impl<'ctx> Bool<'ctx> for z3::ast::Bool<'ctx> {
     }
     fn from_bool(ctx: &'ctx z3::Context, b: bool) -> Self {
         Self::from_bool(ctx, b)
+    }
+    fn as_bool(&self) -> Option<bool> {
+        self.as_bool()
     }
     fn bvite(&self, a: &Self::AssociatedBV, b: &Self::AssociatedBV) -> Self::AssociatedBV {
         self.ite(a, b)

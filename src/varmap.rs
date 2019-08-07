@@ -237,7 +237,6 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
 
     /// Look up the most recent `BV` created for the given `(String, Name)` pair
     pub fn lookup_bv_var(&self, funcname: &String, name: &Name) -> V {
-        debug!("Looking up var {:?} from function {:?}", name, funcname);
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
@@ -246,7 +245,6 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
 
     /// Look up the most recent `Bool` created for the given `(String, Name)` pair
     pub fn lookup_bool_var(&self, funcname: &String, name: &Name) -> B {
-        debug!("Looking up var {:?} from function {:?}", name, funcname);
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);

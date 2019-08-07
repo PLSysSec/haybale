@@ -5,6 +5,7 @@ pub use symex::*;
 
 mod size;
 pub use size::size;
+mod extend;
 
 mod state;
 pub mod memory;

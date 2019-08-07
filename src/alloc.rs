@@ -1,4 +1,5 @@
 use crate::memory::Memory;
+use log::debug;
 
 /// An extremely simple bump-allocator which never frees
 pub struct Alloc {
@@ -34,6 +35,7 @@ impl Alloc {
         }
         let rval = self.cursor;
         self.cursor += bytes;
+        debug!("Allocated {} bits at 0x{:x}", bits, rval);
         rval
     }
 }
