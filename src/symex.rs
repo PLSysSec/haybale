@@ -5,7 +5,7 @@ use either::Either;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub use crate::state::{State, Callsite, Location, QualifiedBB};
+pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::size::size;
 use crate::backend::*;
 
@@ -118,7 +118,7 @@ fn symex_from_bb_through_end_of_function<'ctx, 'm, B>(state: &mut State<'ctx, 'm
 fn symex_from_inst_in_bb_through_end_of_function<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
     assert_eq!(bb.name, state.cur_loc.bbname);
     debug!("Symexing basic block {:?} in function {}", bb.name, state.cur_loc.func.name);
-    state.record_in_path(QualifiedBB {
+    state.record_in_path(PathEntry {
         funcname: state.cur_loc.func.name.clone(),
         bbname: bb.name.clone(),
     });
@@ -466,7 +466,7 @@ fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction
                 None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
                 Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
                     state.cur_loc = saved_loc;
-                    state.record_in_path(QualifiedBB {
+                    state.record_in_path(PathEntry {
                         funcname: state.cur_loc.func.name.clone(),
                         bbname: state.cur_loc.bbname.clone(),
                     });
@@ -637,12 +637,12 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    type Path<'m> = Vec<QualifiedBB>;
+    type Path<'m> = Vec<PathEntry>;
 
     fn path_from_bbnames(funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path {
         let mut vec = vec![];
         for bbname in bbnames {
-            vec.push(QualifiedBB { funcname: funcname.to_string(), bbname });
+            vec.push(PathEntry { funcname: funcname.to_string(), bbname });
         }
         vec
     }
@@ -830,9 +830,9 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -846,11 +846,11 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
-            QualifiedBB { funcname: "conditional_caller".to_owned(), bbname: Name::Number(8) },
+            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
+            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 6, 8]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
@@ -865,11 +865,11 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -883,11 +883,11 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
         ]);
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -901,55 +901,55 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 5)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths[1], vec![
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths[2], vec![
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths[3], vec![
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths[4], vec![
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths[5], vec![
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            QualifiedBB { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            QualifiedBB { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
+            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
+            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
         ]);
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
@@ -963,41 +963,41 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 3)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths[1], vec![
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths[2], vec![
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths[3], vec![
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
-            QualifiedBB { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
+            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
         ]);
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
@@ -1071,57 +1071,57 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 3)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[1], vec![
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[2], vec![
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[3], vec![
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
         ]);
         assert_eq!(paths[4], vec![
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
         ]);
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
@@ -1135,88 +1135,88 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, 3)).collect();
         assert_eq!(paths[0], vec![
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[1], vec![
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[2], vec![
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[3], vec![
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[4], vec![
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths[5], vec![
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            QualifiedBB { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
+            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
         ]);
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }

@@ -19,7 +19,7 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// or the first `BasicBlock` of a function
     pub prev_bb_name: Option<Name>,
     /// Log of the basic blocks which have been executed to get to this point
-    pub path: Vec<QualifiedBB>,
+    pub path: Vec<PathEntry>,
     /// A place where `Backend`s can put any additional state they need for
     /// themselves
     pub backend_state: Rc<RefCell<B::State>>,
@@ -43,12 +43,12 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct QualifiedBB {
+pub struct PathEntry {
     pub funcname: String,
     pub bbname: Name,
 }
 
-impl fmt::Debug for QualifiedBB {
+impl fmt::Debug for PathEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let pretty_name = match self.bbname {
             Name::Name(ref s) => format!("{:?}", s),
@@ -341,10 +341,10 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
         BV::from_u64(self.ctx, raw_ptr, 64)
     }
 
-    /// Record having visited the given `QualifiedBB` on the current path.
-    pub fn record_in_path(&mut self, bb: QualifiedBB) {
-        debug!("Recording a path entry {:?}", bb);
-        self.path.push(bb);
+    /// Record a `PathEntry` in the current path.
+    pub fn record_in_path(&mut self, entry: PathEntry) {
+        debug!("Recording a path entry {:?}", entry);
+        self.path.push(entry);
     }
 
     /// Record entering a call at the given `inst` in the current location's `BasicBlock`
