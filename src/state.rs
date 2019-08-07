@@ -153,7 +153,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             path: Vec::new(),
             backend_state: backend_state.clone(),
             varmap: VarMap::new(ctx, max_versions_of_name),
-            mem: Memory::new(ctx, backend_state.clone()),
+            mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
             solver: B::Solver::new(ctx, backend_state.clone()),
             stack: Vec::new(),

@@ -100,7 +100,8 @@ pub trait Memory<'ctx> : Clone + PartialEq + Eq {
     type Value: BV<'ctx>;
     type BackendState;
 
-    fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+    fn new_uninitialized(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+    fn new_zero_initialized(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
     fn read(&self, index: &Self::Index, bits: u32) -> Self::Value;
     fn write(&mut self, index: &Self::Index, value: Self::Value);
 }
@@ -305,8 +306,11 @@ impl<'ctx> Memory<'ctx> for crate::memory::Memory<'ctx> {
     type Value = z3::ast::BV<'ctx>;
     type BackendState = ();
 
-    fn new(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
-        crate::memory::Memory::new(ctx)
+    fn new_uninitialized(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
+        crate::memory::Memory::new_uninitialized(ctx)
+    }
+    fn new_zero_initialized(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
+        crate::memory::Memory::new_zero_initialized(ctx)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Self::Value {
         self.read(index, bits)

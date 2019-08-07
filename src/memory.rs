@@ -19,13 +19,27 @@ impl<'ctx> Memory<'ctx> {
     pub const CELL_BYTES: u32 = Self::CELL_BITS / Self::BITS_IN_BYTE;  // how many bytes in a cell
     pub const LOG_CELL_BYTES: u32 = 3;  // log base 2 of CELL_BYTES. This many of the bottom index bits determine cell offset.
 
-    pub fn new(ctx: &'ctx z3::Context) -> Self {
+    /// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)
+    pub fn new_uninitialized(ctx: &'ctx z3::Context) -> Self {
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
         let domain = z3::Sort::bitvector(ctx, log_num_cells);
         let range = z3::Sort::bitvector(ctx, Self::CELL_BITS);
         Self {
             ctx,
-            mem: Array::new_const(&ctx, "mem", &domain, &range),
+            mem: Array::new_const(ctx, "mem", &domain, &range),
+            cell_bytes_as_bv: BV::from_u64(ctx, u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
+            log_bits_in_byte_as_bv: BV::from_u64(ctx, u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
+            log_bits_in_byte_as_wide_bv: BV::from_u64(ctx, u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
+        }
+    }
+
+    /// A new `Memory`, whose contents at all addresses are initialized to be `0`
+    pub fn new_zero_initialized(ctx: &'ctx z3::Context) -> Self {
+        let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
+        let domain = z3::Sort::bitvector(ctx, log_num_cells);
+        Self {
+            ctx,
+            mem: Array::const_array(ctx, &domain, &BV::from_u64(ctx, 0, Self::CELL_BITS).into()),
             cell_bytes_as_bv: BV::from_u64(ctx, u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
             log_bits_in_byte_as_bv: BV::from_u64(ctx, u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
             log_bits_in_byte_as_wide_bv: BV::from_u64(ctx, u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
@@ -239,9 +253,55 @@ mod tests {
     use z3::ast::BV;
 
     #[test]
+    fn uninitialized() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mem = Memory::new_uninitialized(&ctx);
+        let mut solver = Solver::new(&ctx);
+
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::INDEX_BITS);
+        let zero = BV::from_u64(&ctx, 0, Memory::CELL_BITS);
+
+        // Read a value from (uninitialized) memory
+        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+
+        // Constrain it to be > 0 and check that we're sat (and get a value > 0)
+        solver.push();
+        solver.assert(&read_bv.bvsgt(&zero));
+        assert!(solver.check());
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        assert!(read_val > 0);
+
+        // Alternately, constrain it to be < 0 and check that we're sat (and get a value < 0)
+        solver.pop(1);
+        solver.assert(&read_bv.bvslt(&zero));
+        assert!(solver.check());
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap() as i64;
+        assert!(read_val < 0);
+    }
+
+    #[test]
+    fn zero_initialized() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mem = Memory::new_zero_initialized(&ctx);
+        let mut solver = Solver::new(&ctx);
+
+        let addr = BV::from_u64(&ctx, 0x10000, Memory::INDEX_BITS);
+        let zero = BV::from_u64(&ctx, 0, Memory::CELL_BITS);
+
+        // Read a value from (zero-initialized) memory and check that the value is 0
+        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        assert_eq!(read_val, 0);
+
+        // Constrain the read value to be > 0 and check that we're unsat
+        solver.assert(&read_bv.bvsgt(&zero));
+        assert!(!solver.check());
+    }
+
+    #[test]
     fn read_and_write_to_cell_zero() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store data to address 0
@@ -259,7 +319,7 @@ mod tests {
     #[test]
     fn read_and_write_cell_aligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store data to a nonzero, but aligned, address
@@ -278,7 +338,7 @@ mod tests {
     fn read_and_write_small() {
         let _ = env_logger::builder().is_test(true).try_init();
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data
@@ -296,7 +356,7 @@ mod tests {
     #[test]
     fn read_and_write_unaligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data to offset 1 in a cell
@@ -314,7 +374,7 @@ mod tests {
     #[test]
     fn read_and_write_across_cell_boundaries() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 64 bits of data such that half is in one cell and half in the next
@@ -332,7 +392,7 @@ mod tests {
     #[test]
     fn read_and_write_twocells() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store two cells' worth of data
@@ -354,7 +414,7 @@ mod tests {
     #[test]
     fn read_and_write_200bits() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 200 bits of data
@@ -385,7 +445,7 @@ mod tests {
     #[test]
     fn write_twice_read_once() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data
@@ -408,7 +468,7 @@ mod tests {
     #[test]
     fn write_different_cells() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 32 bits of data to a cell
@@ -435,7 +495,7 @@ mod tests {
     #[test]
     fn write_different_places_within_cell() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 32 bits of data to a cell
@@ -462,7 +522,7 @@ mod tests {
     #[test]
     fn write_small_read_big() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_zero_initialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 8 bits of data to offset 1 in a cell
@@ -497,7 +557,7 @@ mod tests {
     #[test]
     fn write_big_read_small() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Store 32 bits of data to offset 2 in a cell
@@ -529,7 +589,7 @@ mod tests {
     #[test]
     fn partial_overwrite_aligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Write an entire cell
@@ -556,7 +616,7 @@ mod tests {
     #[test]
     fn partial_overwrite_unaligned() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let mut mem = Memory::new(&ctx);
+        let mut mem = Memory::new_uninitialized(&ctx);
         let mut solver = Solver::new(&ctx);
 
         // Write an entire cell
