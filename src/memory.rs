@@ -124,7 +124,6 @@ impl<'ctx> Memory<'ctx> {
     /// Read up to a cell size's worth of memory, at any alignment. May cross cell boundaries.
     /// Returned `BV` will have size `bits`.
     fn read_small(&self, addr: &BV<'ctx>, bits: u32) -> BV<'ctx> {
-        debug!("Small read, {} bits at {:?}", bits, addr);
         assert!(bits <= Self::CELL_BITS);
         if bits <= 8 {
             // In this case we can't possibly cross cell boundaries
@@ -146,7 +145,6 @@ impl<'ctx> Memory<'ctx> {
 
     /// Write up to a cell size's worth of memory, at any alignment. May cross cell boundaries.
     fn write_small(&mut self, addr: &BV<'ctx>, val: BV<'ctx>) {
-        debug!("Small write, {:?} to address {:?}", val, addr);
         let write_size = val.get_size();
         assert!(write_size <= Self::CELL_BITS);
         if write_size <= 8 {

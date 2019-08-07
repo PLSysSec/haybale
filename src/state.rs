@@ -166,6 +166,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             backtrack_points: Vec::new(),
         };
         // Here we do initialization of the global variables in the Module
+        debug!("Initializing global variables");
         for var in &state.cur_loc.module.global_vars {
             if let Type::PointerType { pointee_type, .. } = &var.ty {
                 let addr = state.allocate(size(&*pointee_type) as u64);
@@ -177,6 +178,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
                 panic!("Global variable has non-pointer type {:?}", &var.ty);
             }
         }
+        debug!("Done initializing global variables");
         state
     }
 
