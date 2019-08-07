@@ -431,7 +431,6 @@ fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction
         Either::Left(_) => unimplemented!("inline assembly"),
         _ => unimplemented!("{:?}", call),
     };
-    let errorfuncname = funcname.clone();  // just for possible error reporting
     if let Name::Name(s) = funcname {
         if let Some(callee) = state.cur_loc.module.get_func_by_name(s) {
             assert_eq!(call.arguments.len(), callee.parameters.len());
@@ -479,7 +478,7 @@ fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction
         {
             Ok(None) // these are all safe to ignore
         } else {
-            unimplemented!("Call of a function named {:?}", errorfuncname)
+            unimplemented!("Call of a function named {:?}", s)
         }
     } else {
         panic!("Function with a numbered name, {:?}", funcname)
