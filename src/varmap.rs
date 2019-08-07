@@ -134,8 +134,11 @@ impl<'ctx, V, B> BVorBool<'ctx, V, B>
 impl<'ctx, V, B> VarMap<'ctx, V, B>
     where V: BV<'ctx, AssociatedBool = B>, B: Bool<'ctx, AssociatedBV = V>
 {
-    /// `max_versions_of_name`: Maximum number of distinct versions of any given `Name`.
-    /// This can be used to bound loops (really crudely).
+    /// `max_versions_of_name`: the maximum number of distinct versions allowed
+    /// of any given `Name`, that is, the maximum number of Z3 objects created
+    /// for a given LLVM SSA value. Used to bound both loop iterations and
+    /// recursion depth.
+    ///
     /// Variables with the same `Name` in different functions do not share
     /// counters for this purpose - they can each have up to
     /// `max_versions_of_name` distinct versions.

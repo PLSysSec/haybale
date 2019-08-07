@@ -7,6 +7,9 @@ mod size;
 pub use size::size;
 mod extend;
 
+mod config;
+pub use config::Config;
+
 mod state;
 pub mod memory;
 mod alloc;
@@ -66,16 +69,12 @@ impl SolutionValue {
 /// Given a function, find values of its inputs such that it returns zero.
 /// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer.
 ///
-/// `loop_bound`: maximum number of times to execute any given line of LLVM IR.
-/// This bounds both the number of iterations of loops, and also the depth of recursion.
-/// For inner loops, this bounds the number of total iterations across all invocations of the loop.
-///
 /// Returns `None` if there are no values of the inputs such that the function returns zero.
 ///
 /// Note: `find_zero_of_func()` may be of some use itself, but is included in the
 /// crate more as an example of how you can use the other public functions in the
 /// crate.
-pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) -> Option<Vec<SolutionValue>> {
+pub fn find_zero_of_func(func: &Function, module: &Module, config: &Config) -> Option<Vec<SolutionValue>> {
     let cfg = z3::Config::new();
     let ctx = z3::Context::new(&cfg);
 
@@ -83,7 +82,7 @@ pub fn find_zero_of_func(func: &Function, module: &Module, loop_bound: usize) ->
     let zero = z3::ast::BV::from_u64(&ctx, 0, returnwidth as u32);
 
     let mut found = false;
-    let mut em: ExecutionManager<Z3Backend> = symex_function(&ctx, module, func, loop_bound);
+    let mut em: ExecutionManager<Z3Backend> = symex_function(&ctx, module, func, config);
     while let Some(z3rval) = em.next() {
         match z3rval {
             SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),

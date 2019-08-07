@@ -10,6 +10,7 @@ use crate::alloc::Alloc;
 use crate::varmap::{VarMap, RestoreInfo};
 use crate::size::size;
 use crate::backend::*;
+use crate::config::Config;
 use crate::extend::*;
 
 pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
@@ -146,10 +147,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// `start_loc`: the `Location` where the `State` should begin executing.
     ///   As of this writing, this should be the entry point of a function, or you
     ///   will have problems.
-    /// `max_versions_of_name`: the maximum number of versions allowed of a given `Name`,
-    ///   that is, the maximum number of Z3 objects created for a given LLVM SSA value.
-    ///   Used to bound both loop iterations and recursion depth.
-    pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, max_versions_of_name: usize) -> Self {
+    pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, config: &Config) -> Self {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
         let mut state = Self {
             ctx,
@@ -157,7 +155,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             prev_bb_name: None,
             path: Vec::new(),
             backend_state: backend_state.clone(),
-            varmap: VarMap::new(ctx, max_versions_of_name),
+            varmap: VarMap::new(ctx, config.loop_bound),
             mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
             solver: B::Solver::new(ctx, backend_state.clone()),
@@ -607,7 +605,7 @@ mod tests {
             func,
             bbname: "test_bb".to_owned().into(),
         };
-        State::new(ctx, start_loc, 20)
+        State::new(ctx, start_loc, &Config::default())
     }
 
     /// utility that creates a technically valid (but functionally useless) `Module` for testing
