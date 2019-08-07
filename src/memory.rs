@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use log::debug;
+use reduce::Reduce;
 use z3::ast::{Ast, Array, BV};
 
 #[derive(Clone, Debug)]
@@ -191,15 +192,17 @@ impl<'ctx> Memory<'ctx> {
             // large reads must start at a cell boundary
             let num_full_cells = (bits-1) / Self::CELL_BITS;  // this is bits / CELL_BITS, but if bits is a multiple of CELL_BITS, it undercounts by 1 (we treat this as N-1 full cells plus a "partial" cell of CELL_BITS bits)
             let bits_in_last_cell = (bits-1) % Self::CELL_BITS + 1;  // this is bits % CELL_BITS, but if bits is a multiple of CELL_BITS, then we get CELL_BITS rather than 0
-            let reads = itertools::repeat_n(Self::CELL_BITS, num_full_cells.try_into().unwrap())
+            itertools::repeat_n(Self::CELL_BITS, num_full_cells.try_into().unwrap())
                 .chain(std::iter::once(bits_in_last_cell))  // this forms the sequence of read sizes
                 .enumerate()
                 .map(|(i,sz)| {
                     let offset_bytes = i as u64 * u64::from(Self::CELL_BYTES);
                     // note that all reads in the sequence must be within-cell, i.e., not cross cell boundaries, because of how we constructed the sequence
                     self.read_within_cell(&addr.bvadd(&BV::from_u64(self.ctx, offset_bytes, Self::INDEX_BITS)).simplify(), sz)
-                });
-            fold_from_first(reads, |a,b| b.concat(&a)).simplify()
+                })
+                .reduce(|a,b| b.concat(&a))
+                .unwrap()  // because of the std::iter::once, there must have been at least 1 item in the iterator
+                .simplify()
         }
     }
 
@@ -236,15 +239,6 @@ impl<'ctx> PartialEq for Memory<'ctx> {
 }
 
 impl<'ctx> Eq for Memory<'ctx> {}
-
-/// Utility function that `fold()`s an iterator using the iterator's first item as starting point.
-/// Panics if the iterator has zero items.
-fn fold_from_first<F, T>(mut i: impl Iterator<Item = T>, f: F) -> T
-    where F: FnMut(T, T) -> T
-{
-    let first = i.next().expect("fold_from_first was passed an iterator with zero items");
-    i.fold(first, f)
-}
 
 #[cfg(test)]
 mod tests {
