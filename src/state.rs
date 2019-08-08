@@ -147,14 +147,13 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// `start_loc`: the `Location` where the `State` should begin executing.
     ///   As of this writing, this should be the entry point of a function, or you
     ///   will have problems.
-    pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, config: &Config) -> Self {
+    pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, config: &Config<B>) -> Self {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
         let mut state = Self {
             ctx,
             cur_loc: start_loc,
             prev_bb_name: None,
             path: Vec::new(),
-            backend_state: backend_state.clone(),
             varmap: VarMap::new(ctx, config.loop_bound),
             mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
@@ -162,6 +161,9 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             allocated_globals: HashMap::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
+
+            // listed last (out-of-order) so that it can be used above but moved in now
+            backend_state,
         };
         // Here we do initialization of the global variables in the Module
         debug!("Initializing global variables");

@@ -13,7 +13,7 @@ use crate::extend::*;
 
 /// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
 /// The function's parameters will start completely unconstrained.
-pub fn symex_function<'ctx, 'm, B>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, config: &Config) -> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
+pub fn symex_function<'ctx, 'm, B>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, config: &'m Config<B>) -> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
     debug!("Symexing function {}", func.name);
     let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
     let start_loc = Location {
@@ -25,7 +25,7 @@ pub fn symex_function<'ctx, 'm, B>(ctx: &'ctx z3::Context, module: &'m Module, f
     let z3params: Vec<_> = func.parameters.iter().map(|param| {
         state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
     }).collect();
-    ExecutionManager::new(state, z3params, &bb)
+    ExecutionManager::new(state, config, z3params, &bb)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a function.
@@ -39,6 +39,7 @@ pub fn symex_function<'ctx, 'm, B>(ctx: &'ctx z3::Context, module: &'m Module, f
 /// function.
 pub struct ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
     state: State<'ctx, 'm, B>,
+    config: &'m Config<B>,
     z3params: Vec<B::BV>,
     start_bb: &'m BasicBlock,
     /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
@@ -48,9 +49,10 @@ pub struct ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
 }
 
 impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
-    fn new(state: State<'ctx, 'm, B>, z3params: Vec<B::BV>, start_bb: &'m BasicBlock) -> Self {
+    fn new(state: State<'ctx, 'm, B>, config: &'m Config<B>, z3params: Vec<B::BV>, start_bb: &'m BasicBlock) -> Self {
         Self {
             state,
+            config,
             z3params,
             start_bb,
             fresh: true,
@@ -98,7 +100,7 @@ impl<'ctx, 'm, B> Iterator for ExecutionManager<'ctx, 'm, B> where B: Backend<'c
     }
 }
 
-impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
+impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
     /// Symex from the current `Location` through the rest of the function.
     /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
     fn symex_from_cur_loc_through_end_of_function(&mut self) -> Option<SymexResult<B::BV>> {
@@ -435,7 +437,10 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
             _ => unimplemented!("{:?}", call),
         };
         if let Name::Name(s) = funcname {
-            if let Some(callee) = self.state.cur_loc.module.get_func_by_name(s) {
+            if let Some(hook) = self.config.function_hooks.get(s) {
+                hook.call_hook(&mut self.state, call);
+                Ok(None)
+            } else if let Some(callee) = self.state.cur_loc.module.get_func_by_name(s) {
                 assert_eq!(call.arguments.len(), callee.parameters.len());
                 let z3args: Vec<_> = call.arguments.iter().map(|arg| self.state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                 let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
@@ -645,7 +650,7 @@ mod tests {
     }
 
     impl<'ctx, 'm, B> PathIterator<'ctx, 'm, B> where B: Backend<'ctx> {
-        pub fn new(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, config: &Config) -> Self {
+        pub fn new(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, config: &'m Config<B>) -> Self {
             Self { em: symex_function(ctx, module, func, config) }
         }
     }

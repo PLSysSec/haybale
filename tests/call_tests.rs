@@ -16,9 +16,10 @@ fn get_module() -> Module {
 #[test]
 fn simple_call() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("simple_caller").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -26,9 +27,10 @@ fn simple_call() {
 #[test]
 fn conditional_call() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("conditional_caller").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[0], SolutionValue::I32(3));
     assert!(args[1].unwrap_to_i32() > 5);
@@ -37,9 +39,10 @@ fn conditional_call() {
 #[test]
 fn call_twice() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("twice_caller").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -47,9 +50,10 @@ fn call_twice() {
 #[test]
 fn nested_call() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("nested_caller").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -60,9 +64,10 @@ fn nested_call() {
 #[test]
 fn call_of_loop() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("caller_of_loop").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -70,9 +75,10 @@ fn call_of_loop() {
 #[test]
 fn call_in_loop() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("caller_with_loop").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -80,9 +86,10 @@ fn call_in_loop() {
 #[test]
 fn recursive_simple() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("recursive_simple").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x.0);
@@ -102,10 +109,11 @@ fn recursive_simple_dummy(x: Wrapping<i32>) -> Wrapping<i32> {
 #[test]
 fn recursive_double() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("recursive_double").expect("Failed to find function");
     let config = Config { loop_bound: 5, ..Config::default() };
-    let args = find_zero_of_func(func, &module, &config).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &config).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(-6));
 }
@@ -113,9 +121,10 @@ fn recursive_double() {
 #[test]
 fn recursive_not_tail() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("recursive_not_tail").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x.0);
@@ -138,9 +147,10 @@ fn recursive_not_tail_dummy(x: Wrapping<i32>) -> Wrapping<i32> {
 #[test]
 fn recursive_and_normal_call() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("recursive_and_normal_caller").expect("Failed to find function");
-    let args = find_zero_of_func(func, &module, &Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(11));
 }
@@ -148,10 +158,11 @@ fn recursive_and_normal_call() {
 #[test]
 fn mutually_recursive_functions() {
     init_logging();
+    let ctx = z3::Context::new(&z3::Config::new());
     let module = get_module();
     let func = module.get_func_by_name("mutually_recursive_a").expect("Failed to find function");
     let config = Config { loop_bound: 5, ..Config::default() };
-    let args = find_zero_of_func(func, &module, &config).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, func, &module, &config).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
 
 }

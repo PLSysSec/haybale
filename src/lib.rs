@@ -74,15 +74,12 @@ impl SolutionValue {
 /// Note: `find_zero_of_func()` may be of some use itself, but is included in the
 /// crate more as an example of how you can use the other public functions in the
 /// crate.
-pub fn find_zero_of_func(func: &Function, module: &Module, config: &Config) -> Option<Vec<SolutionValue>> {
-    let cfg = z3::Config::new();
-    let ctx = z3::Context::new(&cfg);
-
+pub fn find_zero_of_func<'ctx>(ctx: &'ctx z3::Context, func: &Function, module: &Module, config: &Config<Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
     let returnwidth = size(&func.return_type);
-    let zero = z3::ast::BV::from_u64(&ctx, 0, returnwidth as u32);
+    let zero = z3::ast::BV::from_u64(ctx, 0, returnwidth as u32);
 
     let mut found = false;
-    let mut em: ExecutionManager<Z3Backend> = symex_function(&ctx, module, func, config);
+    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, module, func, config);
     while let Some(z3rval) = em.next() {
         match z3rval {
             SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),
