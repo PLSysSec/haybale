@@ -297,7 +297,7 @@ mod tests {
         let mut solver = Solver::new(&ctx);
 
         // Store data to address 0
-        let data_val = 0x12345678;
+        let data_val = 0x1234_5678;
         let data = BV::from_u64(&ctx, data_val, Memory::CELL_BITS);
         let zero = BV::from_u64(&ctx, 0, Memory::INDEX_BITS);
         mem.write(&zero, data);
@@ -315,7 +315,7 @@ mod tests {
         let mut solver = Solver::new(&ctx);
 
         // Store data to a nonzero, but aligned, address
-        let data_val = 0x12345678;
+        let data_val = 0x1234_5678;
         let data = BV::from_u64(&ctx, data_val, Memory::CELL_BITS);
         let aligned = BV::from_u64(&ctx, 0x10000, Memory::INDEX_BITS);
         mem.write(&aligned, data);
@@ -553,7 +553,7 @@ mod tests {
         let mut solver = Solver::new(&ctx);
 
         // Store 32 bits of data to offset 2 in a cell
-        let data_val = 0x12345678;
+        let data_val = 0x1234_5678;
         let data = BV::from_u64(&ctx, data_val, 32);
         let offset_2 = BV::from_u64(&ctx, 0x10002, Memory::INDEX_BITS);
         mem.write(&offset_2, data.clone());
