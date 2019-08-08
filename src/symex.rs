@@ -79,411 +79,502 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
     }
 }
 
+pub enum SymexResult<V> {
+    Returned(V),
+    ReturnedVoid,
+}
+
 impl<'ctx, 'm, B> Iterator for ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
     type Item = SymexResult<B::BV>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.fresh {
             self.fresh = false;
-            symex_from_bb_through_end_of_function(&mut self.state, self.start_bb)
+            self.symex_from_bb_through_end_of_function(self.start_bb)
         } else {
             debug!("ExecutionManager: requesting next path");
-            backtrack_and_continue(&mut self.state)
+            self.backtrack_and_continue()
         }
     }
 }
 
-pub enum SymexResult<V> {
-    Returned(V),
-    ReturnedVoid,
-}
-
-/// Symex from the current `Location` through the rest of the function.
-/// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_cur_loc_through_end_of_function<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    let bb = state.cur_loc.func.get_bb_by_name(&state.cur_loc.bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function", state.cur_loc.bbname));
-    symex_from_bb_through_end_of_function(state, bb)
-}
-
-/// Symex the given bb, through the rest of the function.
-/// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_bb_through_end_of_function<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, bb: &'m BasicBlock) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    symex_from_inst_in_bb_through_end_of_function(state, bb, 0)
-}
-
-/// Symex starting from the given `inst` index in the given bb, through the rest of the function.
-/// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-fn symex_from_inst_in_bb_through_end_of_function<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    assert_eq!(bb.name, state.cur_loc.bbname);
-    debug!("Symexing basic block {:?} in function {}", bb.name, state.cur_loc.func.name);
-    state.record_in_path(PathEntry {
-        funcname: state.cur_loc.func.name.clone(),
-        bbname: bb.name.clone(),
-    });
-    for (instnum, inst) in bb.instrs.iter().skip(inst).enumerate() {
-        let result = if let Some((binop, z3binop)) = inst_to_binop(&inst) {
-            symex_binop(state, &binop, z3binop)
-        } else {
-            match inst {
-                Instruction::ICmp(icmp) => symex_icmp(state, &icmp),
-                Instruction::Load(load) => symex_load(state, &load),
-                Instruction::Store(store) => symex_store(state, &store),
-                Instruction::GetElementPtr(gep) => symex_gep(state, &gep),
-                Instruction::Alloca(alloca) => symex_alloca(state, &alloca),
-                Instruction::ZExt(zext) => symex_zext(state, &zext),
-                Instruction::SExt(sext) => symex_sext(state, &sext),
-                Instruction::Trunc(trunc) => symex_trunc(state, &trunc),
-                Instruction::BitCast(bitcast) => symex_bitcast(state, &bitcast),
-                Instruction::Phi(phi) => symex_phi(state, &phi),
-                Instruction::Select(select) => symex_select(state, &select),
-                Instruction::Call(call) => match symex_call(state, &call, instnum) {
-                    Err(e) => Err(e),
-                    Ok(None) => Ok(()),
-                    Ok(Some(symexresult)) => return Some(symexresult),
-                },
-                _ => unimplemented!("instruction {:?}", inst),
-            }
-        };
-        if result.is_err() {
-            // Having an `Err` here indicates we can't continue down this path,
-            // for instance because we're unsat, or because loop bound was exceeded, etc
-            return backtrack_and_continue(state);
-        }
+impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
+    /// Symex from the current `Location` through the rest of the function.
+    /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
+    fn symex_from_cur_loc_through_end_of_function(&mut self) -> Option<SymexResult<B::BV>> {
+        let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
+            .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
+        self.symex_from_bb_through_end_of_function(bb)
     }
-    match &bb.term {
-        Terminator::Ret(ret) => Some(symex_return(state, ret)),
-        Terminator::Br(br) => symex_br(state, br),
-        Terminator::CondBr(condbr) => symex_condbr(state, condbr),
-        term => unimplemented!("terminator {:?}", term),
+
+    /// Symex the given bb, through the rest of the function.
+    /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
+    fn symex_from_bb_through_end_of_function(&mut self, bb: &'m BasicBlock) -> Option<SymexResult<B::BV>> {
+        self.symex_from_inst_in_bb_through_end_of_function(bb, 0)
     }
-}
 
-/// Revert to the most recent backtrack point, then continue execution from that point.
-/// Will continue not just to the end of the function containing the backtrack point,
-/// but (using the saved callstack) all the way back to the end of the top-level function.
-///
-/// Returns the `SymexResult` representing the final return value, or `None` if
-/// no possible paths were found.
-fn backtrack_and_continue<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    if state.revert_to_backtracking_point() {
-        debug!("Reverted to backtrack point and continuing");
-        symex_from_inst_in_cur_loc(state, 0)
-    } else {
-        // No backtrack points (and therefore no paths) remain
-        None
-    }
-}
-
-/// Symex starting from the given `inst` index in the current bb, returning
-/// (using the saved callstack) all the way back to the end of the top-level
-/// function.
-///
-/// Returns the `SymexResult` representing the final return value, or `None` if
-/// no possible paths were found.
-fn symex_from_inst_in_cur_loc<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, inst: usize) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    let bb = state.cur_loc.func.get_bb_by_name(&state.cur_loc.bbname).unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", state.cur_loc.bbname, state.cur_loc.func.name));
-    symex_from_inst_in_bb(state, &bb, inst)
-}
-
-/// Symex starting from the given `inst` index in the given bb, returning
-/// (using the saved callstack) all the way back to the end of the top-level
-/// function.
-///
-/// Returns the `SymexResult` representing the final return value, or `None` if
-/// no possible paths were found.
-fn symex_from_inst_in_bb<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    match symex_from_inst_in_bb_through_end_of_function(state, bb, inst) {
-        Some(symexresult) => match state.pop_callsite() {
-            Some(callsite) => {
-                // Return to callsite
-                state.cur_loc = callsite.loc.clone();
-                // Assign the returned value as the result of the caller's call instruction
-                match symexresult {
-                    SymexResult::Returned(bv) => {
-                        let call: &Instruction = callsite.loc.func
-                            .get_bb_by_name(&callsite.loc.bbname)
-                            .expect("Malformed callsite (bb not found)")
-                            .instrs
-                            .get(callsite.inst)
-                            .expect("Malformed callsite (inst out of range)");
-                        let call: &instruction::Call = match call {
-                            Instruction::Call(call) => call,
-                            _ => panic!("Malformed callsite: expected a Call, got {:?}", call),
-                        };
-                        if state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv).is_err() {
-                            // This path is dead, try backtracking again
-                            return backtrack_and_continue(state);
-                        };
+    /// Symex starting from the given `inst` index in the given bb, through the rest of the function.
+    /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
+    fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
+        assert_eq!(bb.name, self.state.cur_loc.bbname);
+        debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
+        self.state.record_in_path(PathEntry {
+            funcname: self.state.cur_loc.func.name.clone(),
+            bbname: bb.name.clone(),
+        });
+        for (instnum, inst) in bb.instrs.iter().skip(inst).enumerate() {
+            let result = if let Some((binop, z3binop)) = Self::inst_to_binop(&inst) {
+                self.symex_binop(&binop, z3binop)
+            } else {
+                match inst {
+                    Instruction::ICmp(icmp) => self.symex_icmp(&icmp),
+                    Instruction::Load(load) => self.symex_load(&load),
+                    Instruction::Store(store) => self.symex_store(&store),
+                    Instruction::GetElementPtr(gep) => self.symex_gep(&gep),
+                    Instruction::Alloca(alloca) => self.symex_alloca(&alloca),
+                    Instruction::ZExt(zext) => self.symex_zext(&zext),
+                    Instruction::SExt(sext) => self.symex_sext(&sext),
+                    Instruction::Trunc(trunc) => self.symex_trunc(&trunc),
+                    Instruction::BitCast(bitcast) => self.symex_bitcast(&bitcast),
+                    Instruction::Phi(phi) => self.symex_phi(&phi),
+                    Instruction::Select(select) => self.symex_select(&select),
+                    Instruction::Call(call) => match self.symex_call(&call, instnum) {
+                        Err(e) => Err(e),
+                        Ok(None) => Ok(()),
+                        Ok(Some(symexresult)) => return Some(symexresult),
                     },
-                    SymexResult::ReturnedVoid => { },
-                };
-                // Continue execution in caller, with the instruction after the call instruction
-                symex_from_inst_in_cur_loc(state, callsite.inst + 1)
+                    _ => unimplemented!("instruction {:?}", inst),
+                }
+            };
+            if result.is_err() {
+                // Having an `Err` here indicates we can't continue down this path,
+                // for instance because we're unsat, or because loop bound was exceeded, etc
+                return self.backtrack_and_continue();
+            }
+        }
+        match &bb.term {
+            Terminator::Ret(ret) => Some(self.symex_return(ret)),
+            Terminator::Br(br) => self.symex_br(br),
+            Terminator::CondBr(condbr) => self.symex_condbr(condbr),
+            term => unimplemented!("terminator {:?}", term),
+        }
+    }
+
+    /// Revert to the most recent backtrack point, then continue execution from that point.
+    /// Will continue not just to the end of the function containing the backtrack point,
+    /// but (using the saved callstack) all the way back to the end of the top-level function.
+    ///
+    /// Returns the `SymexResult` representing the final return value, or `None` if
+    /// no possible paths were found.
+    fn backtrack_and_continue(&mut self) -> Option<SymexResult<B::BV>> {
+        if self.state.revert_to_backtracking_point() {
+            debug!("Reverted to backtrack point and continuing");
+            self.symex_from_inst_in_cur_loc(0)
+        } else {
+            // No backtrack points (and therefore no paths) remain
+            None
+        }
+    }
+
+    /// Symex starting from the given `inst` index in the current bb, returning
+    /// (using the saved callstack) all the way back to the end of the top-level
+    /// function.
+    ///
+    /// Returns the `SymexResult` representing the final return value, or `None` if
+    /// no possible paths were found.
+    fn symex_from_inst_in_cur_loc(&mut self, inst: usize) -> Option<SymexResult<B::BV>> {
+        let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
+            .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
+        self.symex_from_inst_in_bb(&bb, inst)
+    }
+
+    /// Symex starting from the given `inst` index in the given bb, returning
+    /// (using the saved callstack) all the way back to the end of the top-level
+    /// function.
+    ///
+    /// Returns the `SymexResult` representing the final return value, or `None` if
+    /// no possible paths were found.
+    fn symex_from_inst_in_bb(&mut self, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
+        match self.symex_from_inst_in_bb_through_end_of_function(bb, inst) {
+            Some(symexresult) => match self.state.pop_callsite() {
+                Some(callsite) => {
+                    // Return to callsite
+                    self.state.cur_loc = callsite.loc.clone();
+                    // Assign the returned value as the result of the caller's call instruction
+                    match symexresult {
+                        SymexResult::Returned(bv) => {
+                            let call: &Instruction = callsite.loc.func
+                                .get_bb_by_name(&callsite.loc.bbname)
+                                .expect("Malformed callsite (bb not found)")
+                                .instrs
+                                .get(callsite.inst)
+                                .expect("Malformed callsite (inst out of range)");
+                            let call: &instruction::Call = match call {
+                                Instruction::Call(call) => call,
+                                _ => panic!("Malformed callsite: expected a Call, got {:?}", call),
+                            };
+                            if self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv).is_err() {
+                                // This path is dead, try backtracking again
+                                return self.backtrack_and_continue();
+                            };
+                        },
+                        SymexResult::ReturnedVoid => { },
+                    };
+                    // Continue execution in caller, with the instruction after the call instruction
+                    self.symex_from_inst_in_cur_loc(callsite.inst + 1)
+                },
+                None => {
+                    // No callsite to return to, so we're done
+                    Some(symexresult)
+                }
             },
             None => {
-                // No callsite to return to, so we're done
-                Some(symexresult)
-            }
-        },
-        None => {
-            // This path is dead, try backtracking again
-            backtrack_and_continue(state)
-        },
-    }
-}
-
-fn inst_to_binop<'ctx, V>(inst: &Instruction) -> Option<(instruction::groups::BinaryOp, Box<FnOnce(&V, &V) -> V + 'ctx>)> where V: BV<'ctx> + 'ctx {
-    match inst {
-        // TODO: how to not clone the inner instruction here
-        Instruction::Add(i) => Some((i.clone().into(), Box::new(<V as BV<'ctx>>::add))),
-        Instruction::Sub(i) => Some((i.clone().into(), Box::new(V::sub))),
-        Instruction::Mul(i) => Some((i.clone().into(), Box::new(V::mul))),
-        Instruction::UDiv(i) => Some((i.clone().into(), Box::new(V::udiv))),
-        Instruction::SDiv(i) => Some((i.clone().into(), Box::new(V::sdiv))),
-        Instruction::URem(i) => Some((i.clone().into(), Box::new(V::urem))),
-        Instruction::SRem(i) => Some((i.clone().into(), Box::new(V::srem))),
-        Instruction::And(i) => Some((i.clone().into(), Box::new(V::and))),
-        Instruction::Or(i) => Some((i.clone().into(), Box::new(V::or))),
-        Instruction::Xor(i) => Some((i.clone().into(), Box::new(V::xor))),
-        Instruction::Shl(i) => Some((i.clone().into(), Box::new(V::shl))),
-        Instruction::LShr(i) => Some((i.clone().into(), Box::new(V::lshr))),
-        Instruction::AShr(i) => Some((i.clone().into(), Box::new(V::ashr))),
-        _ => None,
-    }
-}
-
-fn intpred_to_z3pred<'ctx, B>(pred: IntPredicate) -> Box<FnOnce(&B::BV, &B::BV) -> B::Bool + 'ctx> where B: Backend<'ctx> {
-    match pred {
-        IntPredicate::EQ => Box::new(|a,b| B::BV::_eq(a,b)),
-        IntPredicate::NE => Box::new(|a,b| B::Bool::not(&B::BV::_eq(a,b))),
-        IntPredicate::UGT => Box::new(B::BV::ugt),
-        IntPredicate::UGE => Box::new(B::BV::uge),
-        IntPredicate::ULT => Box::new(B::BV::ult),
-        IntPredicate::ULE => Box::new(B::BV::ule),
-        IntPredicate::SGT => Box::new(B::BV::sgt),
-        IntPredicate::SGE => Box::new(B::BV::sge),
-        IntPredicate::SLT => Box::new(B::BV::slt),
-        IntPredicate::SLE => Box::new(B::BV::sle),
-    }
-}
-
-fn symex_binop<'ctx, B, F>(state: &mut State<'ctx, '_, B>, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<(), &'static str>
-    where B: Backend<'ctx>, F: FnOnce(&B::BV, &B::BV) -> B::BV
-{
-    debug!("Symexing binop {:?}", bop);
-    let z3firstop = state.operand_to_bv(&bop.get_operand0());
-    let z3secondop = state.operand_to_bv(&bop.get_operand1());
-    state.record_bv_result(bop, z3op(&z3firstop, &z3secondop))
-}
-
-fn symex_icmp<'ctx, B>(state: &mut State<'ctx, '_, B>, icmp: &instruction::ICmp) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing icmp {:?}", icmp);
-    let z3firstop = state.operand_to_bv(&icmp.operand0);
-    let z3secondop = state.operand_to_bv(&icmp.operand1);
-    let z3pred = intpred_to_z3pred::<B>(icmp.predicate);
-    state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
-}
-
-fn symex_zext<'ctx, B>(state: &mut State<'ctx, '_, B>, zext: &instruction::ZExt) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing zext {:?}", zext);
-    let z3op = state.operand_to_bv(&zext.operand);
-    let source_size = z3op.get_size();
-    let dest_size = match zext.get_type() {
-        Type::IntegerType { bits } => bits,
-        Type::VectorType { .. } => unimplemented!("ZExt on vectors"),
-        ty => panic!("ZExt result should be integer or vector of integers; got {:?}", ty),
-    };
-    state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
-}
-
-fn symex_sext<'ctx, B>(state: &mut State<'ctx, '_, B>, sext: &instruction::SExt) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing sext {:?}", sext);
-    let z3op = state.operand_to_bv(&sext.operand);
-    let source_size = z3op.get_size();
-    let dest_size = match sext.get_type() {
-        Type::IntegerType { bits } => bits,
-        Type::VectorType { .. } => unimplemented!("SExt on vectors"),
-        ty => panic!("SExt result should be integer or vector of integers; got {:?}", ty),
-    };
-    state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
-}
-
-fn symex_trunc<'ctx, B>(state: &mut State<'ctx, '_, B>, trunc: &instruction::Trunc) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing trunc {:?}", trunc);
-    let z3op = state.operand_to_bv(&trunc.operand);
-    let dest_size = match trunc.get_type() {
-        Type::IntegerType { bits } => bits,
-        Type::VectorType { .. } => unimplemented!("Trunc on vectors"),
-        ty => panic!("Trunc result should be integer or vector of integers; got {:?}", ty),
-    };
-    state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
-}
-
-fn symex_bitcast<'ctx, B>(state: &mut State<'ctx, '_, B>, bitcast: &instruction::BitCast) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing bitcast {:?}", bitcast);
-    let z3op = state.operand_to_bv(&bitcast.operand);
-    state.record_bv_result(bitcast, z3op)  // from Z3's perspective the bitcast is simply a no-op; the bit patterns are equal
-}
-
-fn symex_load<'ctx, B>(state: &mut State<'ctx, '_, B>, load: &instruction::Load) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing load {:?}", load);
-    let z3addr = state.operand_to_bv(&load.address);
-    let dest_size = size(&load.get_type());
-    state.record_bv_result(load, state.read(&z3addr, dest_size as u32))
-}
-
-fn symex_store<'ctx, B>(state: &mut State<'ctx, '_, B>, store: &instruction::Store) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing store {:?}", store);
-    let z3val = state.operand_to_bv(&store.value);
-    let z3addr = state.operand_to_bv(&store.address);
-    state.write(&z3addr, z3val);
-    Ok(())
-}
-
-fn symex_gep<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, gep: &'m instruction::GetElementPtr) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing gep {:?}", gep);
-    let z3base = state.operand_to_bv(&gep.address);
-    let offset = get_offset(state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
-    state.record_bv_result(gep, z3base.add(&offset).simplify())
-}
-
-/// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-fn get_offset<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &Type, result_bits: u32) -> B::BV where B: Backend<'ctx> {
-    let index = indices.next();
-    if index.is_none() {
-        return BV::from_u64(state.ctx, 0, result_bits);
-    }
-    let index = index.unwrap();  // we just handled the `None` case, so now it must have been `Some`
-    match base_type {
-        Type::PointerType { pointee_type, .. }
-        | Type::ArrayType { element_type: pointee_type, .. }
-        | Type::VectorType { element_type: pointee_type, .. }
-        => {
-            let el_size_bits = size(pointee_type) as u64;
-            if el_size_bits % 8 != 0 {
-                unimplemented!("Type with size {} bits", el_size_bits);
-            }
-            let el_size_bytes = el_size_bits / 8;
-            zero_extend_to_bits(state.operand_to_bv(index), result_bits)
-                .mul(&B::BV::from_u64(state.ctx, el_size_bytes, result_bits))
-                .add(&get_offset(state, indices, pointee_type, result_bits))
-        },
-        Type::StructType { element_types, .. } => match index {
-            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                let mut offset_bits = 0;
-                for ty in element_types.iter().take(*index as usize) {
-                    offset_bits += size(ty) as u64;
-                }
-                if offset_bits % 8 != 0 {
-                    unimplemented!("Struct offset of {} bits", offset_bits);
-                }
-                let offset_bytes = offset_bits / 8;
-                B::BV::from_u64(state.ctx, offset_bytes, result_bits)
-                    .add(&get_offset(state, indices, &element_types[*index as usize], result_bits))
+                // This path is dead, try backtracking again
+                self.backtrack_and_continue()
             },
-            _ => panic!("Can't get_offset from struct type with index {:?}", index),
-        },
-        Type::NamedStructType { ty, .. } => {
-            let rc: Rc<RefCell<Type>> = ty.as_ref()
-                .expect("get_offset on an opaque struct type")
-                .upgrade()
-                .expect("Failed to upgrade weak reference");
-            let actual_ty: &Type = &rc.borrow();
-            if let Type::StructType { ref element_types, .. } = actual_ty {
-                // this code copied from the StructType case, unfortunately
-                match index {
-                    Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                        let mut offset_bits = 0;
-                        for ty in element_types.iter().take(*index as usize) {
-                            offset_bits += size(ty) as u64;
-                        }
-                        if offset_bits % 8 != 0 {
-                            unimplemented!("Struct offset of {} bits", offset_bits);
-                        }
-                        let offset_bytes = offset_bits / 8;
-                        B::BV::from_u64(state.ctx, offset_bytes, result_bits)
-                            .add(&get_offset(state, indices, &element_types[*index as usize], result_bits))
-                    },
-                    _ => panic!("Can't get_offset from struct type with index {:?}", index),
+        }
+    }
+
+    fn inst_to_binop<V>(inst: &Instruction) -> Option<(instruction::groups::BinaryOp, Box<FnOnce(&V, &V) -> V + 'ctx>)> where V: BV<'ctx> + 'ctx {
+        match inst {
+            // TODO: how to not clone the inner instruction here
+            Instruction::Add(i) => Some((i.clone().into(), Box::new(<V as BV<'ctx>>::add))),
+            Instruction::Sub(i) => Some((i.clone().into(), Box::new(V::sub))),
+            Instruction::Mul(i) => Some((i.clone().into(), Box::new(V::mul))),
+            Instruction::UDiv(i) => Some((i.clone().into(), Box::new(V::udiv))),
+            Instruction::SDiv(i) => Some((i.clone().into(), Box::new(V::sdiv))),
+            Instruction::URem(i) => Some((i.clone().into(), Box::new(V::urem))),
+            Instruction::SRem(i) => Some((i.clone().into(), Box::new(V::srem))),
+            Instruction::And(i) => Some((i.clone().into(), Box::new(V::and))),
+            Instruction::Or(i) => Some((i.clone().into(), Box::new(V::or))),
+            Instruction::Xor(i) => Some((i.clone().into(), Box::new(V::xor))),
+            Instruction::Shl(i) => Some((i.clone().into(), Box::new(V::shl))),
+            Instruction::LShr(i) => Some((i.clone().into(), Box::new(V::lshr))),
+            Instruction::AShr(i) => Some((i.clone().into(), Box::new(V::ashr))),
+            _ => None,
+        }
+    }
+
+    fn intpred_to_z3pred(pred: IntPredicate) -> Box<FnOnce(&B::BV, &B::BV) -> B::Bool + 'ctx> {
+        match pred {
+            IntPredicate::EQ => Box::new(|a,b| B::BV::_eq(a,b)),
+            IntPredicate::NE => Box::new(|a,b| B::Bool::not(&B::BV::_eq(a,b))),
+            IntPredicate::UGT => Box::new(B::BV::ugt),
+            IntPredicate::UGE => Box::new(B::BV::uge),
+            IntPredicate::ULT => Box::new(B::BV::ult),
+            IntPredicate::ULE => Box::new(B::BV::ule),
+            IntPredicate::SGT => Box::new(B::BV::sgt),
+            IntPredicate::SGE => Box::new(B::BV::sge),
+            IntPredicate::SLT => Box::new(B::BV::slt),
+            IntPredicate::SLE => Box::new(B::BV::sle),
+        }
+    }
+
+    fn symex_binop<F>(&mut self, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<(), &'static str>
+        where F: FnOnce(&B::BV, &B::BV) -> B::BV
+    {
+        debug!("Symexing binop {:?}", bop);
+        let z3firstop = self.state.operand_to_bv(&bop.get_operand0());
+        let z3secondop = self.state.operand_to_bv(&bop.get_operand1());
+        self.state.record_bv_result(bop, z3op(&z3firstop, &z3secondop))
+    }
+
+    fn symex_icmp(&mut self, icmp: &instruction::ICmp) -> Result<(), &'static str> {
+        debug!("Symexing icmp {:?}", icmp);
+        let z3firstop = self.state.operand_to_bv(&icmp.operand0);
+        let z3secondop = self.state.operand_to_bv(&icmp.operand1);
+        let z3pred = Self::intpred_to_z3pred(icmp.predicate);
+        self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
+    }
+
+    fn symex_zext(&mut self, zext: &instruction::ZExt) -> Result<(), &'static str> {
+        debug!("Symexing zext {:?}", zext);
+        let z3op = self.state.operand_to_bv(&zext.operand);
+        let source_size = z3op.get_size();
+        let dest_size = match zext.get_type() {
+            Type::IntegerType { bits } => bits,
+            Type::VectorType { .. } => unimplemented!("ZExt on vectors"),
+            ty => panic!("ZExt result should be integer or vector of integers; got {:?}", ty),
+        };
+        self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
+    }
+
+    fn symex_sext(&mut self, sext: &instruction::SExt) -> Result<(), &'static str> {
+        debug!("Symexing sext {:?}", sext);
+        let z3op = self.state.operand_to_bv(&sext.operand);
+        let source_size = z3op.get_size();
+        let dest_size = match sext.get_type() {
+            Type::IntegerType { bits } => bits,
+            Type::VectorType { .. } => unimplemented!("SExt on vectors"),
+            ty => panic!("SExt result should be integer or vector of integers; got {:?}", ty),
+        };
+        self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
+    }
+
+    fn symex_trunc(&mut self, trunc: &instruction::Trunc) -> Result<(), &'static str> {
+        debug!("Symexing trunc {:?}", trunc);
+        let z3op = self.state.operand_to_bv(&trunc.operand);
+        let dest_size = match trunc.get_type() {
+            Type::IntegerType { bits } => bits,
+            Type::VectorType { .. } => unimplemented!("Trunc on vectors"),
+            ty => panic!("Trunc result should be integer or vector of integers; got {:?}", ty),
+        };
+        self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
+    }
+
+    fn symex_bitcast(&mut self, bitcast: &instruction::BitCast) -> Result<(), &'static str> {
+        debug!("Symexing bitcast {:?}", bitcast);
+        let z3op = self.state.operand_to_bv(&bitcast.operand);
+        self.state.record_bv_result(bitcast, z3op)  // from Z3's perspective the bitcast is simply a no-op; the bit patterns are equal
+    }
+
+    fn symex_load(&mut self, load: &instruction::Load) -> Result<(), &'static str> {
+        debug!("Symexing load {:?}", load);
+        let z3addr = self.state.operand_to_bv(&load.address);
+        let dest_size = size(&load.get_type());
+        self.state.record_bv_result(load, self.state.read(&z3addr, dest_size as u32))
+    }
+
+    fn symex_store(&mut self, store: &instruction::Store) -> Result<(), &'static str> {
+        debug!("Symexing store {:?}", store);
+        let z3val = self.state.operand_to_bv(&store.value);
+        let z3addr = self.state.operand_to_bv(&store.address);
+        self.state.write(&z3addr, z3val);
+        Ok(())
+    }
+
+    fn symex_gep(&mut self, gep: &'m instruction::GetElementPtr) -> Result<(), &'static str> {
+        debug!("Symexing gep {:?}", gep);
+        let z3base = self.state.operand_to_bv(&gep.address);
+        let offset = Self::get_offset(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
+        self.state.record_bv_result(gep, z3base.add(&offset).simplify())
+    }
+
+    /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
+    fn get_offset(state: &State<'ctx, 'm, B>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &Type, result_bits: u32) -> B::BV {
+        let index = indices.next();
+        if index.is_none() {
+            return BV::from_u64(state.ctx, 0, result_bits);
+        }
+        let index = index.unwrap();  // we just handled the `None` case, so now it must have been `Some`
+        match base_type {
+            Type::PointerType { pointee_type, .. }
+            | Type::ArrayType { element_type: pointee_type, .. }
+            | Type::VectorType { element_type: pointee_type, .. }
+            => {
+                let el_size_bits = size(pointee_type) as u64;
+                if el_size_bits % 8 != 0 {
+                    unimplemented!("Type with size {} bits", el_size_bits);
                 }
-            } else {
-                panic!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)
-            }
-        }
-        _ => panic!("get_offset with base type {:?}", base_type),
-    }
-}
-
-fn symex_alloca<'ctx, B>(state: &mut State<'ctx, '_, B>, alloca: &instruction::Alloca) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing alloca {:?}", alloca);
-    let allocation_size = size(&alloca.allocated_type);
-    let allocated = state.allocate(allocation_size as u64);
-    state.record_bv_result(alloca, allocated)
-}
-
-/// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
-/// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
-/// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
-fn symex_call<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>, &'static str> where B: Backend<'ctx> {
-    debug!("Symexing call {:?}", call);
-    let funcname = match call.function {
-        Either::Right(Operand::ConstantOperand(Constant::GlobalReference { ref name, .. })) => name,
-        Either::Left(_) => unimplemented!("inline assembly"),
-        _ => unimplemented!("{:?}", call),
-    };
-    if let Name::Name(s) = funcname {
-        if let Some(callee) = state.cur_loc.module.get_func_by_name(s) {
-            assert_eq!(call.arguments.len(), callee.parameters.len());
-            let z3args: Vec<_> = call.arguments.iter().map(|arg| state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
-            let saved_loc = state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
-            state.push_callsite(instnum);
-            let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
-            state.cur_loc.func = callee;
-            state.cur_loc.bbname = bb.name.clone();
-            for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
-                state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
-            }
-            let returned_bv = symex_from_bb_through_end_of_function(state, &bb).ok_or("No more valid paths through callee")?;
-            match state.pop_callsite() {
-                None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
-                    state.cur_loc = saved_loc;
-                    state.record_in_path(PathEntry {
-                        funcname: state.cur_loc.func.name.clone(),
-                        bbname: state.cur_loc.bbname.clone(),
-                    });
-                    match returned_bv {
-                        SymexResult::Returned(bv) => {
-                            // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
-                            state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
-                        },
-                        SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
-                    };
-                    debug!("Completed ordinary return to caller");
-                    Ok(None)
+                let el_size_bytes = el_size_bits / 8;
+                zero_extend_to_bits(state.operand_to_bv(index), result_bits)
+                    .mul(&B::BV::from_u64(state.ctx, el_size_bytes, result_bits))
+                    .add(&Self::get_offset(state, indices, pointee_type, result_bits))
+            },
+            Type::StructType { element_types, .. } => match index {
+                Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                    let mut offset_bits = 0;
+                    for ty in element_types.iter().take(*index as usize) {
+                        offset_bits += size(ty) as u64;
+                    }
+                    if offset_bits % 8 != 0 {
+                        unimplemented!("Struct offset of {} bits", offset_bits);
+                    }
+                    let offset_bytes = offset_bits / 8;
+                    B::BV::from_u64(state.ctx, offset_bytes, result_bits)
+                        .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits))
                 },
-                Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
+                _ => panic!("Can't get_offset from struct type with index {:?}", index),
+            },
+            Type::NamedStructType { ty, .. } => {
+                let rc: Rc<RefCell<Type>> = ty.as_ref()
+                    .expect("get_offset on an opaque struct type")
+                    .upgrade()
+                    .expect("Failed to upgrade weak reference");
+                let actual_ty: &Type = &rc.borrow();
+                if let Type::StructType { ref element_types, .. } = actual_ty {
+                    // this code copied from the StructType case, unfortunately
+                    match index {
+                        Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                            let mut offset_bits = 0;
+                            for ty in element_types.iter().take(*index as usize) {
+                                offset_bits += size(ty) as u64;
+                            }
+                            if offset_bits % 8 != 0 {
+                                unimplemented!("Struct offset of {} bits", offset_bits);
+                            }
+                            let offset_bytes = offset_bits / 8;
+                            B::BV::from_u64(state.ctx, offset_bytes, result_bits)
+                                .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits))
+                        },
+                        _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                    }
+                } else {
+                    panic!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)
+                }
             }
-        } else if s.starts_with("llvm.memset") {
-            symex_memset(state, call);
-            Ok(None)
-        } else if s.starts_with("llvm.memcpy") || s.starts_with("llvm.memmove") {
-            // Our memcpy implementation also works for memmove
-            symex_memcpy(state, call);
-            Ok(None)
-        } else if s.starts_with("llvm.lifetime")
-            || s.starts_with("llvm.invariant")
-            || s.starts_with("llvm.launder.invariant")
-            || s.starts_with("llvm.strip.invariant")
-        {
-            Ok(None) // these are all safe to ignore
-        } else {
-            unimplemented!("Call of a function named {:?}", s)
+            _ => panic!("get_offset with base type {:?}", base_type),
         }
-    } else {
-        panic!("Function with a numbered name, {:?}", funcname)
+    }
+
+    fn symex_alloca(&mut self, alloca: &instruction::Alloca) -> Result<(), &'static str> {
+        debug!("Symexing alloca {:?}", alloca);
+        let allocation_size = size(&alloca.allocated_type);
+        let allocated = self.state.allocate(allocation_size as u64);
+        self.state.record_bv_result(alloca, allocated)
+    }
+
+    /// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
+    /// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
+    /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
+    fn symex_call(&mut self, call: &'m instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>, &'static str> {
+        debug!("Symexing call {:?}", call);
+        let funcname = match call.function {
+            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { ref name, .. })) => name,
+            Either::Left(_) => unimplemented!("inline assembly"),
+            _ => unimplemented!("{:?}", call),
+        };
+        if let Name::Name(s) = funcname {
+            if let Some(callee) = self.state.cur_loc.module.get_func_by_name(s) {
+                assert_eq!(call.arguments.len(), callee.parameters.len());
+                let z3args: Vec<_> = call.arguments.iter().map(|arg| self.state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+                let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
+                self.state.push_callsite(instnum);
+                let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
+                self.state.cur_loc.func = callee;
+                self.state.cur_loc.bbname = bb.name.clone();
+                for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
+                    self.state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
+                }
+                let returned_bv = self.symex_from_bb_through_end_of_function(&bb).ok_or("No more valid paths through callee")?;
+                match self.state.pop_callsite() {
+                    None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
+                    Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
+                        self.state.cur_loc = saved_loc;
+                        self.state.record_in_path(PathEntry {
+                            funcname: self.state.cur_loc.func.name.clone(),
+                            bbname: self.state.cur_loc.bbname.clone(),
+                        });
+                        match returned_bv {
+                            SymexResult::Returned(bv) => {
+                                // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
+                                self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
+                            },
+                            SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
+                        };
+                        debug!("Completed ordinary return to caller");
+                        Ok(None)
+                    },
+                    Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
+                }
+            } else if s.starts_with("llvm.memset") {
+                symex_memset(&mut self.state, call);
+                Ok(None)
+            } else if s.starts_with("llvm.memcpy") || s.starts_with("llvm.memmove") {
+                // Our memcpy implementation also works for memmove
+                symex_memcpy(&mut self.state, call);
+                Ok(None)
+            } else if s.starts_with("llvm.lifetime")
+                || s.starts_with("llvm.invariant")
+                || s.starts_with("llvm.launder.invariant")
+                || s.starts_with("llvm.strip.invariant")
+            {
+                Ok(None) // these are all safe to ignore
+            } else {
+                unimplemented!("Call of a function named {:?}", s)
+            }
+        } else {
+            panic!("Function with a numbered name, {:?}", funcname)
+        }
+    }
+
+    // Returns the `SymexResult` representing the return value
+    fn symex_return(&self, ret: &terminator::Ret) -> SymexResult<B::BV> {
+        debug!("Symexing return {:?}", ret);
+        ret.return_operand
+            .as_ref()
+            .map(|op| SymexResult::Returned(self.state.operand_to_bv(op)))
+            .unwrap_or(SymexResult::ReturnedVoid)
+    }
+
+    // Continues to the target of the `Br` and eventually returns the new `SymexResult`
+    // representing the return value of the function (when it reaches the end of the
+    // function), or `None` if no possible paths were found.
+    fn symex_br(&mut self, br: &'m terminator::Br) -> Option<SymexResult<B::BV>> {
+        debug!("Symexing br {:?}", br);
+        self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
+        self.state.cur_loc.bbname = br.dest.clone();
+        self.symex_from_cur_loc_through_end_of_function()
+    }
+
+    // Continues to the target(s) of the `CondBr` (saving a backtracking point if
+    // necessary) and eventually returns the new `SymexResult` representing the
+    // return value of the function (when it reaches the end of the function), or
+    // `None` if no possible paths were found.
+    fn symex_condbr(&mut self, condbr: &'m terminator::CondBr) -> Option<SymexResult<B::BV>> {
+        debug!("Symexing condbr {:?}", condbr);
+        let z3cond = self.state.operand_to_bool(&condbr.condition);
+        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond));
+        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()));
+        if true_feasible && false_feasible {
+            // for now we choose to explore true first, and backtrack to false if necessary
+            self.state.save_backtracking_point(condbr.false_dest.clone(), z3cond.not());
+            self.state.assert(&z3cond);
+            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
+            self.state.cur_loc.bbname = condbr.true_dest.clone();
+            self.symex_from_cur_loc_through_end_of_function()
+        } else if true_feasible {
+            self.state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
+            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
+            self.state.cur_loc.bbname = condbr.true_dest.clone();
+            self.symex_from_cur_loc_through_end_of_function()
+        } else if false_feasible {
+            self.state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
+            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
+            self.state.cur_loc.bbname = condbr.false_dest.clone();
+            self.symex_from_cur_loc_through_end_of_function()
+        } else {
+            self.backtrack_and_continue()
+        }
+    }
+
+    fn symex_phi(&mut self, phi: &instruction::Phi) -> Result<(), &'static str> {
+        debug!("Symexing phi {:?}", phi);
+        let prev_bb = self.state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block");
+        let mut chosen_value = None;
+        for (op, bbname) in phi.incoming_values.iter() {
+            if bbname == prev_bb {
+                chosen_value = Some(op);
+                break;
+            }
+        }
+        let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
+        self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value))
+    }
+
+    fn symex_select(&mut self, select: &instruction::Select) -> Result<(), &'static str> {
+        debug!("Symexing select {:?}", select);
+        let z3cond = self.state.operand_to_bool(&select.condition);
+        let z3trueval = self.state.operand_to_bv(&select.true_value);
+        let z3falseval = self.state.operand_to_bv(&select.false_value);
+        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond));
+        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()));
+        if true_feasible && false_feasible {
+            self.state.record_bv_result(select, B::Bool::bvite(&z3cond, &z3trueval, &z3falseval))
+        } else if true_feasible {
+            self.state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
+            self.state.record_bv_result(select, z3trueval)
+        } else if false_feasible {
+            self.state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
+            self.state.record_bv_result(select, z3falseval)
+        } else {
+            // returning `Err` marks us unsat and will cause us to backtrack
+            Err("discovered we're unsat while checking a switch condition")
+        }
     }
 }
+
+// Built-in "hooks" for LLVM intrinsics
 
 fn symex_memset<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call) where B: Backend<'ctx> {
     assert_eq!(call.arguments.len(), 4);
@@ -517,91 +608,6 @@ fn symex_memcpy<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instructi
         }
     } else {
         unimplemented!("LLVM memcpy or memmove with non-constant-int num_bytes {:?}", call.arguments[2].0)
-    }
-}
-
-// Returns the `SymexResult` representing the return value
-fn symex_return<'ctx, 'm, B>(state: &State<'ctx, 'm, B>, ret: &terminator::Ret) -> SymexResult<B::BV> where B: Backend<'ctx> {
-    debug!("Symexing return {:?}", ret);
-    ret.return_operand
-        .as_ref()
-        .map(|op| SymexResult::Returned(state.operand_to_bv(op)))
-        .unwrap_or(SymexResult::ReturnedVoid)
-}
-
-// Continues to the target of the `Br` and eventually returns the new `SymexResult`
-// representing the return value of the function (when it reaches the end of the
-// function), or `None` if no possible paths were found.
-fn symex_br<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, br: &'m terminator::Br) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    debug!("Symexing br {:?}", br);
-    state.prev_bb_name = Some(state.cur_loc.bbname.clone());
-    state.cur_loc.bbname = br.dest.clone();
-    symex_from_cur_loc_through_end_of_function(state)
-}
-
-// Continues to the target(s) of the `CondBr` (saving a backtracking point if
-// necessary) and eventually returns the new `SymexResult` representing the
-// return value of the function (when it reaches the end of the function), or
-// `None` if no possible paths were found.
-fn symex_condbr<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, condbr: &'m terminator::CondBr) -> Option<SymexResult<B::BV>> where B: Backend<'ctx> {
-    debug!("Symexing condbr {:?}", condbr);
-    let z3cond = state.operand_to_bool(&condbr.condition);
-    let true_feasible = state.check_with_extra_constraints(std::iter::once(&z3cond));
-    let false_feasible = state.check_with_extra_constraints(std::iter::once(&z3cond.not()));
-    if true_feasible && false_feasible {
-        // for now we choose to explore true first, and backtrack to false if necessary
-        state.save_backtracking_point(condbr.false_dest.clone(), z3cond.not());
-        state.assert(&z3cond);
-        state.prev_bb_name = Some(state.cur_loc.bbname.clone());
-        state.cur_loc.bbname = condbr.true_dest.clone();
-        symex_from_cur_loc_through_end_of_function(state)
-    } else if true_feasible {
-        state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
-        state.prev_bb_name = Some(state.cur_loc.bbname.clone());
-        state.cur_loc.bbname = condbr.true_dest.clone();
-        symex_from_cur_loc_through_end_of_function(state)
-    } else if false_feasible {
-        state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
-        state.prev_bb_name = Some(state.cur_loc.bbname.clone());
-        state.cur_loc.bbname = condbr.false_dest.clone();
-        symex_from_cur_loc_through_end_of_function(state)
-    } else {
-        backtrack_and_continue(state)
-    }
-}
-
-fn symex_phi<'ctx, B>(state: &mut State<'ctx, '_, B>, phi: &instruction::Phi) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing phi {:?}", phi);
-    let prev_bb = state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block");
-    let mut chosen_value = None;
-    for (op, bbname) in phi.incoming_values.iter() {
-        if bbname == prev_bb {
-            chosen_value = Some(op);
-            break;
-        }
-    }
-    let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
-    state.record_bv_result(phi, state.operand_to_bv(&chosen_value))
-}
-
-fn symex_select<'ctx, B>(state: &mut State<'ctx, '_, B>, select: &instruction::Select) -> Result<(), &'static str> where B: Backend<'ctx> {
-    debug!("Symexing select {:?}", select);
-    let z3cond = state.operand_to_bool(&select.condition);
-    let z3trueval = state.operand_to_bv(&select.true_value);
-    let z3falseval = state.operand_to_bv(&select.false_value);
-    let true_feasible = state.check_with_extra_constraints(std::iter::once(&z3cond));
-    let false_feasible = state.check_with_extra_constraints(std::iter::once(&z3cond.not()));
-    if true_feasible && false_feasible {
-        state.record_bv_result(select, B::Bool::bvite(&z3cond, &z3trueval, &z3falseval))
-    } else if true_feasible {
-        state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
-        state.record_bv_result(select, z3trueval)
-    } else if false_feasible {
-        state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
-        state.record_bv_result(select, z3falseval)
-    } else {
-        // returning `Err` marks us unsat and will cause us to backtrack
-        Err("discovered we're unsat while checking a switch condition")
     }
 }
 
