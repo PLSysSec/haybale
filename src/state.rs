@@ -50,6 +50,7 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct PathEntry {
+    pub modname: String,
     pub funcname: String,
     pub bbname: Name,
 }
@@ -60,7 +61,7 @@ impl fmt::Debug for PathEntry {
             Name::Name(ref s) => format!("{:?}", s),
             Name::Number(n) => format!("%{}", n),
         };
-        write!(f, "{{{} {}}}", self.funcname, pretty_name)
+        write!(f, "{{{}: {} {}}}", self.modname, self.funcname, pretty_name)
     }
 }
 

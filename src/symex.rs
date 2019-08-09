@@ -121,6 +121,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
         assert_eq!(bb.name, self.state.cur_loc.bbname);
         debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
         self.state.record_in_path(PathEntry {
+            modname: self.state.cur_loc.module.name.clone(),
             funcname: self.state.cur_loc.func.name.clone(),
             bbname: bb.name.clone(),
         });
@@ -457,6 +458,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
                     Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
                         self.state.cur_loc = saved_loc;
                         self.state.record_in_path(PathEntry {
+                            modname: self.state.cur_loc.module.name.clone(),
                             funcname: self.state.cur_loc.func.name.clone(),
                             bbname: self.state.cur_loc.bbname.clone(),
                         });
@@ -630,18 +632,30 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    type Path<'m> = Vec<PathEntry>;
+    type Path = Vec<PathEntry>;
 
-    fn path_from_bbnames(funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path {
+    fn path_from_bbnames(modname: &str, funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path {
         let mut vec = vec![];
         for bbname in bbnames {
-            vec.push(PathEntry { funcname: funcname.to_string(), bbname });
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname });
         }
         vec
     }
 
-    fn path_from_bbnums(funcname: &str, bbnums: impl IntoIterator<Item = usize>) -> Path {
-        path_from_bbnames(funcname, bbnums.into_iter().map(Name::Number))
+    fn path_from_bbnums(modname: &str, funcname: &str, bbnums: impl IntoIterator<Item = usize>) -> Path {
+        path_from_bbnames(modname, funcname, bbnums.into_iter().map(Name::Number))
+    }
+
+    fn path_from_func_and_bbname_pairs<'a>(modname: &str, pairs: impl IntoIterator<Item = (&'a str, Name)>) -> Path {
+        let mut vec = vec![];
+        for (funcname, bbname) in pairs {
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname });
+        }
+        vec
+    }
+
+    fn path_from_func_and_bbnum_pairs<'a>(modname: &str, pairs: impl IntoIterator<Item = (&'a str, usize)>) -> Path {
+        path_from_func_and_bbname_pairs(modname, pairs.into_iter().map(|(f, num)| (f, Name::Number(num))))
     }
 
     /// Iterator over the paths through a function
@@ -656,7 +670,7 @@ mod tests {
     }
 
     impl<'ctx, 'm, B> Iterator for PathIterator<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
-        type Item = Path<'m>;
+        type Item = Path;
 
         fn next(&mut self) -> Option<Self::Item> {
             self.em.next().map(|_| self.em.state().path.clone())
@@ -672,7 +686,7 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = PathIterator::<Z3Backend>::new(&ctx, &module, func, config).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
@@ -685,8 +699,8 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![2, 4, 12]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 8, 12]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![2, 4, 12]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 8, 12]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
     }
 
@@ -699,10 +713,10 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![2, 4, 6, 14]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 4, 8, 10, 14]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![2, 4, 8, 12, 14]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![2, 14]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![2, 4, 6, 14]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 4, 8, 10, 14]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![2, 4, 8, 12, 14]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![2, 14]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
 
@@ -715,11 +729,11 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 6, 6, 12]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 6, 12]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 6, 6, 6, 12]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 6, 6, 12]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 6, 12]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 6, 6, 12]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 6, 12]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 12]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 12]));
+        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 6, 12]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
@@ -732,12 +746,12 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 9, 6]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 9, 9, 6]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 9, 9, 9, 6]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 9, 9, 9, 9, 6]));
-        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 9, 9, 9, 9, 9, 6]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 9, 6]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 6]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 9, 6]));
+        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 9, 9, 6]));
+        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 9, 9, 9, 6]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
 
@@ -750,13 +764,13 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 5, 8, 18]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 5, 11, 8, 18]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 11, 11, 8, 18]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 5, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 5, 11, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 18]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 5, 8, 18]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 8, 18]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 8, 18]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 18]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
     }
 
@@ -769,21 +783,21 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 6, 13, 16,
-                                                                6, 10, 16,
-                                                                6, 10, 16,
-                                                                6, 13, 16,
-                                                                6, 10, 16, 20]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 6, 13, 16,
-                                                                6, 10, 16,
-                                                                6, 10, 16,
-                                                                6, 13, 16, 20]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 6, 13, 16,
-                                                                6, 10, 16,
-                                                                6, 10, 16, 20]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 6, 13, 16,
-                                                                6, 10, 16, 20]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 6, 13, 16, 20]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
+                                                                                6, 10, 16,
+                                                                                6, 10, 16,
+                                                                                6, 13, 16,
+                                                                                6, 10, 16, 20]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
+                                                                                6, 10, 16,
+                                                                                6, 10, 16,
+                                                                                6, 13, 16, 20]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
+                                                                                6, 10, 16,
+                                                                                6, 10, 16, 20]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
+                                                                                6, 10, 16, 20]));
+        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16, 20]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
@@ -796,8 +810,8 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-                                                            11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+                                                                                11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
@@ -810,16 +824,16 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                            10, 7]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                            10, 7]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                            10, 7]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 7]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                            10, 7]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                            10, 7]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                            10, 7]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 7]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
 
@@ -832,11 +846,11 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
-        ]);
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("simple_caller", 1),
+            ("simple_callee", 2),
+            ("simple_caller", 1),
+        ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
@@ -849,14 +863,14 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(4) },
-            PathEntry { funcname: "conditional_caller".to_owned(), bbname: Name::Number(8) },
-        ]);
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![2, 6, 8]));
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("conditional_caller", 2),
+            ("conditional_caller", 4),
+            ("simple_callee", 2),
+            ("conditional_caller", 4),
+            ("conditional_caller", 8),
+        ]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 6, 8]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
     }
 
@@ -869,13 +883,13 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "twice_caller".to_owned(), bbname: Name::Number(1) },
-        ]);
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("twice_caller", 1),
+            ("simple_callee", 2),
+            ("twice_caller", 1),
+            ("simple_callee", 2),
+            ("twice_caller", 1),
+        ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
@@ -888,13 +902,13 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "simple_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "nested_caller".to_owned(), bbname: Name::Number(2) },
-        ]);
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("nested_caller", 2),
+            ("simple_caller", 1),
+            ("simple_callee", 2),
+            ("simple_caller", 1),
+            ("nested_caller", 2),
+        ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
@@ -907,57 +921,57 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-        ]);
-        assert_eq!(paths[1], vec![
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-        ]);
-        assert_eq!(paths[2], vec![
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-        ]);
-        assert_eq!(paths[3], vec![
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-        ]);
-        assert_eq!(paths[4], vec![
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-        ]);
-        assert_eq!(paths[5], vec![
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(13) },
-            PathEntry { funcname: "callee_with_loop".to_owned(), bbname: Name::Number(9) },
-            PathEntry { funcname: "caller_of_loop".to_owned(), bbname: Name::Number(1) },
-        ]);
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_of_loop", 1),
+            ("callee_with_loop", 2),
+            ("callee_with_loop", 9),
+            ("caller_of_loop", 1),
+        ]));
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_of_loop", 1),
+            ("callee_with_loop", 2),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 9),
+            ("caller_of_loop", 1),
+        ]));
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_of_loop", 1),
+            ("callee_with_loop", 2),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 9),
+            ("caller_of_loop", 1),
+        ]));
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_of_loop", 1),
+            ("callee_with_loop", 2),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 9),
+            ("caller_of_loop", 1),
+        ]));
+        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_of_loop", 1),
+            ("callee_with_loop", 2),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 9),
+            ("caller_of_loop", 1),
+        ]));
+        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_of_loop", 1),
+            ("callee_with_loop", 2),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 9),
+            ("caller_of_loop", 1),
+        ]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
 
@@ -970,43 +984,43 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
-        ]);
-        assert_eq!(paths[1], vec![
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
-        ]);
-        assert_eq!(paths[2], vec![
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
-        ]);
-        assert_eq!(paths[3], vec![
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(6) },
-            PathEntry { funcname: "caller_with_loop".to_owned(), bbname: Name::Number(8) },
-        ]);
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_with_loop", 1),
+            ("caller_with_loop", 8),
+        ]));
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_with_loop", 1),
+            ("caller_with_loop", 10),
+            ("simple_callee", 2),
+            ("caller_with_loop", 10),
+            ("caller_with_loop", 6),
+            ("caller_with_loop", 8),
+        ]));
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_with_loop", 1),
+            ("caller_with_loop", 10),
+            ("simple_callee", 2),
+            ("caller_with_loop", 10),
+            ("caller_with_loop", 10),
+            ("simple_callee", 2),
+            ("caller_with_loop", 10),
+            ("caller_with_loop", 6),
+            ("caller_with_loop", 8),
+        ]));
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("caller_with_loop", 1),
+            ("caller_with_loop", 10),
+            ("simple_callee", 2),
+            ("caller_with_loop", 10),
+            ("caller_with_loop", 10),
+            ("simple_callee", 2),
+            ("caller_with_loop", 10),
+            ("caller_with_loop", 10),
+            ("simple_callee", 2),
+            ("caller_with_loop", 10),
+            ("caller_with_loop", 6),
+            ("caller_with_loop", 8),
+        ]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
 
@@ -1019,16 +1033,16 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6]));
-        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 6, 1, 9, 6, 6]));
-        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 4, 9, 6]));
-        assert_eq!(paths[7], path_from_bbnums(&func.name, vec![1, 4, 6, 1, 9, 6]));
-        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 4, 9]));
-        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 9]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6]));
+        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6]));
+        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 9, 6, 6]));
+        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 9, 6]));
+        assert_eq!(paths[7], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 9, 6]));
+        assert_eq!(paths[8], path_from_bbnums(&module.name, &func.name, vec![1, 4, 9]));
+        assert_eq!(paths[9], path_from_bbnums(&module.name, &func.name, vec![1, 9]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
@@ -1041,16 +1055,16 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 4, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 4, 6, 8, 1, 4, 20, 8]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 14]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 20, 8, 14]));
-        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 12, 18, 20, 14]));
-        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 14, 1, 4, 20, 14]));
-        assert_eq!(paths[7], path_from_bbnums(&func.name, vec![1, 4, 6, 12, 18, 20]));
-        assert_eq!(paths[8], path_from_bbnums(&func.name, vec![1, 4, 20]));
-        assert_eq!(paths[9], path_from_bbnums(&func.name, vec![1, 20]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 20, 8]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 14]));
+        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 20, 8, 14]));
+        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 12, 18, 20, 14]));
+        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 20, 14]));
+        assert_eq!(paths[7], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 18, 20]));
+        assert_eq!(paths[8], path_from_bbnums(&module.name, &func.name, vec![1, 4, 20]));
+        assert_eq!(paths[9], path_from_bbnums(&module.name, &func.name, vec![1, 20]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
@@ -1063,13 +1077,13 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&func.name, vec![1, 3, 15]));
-        assert_eq!(paths[1], path_from_bbnums(&func.name, vec![1, 5, 1, 3, 15, 5, 10, 15]));
-        assert_eq!(paths[2], path_from_bbnums(&func.name, vec![1, 5, 1, 3, 15, 5, 12, 15]));
-        assert_eq!(paths[3], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 10, 15]));
-        assert_eq!(paths[4], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 12, 15]));
-        assert_eq!(paths[5], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 10, 15]));
-        assert_eq!(paths[6], path_from_bbnums(&func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 12, 15]));
+        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 3, 15]));
+        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 3, 15, 5, 10, 15]));
+        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 3, 15, 5, 12, 15]));
+        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 10, 15]));
+        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 12, 15]));
+        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 10, 15]));
+        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 12, 15]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
     }
 
@@ -1082,59 +1096,59 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[1], vec![
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[2], vec![
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[3], vec![
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "simple_callee".to_owned(), bbname: Name::Number(2) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-        ]);
-        assert_eq!(paths[4], vec![
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "recursive_and_normal_caller".to_owned(), bbname: Name::Number(10) },
-        ]);
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 3),
+            ("simple_callee", 2),
+            ("recursive_and_normal_caller", 3),
+            ("recursive_and_normal_caller", 7),
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 3),
+            ("simple_callee", 2),
+            ("recursive_and_normal_caller", 3),
+            ("recursive_and_normal_caller", 7),
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 3),
+            ("simple_callee", 2),
+            ("recursive_and_normal_caller", 3),
+            ("recursive_and_normal_caller", 10),
+            ("recursive_and_normal_caller", 7),
+            ("recursive_and_normal_caller", 7),
+        ]));
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 3),
+            ("simple_callee", 2),
+            ("recursive_and_normal_caller", 3),
+            ("recursive_and_normal_caller", 7),
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 3),
+            ("simple_callee", 2),
+            ("recursive_and_normal_caller", 3),
+            ("recursive_and_normal_caller", 10),
+            ("recursive_and_normal_caller", 7),
+        ]));
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 3),
+            ("simple_callee", 2),
+            ("recursive_and_normal_caller", 3),
+            ("recursive_and_normal_caller", 7),
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 10),
+            ("recursive_and_normal_caller", 7),
+        ]));
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 3),
+            ("simple_callee", 2),
+            ("recursive_and_normal_caller", 3),
+            ("recursive_and_normal_caller", 10),
+        ]));
+        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("recursive_and_normal_caller", 1),
+            ("recursive_and_normal_caller", 10),
+        ]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
@@ -1147,90 +1161,90 @@ mod tests {
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], vec![
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[1], vec![
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[2], vec![
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[3], vec![
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[4], vec![
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_b".to_owned(), bbname: Name::Number(7) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(3) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-        ]);
-        assert_eq!(paths[5], vec![
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(1) },
-            PathEntry { funcname: "mutually_recursive_a".to_owned(), bbname: Name::Number(7) },
-        ]);
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+        ]));
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 7),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+        ]));
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+        ]));
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 7),
+            ("mutually_recursive_b", 3),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+        ]));
+        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_b", 1),
+            ("mutually_recursive_b", 7),
+            ("mutually_recursive_a", 3),
+            ("mutually_recursive_a", 7),
+        ]));
+        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(&module.name, vec![
+            ("mutually_recursive_a", 1),
+            ("mutually_recursive_a", 7),
+        ]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
 }
