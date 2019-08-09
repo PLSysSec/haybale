@@ -1,4 +1,5 @@
 use crate::backend::Backend;
+use crate::default_hooks;
 use crate::state::State;
 use llvm_ir::instruction;
 use std::collections::HashMap;
@@ -33,10 +34,24 @@ pub struct Config<'ctx, B> where B: Backend<'ctx> {
     pub function_hooks: HashMap<String, FunctionHook<'ctx, B>>,
 }
 
-pub struct FunctionHook<'ctx, B>(Box<Fn(&mut State<'ctx, '_, B>, &instruction::Call)>) where B: Backend<'ctx>;
+/// Function hooks are given mutable access to the `State`, and read-only access
+/// to the `Call` they are hooking (which includes arguments etc).
+///
+pub struct FunctionHook<'ctx, B>(Box<Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> HookResult + 'ctx>)
+    where B: Backend<'ctx>;
 
-impl<'ctx, 'm, B> FunctionHook<'ctx, B> where B: Backend<'ctx> {
-    pub fn call_hook(&self, state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call) {
+/// Function hooks should return `Ok(())` if processing succeeded.
+///
+/// If they return `Err`, this will be treated as an indication that the current
+/// path should be killed (and not some other type of error).
+pub type HookResult = Result<(), &'static str>;
+
+impl<'ctx, B> FunctionHook<'ctx, B> where B: Backend<'ctx> {
+    pub fn new(f: &'ctx Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> HookResult) -> Self {
+        Self(Box::new(f))
+    }
+
+    pub fn call_hook(&self, state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> HookResult {
         (self.0)(state, call)
     }
 }
@@ -45,7 +60,7 @@ impl<'ctx, B> Default for Config<'ctx, B> where B: Backend<'ctx> {
     fn default() -> Self {
         Self {
             loop_bound: 10,
-            function_hooks: HashMap::new(),
+            function_hooks: default_hooks::default_hooks(),
         }
     }
 }

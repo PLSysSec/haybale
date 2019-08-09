@@ -438,7 +438,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
         };
         if let Name::Name(s) = funcname {
             if let Some(hook) = self.config.function_hooks.get(s) {
-                hook.call_hook(&mut self.state, call);
+                hook.call_hook(&mut self.state, call)?;
                 Ok(None)
             } else if let Some(callee) = self.state.cur_loc.module.get_func_by_name(s) {
                 assert_eq!(call.arguments.len(), callee.parameters.len());

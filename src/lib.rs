@@ -9,6 +9,8 @@ mod extend;
 
 mod config;
 pub use config::Config;
+mod default_hooks;
+pub use default_hooks::*;
 
 mod state;
 pub mod memory;
