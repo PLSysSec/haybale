@@ -11,17 +11,32 @@ use crate::backend::*;
 use crate::config::Config;
 use crate::extend::*;
 
-/// Begin symbolic execution of the given function, obtaining an `ExecutionManager`.
+/// Begin symbolic execution of the given function `func`, obtaining an `ExecutionManager`.
 /// The function's parameters will start completely unconstrained.
-pub fn symex_function<'ctx, 'm, B>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, config: Config<'ctx, B>) -> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
+///
+/// `func_module`: the `Module` containing `func`
+///
+/// `other_modules`: Any other `Module`s to follow calls into.
+/// In the absence of function hooks (see [`Config`](struct.Config.html)),
+/// `symex_function` will try to enter calls to any functions defined in
+/// `func_module` or any of `other_modules`.
+/// `other_modules` should not include duplicates; in particular, it should not
+/// include `func_module`.
+pub fn symex_function<'ctx, 'm, B>(
+    ctx: &'ctx z3::Context,
+    func: &'m Function,
+    func_module: &'m Module,
+    other_modules: impl IntoIterator<Item = &'m Module>,
+    config: Config<'ctx, B>,
+) -> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
     debug!("Symexing function {}", func.name);
     let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
     let start_loc = Location {
-        module,
+        module: func_module,
         func,
         bbname: bb.name.clone(),
     };
-    let mut state = State::new(ctx, start_loc, &config);
+    let mut state = State::new(ctx, std::iter::once(func_module).chain(other_modules.into_iter()), start_loc, &config);
     let z3params: Vec<_> = func.parameters.iter().map(|param| {
         state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
     }).collect();
@@ -441,14 +456,17 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
             if let Some(hook) = self.config.function_hooks.get(s) {
                 hook.call_hook(&mut self.state, call)?;
                 Ok(None)
-            } else if let Some(callee) = self.state.cur_loc.module.get_func_by_name(s) {
+            } else if let Some((callee, callee_mod)) = self.state.get_func_by_name(s) {
                 assert_eq!(call.arguments.len(), callee.parameters.len());
                 let z3args: Vec<_> = call.arguments.iter().map(|arg| self.state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                 let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
                 self.state.push_callsite(instnum);
                 let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
-                self.state.cur_loc.func = callee;
-                self.state.cur_loc.bbname = bb.name.clone();
+                self.state.cur_loc = Location {
+                    module: callee_mod,
+                    func: callee,
+                    bbname: bb.name.clone(),
+                };
                 for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
                     self.state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                 }
@@ -658,14 +676,39 @@ mod tests {
         path_from_func_and_bbname_pairs(modname, pairs.into_iter().map(|(f, num)| (f, Name::Number(num))))
     }
 
+    /// Build a path from (modname, funcname, bbnum) triples
+    fn path_from_triples<'a>(triples: impl IntoIterator<Item = (&'a String, &'a str, usize)>) -> Path {
+        let mut vec = vec![];
+        for (modname, funcname, bbnum) in triples {
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::Number(bbnum) });
+        }
+        vec
+    }
+
     /// Iterator over the paths through a function
     struct PathIterator<'ctx, 'm, B> where B: Backend<'ctx> {
         em: ExecutionManager<'ctx, 'm, B>,
     }
 
     impl<'ctx, 'm, B> PathIterator<'ctx, 'm, B> where B: Backend<'ctx> {
-        pub fn new(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function, config: Config<'ctx, B>) -> Self {
-            Self { em: symex_function(ctx, module, func, config) }
+        /// For argument descriptions, see notes on `symex_function`
+        pub fn new(
+            ctx: &'ctx z3::Context,
+            func: &'m Function,
+            func_module: &'m Module,
+            other_modules: impl IntoIterator<Item = &'m Module>,
+            config: Config<'ctx, B>,
+        ) -> Self {
+            Self { em: symex_function(ctx, func, func_module, other_modules, config) }
+        }
+
+        pub fn new_with_single_module(
+            ctx: &'ctx z3::Context,
+            module: &'m Module,
+            func: &'m Function,
+            config: Config<'ctx, B>,
+        ) -> Self {
+            Self { em: symex_function(ctx, func, module, std::iter::empty(), config) }
         }
     }
 
@@ -685,7 +728,7 @@ mod tests {
         let func = module.get_func_by_name("one_arg").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = PathIterator::<Z3Backend>::new(&ctx, &module, func, config).collect();
+        let paths: Vec<Path> = PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -698,7 +741,7 @@ mod tests {
         let func = module.get_func_by_name("conditional_true").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![2, 4, 12]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 8, 12]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
@@ -712,7 +755,7 @@ mod tests {
         let func = module.get_func_by_name("conditional_nozero").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![2, 4, 6, 14]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 4, 8, 10, 14]));
         assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![2, 4, 8, 12, 14]));
@@ -728,7 +771,7 @@ mod tests {
         let func = module.get_func_by_name("while_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 6, 6, 12]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 6, 12]));
         assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 12]));
@@ -745,7 +788,7 @@ mod tests {
         let func = module.get_func_by_name("for_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 9, 6]));
         assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 6]));
@@ -763,7 +806,7 @@ mod tests {
         let func = module.get_func_by_name("loop_zero_iterations").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 5, 8, 18]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 8, 18]));
         assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 8, 18]));
@@ -782,7 +825,7 @@ mod tests {
         let func = module.get_func_by_name("loop_with_cond").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
                                                                                 6, 10, 16,
                                                                                 6, 10, 16,
@@ -809,7 +852,7 @@ mod tests {
         let func = module.get_func_by_name("sum_of_array").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
                                                                                 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
@@ -823,7 +866,7 @@ mod tests {
         let func = module.get_func_by_name("nested_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                             10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                             10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
@@ -845,13 +888,32 @@ mod tests {
         let func = module.get_func_by_name("simple_caller").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("simple_caller", 1),
             ("simple_callee", 2),
             ("simple_caller", 1),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn cross_module_simple_call() {
+        init_logging();
+        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
+            .expect("Failed to parse crossmod.bc module");
+        let func = callermod.get_func_by_name("cross_module_simple_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let config = Config { loop_bound: 5, ..Config::default() };
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        assert_eq!(paths[0], path_from_triples(vec![
+            (&callermod.name, "cross_module_simple_caller", 1),
+            (&callmod.name, "simple_callee", 2),
+            (&callermod.name, "cross_module_simple_caller", 1),
+        ]));
+        assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
 
     #[test]
@@ -862,7 +924,7 @@ mod tests {
         let func = module.get_func_by_name("conditional_caller").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("conditional_caller", 2),
             ("conditional_caller", 4),
@@ -882,7 +944,7 @@ mod tests {
         let func = module.get_func_by_name("twice_caller").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("twice_caller", 1),
             ("simple_callee", 2),
@@ -891,6 +953,27 @@ mod tests {
             ("twice_caller", 1),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn cross_module_call_twice() {
+        init_logging();
+        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
+            .expect("Failed to parse crossmod.bc module");
+        let func = callermod.get_func_by_name("cross_module_twice_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let config = Config { loop_bound: 5, ..Config::default() };
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        assert_eq!(paths[0], path_from_triples(vec![
+            (&callermod.name, "cross_module_twice_caller", 1),
+            (&callmod.name, "simple_callee", 2),
+            (&callermod.name, "cross_module_twice_caller", 1),
+            (&callmod.name, "simple_callee", 2),
+            (&callermod.name, "cross_module_twice_caller", 1),
+        ]));
+        assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
 
     #[test]
@@ -901,7 +984,7 @@ mod tests {
         let func = module.get_func_by_name("nested_caller").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("nested_caller", 2),
             ("simple_caller", 1),
@@ -913,6 +996,48 @@ mod tests {
     }
 
     #[test]
+    fn cross_module_nested_near_call() {
+        init_logging();
+        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
+            .expect("Failed to parse crossmod.bc module");
+        let func = callermod.get_func_by_name("cross_module_nested_near_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let config = Config { loop_bound: 5, ..Config::default() };
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        assert_eq!(paths[0], path_from_triples(vec![
+            (&callermod.name, "cross_module_nested_near_caller", 2),
+            (&callermod.name, "cross_module_simple_caller", 1),
+            (&callmod.name, "simple_callee", 2),
+            (&callermod.name, "cross_module_simple_caller", 1),
+            (&callermod.name, "cross_module_nested_near_caller", 2),
+        ]));
+        assert_eq!(paths.len(), 1);  // enusre there are no more paths
+    }
+
+    #[test]
+    fn cross_module_nested_far_call() {
+        init_logging();
+        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
+            .expect("Failed to parse call.bc module");
+        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
+            .expect("Failed to parse crossmod.bc module");
+        let func = callermod.get_func_by_name("cross_module_nested_far_caller").expect("Failed to find function");
+        let ctx = z3::Context::new(&z3::Config::new());
+        let config = Config { loop_bound: 5, ..Config::default() };
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        assert_eq!(paths[0], path_from_triples(vec![
+            (&callermod.name, "cross_module_nested_far_caller", 2),
+            (&callmod.name, "simple_caller", 1),
+            (&callmod.name, "simple_callee", 2),
+            (&callmod.name, "simple_caller", 1),
+            (&callermod.name, "cross_module_nested_far_caller", 2),
+        ]));
+        assert_eq!(paths.len(), 1);  // enusre there are no more paths
+    }
+
+    #[test]
     fn call_of_loop() {
         init_logging();
         let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
@@ -920,7 +1045,7 @@ mod tests {
         let func = module.get_func_by_name("caller_of_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
@@ -983,7 +1108,7 @@ mod tests {
         let func = module.get_func_by_name("caller_with_loop").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("caller_with_loop", 1),
             ("caller_with_loop", 8),
@@ -1032,7 +1157,7 @@ mod tests {
         let func = module.get_func_by_name("recursive_simple").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
         assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
@@ -1054,7 +1179,7 @@ mod tests {
         let func = module.get_func_by_name("recursive_double").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 4, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
         assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 20, 8]));
@@ -1076,7 +1201,7 @@ mod tests {
         let func = module.get_func_by_name("recursive_not_tail").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 3, 15]));
         assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 3, 15, 5, 10, 15]));
         assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 3, 15, 5, 12, 15]));
@@ -1095,7 +1220,7 @@ mod tests {
         let func = module.get_func_by_name("recursive_and_normal_caller").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 3),
@@ -1160,7 +1285,7 @@ mod tests {
         let func = module.get_func_by_name("mutually_recursive_a").expect("Failed to find function");
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, &module, func, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),

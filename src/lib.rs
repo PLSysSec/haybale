@@ -71,17 +71,19 @@ impl SolutionValue {
 /// Given a function, find values of its inputs such that it returns zero.
 /// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer.
 ///
+/// For detailed descriptions of the arguments, see [`symex_function`](fn.symex_function.html).
+///
 /// Returns `None` if there are no values of the inputs such that the function returns zero.
 ///
 /// Note: `find_zero_of_func()` may be of some use itself, but is included in the
 /// crate more as an example of how you can use the other public functions in the
 /// crate.
-pub fn find_zero_of_func<'ctx>(ctx: &'ctx z3::Context, func: &Function, module: &Module, config: Config<'ctx, Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
+pub fn find_zero_of_func<'ctx, 'm>(ctx: &'ctx z3::Context, func: &'m Function, func_module: &'m Module, other_modules: impl IntoIterator<Item = &'m Module>, config: Config<'ctx, Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
     let returnwidth = size(&func.return_type);
     let zero = z3::ast::BV::from_u64(ctx, 0, returnwidth as u32);
 
     let mut found = false;
-    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, module, func, config);
+    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, func, func_module, other_modules, config);
     while let Some(z3rval) = em.next() {
         match z3rval {
             SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),

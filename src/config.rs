@@ -11,9 +11,16 @@ pub struct Config<'ctx, B> where B: Backend<'ctx> {
     pub loop_bound: usize,
 
     /// Map from function names to the hook to use (if any).
-    /// You can hook internal functions (which are defined in the same
-    /// module as the caller), external functions (e.g., calls to external libraries),
-    /// LLVM intrinsics, or any other kind of function.
+    /// You can hook internal functions (which are defined in some available LLVM
+    /// `Module`), external functions (e.g., calls to external libraries), LLVM
+    /// intrinsics, or any other kind of function.
+    ///
+    /// Note that the function [`default_hooks()`](fn.default_hooks.html)
+    /// provides a set of predefined hooks for common functions.
+    /// (At the time of this writing, only `malloc()` and `free()`.)
+    /// `Config::default()` uses these predefined hooks and no others.
+    /// If you define your own hooks, you may want to consider starting with
+    /// `default_hooks()` rather than an empty map.
     ///
     /// The function resolution process is as follows:
     ///
@@ -21,9 +28,8 @@ pub struct Config<'ctx, B> where B: Backend<'ctx> {
     /// will be used instead of any other option. That is, the hook has the
     /// highest precedence.
     ///
-    /// (2) Else, if the function is not hooked but is defined in the same LLVM
-    /// module as the caller, the function will be symbolically executed
-    /// (called).
+    /// (2) Else, if the function is not hooked but is defined in an available
+    /// LLVM `Module`, the function will be symbolically executed (called).
     ///
     /// (3) Haybale provides default hooks for certain LLVM intrinsics like
     /// `memcpy`, which it will apply if the first two options fail.

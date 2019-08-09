@@ -33,6 +33,7 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     mem: B::Memory,
     alloc: Alloc,
     solver: B::Solver,
+    active_modules: Vec<&'m Module>,
     /// Map from `Name`s of global variables, to addresses at which they are allocated
     allocated_globals: HashMap<Name, B::BV>,
     /// This tracks the call stack of the symbolic execution.
@@ -145,10 +146,20 @@ impl<'ctx, 'm, B> fmt::Display for BacktrackPoint<'ctx, 'm, B> where B: Backend<
 }
 
 impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
+    /// `modules`: The set of modules in which symbolic execution should take place.
+    /// In the absence of function hooks (see [`Config`](struct.Config.html)), we
+    /// will try to enter calls to any functions defined in these modules.
+    ///
     /// `start_loc`: the `Location` where the `State` should begin executing.
-    ///   As of this writing, this should be the entry point of a function, or you
-    ///   will have problems.
-    pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, config: &Config<'ctx, B>) -> Self {
+    /// Must be in one of `modules`.
+    /// As of this writing, `start_loc` should also be the entry point of a
+    /// function, or you will have problems.
+    pub fn new(
+        ctx: &'ctx z3::Context,
+        modules: impl IntoIterator<Item = &'m Module>,
+        start_loc: Location<'m>,
+        config: &Config<'ctx, B>,
+    ) -> Self {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
         let mut state = Self {
             ctx,
@@ -159,6 +170,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
             solver: B::Solver::new(ctx, backend_state.clone()),
+            active_modules: modules.into_iter().collect(),
             allocated_globals: HashMap::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
@@ -493,6 +505,22 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
         }
     }
 
+    /// Search all active modules for a function with the given name.
+    /// If a matching function is found, return both it and the module it was
+    /// found in.
+    pub fn get_func_by_name(&self, name: &str) -> Option<(&'m Function, &'m Module)> {
+        let mut retval = None;
+        for module in &self.active_modules {
+            if let Some(f) = module.get_func_by_name(name) {
+                match retval {
+                    None => retval = Some((f, *module)),
+                    Some(_) => panic!("Multiple functions found with name {:?}", name),
+                };
+            }
+        }
+        retval
+    }
+
     /// Read a value `bits` bits long from memory at `addr`.
     /// Caller is responsible for ensuring that the read does not cross cell boundaries
     /// (see notes in memory.rs)
@@ -608,7 +636,7 @@ mod tests {
             func,
             bbname: "test_bb".to_owned().into(),
         };
-        State::new(ctx, start_loc, &Config::default())
+        State::new(ctx, std::iter::once(module), start_loc, &Config::default())
     }
 
     /// utility that creates a technically valid (but functionally useless) `Module` for testing
