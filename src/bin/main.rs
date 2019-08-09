@@ -24,7 +24,7 @@ fn main() {
     let ctx = z3::Context::new(&z3::Config::new());
     for func in functions {
         println!("Finding zero of function {:?}...", func.name);
-        if let Some(args) = find_zero_of_func(&ctx, func, &llvm_mod, &Config::default()) {
+        if let Some(args) = find_zero_of_func(&ctx, func, &llvm_mod, Config::default()) {
             assert_eq!(args.len(), func.parameters.len());
             match func.parameters.len() {
                 0 => println!("Function returns zero when passed no arguments\n"),

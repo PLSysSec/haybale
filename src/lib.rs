@@ -74,7 +74,7 @@ impl SolutionValue {
 /// Note: `find_zero_of_func()` may be of some use itself, but is included in the
 /// crate more as an example of how you can use the other public functions in the
 /// crate.
-pub fn find_zero_of_func<'ctx>(ctx: &'ctx z3::Context, func: &Function, module: &Module, config: &Config<Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
+pub fn find_zero_of_func<'ctx>(ctx: &'ctx z3::Context, func: &Function, module: &Module, config: Config<'ctx, Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
     let returnwidth = size(&func.return_type);
     let zero = z3::ast::BV::from_u64(ctx, 0, returnwidth as u32);
 

@@ -3,7 +3,7 @@ use crate::state::State;
 use llvm_ir::instruction;
 use std::collections::HashMap;
 
-pub struct Config<B> {
+pub struct Config<'ctx, B> where B: Backend<'ctx> {
     /// Maximum number of times to execute any given line of LLVM IR.
     /// This bounds both the number of iterations of loops, and also the depth of recursion.
     /// For inner loops, this bounds the number of total iterations across all invocations of the loop.
@@ -30,18 +30,18 @@ pub struct Config<B> {
     /// (4) If none of the above options apply, an error will be raised.
     /// Note that this means that calls to external functions will always
     /// error unless a hook for them is provided here.
-    pub function_hooks: HashMap<String, FunctionHook<B>>,
+    pub function_hooks: HashMap<String, FunctionHook<'ctx, B>>,
 }
 
-pub struct FunctionHook<B>(Box<Fn(&mut State<B>, &instruction::Call)>);
+pub struct FunctionHook<'ctx, B>(Box<Fn(&mut State<'ctx, '_, B>, &instruction::Call)>) where B: Backend<'ctx>;
 
-impl<'ctx, 'm, B> FunctionHook<B> where B: Backend<'ctx> {
+impl<'ctx, 'm, B> FunctionHook<'ctx, B> where B: Backend<'ctx> {
     pub fn call_hook(&self, state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call) {
         (self.0)(state, call)
     }
 }
 
-impl<B> Default for Config<B> {
+impl<'ctx, B> Default for Config<'ctx, B> where B: Backend<'ctx> {
     fn default() -> Self {
         Self {
             loop_bound: 10,

@@ -147,7 +147,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// `start_loc`: the `Location` where the `State` should begin executing.
     ///   As of this writing, this should be the entry point of a function, or you
     ///   will have problems.
-    pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, config: &Config<B>) -> Self {
+    pub fn new(ctx: &'ctx z3::Context, start_loc: Location<'m>, config: &Config<'ctx, B>) -> Self {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
         let mut state = Self {
             ctx,
