@@ -34,7 +34,7 @@ pub fn symex_function<'ctx, 'p, B>(
         func,
         bbname: bb.name.clone(),
     };
-    let mut state = State::new(ctx, start_loc, &config);
+    let mut state = State::new(ctx, project, start_loc, &config);
     let z3params: Vec<_> = func.parameters.iter().map(|param| {
         state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
     }).collect();

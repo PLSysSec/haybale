@@ -2,6 +2,7 @@ use llvm_ir::*;
 use log::debug;
 use reduce::Reduce;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -10,6 +11,7 @@ use crate::alloc::Alloc;
 use crate::backend::*;
 use crate::config::Config;
 use crate::extend::*;
+use crate::project::Project;
 use crate::size::size;
 use crate::varmap::{VarMap, RestoreInfo};
 
@@ -150,6 +152,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// function, or you will have problems.
     pub fn new(
         ctx: &'ctx z3::Context,
+        project: &'p Project,
         start_loc: Location<'p>,
         config: &Config<'ctx, B>,
     ) -> Self {
@@ -170,20 +173,35 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             // listed last (out-of-order) so that it can be used above but moved in now
             backend_state,
         };
-        // Here we do initialization of the global variables in the Module
-        debug!("Initializing global variables");
-        for var in &state.cur_loc.module.global_vars {
-            if let Type::PointerType { pointee_type, .. } = &var.ty {
-                let addr = state.allocate(size(&*pointee_type) as u64);
-                if let Some(ref c) = var.initializer {
-                    state.write(&addr, state.const_to_bv(c));
+        // Here we do allocation and initialization of the global variables in the Project
+        debug!("Allocating and initializing global variables");
+        for var in project.all_global_vars() {
+            // We only want to allocate/initialize for global variable
+            // *definitions*, not merely global variable *declarations*. This
+            // way we don't end up trying to allocate a global multiple times,
+            // i.e., in each module where it is declared.
+            //
+            // From LLVM docs (direct quote) "Definitions have initializers,
+            // declarations don't."
+            // So, we only allocate/initialize if an initializer is present.
+            // This implies that even globals without an initializer in C have
+            // one in LLVM, which seems weird to me, but it's what the docs say,
+            // and also matches what I've seen empirically.
+            if let Some(ref initial_val) = var.initializer {
+                if let Type::PointerType { pointee_type, .. } = &var.ty {
+                    let addr = state.allocate(size(&*pointee_type) as u64);
+                    debug!("Allocated {:?} at {:?}", var.name, addr);
+                    state.write(&addr, state.const_to_bv(initial_val));
+                    match state.allocated_globals.entry(var.name.clone()) {
+                        Entry::Occupied(_) => panic!("Found multiple globals with the name {:?}", var.name),
+                        Entry::Vacant(entry) => entry.insert(addr),
+                    };
+                } else {
+                    panic!("Global variable has non-pointer type {:?}", &var.ty);
                 }
-                state.allocated_globals.insert(var.name.clone(), addr);
-            } else {
-                panic!("Global variable has non-pointer type {:?}", &var.ty);
             }
         }
-        debug!("Done initializing global variables");
+        debug!("Done allocating and initializing global variables");
         state
     }
 
@@ -605,29 +623,32 @@ mod tests {
     // we don't include tests here for Solver, Memory, Alloc, or VarMap; those are tested in their own modules.
     // Instead, here we just test the nontrivial functionality that State has itself.
 
-    /// utility to initialize a `State` out of a `z3::Context`, a `Module`, and a `Function`
-    fn blank_state<'ctx, 'p>(ctx: &'ctx z3::Context, module: &'p Module, func: &'p Function) -> State<'ctx, 'p, Z3Backend<'ctx>> {
+    /// utility to initialize a `State` out of a `z3::Context`, a `Project`, and a function name
+    fn blank_state<'ctx, 'p>(ctx: &'ctx z3::Context, project: &'p Project, funcname: &str) -> State<'ctx, 'p, Z3Backend<'ctx>> {
+        let (func, module) = project.get_func_by_name(funcname).expect("Failed to find function");
         let start_loc = Location {
             module,
             func,
             bbname: "test_bb".to_owned().into(),
         };
-        State::new(ctx, start_loc, &Config::default())
+        State::new(ctx, project, start_loc, &Config::default())
     }
 
-    /// utility that creates a technically valid (but functionally useless) `Module` for testing
-    fn blank_module(name: impl Into<String>) -> Module {
-        Module {
-            name: name.into(),
+    /// Utility that creates a simple `Project` for testing.
+    /// The `Project` will contain a single `Module` (with the given name) which contains
+    /// a single function (given).
+    fn blank_project(modname: impl Into<String>, func: Function) -> Project {
+        Project::from_module(Module {
+            name: modname.into(),
             source_file_name: String::new(),
             data_layout: String::new(),
             target_triple: None,
-            functions: vec![],
+            functions: vec![func],
             global_vars: vec![],
             global_aliases: vec![],
             named_struct_types: HashMap::new(),
             inline_assembly: String::new(),
-        }
+        })
     }
 
     /// utility that creates a technically valid (but functionally useless) `Function` for testing
@@ -638,9 +659,9 @@ mod tests {
     #[test]
     fn lookup_vars_via_operand() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let module = blank_module("test_mod");
         let func = blank_function("test_func");
-        let mut state = blank_state(&ctx, &module, &func);
+        let project = blank_project("test_mod", func);
+        let mut state = blank_state(&ctx, &project, "test_func");
 
         // create llvm-ir names
         let valname = Name::Name("val".to_owned());
@@ -660,9 +681,9 @@ mod tests {
     #[test]
     fn const_bv() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let module = blank_module("test_mod");
         let func = blank_function("test_func");
-        let mut state = blank_state(&ctx, &module, &func);
+        let project = blank_project("test_mod", func);
+        let mut state = blank_state(&ctx, &project, "test_func");
 
         // create an llvm-ir value which is constant 3
         let constint = Constant::Int { bits: 64, value: 3 };
@@ -677,9 +698,9 @@ mod tests {
     #[test]
     fn const_bool() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let module = blank_module("test_mod");
         let func = blank_function("test_func");
-        let mut state = blank_state(&ctx, &module, &func);
+        let project = blank_project("test_mod", func);
+        let mut state = blank_state(&ctx, &project, "test_func");
 
         // create llvm-ir constants true and false
         let consttrue = Constant::Int { bits: 1, value: 1 };
@@ -705,9 +726,9 @@ mod tests {
     #[test]
     fn backtracking() {
         let ctx = z3::Context::new(&z3::Config::new());
-        let module = blank_module("test_mod");
         let func = blank_function("test_func");
-        let mut state = blank_state(&ctx, &module, &func);
+        let project = blank_project("test_mod", func);
+        let mut state = blank_state(&ctx, &project, "test_func");
 
         // assert x > 11
         let x = z3::ast::BV::new_const(&ctx, "x", 64);

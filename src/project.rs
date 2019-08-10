@@ -1,4 +1,5 @@
 use llvm_ir::{Function, Module};
+use llvm_ir::module::{GlobalAlias, GlobalVariable};
 use std::fs::DirEntry;
 use std::io;
 use std::path::Path;
@@ -60,6 +61,16 @@ impl Project {
         self.modules.iter().map(|m| m.functions.iter()).flatten()
     }
 
+    /// Iterate over all `GlobalVariable`s in the `Project`
+    pub fn all_global_vars(&self) -> impl Iterator<Item = &GlobalVariable> {
+        self.modules.iter().map(|m| m.global_vars.iter()).flatten()
+    }
+
+    /// Iterate over all `GlobalAlias`es in the `Project`
+    pub fn all_global_aliases(&self) -> impl Iterator<Item = &GlobalAlias> {
+        self.modules.iter().map(|m| m.global_aliases.iter()).flatten()
+    }
+
     /// Search the project for a function with the given name.
     /// If a matching function is found, return both it and the module it was
     /// found in.
@@ -99,6 +110,14 @@ impl Project {
             .collect::<Vec<Result<_,_>>>()  // Turns Iterator<Item = Result<_, _>> into Vec<Result<_, _>>
             .into_iter()
             .collect()  // Turns Vec<Result<T, E>> into Result<Vec<T>, E>, failing if any of the results were Err
+    }
+
+    /// For testing only: construct a `Project` directly from a `Module`
+    #[cfg(test)]
+    pub(crate) fn from_module(module: Module) -> Self {
+        Self {
+            modules: vec![module],
+        }
     }
 }
 

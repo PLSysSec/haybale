@@ -9,6 +9,7 @@ all: basic.bc basic.ll \
 			linkedlist.bc linkedlist.ll \
 			call.bc call.ll \
 			crossmod.bc crossmod.ll \
+			globals.bc globals.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@

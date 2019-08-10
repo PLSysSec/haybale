@@ -5,15 +5,10 @@ authors = ["Craig Disselkoen <craigdissel@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-llvm-ir = "0.2.1"
-z3 = "0.3.2"
+llvm-ir = { git = "https://github.com/cdisselkoen/llvm-ir" }
+z3 = { path = "../z3.rs/z3" }
 either = "1.5.2"
 itertools = "0.8.0"
 reduce = "0.1"
 log = "0.4.0"
 env_logger = "0.6.1"
-
-# override the dependency with our locally-patched version, for now
-# see https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#overriding-dependencies
-[patch.crates-io]
-z3 = { path = "../z3.rs/z3" }

@@ -121,3 +121,62 @@ pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, proje
         None
     }
 }
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
+pub enum ReturnValues {
+    ExactlyOnePossibleValue(u64),
+    MultiplePossibleValues,
+    NoPossibleValues,
+}
+
+/// Get a description of the possible return values of a function, for given
+/// argument values.
+/// Considers all possible paths through the function given these arguments.
+///
+/// `args`: For each function parameter, either a concrete value for that
+/// parameter, or `None` to have the analysis consider all possible values of the
+/// parameter.
+///
+/// For detailed descriptions of the other arguments, see [`symex_function`](fn.symex_function.html).
+pub fn get_possible_return_values_of_func<'ctx, 'p>(
+    ctx: &'ctx z3::Context,
+    funcname: &str,
+    args: impl IntoIterator<Item = Option<u64>>,
+    project: &'p Project,
+    config: Config<'ctx, Z3Backend<'ctx>>,
+) -> ReturnValues {
+    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, funcname, project, config);
+
+    let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
+    for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
+        if let Some(val) = arg {
+            em.mut_state().overwrite_latest_version_of_bv(&param.name, BV::from_u64(ctx, val, size(&param.ty) as u32));
+        }
+    }
+
+    let mut candidate_value = None;
+    while let Some(z3rval) = em.next() {
+        match z3rval {
+            SymexResult::ReturnedVoid => panic!("This function shouldn't be called with functions that return void"),
+            SymexResult::Returned(z3rval) => {
+                let state = em.mut_state();
+                if let Some(val) = state.get_a_solution_for_bv(&z3rval) {
+                    match candidate_value {
+                        None => candidate_value = Some(val),  // this will be our new candidate value
+                        Some(c) if c != val => return ReturnValues::MultiplePossibleValues,  // we clearly have at least two possibilities for the value
+                        Some(_) => {},  // this value was already our candidate value; do nothing
+                    };
+                    // now check for other possible values along this path
+                    state.assert(&z3rval._eq(&BV::from_u64(ctx, val, z3rval.get_size())).not());
+                    if state.check() {
+                        return ReturnValues::MultiplePossibleValues;
+                    }
+                }
+            }
+        }
+    }
+    match candidate_value {
+        Some(val) => ReturnValues::ExactlyOnePossibleValue(val),
+        None => ReturnValues::NoPossibleValues,
+    }
+}
