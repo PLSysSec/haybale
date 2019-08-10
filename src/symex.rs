@@ -6,41 +6,39 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 pub use crate::state::{State, Callsite, Location, PathEntry};
-use crate::size::size;
 use crate::backend::*;
 use crate::config::Config;
 use crate::extend::*;
+use crate::project::Project;
+use crate::size::size;
 
-/// Begin symbolic execution of the given function `func`, obtaining an `ExecutionManager`.
-/// The function's parameters will start completely unconstrained.
+/// Begin symbolic execution of the function named `funcname`, obtaining an
+/// `ExecutionManager`. The function's parameters will start completely
+/// unconstrained.
 ///
-/// `func_module`: the `Module` containing `func`
-///
-/// `other_modules`: Any other `Module`s to follow calls into.
-/// In the absence of function hooks (see [`Config`](struct.Config.html)),
-/// `symex_function` will try to enter calls to any functions defined in
-/// `func_module` or any of `other_modules`.
-/// `other_modules` should not include duplicates; in particular, it should not
-/// include `func_module`.
-pub fn symex_function<'ctx, 'm, B>(
+/// `project`: The `Project` (set of LLVM modules) in which symbolic execution
+/// should take place. In the absence of function hooks (see
+/// [`Config`](struct.Config.html)), we will try to enter calls to any functions
+/// defined in the `Project`.
+pub fn symex_function<'ctx, 'p, B>(
     ctx: &'ctx z3::Context,
-    func: &'m Function,
-    func_module: &'m Module,
-    other_modules: impl IntoIterator<Item = &'m Module>,
+    funcname: &str,
+    project: &'p Project,
     config: Config<'ctx, B>,
-) -> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
-    debug!("Symexing function {}", func.name);
+) -> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
+    debug!("Symexing function {}", funcname);
+    let (func, module) = project.get_func_by_name(funcname).unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
     let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
     let start_loc = Location {
-        module: func_module,
+        module,
         func,
         bbname: bb.name.clone(),
     };
-    let mut state = State::new(ctx, std::iter::once(func_module).chain(other_modules.into_iter()), start_loc, &config);
+    let mut state = State::new(ctx, start_loc, &config);
     let z3params: Vec<_> = func.parameters.iter().map(|param| {
         state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
     }).collect();
-    ExecutionManager::new(state, config, z3params, &bb)
+    ExecutionManager::new(state, project, config, z3params, &bb)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a function.
@@ -52,21 +50,23 @@ pub fn symex_function<'ctx, 'm, B>(
 /// from the end of that path using the `state()` or `mut_state()` methods.
 /// When `next()` returns `None`, there are no more possible paths through the
 /// function.
-pub struct ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
-    state: State<'ctx, 'm, B>,
+pub struct ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
+    state: State<'ctx, 'p, B>,
+    project: &'p Project,
     config: Config<'ctx, B>,
     z3params: Vec<B::BV>,
-    start_bb: &'m BasicBlock,
+    start_bb: &'p BasicBlock,
     /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
     /// has not yet produced its first path, i.e., `next()` has not been called
     /// on it yet.
     fresh: bool,
 }
 
-impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
-    fn new(state: State<'ctx, 'm, B>, config: Config<'ctx, B>, z3params: Vec<B::BV>, start_bb: &'m BasicBlock) -> Self {
+impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
+    fn new(state: State<'ctx, 'p, B>, project: &'p Project, config: Config<'ctx, B>, z3params: Vec<B::BV>, start_bb: &'p BasicBlock) -> Self {
         Self {
             state,
+            project,
             config,
             z3params,
             start_bb,
@@ -77,7 +77,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
     /// Provides access to the `State` resulting from the end of the most recently
     /// explored path (or, if `next()` has never been called on this `ExecutionManager`,
     /// then simply the initial `State` which was passed in).
-    pub fn state(&self) -> &State<'ctx, 'm, B> {
+    pub fn state(&self) -> &State<'ctx, 'p, B> {
         &self.state
     }
 
@@ -86,7 +86,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> {
     /// "sticky", and will persist through all executions of the function.
     /// However, changes made to a final state (after a call to `next()`) will be
     /// completely wiped away the next time that `next()` is called.
-    pub fn mut_state(&mut self) -> &mut State<'ctx, 'm, B> {
+    pub fn mut_state(&mut self) -> &mut State<'ctx, 'p, B> {
         &mut self.state
     }
 
@@ -101,7 +101,7 @@ pub enum SymexResult<V> {
     ReturnedVoid,
 }
 
-impl<'ctx, 'm, B> Iterator for ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
+impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     type Item = SymexResult<B::BV>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -115,7 +115,7 @@ impl<'ctx, 'm, B> Iterator for ExecutionManager<'ctx, 'm, B> where B: Backend<'c
     }
 }
 
-impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
+impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// Symex from the current `Location` through the rest of the function.
     /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
     fn symex_from_cur_loc_through_end_of_function(&mut self) -> Option<SymexResult<B::BV>> {
@@ -126,13 +126,13 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
 
     /// Symex the given bb, through the rest of the function.
     /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-    fn symex_from_bb_through_end_of_function(&mut self, bb: &'m BasicBlock) -> Option<SymexResult<B::BV>> {
+    fn symex_from_bb_through_end_of_function(&mut self, bb: &'p BasicBlock) -> Option<SymexResult<B::BV>> {
         self.symex_from_inst_in_bb_through_end_of_function(bb, 0)
     }
 
     /// Symex starting from the given `inst` index in the given bb, through the rest of the function.
     /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-    fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
+    fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
         assert_eq!(bb.name, self.state.cur_loc.bbname);
         debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
         self.state.record_in_path(PathEntry {
@@ -212,7 +212,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
     ///
     /// Returns the `SymexResult` representing the final return value, or `None` if
     /// no possible paths were found.
-    fn symex_from_inst_in_bb(&mut self, bb: &'m BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
+    fn symex_from_inst_in_bb(&mut self, bb: &'p BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
         match self.symex_from_inst_in_bb_through_end_of_function(bb, inst) {
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => {
@@ -361,7 +361,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
         Ok(())
     }
 
-    fn symex_gep(&mut self, gep: &'m instruction::GetElementPtr) -> Result<(), &'static str> {
+    fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<(), &'static str> {
         debug!("Symexing gep {:?}", gep);
         let z3base = self.state.operand_to_bv(&gep.address);
         let offset = Self::get_offset(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
@@ -369,7 +369,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-    fn get_offset(state: &State<'ctx, 'm, B>, mut indices: impl Iterator<Item = &'m Operand>, base_type: &Type, result_bits: u32) -> B::BV {
+    fn get_offset(state: &State<'ctx, 'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> B::BV {
         let index = indices.next();
         if index.is_none() {
             return BV::from_u64(state.ctx, 0, result_bits);
@@ -445,7 +445,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
     /// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
     /// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
-    fn symex_call(&mut self, call: &'m instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>, &'static str> {
+    fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>, &'static str> {
         debug!("Symexing call {:?}", call);
         let funcname = match call.function {
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { ref name, .. })) => name,
@@ -456,7 +456,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
             if let Some(hook) = self.config.function_hooks.get(s) {
                 hook.call_hook(&mut self.state, call)?;
                 Ok(None)
-            } else if let Some((callee, callee_mod)) = self.state.get_func_by_name(s) {
+            } else if let Some((callee, callee_mod)) = self.project.get_func_by_name(s) {
                 assert_eq!(call.arguments.len(), callee.parameters.len());
                 let z3args: Vec<_> = call.arguments.iter().map(|arg| self.state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                 let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
@@ -525,7 +525,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
     // Continues to the target of the `Br` and eventually returns the new `SymexResult`
     // representing the return value of the function (when it reaches the end of the
     // function), or `None` if no possible paths were found.
-    fn symex_br(&mut self, br: &'m terminator::Br) -> Option<SymexResult<B::BV>> {
+    fn symex_br(&mut self, br: &'p terminator::Br) -> Option<SymexResult<B::BV>> {
         debug!("Symexing br {:?}", br);
         self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
         self.state.cur_loc.bbname = br.dest.clone();
@@ -536,7 +536,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
     // necessary) and eventually returns the new `SymexResult` representing the
     // return value of the function (when it reaches the end of the function), or
     // `None` if no possible paths were found.
-    fn symex_condbr(&mut self, condbr: &'m terminator::CondBr) -> Option<SymexResult<B::BV>> {
+    fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Option<SymexResult<B::BV>> {
         debug!("Symexing condbr {:?}", condbr);
         let z3cond = self.state.operand_to_bool(&condbr.condition);
         let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond));
@@ -601,7 +601,7 @@ impl<'ctx, 'm, B> ExecutionManager<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
 
 // Built-in "hooks" for LLVM intrinsics
 
-fn symex_memset<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call) where B: Backend<'ctx> {
+fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) where B: Backend<'ctx> {
     assert_eq!(call.arguments.len(), 4);
     assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(call.arguments[1].0.get_type(), Type::i8());
@@ -618,7 +618,7 @@ fn symex_memset<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instructi
     }
 }
 
-fn symex_memcpy<'ctx, 'm, B>(state: &mut State<'ctx, 'm, B>, call: &'m instruction::Call) where B: Backend<'ctx> {
+fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) where B: Backend<'ctx> {
     assert_eq!(call.arguments.len(), 4);
     assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(call.arguments[1].0.get_type(), Type::pointer_to(Type::i8()));
@@ -677,7 +677,7 @@ mod tests {
     }
 
     /// Build a path from (modname, funcname, bbnum) triples
-    fn path_from_triples<'a>(triples: impl IntoIterator<Item = (&'a String, &'a str, usize)>) -> Path {
+    fn path_from_triples<'a>(triples: impl IntoIterator<Item = (&'a str, &'a str, usize)>) -> Path {
         let mut vec = vec![];
         for (modname, funcname, bbnum) in triples {
             vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::Number(bbnum) });
@@ -686,33 +686,23 @@ mod tests {
     }
 
     /// Iterator over the paths through a function
-    struct PathIterator<'ctx, 'm, B> where B: Backend<'ctx> {
-        em: ExecutionManager<'ctx, 'm, B>,
+    struct PathIterator<'ctx, 'p, B> where B: Backend<'ctx> {
+        em: ExecutionManager<'ctx, 'p, B>,
     }
 
-    impl<'ctx, 'm, B> PathIterator<'ctx, 'm, B> where B: Backend<'ctx> {
+    impl<'ctx, 'p, B> PathIterator<'ctx, 'p, B> where B: Backend<'ctx> {
         /// For argument descriptions, see notes on `symex_function`
         pub fn new(
             ctx: &'ctx z3::Context,
-            func: &'m Function,
-            func_module: &'m Module,
-            other_modules: impl IntoIterator<Item = &'m Module>,
+            funcname: &str,
+            project: &'p Project,
             config: Config<'ctx, B>,
         ) -> Self {
-            Self { em: symex_function(ctx, func, func_module, other_modules, config) }
-        }
-
-        pub fn new_with_single_module(
-            ctx: &'ctx z3::Context,
-            module: &'m Module,
-            func: &'m Function,
-            config: Config<'ctx, B>,
-        ) -> Self {
-            Self { em: symex_function(ctx, func, module, std::iter::empty(), config) }
+            Self { em: symex_function(ctx, funcname, project, config) }
         }
     }
 
-    impl<'ctx, 'm, B> Iterator for PathIterator<'ctx, 'm, B> where B: Backend<'ctx> + 'm {
+    impl<'ctx, 'p, B> Iterator for PathIterator<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         type Item = Path;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -722,174 +712,184 @@ mod tests {
 
     #[test]
     fn one_block() {
+        let modname = "tests/bcfiles/basic.bc";
+        let funcname = "one_arg";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/basic.bc"))
-            .expect("Failed to parse basic.bc module");
-        let func = module.get_func_by_name("one_arg").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1]));
+        let paths: Vec<Path> = PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
     #[test]
     fn two_paths() {
+        let modname = "tests/bcfiles/basic.bc";
+        let funcname = "conditional_true";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/basic.bc"))
-            .expect("Failed to parse basic.bc module");
-        let func = module.get_func_by_name("conditional_true").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![2, 4, 12]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 8, 12]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 12]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 8, 12]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
     }
 
     #[test]
     fn four_paths() {
+        let modname = "tests/bcfiles/basic.bc";
+        let funcname = "conditional_nozero";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/basic.bc"))
-            .expect("Failed to parse basic.bc module");
-        let func = module.get_func_by_name("conditional_nozero").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![2, 4, 6, 14]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 4, 8, 10, 14]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![2, 4, 8, 12, 14]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![2, 14]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 6, 14]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![2, 14]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
 
     #[test]
     fn while_loop() {
+        let modname = "tests/bcfiles/loop.bc";
+        let funcname = "while_loop";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/loop.bc"))
-            .expect("Failed to parse loop.bc module");
-        let func = module.get_func_by_name("while_loop").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 6, 6, 12]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 6, 12]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 6, 12]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 6, 6, 12]));
-        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 6, 12]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 6, 6, 12]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 12]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
     #[test]
     fn for_loop() {
+        let modname = "tests/bcfiles/loop.bc";
+        let funcname = "for_loop";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/loop.bc"))
-            .expect("Failed to parse loop.bc module");
-        let func = module.get_func_by_name("for_loop").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 9, 6]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 6]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 9, 6]));
-        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 9, 9, 6]));
-        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 9, 9, 9, 9, 9, 6]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 9, 6]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 9, 9, 6]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 6]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 6]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 9, 6]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
 
     #[test]
     fn loop_more_blocks() {
+        let modname = "tests/bcfiles/loop.bc";
+        let funcname = "loop_zero_iterations";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/loop.bc"))
-            .expect("Failed to parse loop.bc module");
-        let func = module.get_func_by_name("loop_zero_iterations").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 5, 8, 18]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 8, 18]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 8, 18]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 18]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 8, 18]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 18]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
     }
 
     #[test]
     fn loop_more_blocks_in_body() {
+        let modname = "tests/bcfiles/loop.bc";
+        let funcname = "loop_with_cond";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/loop.bc"))
-            .expect("Failed to parse loop.bc module");
-        let func = module.get_func_by_name("loop_with_cond").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
-                                                                                6, 10, 16,
-                                                                                6, 10, 16,
-                                                                                6, 13, 16,
-                                                                                6, 10, 16, 20]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
-                                                                                6, 10, 16,
-                                                                                6, 10, 16,
-                                                                                6, 13, 16, 20]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
-                                                                                6, 10, 16,
-                                                                                6, 10, 16, 20]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16,
-                                                                                6, 10, 16, 20]));
-        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 6, 13, 16, 20]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16,
+                                                                         6, 10, 16,
+                                                                         6, 13, 16,
+                                                                         6, 10, 16, 20]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16,
+                                                                         6, 10, 16,
+                                                                         6, 13, 16, 20]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16,
+                                                                         6, 10, 16, 20]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16, 20]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 20]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
 
     #[test]
     fn two_loops() {
+        let modname = "tests/bcfiles/loop.bc";
+        let funcname = "sum_of_array";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/loop.bc"))
-            .expect("Failed to parse loop.bc module");
-        let func = module.get_func_by_name("sum_of_array").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-                                                                                11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+                                                                         11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
     #[test]
     fn nested_loop() {
+        let modname = "tests/bcfiles/loop.bc";
+        let funcname = "nested_loop";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/loop.bc"))
-            .expect("Failed to parse loop.bc module");
-        let func = module.get_func_by_name("nested_loop").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                            10, 7]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                            10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                            10, 7]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                            10, 7]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 7]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 7]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 7]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 7]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 7]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
 
     #[test]
     fn simple_call() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "simple_caller";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("simple_caller").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&modname, vec![
             ("simple_caller", 1),
             ("simple_callee", 2),
             ("simple_caller", 1),
@@ -899,53 +899,55 @@ mod tests {
 
     #[test]
     fn cross_module_simple_call() {
+        let callee_modname = "tests/bcfiles/call.bc";
+        let caller_modname = "tests/bcfiles/crossmod.bc";
+        let funcname = "cross_module_simple_caller";
         init_logging();
-        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
-            .expect("Failed to parse crossmod.bc module");
-        let func = callermod.get_func_by_name("cross_module_simple_caller").expect("Failed to find function");
+        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
-            (&callermod.name, "cross_module_simple_caller", 1),
-            (&callmod.name, "simple_callee", 2),
-            (&callermod.name, "cross_module_simple_caller", 1),
+            (caller_modname, "cross_module_simple_caller", 1),
+            (callee_modname, "simple_callee", 2),
+            (caller_modname, "cross_module_simple_caller", 1),
         ]));
-        assert_eq!(paths.len(), 1);  // enusre there are no more paths
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
 
     #[test]
     fn conditional_call() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "conditional_caller";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("conditional_caller").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("conditional_caller", 2),
             ("conditional_caller", 4),
             ("simple_callee", 2),
             ("conditional_caller", 4),
             ("conditional_caller", 8),
         ]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![2, 6, 8]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 6, 8]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
     }
 
     #[test]
     fn call_twice() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "twice_caller";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("twice_caller").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("twice_caller", 1),
             ("simple_callee", 2),
             ("twice_caller", 1),
@@ -957,35 +959,36 @@ mod tests {
 
     #[test]
     fn cross_module_call_twice() {
+        let callee_modname = "tests/bcfiles/call.bc";
+        let caller_modname = "tests/bcfiles/crossmod.bc";
+        let funcname = "cross_module_twice_caller";
         init_logging();
-        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
-            .expect("Failed to parse crossmod.bc module");
-        let func = callermod.get_func_by_name("cross_module_twice_caller").expect("Failed to find function");
+        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
-            (&callermod.name, "cross_module_twice_caller", 1),
-            (&callmod.name, "simple_callee", 2),
-            (&callermod.name, "cross_module_twice_caller", 1),
-            (&callmod.name, "simple_callee", 2),
-            (&callermod.name, "cross_module_twice_caller", 1),
+            (caller_modname, "cross_module_twice_caller", 1),
+            (callee_modname, "simple_callee", 2),
+            (caller_modname, "cross_module_twice_caller", 1),
+            (callee_modname, "simple_callee", 2),
+            (caller_modname, "cross_module_twice_caller", 1),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
 
     #[test]
     fn nested_call() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "nested_caller";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("nested_caller").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("nested_caller", 2),
             ("simple_caller", 1),
             ("simple_callee", 2),
@@ -997,69 +1000,70 @@ mod tests {
 
     #[test]
     fn cross_module_nested_near_call() {
+        let callee_modname = "tests/bcfiles/call.bc";
+        let caller_modname = "tests/bcfiles/crossmod.bc";
+        let funcname = "cross_module_nested_near_caller";
         init_logging();
-        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
-            .expect("Failed to parse crossmod.bc module");
-        let func = callermod.get_func_by_name("cross_module_nested_near_caller").expect("Failed to find function");
+        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
-            (&callermod.name, "cross_module_nested_near_caller", 2),
-            (&callermod.name, "cross_module_simple_caller", 1),
-            (&callmod.name, "simple_callee", 2),
-            (&callermod.name, "cross_module_simple_caller", 1),
-            (&callermod.name, "cross_module_nested_near_caller", 2),
+            (caller_modname, "cross_module_nested_near_caller", 2),
+            (caller_modname, "cross_module_simple_caller", 1),
+            (callee_modname, "simple_callee", 2),
+            (caller_modname, "cross_module_simple_caller", 1),
+            (caller_modname, "cross_module_nested_near_caller", 2),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
 
     #[test]
     fn cross_module_nested_far_call() {
+        let callee_modname = "tests/bcfiles/call.bc";
+        let caller_modname = "tests/bcfiles/crossmod.bc";
+        let funcname = "cross_module_nested_far_caller";
         init_logging();
-        let callmod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let callermod = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/crossmod.bc"))
-            .expect("Failed to parse crossmod.bc module");
-        let func = callermod.get_func_by_name("cross_module_nested_far_caller").expect("Failed to find function");
+        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, func, &callermod, std::iter::once(&callmod), config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
-            (&callermod.name, "cross_module_nested_far_caller", 2),
-            (&callmod.name, "simple_caller", 1),
-            (&callmod.name, "simple_callee", 2),
-            (&callmod.name, "simple_caller", 1),
-            (&callermod.name, "cross_module_nested_far_caller", 2),
+            (caller_modname, "cross_module_nested_far_caller", 2),
+            (callee_modname, "simple_caller", 1),
+            (callee_modname, "simple_callee", 2),
+            (callee_modname, "simple_caller", 1),
+            (caller_modname, "cross_module_nested_far_caller", 2),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
 
     #[test]
     fn call_of_loop() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "caller_of_loop";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("caller_of_loop").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
             ("callee_with_loop", 9),
             ("caller_of_loop", 1),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
             ("callee_with_loop", 13),
             ("callee_with_loop", 9),
             ("caller_of_loop", 1),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
             ("callee_with_loop", 13),
@@ -1067,26 +1071,26 @@ mod tests {
             ("callee_with_loop", 9),
             ("caller_of_loop", 1),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 9),
-            ("caller_of_loop", 1),
-        ]));
-        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(&module.name, vec![
-            ("caller_of_loop", 1),
-            ("callee_with_loop", 2),
-            ("callee_with_loop", 13),
             ("callee_with_loop", 13),
             ("callee_with_loop", 13),
             ("callee_with_loop", 13),
             ("callee_with_loop", 9),
             ("caller_of_loop", 1),
         ]));
-        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(modname, vec![
+            ("caller_of_loop", 1),
+            ("callee_with_loop", 2),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 13),
+            ("callee_with_loop", 9),
+            ("caller_of_loop", 1),
+        ]));
+        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
             ("callee_with_loop", 13),
@@ -1102,18 +1106,19 @@ mod tests {
 
     #[test]
     fn call_in_loop() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "caller_with_loop";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("caller_with_loop").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_with_loop", 1),
             ("caller_with_loop", 8),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_with_loop", 1),
             ("caller_with_loop", 10),
             ("simple_callee", 2),
@@ -1121,7 +1126,7 @@ mod tests {
             ("caller_with_loop", 6),
             ("caller_with_loop", 8),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_with_loop", 1),
             ("caller_with_loop", 10),
             ("simple_callee", 2),
@@ -1132,7 +1137,7 @@ mod tests {
             ("caller_with_loop", 6),
             ("caller_with_loop", 8),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_with_loop", 1),
             ("caller_with_loop", 10),
             ("simple_callee", 2),
@@ -1151,77 +1156,81 @@ mod tests {
 
     #[test]
     fn recursive_simple() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "recursive_simple";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("recursive_simple").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6]));
-        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6]));
-        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 6, 1, 9, 6, 6]));
-        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 4, 9, 6]));
-        assert_eq!(paths[7], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 1, 9, 6]));
-        assert_eq!(paths[8], path_from_bbnums(&module.name, &func.name, vec![1, 4, 9]));
-        assert_eq!(paths[9], path_from_bbnums(&module.name, &func.name, vec![1, 9]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 9, 6, 6]));
+        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 9, 6]));
+        assert_eq!(paths[7], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 9, 6]));
+        assert_eq!(paths[8], path_from_bbnums(modname, funcname, vec![1, 4, 9]));
+        assert_eq!(paths[9], path_from_bbnums(modname, funcname, vec![1, 9]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
     #[test]
     fn recursive_double() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "recursive_double";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("recursive_double").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 4, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 8, 1, 4, 20, 8]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 14]));
-        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 20, 8, 14]));
-        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 6, 12, 18, 20, 14]));
-        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 14, 1, 4, 20, 14]));
-        assert_eq!(paths[7], path_from_bbnums(&module.name, &func.name, vec![1, 4, 6, 12, 18, 20]));
-        assert_eq!(paths[8], path_from_bbnums(&module.name, &func.name, vec![1, 4, 20]));
-        assert_eq!(paths[9], path_from_bbnums(&module.name, &func.name, vec![1, 20]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 20, 8]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 14]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 20, 8, 14]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 6, 12, 18, 20, 14]));
+        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 20, 14]));
+        assert_eq!(paths[7], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 18, 20]));
+        assert_eq!(paths[8], path_from_bbnums(modname, funcname, vec![1, 4, 20]));
+        assert_eq!(paths[9], path_from_bbnums(modname, funcname, vec![1, 20]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
     #[test]
     fn recursive_not_tail() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "recursive_not_tail";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("recursive_not_tail").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(&module.name, &func.name, vec![1, 3, 15]));
-        assert_eq!(paths[1], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 3, 15, 5, 10, 15]));
-        assert_eq!(paths[2], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 3, 15, 5, 12, 15]));
-        assert_eq!(paths[3], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 10, 15]));
-        assert_eq!(paths[4], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 12, 15]));
-        assert_eq!(paths[5], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 10, 15]));
-        assert_eq!(paths[6], path_from_bbnums(&module.name, &func.name, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 12, 15]));
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 3, 15]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 10, 15]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 12, 15]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 10, 15]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 12, 15]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 10, 15]));
+        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 12, 15]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
     }
 
     #[test]
     fn recursive_and_normal_call() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "recursive_and_normal_caller";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("recursive_and_normal_caller").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 3),
             ("simple_callee", 2),
@@ -1240,7 +1249,7 @@ mod tests {
             ("recursive_and_normal_caller", 7),
             ("recursive_and_normal_caller", 7),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 3),
             ("simple_callee", 2),
@@ -1253,7 +1262,7 @@ mod tests {
             ("recursive_and_normal_caller", 10),
             ("recursive_and_normal_caller", 7),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 3),
             ("simple_callee", 2),
@@ -1263,14 +1272,14 @@ mod tests {
             ("recursive_and_normal_caller", 10),
             ("recursive_and_normal_caller", 7),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 3),
             ("simple_callee", 2),
             ("recursive_and_normal_caller", 3),
             ("recursive_and_normal_caller", 10),
         ]));
-        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(modname, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 10),
         ]));
@@ -1279,14 +1288,15 @@ mod tests {
 
     #[test]
     fn mutually_recursive_functions() {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "mutually_recursive_a";
         init_logging();
-        let module = Module::from_bc_path(&std::path::Path::new("tests/bcfiles/call.bc"))
-            .expect("Failed to parse call.bc module");
-        let func = module.get_func_by_name("mutually_recursive_a").expect("Failed to find function");
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new_with_single_module(&ctx, &module, func, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&module.name, vec![
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),
             ("mutually_recursive_b", 1),
@@ -1310,7 +1320,7 @@ mod tests {
             ("mutually_recursive_a", 3),
             ("mutually_recursive_a", 7),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),
             ("mutually_recursive_b", 1),
@@ -1330,7 +1340,7 @@ mod tests {
             ("mutually_recursive_a", 3),
             ("mutually_recursive_a", 7),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),
             ("mutually_recursive_b", 1),
@@ -1346,7 +1356,7 @@ mod tests {
             ("mutually_recursive_a", 3),
             ("mutually_recursive_a", 7),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),
             ("mutually_recursive_b", 1),
@@ -1358,7 +1368,7 @@ mod tests {
             ("mutually_recursive_a", 3),
             ("mutually_recursive_a", 7),
         ]));
-        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),
             ("mutually_recursive_b", 1),
@@ -1366,7 +1376,7 @@ mod tests {
             ("mutually_recursive_a", 3),
             ("mutually_recursive_a", 7),
         ]));
-        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(&module.name, vec![
+        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 7),
         ]));

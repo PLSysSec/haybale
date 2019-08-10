@@ -1,4 +1,7 @@
-use llvm_ir::{Function, Module, Type};
+use llvm_ir::Type;
+
+mod project;
+pub use project::Project;
 
 mod symex;
 pub use symex::*;
@@ -78,12 +81,12 @@ impl SolutionValue {
 /// Note: `find_zero_of_func()` may be of some use itself, but is included in the
 /// crate more as an example of how you can use the other public functions in the
 /// crate.
-pub fn find_zero_of_func<'ctx, 'm>(ctx: &'ctx z3::Context, func: &'m Function, func_module: &'m Module, other_modules: impl IntoIterator<Item = &'m Module>, config: Config<'ctx, Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
-    let returnwidth = size(&func.return_type);
+pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, project: &'p Project, config: Config<'ctx, Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
+    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, funcname, project, config);
+    let start_func = em.state().cur_loc.func;
+    let returnwidth = size(&start_func.return_type);
     let zero = z3::ast::BV::from_u64(ctx, 0, returnwidth as u32);
-
     let mut found = false;
-    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, func, func_module, other_modules, config);
     while let Some(z3rval) = em.next() {
         match z3rval {
             SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),
@@ -102,7 +105,7 @@ pub fn find_zero_of_func<'ctx, 'm>(ctx: &'ctx z3::Context, func: &'m Function, f
     let state = em.mut_state();
     if found {
         // in this case state.check() must have passed
-        Some(func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
+        Some(start_func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
             let param_as_u64 = state.get_a_solution_for_bv(bv)
                 .expect("since state.check() passed, expected a solution for each var");
             match &p.ty {

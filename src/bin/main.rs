@@ -1,4 +1,3 @@
-use llvm_ir::{Function, Module};
 use haybale::*;
 use std::path::Path;
 
@@ -14,19 +13,18 @@ fn main() {
         .join(Path::new("bcfiles"))
         .join(Path::new(&modname))
         .with_extension("bc");
-    let llvm_mod = Module::from_bc_path(&filepath).unwrap_or_else(|e| panic!("Failed to parse module at path {}: {}", filepath.display(), e));
-    let functions: Box<Iterator<Item = &Function>>;
+    let proj = Project::from_bc_path(&filepath).unwrap_or_else(|e| panic!("Failed to parse module at path {}: {}", filepath.display(), e));
+    let functions: Box<Iterator<Item = String>>;
     if let Some(funcname) = secondarg {
-        functions = Box::new(std::iter::once(llvm_mod.get_func_by_name(&funcname).unwrap_or_else(|| panic!("Failed to find function named {}", funcname))));
+        functions = Box::new(std::iter::once(funcname.clone()));
     } else {
-        functions = Box::new(llvm_mod.functions.iter());
+        functions = Box::new(proj.all_functions().map(|f| f.name.clone()));
     }
     let ctx = z3::Context::new(&z3::Config::new());
-    for func in functions {
-        println!("Finding zero of function {:?}...", func.name);
-        if let Some(args) = find_zero_of_func(&ctx, func, &llvm_mod, std::iter::empty(), Config::default()) {
-            assert_eq!(args.len(), func.parameters.len());
-            match func.parameters.len() {
+    for funcname in functions {
+        println!("Finding zero of function {:?}...", funcname);
+        if let Some(args) = find_zero_of_func(&ctx, &funcname, &proj, Config::default()) {
+            match args.len() {
                 0 => println!("Function returns zero when passed no arguments\n"),
                 1 => println!("Function returns zero when passed the argument {:?}\n", args[0]),
                 _ => println!("Function returns zero when passed arguments {:?}\n", args),

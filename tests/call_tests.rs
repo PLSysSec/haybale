@@ -1,4 +1,3 @@
-use llvm_ir::*;
 use haybale::*;
 use std::num::Wrapping;
 use std::path::Path;
@@ -8,42 +7,44 @@ fn init_logging() {
     let _ = env_logger::builder().is_test(true).try_init();
 }
 
-fn get_module() -> Module {
-    Module::from_bc_path(&Path::new("tests/bcfiles/call.bc"))
-        .expect("Failed to parse module")
+fn get_project() -> Project {
+    let modname = "tests/bcfiles/call.bc";
+    Project::from_bc_path(&Path::new(modname))
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 #[test]
 fn simple_call() {
+    let funcname = "simple_caller";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("simple_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn cross_module_simple_call() {
+    let callee_modname = "tests/bcfiles/call.bc";
+    let caller_modname = "tests/bcfiles/crossmod.bc";
+    let funcname = "cross_module_simple_caller";
     init_logging();
+    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let ctx = z3::Context::new(&z3::Config::new());
-    let callmod = get_module();
-    let callermod = Module::from_bc_path(&Path::new("tests/bcfiles/crossmod.bc"))
-        .expect("Failed to parse module");
-    let func = callermod.get_func_by_name("cross_module_simple_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &callermod, std::iter::once(&callmod), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn conditional_call() {
+    let funcname = "conditional_caller";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("conditional_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[0], SolutionValue::I32(3));
     assert!(args[1].unwrap_to_i32() > 5);
@@ -51,35 +52,36 @@ fn conditional_call() {
 
 #[test]
 fn call_twice() {
+    let funcname = "twice_caller";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("twice_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn cross_module_call_twice() {
+    let callee_modname = "tests/bcfiles/call.bc";
+    let caller_modname = "tests/bcfiles/crossmod.bc";
+    let funcname = "cross_module_twice_caller";
     init_logging();
+    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let ctx = z3::Context::new(&z3::Config::new());
-    let callmod = get_module();
-    let callermod = Module::from_bc_path(&Path::new("tests/bcfiles/crossmod.bc"))
-        .expect("Failed to parse module");
-    let func = callermod.get_func_by_name("cross_module_twice_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &callermod, std::iter::once(&callmod), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn nested_call() {
+    let funcname = "nested_caller";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("nested_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -89,13 +91,14 @@ fn nested_call() {
 
 #[test]
 fn cross_module_nested_near_call() {
+    let callee_modname = "tests/bcfiles/call.bc";
+    let caller_modname = "tests/bcfiles/crossmod.bc";
+    let funcname = "cross_module_nested_near_caller";
     init_logging();
+    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let ctx = z3::Context::new(&z3::Config::new());
-    let callmod = get_module();
-    let callermod = Module::from_bc_path(&Path::new("tests/bcfiles/crossmod.bc"))
-        .expect("Failed to parse module");
-    let func = callermod.get_func_by_name("cross_module_nested_near_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &callermod, std::iter::once(&callmod), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -105,13 +108,14 @@ fn cross_module_nested_near_call() {
 
 #[test]
 fn cross_module_nested_far_call() {
+    let callee_modname = "tests/bcfiles/call.bc";
+    let caller_modname = "tests/bcfiles/crossmod.bc";
+    let funcname = "cross_module_nested_far_caller";
     init_logging();
+    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let ctx = z3::Context::new(&z3::Config::new());
-    let callmod = get_module();
-    let callermod = Module::from_bc_path(&Path::new("tests/bcfiles/crossmod.bc"))
-        .expect("Failed to parse module");
-    let func = callermod.get_func_by_name("cross_module_nested_far_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &callermod, std::iter::once(&callmod), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -121,33 +125,33 @@ fn cross_module_nested_far_call() {
 
 #[test]
 fn call_of_loop() {
+    let funcname = "caller_of_loop";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("caller_of_loop").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn call_in_loop() {
+    let funcname = "caller_with_loop";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("caller_with_loop").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn recursive_simple() {
+    let funcname = "recursive_simple";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("recursive_simple").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x.0);
@@ -166,23 +170,22 @@ fn recursive_simple_dummy(x: Wrapping<i32>) -> Wrapping<i32> {
 
 #[test]
 fn recursive_double() {
+    let funcname = "recursive_double";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("recursive_double").expect("Failed to find function");
-    let config = Config { loop_bound: 5, ..Config::default() };
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), config).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(-6));
 }
 
 #[test]
 fn recursive_not_tail() {
+    let funcname = "recursive_not_tail";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("recursive_not_tail").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x.0);
@@ -204,23 +207,22 @@ fn recursive_not_tail_dummy(x: Wrapping<i32>) -> Wrapping<i32> {
 
 #[test]
 fn recursive_and_normal_call() {
+    let funcname = "recursive_and_normal_caller";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("recursive_and_normal_caller").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(11));
 }
 
 #[test]
 fn mutually_recursive_functions() {
+    let funcname = "mutually_recursive_a";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("mutually_recursive_a").expect("Failed to find function");
-    let config = Config { loop_bound: 5, ..Config::default() };
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), config).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
-
+    //assert_eq!(args[0], SolutionValue::I32(3))
 }

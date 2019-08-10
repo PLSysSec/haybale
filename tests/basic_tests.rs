@@ -1,4 +1,3 @@
-use llvm_ir::*;
 use haybale::*;
 use std::num::Wrapping;
 use std::path::Path;
@@ -8,37 +7,38 @@ fn init_logging() {
     let _ = env_logger::builder().is_test(true).try_init();
 }
 
-fn get_module() -> Module {
-    Module::from_bc_path(&Path::new("tests/bcfiles/basic.bc"))
-        .expect("Failed to parse module")
+fn get_project() -> Project {
+    let modname = "tests/bcfiles/basic.bc";
+    Project::from_bc_path(&Path::new(modname))
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 #[test]
 fn no_args_nozero() {
+    let funcname = "no_args_nozero";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("no_args_nozero").expect("Failed to find function");
-    assert_eq!(find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()), None);
+    assert_eq!(find_zero_of_func(&ctx, funcname, &proj, Config::default()), None);
 }
 
 #[test]
 fn no_args_zero() {
+    let funcname = "no_args_zero";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("no_args_zero").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 0);
 }
 
 #[test]
 fn one_arg() {
+    let funcname = "one_arg";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("one_arg").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -46,11 +46,11 @@ fn one_arg() {
 
 #[test]
 fn two_args() {
+    let funcname = "two_args";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("two_args").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -58,11 +58,11 @@ fn two_args() {
 
 #[test]
 fn three_args() {
+    let funcname = "three_args";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("three_args").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 3);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -70,11 +70,11 @@ fn three_args() {
 
 #[test]
 fn four_args() {
+    let funcname = "four_args";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("four_args").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 4);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -82,11 +82,11 @@ fn four_args() {
 
 #[test]
 fn five_args() {
+    let funcname = "five_args";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("five_args").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 5);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -94,11 +94,11 @@ fn five_args() {
 
 #[test]
 fn binops() {
+    let funcname = "binops";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("binops").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = Wrapping(args[0].unwrap_to_i32());
     let b = Wrapping(args[1].unwrap_to_i32());
@@ -111,11 +111,11 @@ fn binops() {
 
 #[test]
 fn conditional_true() {
+    let funcname = "conditional_true";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("conditional_true").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = Wrapping(args[0].unwrap_to_i32());
     let b = Wrapping(args[1].unwrap_to_i32());
@@ -126,11 +126,11 @@ fn conditional_true() {
 
 #[test]
 fn conditional_false() {
+    let funcname = "conditional_false";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("conditional_false").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = Wrapping(args[0].unwrap_to_i32());
     let b = Wrapping(args[1].unwrap_to_i32());
@@ -142,20 +142,20 @@ fn conditional_false() {
 
 #[test]
 fn conditional_nozero() {
+    let funcname = "conditional_nozero";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("conditional_nozero").expect("Failed to find function");
-    assert_eq!(find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()), None);
+    assert_eq!(find_zero_of_func(&ctx, funcname, &proj, Config::default()), None);
 }
 
 #[test]
 fn conditional_with_and() {
+    let funcname = "conditional_with_and";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("conditional_with_and").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = args[0].unwrap_to_i32();
     let b = args[1].unwrap_to_i32();
@@ -166,11 +166,11 @@ fn conditional_with_and() {
 
 #[test]
 fn int8t() {
+    let funcname = "int8t";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("int8t").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i8 = args.iter().map(|a| a.unwrap_to_i8()).sum();
     assert_eq!(sum, 3);
@@ -178,11 +178,11 @@ fn int8t() {
 
 #[test]
 fn int16t() {
+    let funcname = "int16t";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("int16t").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i16 = args.iter().map(|a| a.unwrap_to_i16()).sum();
     assert_eq!(sum, 3);
@@ -190,11 +190,11 @@ fn int16t() {
 
 #[test]
 fn int32t() {
+    let funcname = "int32t";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("int32t").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -202,11 +202,11 @@ fn int32t() {
 
 #[test]
 fn int64t() {
+    let funcname = "int64t";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("int64t").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i64 = args.iter().map(|a| a.unwrap_to_i64()).sum();
     assert_eq!(sum, 3);
@@ -214,16 +214,16 @@ fn int64t() {
 
 #[test]
 fn mixed_bitwidths() {
+    let funcname = "mixed_bitwidths";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("mixed_bitwidths").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 4);
     let arg1 = args[0].unwrap_to_i8();
     let arg2 = args[1].unwrap_to_i16();
     let arg3 = args[2].unwrap_to_i32();
     let arg4 = args[3].unwrap_to_i64();
-    let sum: i64 = (arg1 as i32 + arg2 as i32 + arg3) as i64 + arg4;
+    let sum: i64 = i64::from(i32::from(arg1) + i32::from(arg2) + arg3) + arg4;
     assert_eq!(sum, 3);
 }

@@ -1,4 +1,3 @@
-use llvm_ir::*;
 use haybale::*;
 use std::path::Path;
 
@@ -7,107 +6,108 @@ fn init_logging() {
     let _ = env_logger::builder().is_test(true).try_init();
 }
 
-fn get_module() -> Module {
-    Module::from_bc_path(&Path::new("tests/bcfiles/loop.bc"))
-        .expect("Failed to parse module")
+fn get_project() -> Project {
+    let modname = "tests/bcfiles/loop.bc";
+    Project::from_bc_path(&Path::new(modname))
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 #[test]
 fn while_loop() {
+    let funcname = "while_loop";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("while_loop").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn for_loop() {
+    let funcname = "for_loop";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("for_loop").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn loop_zero_iterations() {
+    let funcname = "loop_zero_iterations";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("loop_zero_iterations").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(0));
 }
 
 #[test]
 fn loop_with_cond() {
+    let funcname = "loop_with_cond";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("loop_with_cond").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(7));
 }
 
 #[test]
 fn loop_inside_cond() {
+    let funcname = "loop_inside_cond";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("loop_inside_cond").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert!(args[0].unwrap_to_i32() > 7);
 }
 
 #[test]
 fn loop_over_array() {
+    let funcname = "loop_over_array";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("loop_over_array").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn sum_of_array() {
+    let funcname = "sum_of_array";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("sum_of_array").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn search_array() {
+    let funcname = "search_array";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("search_array").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(4));
 }
 
 #[test]
 fn nested_loop() {
+    let funcname = "nested_loop";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("nested_loop").expect("Failed to find function");
     let config = Config { loop_bound: 50, ..Config::default() };
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), config).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, config).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }

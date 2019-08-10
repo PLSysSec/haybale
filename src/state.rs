@@ -7,17 +7,17 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::alloc::Alloc;
-use crate::varmap::{VarMap, RestoreInfo};
-use crate::size::size;
 use crate::backend::*;
 use crate::config::Config;
 use crate::extend::*;
+use crate::size::size;
+use crate::varmap::{VarMap, RestoreInfo};
 
-pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
+pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Reference to the Z3 context being used
     pub ctx: &'ctx z3::Context,
     /// Indicates the `BasicBlock` which is currently being executed
-    pub cur_loc: Location<'m>,
+    pub cur_loc: Location<'p>,
     /// `Name` of the `BasicBlock` which was executed before this one;
     /// or `None` if this is the first `BasicBlock` being executed
     /// or the first `BasicBlock` of a function
@@ -33,7 +33,6 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     mem: B::Memory,
     alloc: Alloc,
     solver: B::Solver,
-    active_modules: Vec<&'m Module>,
     /// Map from `Name`s of global variables, to addresses at which they are allocated
     allocated_globals: HashMap<Name, B::BV>,
     /// This tracks the call stack of the symbolic execution.
@@ -43,10 +42,10 @@ pub struct State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// We won't have a `StackFrame` for the current function here, only each of
     /// its callers. For instance, while we are executing the top-level function,
     /// this stack will be empty.
-    stack: Vec<StackFrame<'ctx, 'm, B::BV, B::Bool>>,
+    stack: Vec<StackFrame<'ctx, 'p, B::BV, B::Bool>>,
     /// These backtrack points are places where execution can be resumed later
     /// (efficiently, thanks to the incremental solving capabilities of Z3).
-    backtrack_points: Vec<BacktrackPoint<'ctx, 'm, B>>,
+    backtrack_points: Vec<BacktrackPoint<'ctx, 'p, B>>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
@@ -67,14 +66,14 @@ impl fmt::Debug for PathEntry {
 }
 
 #[derive(Clone)]
-pub struct Location<'m> {
-    pub module: &'m Module,
-    pub func: &'m Function,
+pub struct Location<'p> {
+    pub module: &'p Module,
+    pub func: &'p Function,
     pub bbname: Name,
 }
 
 /// Implementation of `PartialEq` assumes that module and function names are unique
-impl<'m> PartialEq for Location<'m> {
+impl<'p> PartialEq for Location<'p> {
     fn eq(&self, other: &Self) -> bool {
         self.module.name == other.module.name
             && self.func.name == other.func.name
@@ -83,35 +82,35 @@ impl<'m> PartialEq for Location<'m> {
 }
 
 /// Our implementation of `PartialEq` satisfies the requirements of `Eq`
-impl<'m> Eq for Location<'m> {}
+impl<'p> Eq for Location<'p> {}
 
-impl<'m> fmt::Debug for Location<'m> {
+impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<Location: module {:?}, func {:?}, bb {:?}", self.module.name, self.func.name, self.bbname)
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Callsite<'m> {
+pub struct Callsite<'p> {
     /// `Module`, `Function`, and `BasicBlock` of the callsite
-    pub loc: Location<'m>,
+    pub loc: Location<'p>,
     /// Index of the `Call` instruction within the `BasicBlock`
     pub inst: usize,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-struct StackFrame<'ctx, 'm, V, B> where V: BV<'ctx, AssociatedBool = B>, B: Bool<'ctx, AssociatedBV = V> {
+struct StackFrame<'ctx, 'p, V, B> where V: BV<'ctx, AssociatedBool = B>, B: Bool<'ctx, AssociatedBV = V> {
     /// Indicates the call instruction which was responsible for the call
-    callsite: Callsite<'m>,
+    callsite: Callsite<'p>,
     /// Caller's local variables, so they can be restored when we return to the caller.
     /// This is necessary in the case of (direct or indirect) recursion.
     /// See notes on `VarMap.get_restore_info_for_fn()`.
     restore_info: RestoreInfo<'ctx, V, B>,
 }
 
-struct BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
+struct BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Where to resume execution
-    loc: Location<'m>,
+    loc: Location<'p>,
     /// `Name` of the `BasicBlock` executed just prior to the `BacktrackPoint`.
     /// Assumed to be in the same `Module` and `Function` as `loc` (which is
     /// always true for how we currently use `BacktrackPoint`s as of this writing)
@@ -119,7 +118,7 @@ struct BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
     /// Call stack at the `BacktrackPoint`.
     /// This is a vector of `StackFrame`s where the first entry is the top-level
     /// caller, and the last entry is the caller of the `BacktrackPoint`'s function.
-    stack: Vec<StackFrame<'ctx, 'm, B::BV, B::Bool>>,
+    stack: Vec<StackFrame<'ctx, 'p, B::BV, B::Bool>>,
     /// Constraint to add before restarting execution at `next_bb`.
     /// (Intended use of this is to constrain the branch in that direction.)
     constraint: B::Bool,
@@ -139,25 +138,19 @@ struct BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
     backend_state: B::State,
 }
 
-impl<'ctx, 'm, B> fmt::Display for BacktrackPoint<'ctx, 'm, B> where B: Backend<'ctx> {
+impl<'ctx, 'p, B> fmt::Display for BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<BacktrackPoint to execute bb {:?} with constraint {:?} and {} frames on the callstack>", self.loc.bbname, self.constraint, self.stack.len())
     }
 }
 
-impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
-    /// `modules`: The set of modules in which symbolic execution should take place.
-    /// In the absence of function hooks (see [`Config`](struct.Config.html)), we
-    /// will try to enter calls to any functions defined in these modules.
-    ///
+impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// `start_loc`: the `Location` where the `State` should begin executing.
-    /// Must be in one of `modules`.
-    /// As of this writing, `start_loc` should also be the entry point of a
+    /// As of this writing, `start_loc` should be the entry point of a
     /// function, or you will have problems.
     pub fn new(
         ctx: &'ctx z3::Context,
-        modules: impl IntoIterator<Item = &'m Module>,
-        start_loc: Location<'m>,
+        start_loc: Location<'p>,
         config: &Config<'ctx, B>,
     ) -> Self {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
@@ -170,7 +163,6 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
             mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
             solver: B::Solver::new(ctx, backend_state.clone()),
-            active_modules: modules.into_iter().collect(),
             allocated_globals: HashMap::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
@@ -505,22 +497,6 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
         }
     }
 
-    /// Search all active modules for a function with the given name.
-    /// If a matching function is found, return both it and the module it was
-    /// found in.
-    pub fn get_func_by_name(&self, name: &str) -> Option<(&'m Function, &'m Module)> {
-        let mut retval = None;
-        for module in &self.active_modules {
-            if let Some(f) = module.get_func_by_name(name) {
-                match retval {
-                    None => retval = Some((f, *module)),
-                    Some(_) => panic!("Multiple functions found with name {:?}", name),
-                };
-            }
-        }
-        retval
-    }
-
     /// Read a value `bits` bits long from memory at `addr`.
     /// Caller is responsible for ensuring that the read does not cross cell boundaries
     /// (see notes in memory.rs)
@@ -568,7 +544,7 @@ impl<'ctx, 'm, B> State<'ctx, 'm, B> where B: Backend<'ctx> {
     /// top-level function.
     ///
     /// Also restores the caller's local variables.
-    pub fn pop_callsite(&mut self) -> Option<Callsite<'m>> {
+    pub fn pop_callsite(&mut self) -> Option<Callsite<'p>> {
         if let Some(StackFrame { callsite, restore_info }) = self.stack.pop() {
             self.varmap.restore_fn_vars(restore_info);
             Some(callsite)
@@ -630,13 +606,13 @@ mod tests {
     // Instead, here we just test the nontrivial functionality that State has itself.
 
     /// utility to initialize a `State` out of a `z3::Context`, a `Module`, and a `Function`
-    fn blank_state<'ctx, 'm>(ctx: &'ctx z3::Context, module: &'m Module, func: &'m Function) -> State<'ctx, 'm, Z3Backend<'ctx>> {
+    fn blank_state<'ctx, 'p>(ctx: &'ctx z3::Context, module: &'p Module, func: &'p Function) -> State<'ctx, 'p, Z3Backend<'ctx>> {
         let start_loc = Location {
             module,
             func,
             bbname: "test_bb".to_owned().into(),
         };
-        State::new(ctx, std::iter::once(module), start_loc, &Config::default())
+        State::new(ctx, start_loc, &Config::default())
     }
 
     /// utility that creates a technically valid (but functionally useless) `Module` for testing

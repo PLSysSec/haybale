@@ -1,4 +1,3 @@
-use llvm_ir::*;
 use haybale::*;
 use std::path::Path;
 use std::num::Wrapping;
@@ -8,51 +7,52 @@ fn init_logging() {
     let _ = env_logger::builder().is_test(true).try_init();
 }
 
-fn get_module() -> Module {
-    Module::from_bc_path(&Path::new("tests/bcfiles/struct.bc"))
-        .expect("Failed to parse module")
+fn get_project() -> Project {
+    let modname = "tests/bcfiles/struct.bc";
+    Project::from_bc_path(&Path::new(modname))
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 #[test]
 fn one_int() {
+    let funcname = "one_int";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("one_int").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn two_ints_first() {
+    let funcname = "two_ints_first";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("two_ints_first").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn two_ints_second() {
+    let funcname = "two_ints_second";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("two_ints_second").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn two_ints_both() {
+    let funcname = "two_ints_both";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("two_ints_both").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -66,11 +66,11 @@ fn two_ints_both() {
 
 #[test]
 fn three_ints() {
+    let funcname = "three_ints";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("three_ints").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -86,11 +86,11 @@ fn three_ints() {
 
 #[test]
 fn zero_initialize() {
+    let funcname = "zero_initialize";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("zero_initialize").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     let a = Wrapping(2);
@@ -103,55 +103,55 @@ fn zero_initialize() {
 
 #[test]
 fn nonzero_initialize() {
+    let funcname = "nonzero_initialize";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("nonzero_initialize").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(103));
 }
 
 #[test]
 fn mismatched_first() {
+    let funcname = "mismatched_first";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("mismatched_first").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I8(3));
 }
 
 #[test]
 fn mismatched_second() {
+    let funcname = "mismatched_second";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("mismatched_second").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn mismatched_third() {
+    let funcname = "mismatched_third";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("mismatched_third").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I8(3));
 }
 
 #[test]
 fn mismatched_all() {
+    let funcname = "mismatched_all";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("mismatched_all").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -171,33 +171,33 @@ fn mismatched_all() {
 
 #[test]
 fn nested_first() {
+    let funcname = "nested_first";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("nested_first").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn nested_second() {
+    let funcname = "nested_second";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("nested_second").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn nested_all() {
+    let funcname = "nested_all";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("nested_all").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -215,22 +215,22 @@ fn nested_all() {
 
 #[test]
 fn with_array() {
+    let funcname = "with_array";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("with_array").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn with_array_all() {
+    let funcname = "with_array_all";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("with_array_all").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -244,11 +244,11 @@ fn with_array_all() {
 
 #[test]
 fn structptr() {
+    let funcname = "structptr";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("structptr").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -261,22 +261,22 @@ fn structptr() {
 
 #[test]
 fn structelptr() {
+    let funcname = "structelptr";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("structelptr").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
 
 #[test]
 fn changeptr() {
+    let funcname = "changeptr";
     init_logging();
+    let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
-    let module = get_module();
-    let func = module.get_func_by_name("changeptr").expect("Failed to find function");
-    let args = find_zero_of_func(&ctx, func, &module, std::iter::empty(), Config::default()).expect("Failed to find zero of function");
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
