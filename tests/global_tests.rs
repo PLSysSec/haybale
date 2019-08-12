@@ -117,3 +117,17 @@ fn cross_module_modify_global_via_call() {
         ReturnValues::ExactlyOnePossibleValue(3),
     );
 }
+
+#[test]
+fn globals_initialization() {
+    let modnames = vec!["tests/bcfiles/globals_initialization_1.bc", "tests/bcfiles/globals_initialization_2.bc"];
+    let funcname = "foo";
+    init_logging();
+    let proj = Project::from_bc_paths(modnames.into_iter().map(Path::new))
+        .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
+    let ctx = z3::Context::new(&z3::Config::new());
+    assert_eq!(
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default()),
+        ReturnValues::ExactlyOnePossibleValue(228),
+    )
+}

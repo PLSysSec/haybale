@@ -396,6 +396,12 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             }
             Constant::ExtractValue(ev) => self.const_to_bv(Self::simplify_const_ev(&ev.aggregate, ev.indices.iter().copied())),
             Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(iv.aggregate.clone(), iv.element.clone(), iv.indices.iter().copied())),
+            Constant::GetElementPtr(gep) => {
+                // heavily inspired by `ExecutionManager::symex_gep()` in symex.rs. TODO could try to share more code
+                let z3base = self.const_to_bv(&gep.address);
+                let offset = self.get_offset(gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
+                z3base.add(&offset).simplify()
+            },
             Constant::Trunc(t) => self.const_to_bv(&t.operand).extract(size(&t.to_type) as u32 - 1, 0),
             Constant::ZExt(z) => zero_extend_to_bits(self.const_to_bv(&z.operand), size(&z.to_type) as u32),
             Constant::SExt(s) => sign_extend_to_bits(self.const_to_bv(&s.operand), size(&s.to_type) as u32),
@@ -461,6 +467,73 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 } else {
                     panic!("simplify_const_iv: not a Constant::Struct: {:?}", s)
                 }
+            }
+        }
+    }
+
+    /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
+    //
+    // Heavily inspired by `ExecutionManager::get_offset()` in symex.rs. TODO could try to share more code
+    fn get_offset(&self, mut indices: impl Iterator<Item = &'p Constant>, base_type: &Type, result_bits: u32) -> B::BV {
+        match indices.next() {
+            None => BV::from_u64(self.ctx, 0, result_bits),
+            Some(index) => match base_type {
+                Type::PointerType { pointee_type, .. }
+                | Type::ArrayType { element_type: pointee_type, .. }
+                | Type::VectorType { element_type: pointee_type, .. }
+                => {
+                    let el_size_bits = size(pointee_type) as u64;
+                    if el_size_bits % 8 != 0 {
+                        unimplemented!("Type with size {} bits", el_size_bits);
+                    }
+                    let el_size_bytes = el_size_bits / 8;
+                    zero_extend_to_bits(self.const_to_bv(index), result_bits)
+                        .mul(&B::BV::from_u64(self.ctx, el_size_bytes, result_bits))
+                        .add(&self.get_offset(indices, pointee_type, result_bits))
+                },
+                Type::StructType { element_types, .. } => match index {
+                    Constant::Int { value: index, .. } => {
+                        let mut offset_bits = 0;
+                        for ty in element_types.iter().take(*index as usize) {
+                            offset_bits += size(ty) as u64;
+                        }
+                        if offset_bits % 8 != 0 {
+                            unimplemented!("Struct offset of {} bits", offset_bits);
+                        }
+                        let offset_bytes = offset_bits / 8;
+                        B::BV::from_u64(self.ctx, offset_bytes, result_bits)
+                            .add(&self.get_offset(indices, &element_types[*index as usize], result_bits))
+                    },
+                    _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                },
+                Type::NamedStructType { ty, .. } => {
+                    let rc: Rc<RefCell<Type>> = ty.as_ref()
+                        .expect("get_offset on an opaque struct type")
+                        .upgrade()
+                        .expect("Failed to upgrade weak reference");
+                    let actual_ty: &Type = &rc.borrow();
+                    if let Type::StructType { ref element_types, .. } = actual_ty {
+                        // this code copied from the StructType case, unfortunately
+                        match index {
+                            Constant::Int { value: index, .. } => {
+                                let mut offset_bits = 0;
+                                for ty in element_types.iter().take(*index as usize) {
+                                    offset_bits += size(ty) as u64;
+                                }
+                                if offset_bits % 8 != 0 {
+                                    unimplemented!("Struct offset of {} bits", offset_bits);
+                                }
+                                let offset_bytes = offset_bits / 8;
+                                B::BV::from_u64(self.ctx, offset_bytes, result_bits)
+                                    .add(&self.get_offset(indices, &element_types[*index as usize], result_bits))
+                            },
+                            _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                        }
+                    } else {
+                        panic!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)
+                    }
+                }
+                _ => panic!("get_offset with base type {:?}", base_type),
             }
         }
     }
