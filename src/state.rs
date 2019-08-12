@@ -2,7 +2,6 @@ use llvm_ir::*;
 use log::debug;
 use reduce::Reduce;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -173,32 +172,64 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             // listed last (out-of-order) so that it can be used above but moved in now
             backend_state,
         };
-        // Here we do allocation and initialization of the global variables in the Project
-        debug!("Allocating and initializing global variables");
+        // Here we do allocation and initialization of the global variables in the Project.
+        // We need to do these in two separate passes - first allocating them
+        // all, then initializing them all - because initializers can refer to
+        // the addresses of other global variables, potentially even circularly.
+        // See further notes below.
+        debug!("Allocating global variables");
         for var in project.all_global_vars() {
-            // We only want to allocate/initialize for global variable
-            // *definitions*, not merely global variable *declarations*. This
-            // way we don't end up trying to allocate a global multiple times,
-            // i.e., in each module where it is declared.
-            //
-            // From LLVM docs (direct quote) "Definitions have initializers,
-            // declarations don't."
-            // So, we only allocate/initialize if an initializer is present.
-            // This implies that even globals without an initializer in C have
-            // one in LLVM, which seems weird to me, but it's what the docs say,
-            // and also matches what I've seen empirically.
-            if let Some(ref initial_val) = var.initializer {
+            // Allocate the global variable if this is the first time we've seen it.
+            // We assume that global variables have globally-unique names, even across
+            // modules - that is, no two modules will have different globals with the
+            // same name. This assumption could theoretically fail in the presence
+            // of module-private globals.
+            let alloc = &mut state.alloc;  // this is here so the closure below can capture just this field, not the whole &mut state
+            state.allocated_globals.entry(var.name.clone()).or_insert_with(|| {
                 if let Type::PointerType { pointee_type, .. } = &var.ty {
-                    let addr = state.allocate(size(&*pointee_type) as u64);
-                    debug!("Allocated {:?} at {:?}", var.name, addr);
-                    state.write(&addr, state.const_to_bv(initial_val));
-                    match state.allocated_globals.entry(var.name.clone()) {
-                        Entry::Occupied(_) => panic!("Found multiple globals with the name {:?}", var.name),
-                        Entry::Vacant(entry) => entry.insert(addr),
-                    };
+                    let addr = alloc.alloc(size(&*pointee_type) as u64);
+                    debug!("Allocated {:?} at 0x{:x}", var.name, addr);
+                    BV::from_u64(ctx, addr, 64)
                 } else {
-                    panic!("Global variable has non-pointer type {:?}", &var.ty);
+                    panic!("Global variable has non-pointer type {:?}", &var.ty)
                 }
+            });
+        }
+        // Now we do initialization of global variables.
+        debug!("Initializing global variables");
+        for var in project.all_global_vars() {
+            // Note that `project.all_global_vars()` gives us both global variable
+            // *definitions* and *declarations*; we can distinguish these because
+            // (direct quote from the LLVM docs) "Definitions have initializers,
+            // declarations don't." This implies that even globals without an
+            // initializer in C have one in LLVM, which seems weird to me, but it's
+            // what the docs say, and also matches what I've seen empirically.
+            //
+            // We initialize each variable when we come across its definition,
+            // i.e., we initialize if and only if there is an initializer. Convenient.
+            //
+            // We assume that global-variable initializers can only refer to the
+            // *addresses* of other globals, and not the *values* of other
+            // global constants, so that it's fine that any referred-to globals
+            // may have been allocated but not initialized at this point (since
+            // their definition may not have been processed yet).
+            // This assumption seems to hold empirically: in my tests,
+            // (1) clang performs constant-folding, even at -O0, on global
+            //     variable initializers so that these initializers do not refer to
+            //     the values of other global constants at the LLVM level. For
+            //     instance, the C code
+            //       `const int a = 1; const int b = a + 3;`
+            //     is translated into the LLVM equivalent of
+            //       `const int a = 1; const int b = 4;`
+            // (2) clang rejects programs where global variable initializers refer
+            //     to the value of externally-defined global constants, in which
+            //     case the constant-folding described above would be impossible.
+            //     Note, however, that clang does allow referring to the *addresses*
+            //     of externally-defined global variables.
+            if let Some(ref initial_val) = var.initializer {
+                debug!("Initializing {:?} with initializer {:?}", var.name, initial_val);
+                let addr = state.allocated_globals.get(&var.name).unwrap_or_else(|| panic!("Trying to initialize global variable {:?} which hasn't been allocated", var.name));
+                state.mem.write(&addr, state.const_to_bv(initial_val));
             }
         }
         debug!("Done allocating and initializing global variables");
@@ -360,7 +391,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
                     self.const_to_bv(&alias.aliasee)
                 } else {
-                    panic!("const_to_bv on a GlobalReference but couldn't find {:?} in the module's globals", name)
+                    panic!("const_to_bv: GlobalReference to variable {:?} which was not found", name)
                 }
             },
             Constant::Add(a) => self.const_to_bv(&a.operand0).add(&self.const_to_bv(&a.operand1)),

@@ -15,6 +15,8 @@ target triple = "x86_64-apple-macosx10.14.0"
 @swp1 = constant %struct.StructWithPointers { i32 6, i32* getelementptr inbounds (%struct.StructWithPointers, %struct.StructWithPointers* @swp0, i32 0, i32 0), %struct.SomeStruct* @ss2, %struct.StructWithPointers* @swp0 }, align 8
 @swp0 = constant %struct.StructWithPointers { i32 2, i32* @x, %struct.SomeStruct* @ss1, %struct.StructWithPointers* @swp1 }, align 8
 @ss2 = external constant %struct.SomeStruct, align 4
+@crossMod1 = external constant %struct.StructWithPointers, align 8
+@crossMod0 = local_unnamed_addr constant %struct.StructWithPointers { i32 2, i32* getelementptr inbounds (%struct.StructWithPointers, %struct.StructWithPointers* @crossMod1, i32 0, i32 0), %struct.SomeStruct* @ss1, %struct.StructWithPointers* @crossMod1 }, align 8
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
 define i32 @foo() local_unnamed_addr #0 {

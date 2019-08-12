@@ -5,6 +5,7 @@
 // forward declarations (these are defined in globals_initialization_2.c)
 extern const int x;
 extern const struct SomeStruct ss2;
+extern const struct StructWithPointers crossMod1;
 
 // integer constants
 const int a = 2;  // literal constant
@@ -19,6 +20,9 @@ const struct SomeStruct ss1 = { a, c, b };
 const struct StructWithPointers swp1;
 const struct StructWithPointers swp0 = { b, &x, &ss1, &swp1 };
 const struct StructWithPointers swp1 = { c, &swp0.field1, &ss2, &swp0 };
+
+// a circular data structure, with links across modules
+const struct StructWithPointers crossMod0 = { 2, &crossMod1.field1, &ss1, &crossMod1};
 
 int foo() {
   return a + b + c + ss0.field1 + ss1.field2 + ss2.field3 + *(swp0.intptr) + swp1.ssptr->field2 + swp0.swpptr->swpptr->field1;

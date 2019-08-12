@@ -13,6 +13,9 @@ target triple = "x86_64-apple-macosx10.14.0"
 @swp2 = local_unnamed_addr constant %struct.StructWithPointers { i32 511, i32* @c, %struct.SomeStruct* @ss2, %struct.StructWithPointers* @swp0 }, align 8
 @swp1 = external constant %struct.StructWithPointers, align 8
 @swp3 = local_unnamed_addr constant %struct.StructWithPointers { i32 509, i32* getelementptr inbounds (%struct.StructWithPointers, %struct.StructWithPointers* @swp0, i32 0, i32 0), %struct.SomeStruct* @ss2, %struct.StructWithPointers* @swp1 }, align 8
+@crossMod0 = external constant %struct.StructWithPointers, align 8
+@ss0 = external constant %struct.SomeStruct, align 4
+@crossMod1 = local_unnamed_addr constant %struct.StructWithPointers { i32 2, i32* getelementptr inbounds (%struct.StructWithPointers, %struct.StructWithPointers* @crossMod0, i32 0, i32 0), %struct.SomeStruct* @ss0, %struct.StructWithPointers* @crossMod0 }, align 8
 
 !llvm.module.flags = !{!0, !1}
 !llvm.ident = !{!2}
