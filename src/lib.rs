@@ -22,6 +22,7 @@ mod alloc;
 pub mod solver;
 mod varmap;
 mod double_keyed_map;
+mod global_allocations;
 mod possible_solutions;
 pub use possible_solutions::PossibleSolutions;
 

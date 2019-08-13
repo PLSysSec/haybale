@@ -1,8 +1,6 @@
 use llvm_ir::*;
 use log::debug;
 use reduce::Reduce;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -11,6 +9,7 @@ use crate::alloc::Alloc;
 use crate::backend::*;
 use crate::config::Config;
 use crate::extend::*;
+use crate::global_allocations::*;
 use crate::possible_solutions::*;
 use crate::project::Project;
 use crate::size::size;
@@ -36,14 +35,7 @@ pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     mem: B::Memory,
     alloc: Alloc,
     solver: B::Solver,
-    /// Map from `Name`s of global variables and `Function`s, to addresses at
-    /// which they are allocated. Note that we have to pretend to allocate
-    /// `Function`s so that we can have pointers to them. (As of this writing, we
-    /// actually only allocate 64 bits for every `Function`)
-    allocated_globals: HashMap<Name, B::BV>,
-    /// Somewhat a reverse of the above map: this is a map from an address to the
-    /// `Function` which was allocated at that address (if any)
-    addr_to_function: HashMap<u64, &'p Function>,
+    global_allocations: GlobalAllocations<'ctx, 'p, B::BV>,
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
@@ -166,15 +158,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
         let mut state = Self {
             ctx,
-            cur_loc: start_loc,
+            cur_loc: start_loc.clone(),
             prev_bb_name: None,
             path: Vec::new(),
             varmap: VarMap::new(ctx, config.loop_bound),
             mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
             solver: B::Solver::new(ctx, backend_state.clone()),
-            allocated_globals: HashMap::new(),
-            addr_to_function: HashMap::new(),
+            global_allocations: GlobalAllocations::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
 
@@ -193,7 +184,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         // initializer in C have one in LLVM, which seems weird to me, but it's
         // what the docs say, and also matches what I've seen empirically.
         debug!("Allocating global variables");
-        for (var, _) in project.all_global_vars().filter(|(var,_)| var.initializer.is_some()) {
+        for (var, module) in project.all_global_vars().filter(|(var,_)| var.initializer.is_some()) {
             // Allocate the global variable.
             //
             // In the allocation pass, we want to process each global variable
@@ -203,10 +194,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             if let Type::PointerType { pointee_type, .. } = &var.ty {
                 let addr = state.allocate(size(&*pointee_type) as u64);
                 debug!("Allocated {:?} at {:?}", var.name, addr);
-                match state.allocated_globals.entry(var.name.clone()) {
-                    Entry::Occupied(_) => panic!("Duplicate definitions found for global variable {:?}", var.name),
-                    Entry::Vacant(entry) => entry.insert(addr),
-                };
+                state.global_allocations.allocate_global_var(var, module, addr);
             } else {
                 panic!("Global variable has non-pointer type {:?}", &var.ty);
             }
@@ -216,19 +204,15 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         // The `state.addr_to_function` map will help in interpreting these
         // function pointers.
         debug!("Allocating functions");
-        for (func, _) in project.all_functions() {
+        for (func, module) in project.all_functions() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-            let addr_bv = BV::from_u64(ctx, addr, 64);
+            let addr_bv = BV::from_u64(state.ctx, addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
-            match state.allocated_globals.entry(Name::Name(func.name.clone())) {
-                Entry::Occupied(_) => panic!("Function {:?} shares its name with another function or global variable in the Project", func.name),
-                Entry::Vacant(entry) => entry.insert(addr_bv),
-            };
-            state.addr_to_function.insert(addr, func);
-        }
+            state.global_allocations.allocate_function(func, module, addr, addr_bv);
+       }
         // Now we do initialization of global variables.
         debug!("Initializing global variables");
-        for (var, _) in project.all_global_vars() {
+        for (var, module) in project.all_global_vars() {
             // Like with the allocation pass, in the initialization pass we
             // again only need to process definitions. Conveniently, definitions
             // are where we find the initializer anyway; so we initialize the
@@ -256,11 +240,15 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             //     of externally-defined global variables.
             if let Some(ref initial_val) = var.initializer {
                 debug!("Initializing {:?} with initializer {:?}", var.name, initial_val);
-                let addr = state.allocated_globals.get(&var.name).unwrap_or_else(|| panic!("Trying to initialize global variable {:?} which hasn't been allocated", var.name));
+                let addr = state.global_allocations
+                    .get_global_address(&var.name, module)
+                    .unwrap_or_else(|| panic!("Trying to initialize global variable {:?} in module {:?} but failed to find its allocated address", var.name, &module.name));
+                state.cur_loc.module = module;  // have to do this prior to call to state.const_to_bv(), to ensure the correct module is used for resolution of references to other globals
                 state.mem.write(&addr, state.const_to_bv(initial_val));
             }
         }
         debug!("Done allocating and initializing global variables");
+        state.cur_loc = start_loc;  // reset any changes we made above
         state
     }
 
@@ -451,12 +439,12 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             Constant::Array { elements, .. } => elements.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
             Constant::Vector(elements) => elements.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
             Constant::GlobalReference { name, .. } => {
-                if let Some(addr) = self.allocated_globals.get(name) {
+                if let Some(addr) = self.global_allocations.get_global_address(name, self.cur_loc.module) {
                     addr.clone()
                 } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
                     self.const_to_bv(&alias.aliasee)
                 } else {
-                    panic!("const_to_bv: GlobalReference to variable {:?} which was not found", name)
+                    panic!("const_to_bv: GlobalReference to {:?} which was not found (current module is {:?})", name, &self.cur_loc.module.name)
                 }
             },
             Constant::Add(a) => self.const_to_bv(&a.operand0).add(&self.const_to_bv(&a.operand1)),
@@ -699,16 +687,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             unimplemented!("n == 0 in interpret_as_function_ptr")
         }
         // First try to interpret without a full solve (i.e., with `as_u64()`)
-        match bv.as_u64().and_then(|val| self.addr_to_function.get(&val).copied()) {
+        match bv.as_u64().and_then(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)) {
             Some(f) => Ok(PossibleSolutions::PossibleSolutions(vec![f])),  // there is only one possible solution, and it's this `f`
             None => {
                 match self.get_possible_solutions_for_bv(&bv, n)? {
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => Ok(PossibleSolutions::MoreThanNPossibleSolutions(n)),
                     PossibleSolutions::PossibleSolutions(v) => {
                         v.into_iter()
-                            .map(|addr| self.addr_to_function
-                                .get(&addr)
-                                .copied()
+                            .map(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
                                 .ok_or_else(|| format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv))
                             )
                             .collect::<Vec<Result<_,_>>>()
@@ -825,6 +811,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     // we don't include tests here for Solver, Memory, Alloc, or VarMap; those are tested in their own modules.
     // Instead, here we just test the nontrivial functionality that State has itself.
