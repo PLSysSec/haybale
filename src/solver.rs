@@ -27,13 +27,18 @@ impl<'ctx> Solver<'ctx> {
         }
     }
 
-    /// Add `cond` as a constraint, i.e., assert that `cond` must be true
-    pub fn assert(&mut self, cond: &Bool<'ctx>) {
-        let cond = cond.simplify();
+    /// Get the `Context` this `Solver` was created with
+    pub fn get_context(&self) -> &'ctx z3::Context {
+        self.ctx
+    }
+
+    /// Add `constraint` as a constraint, i.e., assert that `cond` must be true
+    pub fn assert(&mut self, constraint: &Bool<'ctx>) {
+        let constraint = constraint.simplify();
         // A new assertion invalidates the cached check status and model
         self.check_status = None;
         self.model = None;
-        self.z3_solver.assert(&cond);
+        self.z3_solver.assert(&constraint);
     }
 
     /// Returns `true` if current constraints are satisfiable, `false` if not.
@@ -60,9 +65,16 @@ impl<'ctx> Solver<'ctx> {
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
     pub fn check_with_extra_constraints<'b>(&'b mut self, conds: impl Iterator<Item = &'b Bool<'ctx>>) -> Result<bool, &'static str> {
-        // although the check status by itself would not be invalidated by this,
-        // we do need to run check() again before getting the model,
-        // so we indicate that by invalidating the check status if we don't have a model
+        // This implementation is slightly more efficient than the default
+        // implementation provided by the `crate::backend::Solver` trait.
+        // Although the default implementation would be correct, it would
+        // needlessly invalidate the generated model, whereas for this solver,
+        // we know that the cached model will still be valid after this
+        // operation due to the `pop()`.
+        //
+        // That said, if we currently have a check status but not a cached
+        // model, we will need to run `check()` again before getting the model, so
+        // in that case we do intentionally invalidate the check status.
         if self.model.is_none() {
             self.check_status = None;
         }
@@ -137,6 +149,10 @@ impl<'ctx> Solver<'ctx> {
     /// If there are more than `n` possible solutions, this simply
     /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
     pub fn get_possible_solutions_for_bv(&mut self, bv: &BV<'ctx>, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+        // This is the same as the default implementation provided by the
+        // `crate::backend::Solver` trait, but is included here in case anyone
+        // wants to use this `Solver` without the backend trait.
+        // Also, it makes it more visible in the docs.
         let mut solutions = vec![];
         self.push();
         while solutions.len() <= n {
@@ -145,7 +161,7 @@ impl<'ctx> Solver<'ctx> {
                 Some(val) => {
                     solutions.push(val);
                     // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                    self.assert(&bv._eq(&BV::from_u64(self.ctx, val, bv.get_size())).not());
+                    self.assert(&bv._eq(&BV::from_u64(self.get_context(), val, bv.get_size())).not());
                 }
             }
         }
@@ -167,12 +183,16 @@ impl<'ctx> Solver<'ctx> {
     ///   - `PossibleSolutions::PossibleSolutions(vec![false])`,
     ///   - `PossibleSolutions::PossibleSolutions(vec![true, false])`
     pub fn get_possible_solutions_for_bool(&mut self, b: &Bool<'ctx>) -> Result<PossibleSolutions<bool>, &'static str> {
+        // This is the same as the default implementation provided by the
+        // `crate::backend::Solver` trait, but is included here in case anyone
+        // wants to use this `Solver` without the backend trait.
+        // Also, it makes it more visible in the docs.
         self.push();
         let retval = match self.get_a_solution_for_bool(b)? {
             None => PossibleSolutions::PossibleSolutions(vec![]),
             Some(val) => {
                 // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                self.assert(&b._eq(&Bool::from_bool(self.ctx, val)).not());
+                self.assert(&b._eq(&Bool::from_bool(self.get_context(), val)).not());
                 match self.get_a_solution_for_bool(b)? {
                     None => PossibleSolutions::PossibleSolutions(vec![val]),
                     Some(_) => PossibleSolutions::PossibleSolutions(vec![true, false]),

@@ -104,21 +104,112 @@ pub trait Memory<'ctx> : Clone + PartialEq + Eq {
 }
 
 pub trait Solver<'ctx> {
-    type Constraint: Bool<'ctx>;
-    type Value: BV<'ctx>;
+    type Constraint: Bool<'ctx, AssociatedBV = Self::Value>;
+    type Value: BV<'ctx, AssociatedBool = Self::Constraint>;
     type BackendState;
 
+    /// A new `Solver` with no constraints
     fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+
+    /// Get the `Context` this `Solver` was created with
+    fn get_context(&self) -> &'ctx z3::Context;
+
+    /// Add `constraint` as a constraint, i.e., assert that `constraint` must be true
     fn assert(&mut self, constraint: &Self::Constraint);
+
+    /// Returns `true` if current constraints are satisfiable, `false` if not.
+    ///
+    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
     fn check(&mut self) -> Result<bool, &'static str>;
-    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool, &'static str> where Self::Constraint: 'a;
+
+    /// Returns `true` if the current constraints plus the additional constraints `conds`
+    /// are together satisfiable, or `false` if not.
+    ///
+    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
+    ///
+    /// Does not permanently add the constraints in `conds` to the solver.
+    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool, &'static str> where Self::Constraint: 'a {
+        // a default implementation in terms of check(), assert(), push(), and pop()
+        self.push();
+        for constraint in constraints {
+            self.assert(constraint);
+        }
+        let retval = self.check();
+        self.pop(1);
+        retval
+    }
+
     fn push(&mut self);
+
+    /// `n`: number of `push`es to backtrack
     fn pop(&mut self, n: usize);
+
+    /// Get one possible concrete value for the `BV`.
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
     fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>, &'static str>;
+
+    /// Get one possible concrete value for specified bits (`high`, `low`) of the `BV`, inclusive on both ends.
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
     fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>, &'static str>;
+
+    /// Get one possible concrete value for the `Bool`.
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
     fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>, &'static str>;
-    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value, n: usize) -> Result<PossibleSolutions<u64>, &'static str>;
-    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>, &'static str>;
+
+    /// Get a description of the possible solutions for the `BV`.
+    ///
+    /// `n`: Maximum number of distinct solutions to return.
+    /// If there are more than `n` possible solutions, this simply
+    /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+        // a default implementation in terms of get_a_solution_for_bv(), assert(), get_context(), push(), and pop()
+        let mut solutions = vec![];
+        self.push();
+        while solutions.len() <= n {
+            match self.get_a_solution_for_bv(bv)? {
+                None => break,  // no more possible solutions, we're done
+                Some(val) => {
+                    solutions.push(val);
+                    // Temporarily constrain that the solution can't be `val`, to see if there is another solution
+                    self.assert(&bv._eq(&Self::Value::from_u64(self.get_context(), val, bv.get_size())).not());
+                }
+            }
+        }
+        self.pop(1);
+        if solutions.len() > n {
+            Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
+        } else {
+            Ok(PossibleSolutions::PossibleSolutions(solutions))
+        }
+    }
+
+    /// Get a description of the possible solutions for the `Bool`.
+    ///
+    /// Since there cannot be more than two solutions (`true` and `false`),
+    /// this should never return the `PossibleSolutions::MoreThanNPossibleSolutions` variant.
+    /// Instead, it should only return one of these four things:
+    ///   - `PossibleSolutions::PossibleSolutions(vec![])` indicating no possible solution,
+    ///   - `PossibleSolutions::PossibleSolutions(vec![true])`,
+    ///   - `PossibleSolutions::PossibleSolutions(vec![false])`,
+    ///   - `PossibleSolutions::PossibleSolutions(vec![true, false])`
+    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>, &'static str> {
+        // a default implementation in terms of get_a_solution_for_bool(), assert(), get_context(), push(), and pop()
+        self.push();
+        let retval = match self.get_a_solution_for_bool(b)? {
+            None => PossibleSolutions::PossibleSolutions(vec![]),
+            Some(val) => {
+                // Temporarily constrain that the solution can't be `val`, to see if there is another solution
+                self.assert(&b._eq(&Bool::from_bool(self.get_context(), val)).not());
+                match self.get_a_solution_for_bool(b)? {
+                    None => PossibleSolutions::PossibleSolutions(vec![val]),
+                    Some(_) => PossibleSolutions::PossibleSolutions(vec![true, false]),
+                }
+            }
+        };
+        self.pop(1);
+        Ok(retval)
+    }
+
     fn current_model_to_pretty_string(&self) -> String;
 }
 
@@ -329,6 +420,9 @@ impl<'ctx> Solver<'ctx> for crate::solver::Solver<'ctx> {
 
     fn new(ctx: &'ctx z3::Context, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
         crate::solver::Solver::new(ctx)
+    }
+    fn get_context(&self) -> &'ctx z3::Context {
+        self.get_context()
     }
     fn assert(&mut self, constraint: &Self::Constraint) {
         self.assert(constraint)

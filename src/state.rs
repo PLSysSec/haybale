@@ -273,8 +273,9 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     ///
     /// Returns `None` if the query failed (e.g., was interrupted or timed out).
     ///
-    /// This function caches its result and will only call to Z3 if constraints have changed
-    /// since the last call to `check()`.
+    /// With the default `Z3Backend`, this function caches its result and will
+    /// only call to Z3 if constraints have changed since the last call to
+    /// `check()`.
     pub fn check(&mut self) -> Result<bool, &'static str> {
         self.solver.check()
     }
