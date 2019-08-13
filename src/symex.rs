@@ -9,6 +9,7 @@ pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::backend::*;
 use crate::config::Config;
 use crate::extend::*;
+use crate::possible_solutions::*;
 use crate::project::Project;
 use crate::size::size;
 
@@ -452,9 +453,15 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => name,
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
             Either::Right(operand) => {
-                let func = self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand))
-                    .unwrap_or_else(|| panic!("Failed to interpret this as a function pointer: {:?}", operand));
-                &func.name
+                match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand), 1).unwrap() {
+                    PossibleSolutions::MoreThanNPossibleSolutions(1) => unimplemented!("calling a function pointer which has multiple possible targets"),
+                    PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
+                    PossibleSolutions::PossibleSolutions(v) => match v.len() {
+                        0 => return Err("No valid solutions for function pointer"),
+                        1 => &v[0].name,
+                        n => panic!("Got {} solutions even though we asked for a maximum of one", n),
+                    }
+                }
             },
             Either::Left(_) => unimplemented!("inline assembly"),
         };

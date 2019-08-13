@@ -683,15 +683,41 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         }
     }
 
-    /// Given a `BV`, interpret it as a function pointer, and return the
-    /// `Function` which it would point to.
+    /// Given a `BV`, interpret it as a function pointer, and return a
+    /// description of the possible `Function`s which it would point to.
     ///
-    /// Returns `None` if:
-    ///   - the `BV` points to something that's not a `Function` in the `Project`, or
-    ///   - the `BV` couldn't easily be interpreted as a single value.
-    //       TODO: do we want to automatically do a solve here if `BV::as_u64()` fails?
-    pub fn interpret_as_function_ptr(&self, bv: B::BV) -> Option<&'p Function> {
-        bv.as_u64().and_then(|val| self.addr_to_function.get(&val).copied())
+    /// `n`: Maximum number of distinct `Function`s to return.
+    /// If there are more than `n` possible `Function`s, this simply returns
+    /// `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    ///
+    /// Returns `Err` if the solver query fails or if it finds that it is
+    /// possible that the `BV` points to something that's not a `Function` in
+    /// the `Project`.
+    pub fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<&'p Function>, String> {
+        if n == 0 {
+            unimplemented!("n == 0 in interpret_as_function_ptr")
+        }
+        // First try to interpret without a full solve (i.e., with `as_u64()`)
+        match bv.as_u64().and_then(|val| self.addr_to_function.get(&val).copied()) {
+            Some(f) => Ok(PossibleSolutions::PossibleSolutions(vec![f])),  // there is only one possible solution, and it's this `f`
+            None => {
+                match self.get_possible_solutions_for_bv(&bv, n)? {
+                    PossibleSolutions::MoreThanNPossibleSolutions(n) => Ok(PossibleSolutions::MoreThanNPossibleSolutions(n)),
+                    PossibleSolutions::PossibleSolutions(v) => {
+                        v.into_iter()
+                            .map(|addr| self.addr_to_function
+                                .get(&addr)
+                                .copied()
+                                .ok_or_else(|| format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv))
+                            )
+                            .collect::<Vec<Result<_,_>>>()
+                            .into_iter()
+                            .collect::<Result<Vec<_>,_>>()
+                            .map(PossibleSolutions::PossibleSolutions)
+                    }
+                }
+            }
+        }
     }
 
     /// Read a value `bits` bits long from memory at `addr`.
