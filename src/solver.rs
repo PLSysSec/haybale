@@ -84,44 +84,47 @@ impl<'ctx> Solver<'ctx> {
     }
 
     /// Get one possible concrete value for the `BV`.
-    /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
+    pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Result<Option<u64>, &'static str> {
         self.refresh_model();
-        if self.check() == Ok(true) {
-            Some(self.model.as_ref().expect("check_status was true but we don't have a model")
+        if self.check()? {
+            Ok(Some(self.model.as_ref().expect("check_status was true but we don't have a model")
                 .eval(bv).expect("Have model but failed to eval bv")
-                .as_u64().expect("Failed to get u64 value of eval'd bv"))
+                .as_u64().expect("Failed to get u64 value of eval'd bv")
+            ))
         } else {
-            None
+            Ok(None)
         }
     }
 
     /// Get one possible concrete value for specified bits (`high`, `low`) of the `BV`, inclusive on both ends.
-    /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &BV<'ctx>, high: u32, low: u32) -> Option<u64> {
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
+    pub fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &BV<'ctx>, high: u32, low: u32) -> Result<Option<u64>, &'static str> {
         assert!(high - low <= 63);  // this way the result will fit in a `u64`
         self.refresh_model();
-        if self.check() == Ok(true) {
-            Some(self.model.as_ref().expect("check_status was true but we don't have a model")
+        if self.check()? {
+            Ok(Some(self.model.as_ref().expect("check_status was true but we don't have a model")
                 .eval(bv).expect("Have model but failed to eval bv")
                 .extract(high, low)
                 .simplify()  // apparently necessary so that we get back to a constant rather than an extract expression
-                .as_u64().expect("Failed to get u64 value of extracted bits"))
+                .as_u64().expect("Failed to get u64 value of extracted bits")
+            ))
         } else {
-            None
+            Ok(None)
         }
     }
 
     /// Get one possible concrete value for the `Bool`.
-    /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Option<bool> {
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
+    pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Result<Option<bool>, &'static str> {
         self.refresh_model();
-        if self.check() == Ok(true) {
-            Some(self.model.as_ref().expect("check_status was true but we don't have a model")
+        if self.check()? {
+            Ok(Some(self.model.as_ref().expect("check_status was true but we don't have a model")
                 .eval(b).expect("Have model but failed to eval bool")
-                .as_bool().expect("Failed to get value of eval'd bool"))
+                .as_bool().expect("Failed to get value of eval'd bool")
+            ))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -206,7 +209,7 @@ mod tests {
         solver.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
 
         // check that the computed value of x is > 3
-        let x_value = solver.get_a_solution_for_bv(&x).expect("Expected a solution for x");
+        let x_value = solver.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x");
         assert!(x_value > 3);
     }
 }

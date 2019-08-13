@@ -260,14 +260,14 @@ mod tests {
         solver.push();
         solver.assert(&read_bv.bvsgt(&zero));
         assert_eq!(solver.check(), Ok(true));
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert!(read_val > 0);
 
         // Alternately, constrain it to be < 0 and check that we're sat (and get a value < 0)
         solver.pop(1);
         solver.assert(&read_bv.bvslt(&zero));
         assert_eq!(solver.check(), Ok(true));
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap() as i64;
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap() as i64;
         assert!(read_val < 0);
     }
 
@@ -282,7 +282,7 @@ mod tests {
 
         // Read a value from (zero-initialized) memory and check that the value is 0
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0);
 
         // Constrain the read value to be > 0 and check that we're unsat
@@ -304,7 +304,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&zero, Memory::CELL_BITS);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
     }
 
@@ -322,7 +322,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&aligned, Memory::CELL_BITS);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
     }
 
@@ -341,7 +341,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 8);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
     }
 
@@ -359,7 +359,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&unaligned, 8);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
     }
 
@@ -377,7 +377,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
     }
 
@@ -397,9 +397,9 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 128);
-        let read_val_0 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 63, 0).unwrap();
+        let read_val_0 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 63, 0).unwrap().unwrap();
         assert_eq!(read_val_0, data_val_0, "\nGot value 0x{:x}, expected 0x{:x}", read_val_0, data_val_0);
-        let read_val_1 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 127, 64).unwrap();
+        let read_val_1 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 127, 64).unwrap().unwrap();
         assert_eq!(read_val_1, data_val_1);
     }
 
@@ -424,13 +424,13 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 200);
-        let read_val_0 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 63, 0).unwrap();
+        let read_val_0 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 63, 0).unwrap().unwrap();
         assert_eq!(read_val_0, data_val_0);
-        let read_val_1 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 127, 64).unwrap();
+        let read_val_1 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 127, 64).unwrap().unwrap();
         assert_eq!(read_val_1, data_val_1);
-        let read_val_2 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 191, 128).unwrap();
+        let read_val_2 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 191, 128).unwrap().unwrap();
         assert_eq!(read_val_2, data_val_2);
-        let read_val_3 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 199, 192).unwrap();
+        let read_val_3 = solver.get_a_solution_for_specified_bits_of_bv(&read_bv, 199, 192).unwrap().unwrap();
         assert_eq!(read_val_3, data_val_3);
     }
 
@@ -453,7 +453,7 @@ mod tests {
 
         // Ensure that we get back the most recent data
         let read_bv = mem.read(&addr, 8);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
     }
 
@@ -477,10 +477,10 @@ mod tests {
 
         // Ensure that we can read them both individually
         let read_bv = mem.read(&addr, 32);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
         let read_bv = mem.read(&addr_2, 32);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val_2);
     }
 
@@ -504,10 +504,10 @@ mod tests {
 
         // Ensure that we can read them both individually
         let read_bv = mem.read(&addr, 32);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val);
         let read_bv = mem.read(&addr_2, 32);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, data_val_2);
     }
 
@@ -527,12 +527,12 @@ mod tests {
         // (we are little-endian)
         let aligned = BV::from_u64(&ctx, 0x10000, Memory::INDEX_BITS);
         let read_bv = mem.read(&aligned, 16);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x4F00);
 
         // Ensure that reading extra bits adds zeroed high-order bits
         let read_bv = mem.read(&unaligned, 16);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x004F);
 
         // Ensure that reading elsewhere gives all zeroes
@@ -540,8 +540,8 @@ mod tests {
         let garbage_addr_2 = BV::from_u64(&ctx, 0x10008, Memory::INDEX_BITS);
         let read_bv_1 = mem.read(&garbage_addr_1, 8);
         let read_bv_2 = mem.read(&garbage_addr_2, 8);
-        let read_val_1 = solver.get_a_solution_for_bv(&read_bv_1).unwrap();
-        let read_val_2 = solver.get_a_solution_for_bv(&read_bv_2).unwrap();
+        let read_val_1 = solver.get_a_solution_for_bv(&read_bv_1).unwrap().unwrap();
+        let read_val_2 = solver.get_a_solution_for_bv(&read_bv_2).unwrap().unwrap();
         assert_eq!(read_val_1, 0);
         assert_eq!(read_val_2, 0);
     }
@@ -561,20 +561,20 @@ mod tests {
         // Ensure that reading 8 bits from offset 2 gives the low-order byte
         // (we are little-endian)
         let read_bv = mem.read(&offset_2, 8);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x78);
 
         // Ensure that reading 8 bits from offset 5 gives the high-order byte
         // (we are little-endian)
         let offset_5 = BV::from_u64(&ctx, 0x10005, Memory::INDEX_BITS);
         let read_bv = mem.read(&offset_5, 8);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x12);
 
         // Ensure that reading 16 bits from offset 3 gives the middle two bytes
         let offset_3 = BV::from_u64(&ctx, 0x10003, Memory::INDEX_BITS);
         let read_bv = mem.read(&offset_3, 16);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x3456);
     }
 
@@ -596,12 +596,12 @@ mod tests {
 
         // Ensure that we can read the smaller overwrite back
         let read_bv = mem.read(&addr, 16);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, overwrite_data_val);
 
         // Ensure that reading the whole cell back reflects the partial overwrite
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x12345678_1234dcba);
     }
 
@@ -624,18 +624,18 @@ mod tests {
 
         // Ensure that we can read the smaller overwrite back
         let read_bv = mem.read(&overwrite_addr, 16);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, overwrite_data_val);
 
         // Ensure that reading the whole cell back reflects the partial overwrite
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x12345678_dcba5678);
 
         // Now a different partial read with some original data and some overwritten
         let new_addr = BV::from_u64(&ctx, 0x10003, Memory::INDEX_BITS);
         let read_bv = mem.read(&new_addr, 16);
-        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
+        let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap().unwrap();
         assert_eq!(read_val, 0x78dc);
     }
 }

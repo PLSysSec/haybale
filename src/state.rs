@@ -299,27 +299,27 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Get one possible concrete value for the `BV`.
-    /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bv(&mut self, bv: &B::BV) -> Option<u64> {
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
+    pub fn get_a_solution_for_bv(&mut self, bv: &B::BV) -> Result<Option<u64>, &'static str> {
         self.solver.get_a_solution_for_bv(bv)
     }
 
     /// Get one possible concrete value for the `Bool`.
-    /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bool(&mut self, b: &B::Bool) -> Option<bool> {
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
+    pub fn get_a_solution_for_bool(&mut self, b: &B::Bool) -> Result<Option<bool>, &'static str> {
         self.solver.get_a_solution_for_bool(b)
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.
-    /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Option<u64> {
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
+    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>, &'static str> {
         let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bv(&bv)
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bool.
-    /// Returns `None` if no possible solution.
-    pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Option<bool> {
+    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
+    pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<bool>, &'static str> {
         let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
     }
@@ -850,7 +850,7 @@ mod tests {
         let bv = state.operand_to_bv(&Operand::ConstantOperand(constint));
 
         // check that the Z3 value was evaluated to 3
-        assert_eq!(state.get_a_solution_for_bv(&bv), Some(3));
+        assert_eq!(state.get_a_solution_for_bv(&bv), Ok(Some(3)));
     }
 
     #[test]
@@ -869,8 +869,8 @@ mod tests {
         let bvfalse = state.operand_to_bool(&Operand::ConstantOperand(constfalse));
 
         // check that the Z3 values are evaluated to true and false respectively
-        assert_eq!(state.get_a_solution_for_bool(&bvtrue), Some(true));
-        assert_eq!(state.get_a_solution_for_bool(&bvfalse), Some(false));
+        assert_eq!(state.get_a_solution_for_bool(&bvtrue), Ok(Some(true)));
+        assert_eq!(state.get_a_solution_for_bool(&bvfalse), Ok(Some(false)));
 
         // assert the first one, which should be true, so we should still be sat
         state.assert(&bvtrue);
@@ -919,10 +919,10 @@ mod tests {
         assert_eq!(state.check(), Ok(true));
 
         // check that the constraint y > 5 was added: y evaluates to something > 5
-        assert!(state.get_a_solution_for_bv(&y).unwrap() > 5);
+        assert!(state.get_a_solution_for_bv(&y).unwrap().unwrap() > 5);
 
         // check that the first constraint remained in place: x > 11
-        assert!(state.get_a_solution_for_bv(&x).unwrap() > 11);
+        assert!(state.get_a_solution_for_bv(&x).unwrap().unwrap() > 11);
 
         // check that trying to backtrack again fails
         assert!(!state.revert_to_backtracking_point());

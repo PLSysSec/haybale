@@ -113,9 +113,9 @@ pub trait Solver<'ctx> {
     fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool, &'static str> where Self::Constraint: 'a;
     fn push(&mut self);
     fn pop(&mut self, n: usize);
-    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Option<u64>;
-    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Option<u64>;
-    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Option<bool>;
+    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>, &'static str>;
+    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>, &'static str>;
+    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>, &'static str>;
     fn current_model_to_pretty_string(&self) -> String;
 }
 
@@ -342,13 +342,13 @@ impl<'ctx> Solver<'ctx> for crate::solver::Solver<'ctx> {
     fn pop(&mut self, n: usize) {
         self.pop(n)
     }
-    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Option<u64> {
+    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>, &'static str> {
         self.get_a_solution_for_bv(bv)
     }
-    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Option<u64> {
+    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>, &'static str> {
         self.get_a_solution_for_specified_bits_of_bv(bv, high, low)
     }
-    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Option<bool> {
+    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>, &'static str> {
         self.get_a_solution_for_bool(b)
     }
     fn current_model_to_pretty_string(&self) -> String {
