@@ -21,6 +21,8 @@ mod alloc;
 pub mod solver;
 mod varmap;
 mod double_keyed_map;
+mod possible_solutions;
+pub use possible_solutions::PossibleSolutions;
 
 pub mod backend;
 use backend::*;
@@ -122,13 +124,6 @@ pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, proje
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-pub enum ReturnValues {
-    ExactlyOnePossibleValue(u64),
-    MultiplePossibleValues,
-    NoPossibleValues,
-}
-
 /// Get a description of the possible return values of a function, for given
 /// argument values.
 /// Considers all possible paths through the function given these arguments.
@@ -144,7 +139,7 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
     args: impl IntoIterator<Item = Option<u64>>,
     project: &'p Project,
     config: Config<'ctx, Z3Backend<'ctx>>,
-) -> Result<ReturnValues, &'static str> {
+) -> Result<PossibleSolutions<u64>, &'static str> {
     let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, funcname, project, config);
 
     let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
@@ -160,23 +155,22 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
             SymexResult::ReturnedVoid => panic!("This function shouldn't be called with functions that return void"),
             SymexResult::Returned(z3rval) => {
                 let state = em.mut_state();
-                if let Some(val) = state.get_a_solution_for_bv(&z3rval)? {
-                    match candidate_value {
-                        None => candidate_value = Some(val),  // this will be our new candidate value
-                        Some(c) if c != val => return Ok(ReturnValues::MultiplePossibleValues),  // we clearly have at least two possibilities for the value
-                        Some(_) => {},  // this value was already our candidate value; do nothing
-                    };
-                    // now check for other possible values along this path
-                    state.assert(&z3rval._eq(&BV::from_u64(ctx, val, z3rval.get_size())).not());
-                    if state.check().unwrap() {
-                        return Ok(ReturnValues::MultiplePossibleValues);
+                match state.get_possible_solutions_for_bv(&z3rval)? {
+                    PossibleSolutions::NoSolutions => {},  // do nothing
+                    PossibleSolutions::MultiplePossibleSolutions => return Ok(PossibleSolutions::MultiplePossibleSolutions),
+                    PossibleSolutions::ExactlyOnePossibleSolution(val) => {
+                        match candidate_value {
+                            None => candidate_value = Some(val),  // this will be our new candidate value
+                            Some(c) if c != val => return Ok(PossibleSolutions::MultiplePossibleSolutions),  // we clearly have at least two possibilities for the value
+                            Some(_) => {},  // this value was already our candidate value; do nothing
+                        }
                     }
-                }
+                };
             }
         }
     }
     match candidate_value {
-        Some(val) => Ok(ReturnValues::ExactlyOnePossibleValue(val)),
-        None => Ok(ReturnValues::NoPossibleValues),
+        Some(val) => Ok(PossibleSolutions::ExactlyOnePossibleSolution(val)),
+        None => Ok(PossibleSolutions::NoSolutions),
     }
 }

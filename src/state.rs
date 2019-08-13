@@ -11,6 +11,7 @@ use crate::alloc::Alloc;
 use crate::backend::*;
 use crate::config::Config;
 use crate::extend::*;
+use crate::possible_solutions::*;
 use crate::project::Project;
 use crate::size::size;
 use crate::varmap::{VarMap, RestoreInfo};
@@ -322,6 +323,28 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<bool>, &'static str> {
         let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
+    }
+
+    /// Get a description of the possible solutions for the `BV`.
+    pub fn get_possible_solutions_for_bv(&mut self, bv: &B::BV) -> Result<PossibleSolutions<u64>, &'static str> {
+        self.solver.get_possible_solutions_for_bv(bv)
+    }
+
+    /// Get a description of the possible solutions for the `Bool`.
+    pub fn get_possible_solutions_for_bool(&mut self, b: &B::Bool) -> Result<PossibleSolutions<bool>, &'static str> {
+        self.solver.get_possible_solutions_for_bool(b)
+    }
+
+    /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bitvector.
+    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<u64>, &'static str> {
+        let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
+        self.get_possible_solutions_for_bv(&bv)
+    }
+
+    /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bool.
+    pub fn get_possible_solutions_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<bool>, &'static str> {
+        let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
+        self.get_possible_solutions_for_bool(&b)
     }
 
     /// Create a new (unconstrained) `BV` for the given `Name` (in the current function).

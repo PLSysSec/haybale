@@ -1,9 +1,11 @@
+use crate::possible_solutions::*;
 use log::debug;
 use std::convert::TryInto;
 use std::fmt;
 use z3::ast::{Ast, BV, Bool};
 
 pub struct Solver<'ctx> {
+    ctx: &'ctx z3::Context,
     z3_solver: z3::Solver<'ctx>,
 
     // Invariants:
@@ -18,6 +20,7 @@ impl<'ctx> Solver<'ctx> {
     /// A new `Solver` with no constraints
     pub fn new(ctx: &'ctx z3::Context) -> Self {
         Self {
+            ctx,
             z3_solver: z3::Solver::new(ctx),
             check_status: None,
             model: None,
@@ -128,6 +131,42 @@ impl<'ctx> Solver<'ctx> {
         }
     }
 
+    /// Get a description of the possible solutions for the `BV`.
+    pub fn get_possible_solutions_for_bv(&mut self, bv: &BV<'ctx>) -> Result<PossibleSolutions<u64>, &'static str> {
+        match self.get_a_solution_for_bv(bv)? {
+            None => Ok(PossibleSolutions::NoSolutions),
+            Some(val) => {
+                // Temporarily constrain that the solution can't be `val`, to see if there is another solution
+                self.push();
+                self.assert(&bv._eq(&BV::from_u64(self.ctx, val, bv.get_size())).not());
+                let retval = match self.get_a_solution_for_bv(bv)? {
+                    None => PossibleSolutions::ExactlyOnePossibleSolution(val),
+                    Some(_) => PossibleSolutions::MultiplePossibleSolutions,
+                };
+                self.pop(1);
+                Ok(retval)
+            }
+        }
+    }
+
+    /// Get a description of the possible solutions for the `Bool`.
+    pub fn get_possible_solutions_for_bool(&mut self, b: &Bool<'ctx>) -> Result<PossibleSolutions<bool>, &'static str> {
+        match self.get_a_solution_for_bool(b)? {
+            None => Ok(PossibleSolutions::NoSolutions),
+            Some(val) => {
+                // Temporarily constrain that the solution can't be `val`, to see if there is another solution
+                self.push();
+                self.assert(&b._eq(&Bool::from_bool(self.ctx, val)).not());
+                let retval = match self.get_a_solution_for_bool(b)? {
+                    None => PossibleSolutions::ExactlyOnePossibleSolution(val),
+                    Some(_) => PossibleSolutions::MultiplePossibleSolutions,
+                };
+                self.pop(1);
+                Ok(retval)
+            }
+        }
+    }
+
     /// Private function which ensures that the check status and model are up to date with the current constraints
     fn refresh_model(&mut self) {
         if self.model.is_some() { return; }  // nothing to do
@@ -200,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn get_model() {
+    fn get_a_solution() {
         let ctx = z3::Context::new(&z3::Config::new());
         let mut solver = Solver::new(&ctx);
 
@@ -211,6 +250,31 @@ mod tests {
         // check that the computed value of x is > 3
         let x_value = solver.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x");
         assert!(x_value > 3);
+    }
+
+    #[test]
+    fn possible_solutions() {
+        let ctx = z3::Context::new(&z3::Config::new());
+        let mut solver = Solver::new(&ctx);
+
+        // add x > 3 constraint
+        let x = BV::new_const(&ctx, "x", 64);
+        solver.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
+
+        // check that there are multiple solutions
+        assert_eq!(solver.get_possible_solutions_for_bv(&x), Ok(PossibleSolutions::MultiplePossibleSolutions));
+
+        // add x < 5 constraint
+        solver.assert(&x.bvult(&BV::from_u64(&ctx, 5, 64)));
+
+        // check that there is now exactly one solution
+        assert_eq!(solver.get_possible_solutions_for_bv(&x), Ok(PossibleSolutions::ExactlyOnePossibleSolution(4)));
+
+        // add x < 3 constraint
+        solver.assert(&x.bvult(&BV::from_u64(&ctx, 3, 64)));
+
+        // check that there are now no solutions
+        assert_eq!(solver.get_possible_solutions_for_bv(&x), Ok(PossibleSolutions::NoSolutions));
     }
 }
 

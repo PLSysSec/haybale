@@ -1,3 +1,4 @@
+use crate::possible_solutions::*;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -116,6 +117,8 @@ pub trait Solver<'ctx> {
     fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>, &'static str>;
     fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>, &'static str>;
     fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>, &'static str>;
+    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value) -> Result<PossibleSolutions<u64>, &'static str>;
+    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>, &'static str>;
     fn current_model_to_pretty_string(&self) -> String;
 }
 
@@ -350,6 +353,12 @@ impl<'ctx> Solver<'ctx> for crate::solver::Solver<'ctx> {
     }
     fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>, &'static str> {
         self.get_a_solution_for_bool(b)
+    }
+    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value) -> Result<PossibleSolutions<u64>, &'static str> {
+        self.get_possible_solutions_for_bv(bv)
+    }
+    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>, &'static str> {
+        self.get_possible_solutions_for_bool(b)
     }
     fn current_model_to_pretty_string(&self) -> String {
         self.current_model_to_pretty_string()
