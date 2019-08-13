@@ -10,3 +10,12 @@ struct StructWithPointers {
   const struct SomeStruct* ssptr;
   const struct StructWithPointers* swpptr;
 };
+
+struct StructWithFunctionPointer {
+  const int field1;
+  int (*const funcptr)(int, int);
+  void* voidfuncptr;
+};
+
+int foo();
+int bar(int, int);

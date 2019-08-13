@@ -24,6 +24,9 @@ const struct StructWithPointers swp1 = { c, &swp0.field1, &ss2, &swp0 };
 // a circular data structure, with links across modules
 const struct StructWithPointers crossMod0 = { 2, &crossMod1.field1, &ss1, &crossMod1};
 
+// a struct with pointers to functions in the same module
+const struct StructWithFunctionPointer swfp1 = { 21, &bar, (void*) &foo };
+
 int foo() {
   return a  // 2
        + b  // 2
@@ -34,5 +37,10 @@ int foo() {
        + *(swp0.intptr)  // 511
        + swp1.ssptr->field2  // 515
        + swp0.swpptr->swpptr->field1  // 2
-       + *(crossMod0.swpptr->swpptr->intptr);  // 2
+       + *(crossMod0.swpptr->swpptr->intptr)  // 2
+       + swfp1.funcptr(2, 3);  // 5
+}
+
+int bar(int x, int y) {
+  return x + y;
 }

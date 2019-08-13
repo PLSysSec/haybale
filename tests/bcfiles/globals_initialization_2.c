@@ -20,3 +20,6 @@ const struct StructWithPointers swp3 = { x - 2, &swp0.field1, &ss2, &swp1 };
 
 // a circular data structure, with links across modules
 const struct StructWithPointers crossMod1 = { 2, &crossMod0.field1, &ss0, &crossMod0};
+
+// a struct with pointers to functions in another module
+const struct StructWithFunctionPointer swfp2 = { 21, &bar, (void*) &foo };
