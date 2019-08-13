@@ -193,7 +193,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         // initializer in C have one in LLVM, which seems weird to me, but it's
         // what the docs say, and also matches what I've seen empirically.
         debug!("Allocating global variables");
-        for var in project.all_global_vars().filter(|var| var.initializer.is_some()) {
+        for (var, _) in project.all_global_vars().filter(|(var,_)| var.initializer.is_some()) {
             // Allocate the global variable.
             //
             // In the allocation pass, we want to process each global variable
@@ -216,7 +216,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         // The `state.addr_to_function` map will help in interpreting these
         // function pointers.
         debug!("Allocating functions");
-        for func in project.all_functions() {
+        for (func, _) in project.all_functions() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
             let addr_bv = BV::from_u64(ctx, addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
@@ -228,7 +228,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         }
         // Now we do initialization of global variables.
         debug!("Initializing global variables");
-        for var in project.all_global_vars() {
+        for (var, _) in project.all_global_vars() {
             // Like with the allocation pass, in the initialization pass we
             // again only need to process definitions. Conveniently, definitions
             // are where we find the initializer anyway; so we initialize the

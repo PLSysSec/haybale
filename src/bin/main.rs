@@ -18,7 +18,7 @@ fn main() {
     if let Some(funcname) = secondarg {
         functions = Box::new(std::iter::once(funcname.clone()));
     } else {
-        functions = Box::new(proj.all_functions().map(|f| f.name.clone()));
+        functions = Box::new(proj.all_functions().map(|(f,_)| f.name.clone()));
     }
     let ctx = z3::Context::new(&z3::Config::new());
     for funcname in functions {

@@ -56,19 +56,22 @@ impl Project {
         Ok(())
     }
 
-    /// Iterate over all `Function`s in the `Project`
-    pub fn all_functions(&self) -> impl Iterator<Item = &Function> {
-        self.modules.iter().map(|m| m.functions.iter()).flatten()
+    /// Iterate over all `Function`s in the `Project`.
+    /// Gives pairs which also indicate the `Module` the `Function` is defined in.
+    pub fn all_functions(&self) -> impl Iterator<Item = (&Function, &Module)> {
+        self.modules.iter().map(|m| m.functions.iter().zip(std::iter::repeat(m))).flatten()
     }
 
-    /// Iterate over all `GlobalVariable`s in the `Project`
-    pub fn all_global_vars(&self) -> impl Iterator<Item = &GlobalVariable> {
-        self.modules.iter().map(|m| m.global_vars.iter()).flatten()
+    /// Iterate over all `GlobalVariable`s in the `Project`.
+    /// Gives pairs which also indicate the `Module` the `GlobalVariable` comes from.
+    pub fn all_global_vars(&self) -> impl Iterator<Item = (&GlobalVariable, &Module)> {
+        self.modules.iter().map(|m| m.global_vars.iter().zip(std::iter::repeat(m))).flatten()
     }
 
-    /// Iterate over all `GlobalAlias`es in the `Project`
-    pub fn all_global_aliases(&self) -> impl Iterator<Item = &GlobalAlias> {
-        self.modules.iter().map(|m| m.global_aliases.iter()).flatten()
+    /// Iterate over all `GlobalAlias`es in the `Project`.
+    /// Gives pairs which also indicate the `Module` the `GlobalAlias` comes from.
+    pub fn all_global_aliases(&self) -> impl Iterator<Item = (&GlobalAlias, &Module)> {
+        self.modules.iter().map(|m| m.global_aliases.iter().zip(std::iter::repeat(m))).flatten()
     }
 
     /// Get the names of the LLVM modules which have been parsed and loaded into
