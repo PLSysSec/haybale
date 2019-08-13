@@ -27,8 +27,8 @@ fn read_global() {
     let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     );
 }
 
@@ -39,8 +39,8 @@ fn modify_global() {
     let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     )
 }
 
@@ -51,8 +51,8 @@ fn modify_global_with_call() {
     let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     )
 }
 
@@ -63,8 +63,8 @@ fn dont_confuse_globals() {
     let proj = get_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     )
 }
 
@@ -77,8 +77,8 @@ fn cross_module_read_global() {
     let proj = get_cross_module_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     );
 }
 
@@ -89,8 +89,8 @@ fn cross_module_read_global_via_call() {
     let proj = get_cross_module_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     );
 }
 
@@ -101,8 +101,8 @@ fn cross_module_modify_global() {
     let proj = get_cross_module_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     );
 }
 
@@ -113,8 +113,8 @@ fn cross_module_modify_global_via_call() {
     let proj = get_cross_module_project();
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(3)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![3])),
     );
 }
 
@@ -127,7 +127,7 @@ fn globals_initialization() {
         .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default()),
-        Ok(PossibleSolutions::ExactlyOnePossibleSolution(1052)),
+        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
+        Ok(PossibleSolutions::PossibleSolutions(vec![1052])),
     )
 }

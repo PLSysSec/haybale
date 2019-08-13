@@ -316,8 +316,12 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Get a description of the possible solutions for the `BV`.
-    pub fn get_possible_solutions_for_bv(&mut self, bv: &B::BV) -> Result<PossibleSolutions<u64>, &'static str> {
-        self.solver.get_possible_solutions_for_bv(bv)
+    ///
+    /// `n`: Maximum number of distinct solutions to return.
+    /// If there are more than `n` possible solutions, this simply
+    /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    pub fn get_possible_solutions_for_bv(&mut self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+        self.solver.get_possible_solutions_for_bv(bv, n)
     }
 
     /// Get a description of the possible solutions for the `Bool`.
@@ -326,9 +330,13 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bitvector.
-    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<u64>, &'static str> {
+    ///
+    /// `n`: Maximum number of distinct solutions to return.
+    /// If there are more than `n` possible solutions, this simply
+    /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
         let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
-        self.get_possible_solutions_for_bv(&bv)
+        self.get_possible_solutions_for_bv(&bv, n)
     }
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bool.

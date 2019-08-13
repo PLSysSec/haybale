@@ -1,4 +1,5 @@
 use llvm_ir::Type;
+use std::collections::HashSet;
 
 mod project;
 pub use project::Project;
@@ -132,6 +133,10 @@ pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, proje
 /// parameter, or `None` to have the analysis consider all possible values of the
 /// parameter.
 ///
+/// `n`: Maximum number of distinct solutions to return.
+/// If there are more than `n` possible solutions, this simply returns
+/// `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+///
 /// For detailed descriptions of the other arguments, see [`symex_function`](fn.symex_function.html).
 pub fn get_possible_return_values_of_func<'ctx, 'p>(
     ctx: &'ctx z3::Context,
@@ -139,6 +144,7 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
     args: impl IntoIterator<Item = Option<u64>>,
     project: &'p Project,
     config: Config<'ctx, Z3Backend<'ctx>>,
+    n: usize,
 ) -> Result<PossibleSolutions<u64>, &'static str> {
     let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, funcname, project, config);
 
@@ -149,28 +155,27 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
         }
     }
 
-    let mut candidate_value = None;
+    let mut candidate_values = HashSet::<u64>::new();
     while let Some(z3rval) = em.next() {
         match z3rval {
             SymexResult::ReturnedVoid => panic!("This function shouldn't be called with functions that return void"),
             SymexResult::Returned(z3rval) => {
                 let state = em.mut_state();
-                match state.get_possible_solutions_for_bv(&z3rval)? {
-                    PossibleSolutions::NoSolutions => {},  // do nothing
-                    PossibleSolutions::MultiplePossibleSolutions => return Ok(PossibleSolutions::MultiplePossibleSolutions),
-                    PossibleSolutions::ExactlyOnePossibleSolution(val) => {
-                        match candidate_value {
-                            None => candidate_value = Some(val),  // this will be our new candidate value
-                            Some(c) if c != val => return Ok(PossibleSolutions::MultiplePossibleSolutions),  // we clearly have at least two possibilities for the value
-                            Some(_) => {},  // this value was already our candidate value; do nothing
+                match state.get_possible_solutions_for_bv(&z3rval, n)? {
+                    PossibleSolutions::MoreThanNPossibleSolutions(n) => return Ok(PossibleSolutions::MoreThanNPossibleSolutions(n)),
+                    PossibleSolutions::PossibleSolutions(v) => {
+                        candidate_values.extend(v);
+                        if candidate_values.len() > n {
+                            break;
                         }
                     }
                 };
             }
         }
     }
-    match candidate_value {
-        Some(val) => Ok(PossibleSolutions::ExactlyOnePossibleSolution(val)),
-        None => Ok(PossibleSolutions::NoSolutions),
+    if candidate_values.len() > n {
+        Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
+    } else {
+        Ok(PossibleSolutions::PossibleSolutions(candidate_values.into_iter().collect()))
     }
 }

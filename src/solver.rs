@@ -132,39 +132,55 @@ impl<'ctx> Solver<'ctx> {
     }
 
     /// Get a description of the possible solutions for the `BV`.
-    pub fn get_possible_solutions_for_bv(&mut self, bv: &BV<'ctx>) -> Result<PossibleSolutions<u64>, &'static str> {
-        match self.get_a_solution_for_bv(bv)? {
-            None => Ok(PossibleSolutions::NoSolutions),
-            Some(val) => {
-                // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                self.push();
-                self.assert(&bv._eq(&BV::from_u64(self.ctx, val, bv.get_size())).not());
-                let retval = match self.get_a_solution_for_bv(bv)? {
-                    None => PossibleSolutions::ExactlyOnePossibleSolution(val),
-                    Some(_) => PossibleSolutions::MultiplePossibleSolutions,
-                };
-                self.pop(1);
-                Ok(retval)
+    ///
+    /// `n`: Maximum number of distinct solutions to return.
+    /// If there are more than `n` possible solutions, this simply
+    /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    pub fn get_possible_solutions_for_bv(&mut self, bv: &BV<'ctx>, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+        let mut solutions = vec![];
+        self.push();
+        while solutions.len() <= n {
+            match self.get_a_solution_for_bv(bv)? {
+                None => break,  // no more possible solutions, we're done
+                Some(val) => {
+                    solutions.push(val);
+                    // Temporarily constrain that the solution can't be `val`, to see if there is another solution
+                    self.assert(&bv._eq(&BV::from_u64(self.ctx, val, bv.get_size())).not());
+                }
             }
+        }
+        self.pop(1);
+        if solutions.len() > n {
+            Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
+        } else {
+            Ok(PossibleSolutions::PossibleSolutions(solutions))
         }
     }
 
     /// Get a description of the possible solutions for the `Bool`.
+    ///
+    /// Since there cannot be more than two solutions (`true` and `false`),
+    /// this should never return the `PossibleSolutions::MoreThanNPossibleSolutions` variant.
+    /// Instead, it should only return one of these four things:
+    ///   - `PossibleSolutions::PossibleSolutions(vec![])` indicating no possible solution,
+    ///   - `PossibleSolutions::PossibleSolutions(vec![true])`,
+    ///   - `PossibleSolutions::PossibleSolutions(vec![false])`,
+    ///   - `PossibleSolutions::PossibleSolutions(vec![true, false])`
     pub fn get_possible_solutions_for_bool(&mut self, b: &Bool<'ctx>) -> Result<PossibleSolutions<bool>, &'static str> {
-        match self.get_a_solution_for_bool(b)? {
-            None => Ok(PossibleSolutions::NoSolutions),
+        self.push();
+        let retval = match self.get_a_solution_for_bool(b)? {
+            None => PossibleSolutions::PossibleSolutions(vec![]),
             Some(val) => {
                 // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                self.push();
                 self.assert(&b._eq(&Bool::from_bool(self.ctx, val)).not());
-                let retval = match self.get_a_solution_for_bool(b)? {
-                    None => PossibleSolutions::ExactlyOnePossibleSolution(val),
-                    Some(_) => PossibleSolutions::MultiplePossibleSolutions,
-                };
-                self.pop(1);
-                Ok(retval)
+                match self.get_a_solution_for_bool(b)? {
+                    None => PossibleSolutions::PossibleSolutions(vec![val]),
+                    Some(_) => PossibleSolutions::PossibleSolutions(vec![true, false]),
+                }
             }
-        }
+        };
+        self.pop(1);
+        Ok(retval)
     }
 
     /// Private function which ensures that the check status and model are up to date with the current constraints
@@ -261,20 +277,26 @@ mod tests {
         let x = BV::new_const(&ctx, "x", 64);
         solver.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
 
-        // check that there are multiple solutions
-        assert_eq!(solver.get_possible_solutions_for_bv(&x), Ok(PossibleSolutions::MultiplePossibleSolutions));
+        // check that there are more than 2 solutions
+        assert_eq!(solver.get_possible_solutions_for_bv(&x, 2), Ok(PossibleSolutions::MoreThanNPossibleSolutions(2)));
+
+        // add x < 6 constraint
+        solver.assert(&x.bvult(&BV::from_u64(&ctx, 6, 64)));
+
+        // check that there are now exactly two solutions
+        assert_eq!(solver.get_possible_solutions_for_bv(&x, 2), Ok(PossibleSolutions::PossibleSolutions(vec![4, 5])));
 
         // add x < 5 constraint
         solver.assert(&x.bvult(&BV::from_u64(&ctx, 5, 64)));
 
         // check that there is now exactly one solution
-        assert_eq!(solver.get_possible_solutions_for_bv(&x), Ok(PossibleSolutions::ExactlyOnePossibleSolution(4)));
+        assert_eq!(solver.get_possible_solutions_for_bv(&x, 2), Ok(PossibleSolutions::PossibleSolutions(vec![4])));
 
         // add x < 3 constraint
         solver.assert(&x.bvult(&BV::from_u64(&ctx, 3, 64)));
 
         // check that there are now no solutions
-        assert_eq!(solver.get_possible_solutions_for_bv(&x), Ok(PossibleSolutions::NoSolutions));
+        assert_eq!(solver.get_possible_solutions_for_bv(&x, 2), Ok(PossibleSolutions::PossibleSolutions(vec![])));
     }
 }
 
