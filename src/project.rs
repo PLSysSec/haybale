@@ -71,6 +71,12 @@ impl Project {
         self.modules.iter().map(|m| m.global_aliases.iter()).flatten()
     }
 
+    /// Get the names of the LLVM modules which have been parsed and loaded into
+    /// the `Project`
+    pub fn active_module_names(&self) -> impl Iterator<Item = &String> {
+        self.modules.iter().map(|m| &m.name)
+    }
+
     /// Search the project for a function with the given name.
     /// If a matching function is found, return both it and the module it was
     /// found in.
