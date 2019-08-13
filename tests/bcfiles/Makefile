@@ -12,6 +12,7 @@ all: basic.bc basic.ll \
 			globals.bc globals.ll \
 			globals_initialization_1.bc globals_initialization_1.ll \
 			globals_initialization_2.bc globals_initialization_2.ll \
+			functionptr.bc functionptr.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
