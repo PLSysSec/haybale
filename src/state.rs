@@ -185,26 +185,28 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         // We need to do these in two separate passes - first allocating them
         // all, then initializing them all - because initializers can refer to
         // the addresses of other global variables, potentially even circularly.
-        // See further notes below.
+        //
+        // Note that `project.all_global_vars()` gives us both global variable
+        // *definitions* and *declarations*; we can distinguish these because
+        // (direct quote from the LLVM docs) "Definitions have initializers,
+        // declarations don't." This implies that even globals without an
+        // initializer in C have one in LLVM, which seems weird to me, but it's
+        // what the docs say, and also matches what I've seen empirically.
         debug!("Allocating global variables");
-        for var in project.all_global_vars() {
-            // Allocate the global variable if this is the first time we've seen it.
-            // We assume that global variables have globally-unique names, even across
-            // modules - that is, no two modules will have different globals with the
-            // same name. This assumption could theoretically fail in the presence
-            // of module-private globals.
-            // TODO at least check for this case so we can warn the user with an error message.
-            //   [Note that it's not as simple as checking whether we see the same
-            //   name twice. Seeing the same name twice is normal and expected,
-            //   because global variables may be declared in several modules even
-            //   if they are only defined in one. (See further notes below in the
-            //   "Initializing global variables" section.) So in order to properly
-            //   detect when this is happening, we'd have to examine each
-            //   `GlobalVariable` to determine whether it's module-private, etc.]
+        for var in project.all_global_vars().filter(|var| var.initializer.is_some()) {
+            // Allocate the global variable.
+            //
+            // In the allocation pass, we want to process each global variable
+            // exactly once, and the order doesn't matter, so we simply process
+            // definitions, since each global variable must have exactly one
+            // definition. Hence the `filter()` above.
             if let Type::PointerType { pointee_type, .. } = &var.ty {
                 let addr = state.allocate(size(&*pointee_type) as u64);
                 debug!("Allocated {:?} at {:?}", var.name, addr);
-                state.allocated_globals.entry(var.name.clone()).or_insert(addr);
+                match state.allocated_globals.entry(var.name.clone()) {
+                    Entry::Occupied(_) => panic!("Duplicate definitions found for global variable {:?}", var.name),
+                    Entry::Vacant(entry) => entry.insert(addr),
+                };
             } else {
                 panic!("Global variable has non-pointer type {:?}", &var.ty);
             }
@@ -213,15 +215,6 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         // `Function`, just so that we can have pointers to those `Function`s.
         // The `state.addr_to_function` map will help in interpreting these
         // function pointers.
-        //
-        // We assume that functions do not share names, with other functions or
-        // with global variables, even across modules. This assumption could
-        // theoretically fail in the presence of module-private globals and/or functions.
-        // Unlike with global-variable-to-global-variable name collisions (see notes above),
-        // for function-to-global-variable and function-to-function name collisions
-        // we can actually detect when this is happening and panic.
-        // (This is because each `Function` only appears once in `project.all_functions()`;
-        // that is, we only iterate over function definitions, not declarations.)
         debug!("Allocating functions");
         for func in project.all_functions() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
@@ -236,15 +229,12 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         // Now we do initialization of global variables.
         debug!("Initializing global variables");
         for var in project.all_global_vars() {
-            // Note that `project.all_global_vars()` gives us both global variable
-            // *definitions* and *declarations*; we can distinguish these because
-            // (direct quote from the LLVM docs) "Definitions have initializers,
-            // declarations don't." This implies that even globals without an
-            // initializer in C have one in LLVM, which seems weird to me, but it's
-            // what the docs say, and also matches what I've seen empirically.
-            //
-            // We initialize each variable when we come across its definition,
-            // i.e., we initialize if and only if there is an initializer. Convenient.
+            // Like with the allocation pass, in the initialization pass we
+            // again only need to process definitions. Conveniently, definitions
+            // are where we find the initializer anyway; so we initialize the
+            // variable if and only if there is an initializer. (See notes on
+            // definitions vs. declarations above.) Also, processing only
+            // definitions ensures that we only initialize each variable once.
             //
             // We assume that global-variable initializers can only refer to the
             // *addresses* of other globals, and not the *values* of other
