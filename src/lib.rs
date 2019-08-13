@@ -93,7 +93,7 @@ pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, proje
             SymexResult::Returned(z3rval) => {
                 let state = em.mut_state();
                 state.assert(&z3rval._eq(&zero));
-                if state.check() {
+                if state.check().unwrap() {
                     found = true;
                     break;
                 }
@@ -168,7 +168,7 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
                     };
                     // now check for other possible values along this path
                     state.assert(&z3rval._eq(&BV::from_u64(ctx, val, z3rval.get_size())).not());
-                    if state.check() {
+                    if state.check().unwrap() {
                         return ReturnValues::MultiplePossibleValues;
                     }
                 }

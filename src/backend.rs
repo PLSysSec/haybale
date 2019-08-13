@@ -109,8 +109,8 @@ pub trait Solver<'ctx> {
 
     fn new(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
     fn assert(&mut self, constraint: &Self::Constraint);
-    fn check(&mut self) -> bool;
-    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> bool where Self::Constraint: 'a;
+    fn check(&mut self) -> Result<bool, &'static str>;
+    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool, &'static str> where Self::Constraint: 'a;
     fn push(&mut self);
     fn pop(&mut self, n: usize);
     fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Option<u64>;
@@ -330,10 +330,10 @@ impl<'ctx> Solver<'ctx> for crate::solver::Solver<'ctx> {
     fn assert(&mut self, constraint: &Self::Constraint) {
         self.assert(constraint)
     }
-    fn check(&mut self) -> bool {
+    fn check(&mut self) -> Result<bool, &'static str> {
         self.check()
     }
-    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> bool {
+    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool, &'static str> {
         self.check_with_extra_constraints(constraints)
     }
     fn push(&mut self) {

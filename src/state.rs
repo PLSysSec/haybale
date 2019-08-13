@@ -279,16 +279,22 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Returns `true` if current constraints are satisfiable, `false` if not.
+    ///
+    /// Returns `None` if the query failed (e.g., was interrupted or timed out).
+    ///
     /// This function caches its result and will only call to Z3 if constraints have changed
     /// since the last call to `check()`.
-    pub fn check(&mut self) -> bool {
+    pub fn check(&mut self) -> Result<bool, &'static str> {
         self.solver.check()
     }
 
     /// Returns `true` if the current constraints plus the additional constraints `conds`
     /// are together satisfiable, or `false` if not.
+    ///
+    /// Returns `None` if the query failed (e.g., was interrupted or timed out).
+    ///
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn check_with_extra_constraints<'a>(&'a mut self, conds: impl Iterator<Item = &'a B::Bool>) -> bool {
+    pub fn check_with_extra_constraints<'a>(&'a mut self, conds: impl Iterator<Item = &'a B::Bool>) -> Result<bool, &'static str> {
         self.solver.check_with_extra_constraints(conds)
     }
 
@@ -868,11 +874,11 @@ mod tests {
 
         // assert the first one, which should be true, so we should still be sat
         state.assert(&bvtrue);
-        assert!(state.check());
+        assert_eq!(state.check(), Ok(true));
 
         // assert the second one, which should be false, so we should be unsat
         state.assert(&bvfalse);
-        assert!(!state.check());
+        assert_eq!(state.check(), Ok(false));
     }
 
     #[test]
@@ -893,11 +899,11 @@ mod tests {
         state.save_backtracking_point(bb.name.clone(), constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
-        assert!(state.check_with_extra_constraints(std::iter::once(&y.bvslt(&BV::from_i64(&ctx, 4, 64)))));
+        assert_eq!(state.check_with_extra_constraints(std::iter::once(&y.bvslt(&BV::from_i64(&ctx, 4, 64)))), Ok(true));
 
         // assert x < 8 to make us unsat
         state.assert(&x.bvslt(&BV::from_i64(&ctx, 8, 64)));
-        assert!(!state.check());
+        assert_eq!(state.check(), Ok(false));
 
         // note the pre-rollback location
         let pre_rollback = state.cur_loc.clone();
@@ -910,7 +916,7 @@ mod tests {
         assert_eq!(state.prev_bb_name, Some("test_bb".to_owned().into()));  // the `blank_state` comes with this as the current bb name
 
         // check that the constraint x < 8 was removed: we're sat again
-        assert!(state.check());
+        assert_eq!(state.check(), Ok(true));
 
         // check that the constraint y > 5 was added: y evaluates to something > 5
         assert!(state.get_a_solution_for_bv(&y).unwrap() > 5);

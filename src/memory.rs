@@ -259,14 +259,14 @@ mod tests {
         // Constrain it to be > 0 and check that we're sat (and get a value > 0)
         solver.push();
         solver.assert(&read_bv.bvsgt(&zero));
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap();
         assert!(read_val > 0);
 
         // Alternately, constrain it to be < 0 and check that we're sat (and get a value < 0)
         solver.pop(1);
         solver.assert(&read_bv.bvslt(&zero));
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
         let read_val = solver.get_a_solution_for_bv(&read_bv).unwrap() as i64;
         assert!(read_val < 0);
     }
@@ -287,7 +287,7 @@ mod tests {
 
         // Constrain the read value to be > 0 and check that we're unsat
         solver.assert(&read_bv.bvsgt(&zero));
-        assert!(!solver.check());
+        assert_eq!(solver.check(), Ok(false));
     }
 
     #[test]

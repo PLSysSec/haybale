@@ -1,4 +1,5 @@
 use log::debug;
+use std::convert::TryInto;
 use std::fmt;
 use z3::ast::{Ast, BV, Bool};
 
@@ -9,7 +10,7 @@ pub struct Solver<'ctx> {
     // if `check_status` is `Some`, then it is a cached value of the last `check()`, which is still valid
     // if `model` is `Some`, then it is a model for the current solver constraints
     // if `model` is `Some`, then `check_status` must be as well (but not necessarily vice versa)
-    check_status: Option<bool>,
+    check_status: Option<z3::SatResult>,
     model: Option<z3::Model<'ctx>>,
 }
 
@@ -33,23 +34,29 @@ impl<'ctx> Solver<'ctx> {
     }
 
     /// Returns `true` if current constraints are satisfiable, `false` if not.
+    ///
+    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
+    ///
     /// This function caches its result and will only call to Z3 if constraints have changed
     /// since the last call to `check()`.
-    pub fn check(&mut self) -> bool {
+    pub fn check(&mut self) -> Result<bool, &'static str> {
         match self.check_status {
-            Some(status) => status,
+            Some(status) => status.try_into(),
             None => {
                 debug!("Solving with constraints:\n{}", self.z3_solver);
                 self.check_status = Some(self.z3_solver.check());
-                self.check_status.unwrap()
+                self.check_status.unwrap().try_into()
             }
         }
     }
 
     /// Returns `true` if the current constraints plus the additional constraints `conds`
     /// are together satisfiable, or `false` if not.
+    ///
+    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
+    ///
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn check_with_extra_constraints<'b>(&'b mut self, conds: impl Iterator<Item = &'b Bool<'ctx>>) -> bool {
+    pub fn check_with_extra_constraints<'b>(&'b mut self, conds: impl Iterator<Item = &'b Bool<'ctx>>) -> Result<bool, &'static str> {
         // although the check status by itself would not be invalidated by this,
         // we do need to run check() again before getting the model,
         // so we indicate that by invalidating the check status if we don't have a model
@@ -63,7 +70,7 @@ impl<'ctx> Solver<'ctx> {
         }
         let retval = self.z3_solver.check();
         self.z3_solver.pop(1);
-        retval
+        retval.try_into()
     }
 
     pub fn push(&mut self) {
@@ -80,7 +87,7 @@ impl<'ctx> Solver<'ctx> {
     /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Option<u64> {
         self.refresh_model();
-        if self.check() {
+        if self.check() == Ok(true) {
             Some(self.model.as_ref().expect("check_status was true but we don't have a model")
                 .eval(bv).expect("Have model but failed to eval bv")
                 .as_u64().expect("Failed to get u64 value of eval'd bv"))
@@ -94,7 +101,7 @@ impl<'ctx> Solver<'ctx> {
     pub fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &BV<'ctx>, high: u32, low: u32) -> Option<u64> {
         assert!(high - low <= 63);  // this way the result will fit in a `u64`
         self.refresh_model();
-        if self.check() {
+        if self.check() == Ok(true) {
             Some(self.model.as_ref().expect("check_status was true but we don't have a model")
                 .eval(bv).expect("Have model but failed to eval bv")
                 .extract(high, low)
@@ -109,7 +116,7 @@ impl<'ctx> Solver<'ctx> {
     /// Returns `None` if no possible solution.
     pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Option<bool> {
         self.refresh_model();
-        if self.check_status.unwrap() {
+        if self.check() == Ok(true) {
             Some(self.model.as_ref().expect("check_status was true but we don't have a model")
                 .eval(b).expect("Have model but failed to eval bool")
                 .as_bool().expect("Failed to get value of eval'd bool"))
@@ -121,7 +128,7 @@ impl<'ctx> Solver<'ctx> {
     /// Private function which ensures that the check status and model are up to date with the current constraints
     fn refresh_model(&mut self) {
         if self.model.is_some() { return; }  // nothing to do
-        if self.check() {
+        if self.check() == Ok(true) {
             // check() was successful, i.e. we are sat. Generate the model.
             self.model = Some(self.z3_solver.get_model());
             debug!("Generated model:\n{}\n", self.current_model_to_pretty_string());
@@ -149,16 +156,16 @@ mod tests {
         let mut solver = Solver::new(&ctx);
 
         // empty solver should be sat
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
 
         // adding True constraint should still be sat
         solver.assert(&Bool::from_bool(&ctx, true));
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
 
         // adding x > 0 constraint should still be sat
         let x = BV::new_const(&ctx, "x", 64);
         solver.assert(&x.bvsgt(&BV::from_i64(&ctx, 0, 64)));
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
     }
 
     #[test]
@@ -168,7 +175,7 @@ mod tests {
 
         // adding False constraint should be unsat
         solver.assert(&Bool::from_bool(&ctx, false));
-        assert!(!solver.check());
+        assert_eq!(solver.check(), Ok(false));
     }
 
     #[test]
@@ -179,14 +186,14 @@ mod tests {
         // adding x > 3 constraint should still be sat
         let x = BV::new_const(&ctx, "x", 64);
         solver.assert(&x.bvugt(&BV::from_u64(&ctx, 3, 64)));
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
 
         // adding x < 3 constraint should make us unsat
         let bad_constraint = x.bvult(&BV::from_u64(&ctx, 3, 64));
-        assert!(!solver.check_with_extra_constraints(std::iter::once(&bad_constraint)));
+        assert_eq!(solver.check_with_extra_constraints(std::iter::once(&bad_constraint)), Ok(false));
 
         // the solver itself should still be sat, extra constraints weren't permanently added
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
     }
 
     #[test]

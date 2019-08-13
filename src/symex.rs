@@ -541,8 +541,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Option<SymexResult<B::BV>> {
         debug!("Symexing condbr {:?}", condbr);
         let z3cond = self.state.operand_to_bool(&condbr.condition);
-        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond));
-        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()));
+        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond)).unwrap();
+        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not())).unwrap();
         if true_feasible && false_feasible {
             // for now we choose to explore true first, and backtrack to false if necessary
             self.state.save_backtracking_point(condbr.false_dest.clone(), z3cond.not());
@@ -584,8 +584,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         let z3cond = self.state.operand_to_bool(&select.condition);
         let z3trueval = self.state.operand_to_bv(&select.true_value);
         let z3falseval = self.state.operand_to_bv(&select.false_value);
-        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond));
-        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()));
+        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond)).unwrap();
+        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not())).unwrap();
         if true_feasible && false_feasible {
             self.state.record_bv_result(select, B::Bool::bvite(&z3cond, &z3trueval, &z3falseval))
         } else if true_feasible {

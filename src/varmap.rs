@@ -377,7 +377,7 @@ mod tests {
         solver.assert(&x2.bvult(&BV::from_u64(&ctx, 1, 64)));
 
         // check that we're still sat
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
 
         // now repeat with integer names
         let name = Name::Number(3);
@@ -385,7 +385,7 @@ mod tests {
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
         solver.assert(&x1.bvugt(&BV::from_u64(&ctx, 2, 64)));
         solver.assert(&x2.bvult(&BV::from_u64(&ctx, 1, 64)));
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
 
         // now repeat with the same name but different functions
         let name = Name::Number(10);
@@ -394,7 +394,7 @@ mod tests {
         let x2 = varmap.new_bv_with_name(otherfuncname.clone(), name.clone(), 64).unwrap();
         solver.assert(&x1.bvugt(&BV::from_u64(&ctx, 2, 64)));
         solver.assert(&x2.bvult(&BV::from_u64(&ctx, 1, 64)));
-        assert!(solver.check());
+        assert_eq!(solver.check(), Ok(true));
     }
 
     #[test]
