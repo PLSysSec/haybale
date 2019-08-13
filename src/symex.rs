@@ -447,69 +447,71 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
     fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>, &'static str> {
         debug!("Symexing call {:?}", call);
-        let funcname = match call.function {
-            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { ref name, .. })) => name,
+        let funcname: &str = match &call.function {
+            // the first two cases are really just optimizations for the third case; things should still work without the first two lines
+            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => name,
+            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
+            Either::Right(operand) => {
+                let func = self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand))
+                    .unwrap_or_else(|| panic!("Failed to interpret this as a function pointer: {:?}", operand));
+                &func.name
+            },
             Either::Left(_) => unimplemented!("inline assembly"),
-            _ => unimplemented!("{:?}", call),
         };
-        if let Name::Name(s) = funcname {
-            if let Some(hook) = self.config.function_hooks.get(s) {
-                hook.call_hook(&mut self.state, call)?;
-                Ok(None)
-            } else if let Some((callee, callee_mod)) = self.project.get_func_by_name(s) {
-                assert_eq!(call.arguments.len(), callee.parameters.len());
-                let z3args: Vec<_> = call.arguments.iter().map(|arg| self.state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
-                let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
-                self.state.push_callsite(instnum);
-                let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
-                self.state.cur_loc = Location {
-                    module: callee_mod,
-                    func: callee,
-                    bbname: bb.name.clone(),
-                };
-                for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
-                    self.state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
-                }
-                let returned_bv = self.symex_from_bb_through_end_of_function(&bb).ok_or("No more valid paths through callee")?;
-                match self.state.pop_callsite() {
-                    None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                    Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
-                        self.state.cur_loc = saved_loc;
-                        self.state.record_in_path(PathEntry {
-                            modname: self.state.cur_loc.module.name.clone(),
-                            funcname: self.state.cur_loc.func.name.clone(),
-                            bbname: self.state.cur_loc.bbname.clone(),
-                        });
-                        match returned_bv {
-                            SymexResult::Returned(bv) => {
-                                // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
-                                self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
-                            },
-                            SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
-                        };
-                        debug!("Completed ordinary return to caller");
-                        Ok(None)
-                    },
-                    Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
-                }
-            } else if s.starts_with("llvm.memset") {
-                symex_memset(&mut self.state, call);
-                Ok(None)
-            } else if s.starts_with("llvm.memcpy") || s.starts_with("llvm.memmove") {
-                // Our memcpy implementation also works for memmove
-                symex_memcpy(&mut self.state, call);
-                Ok(None)
-            } else if s.starts_with("llvm.lifetime")
-                || s.starts_with("llvm.invariant")
-                || s.starts_with("llvm.launder.invariant")
-                || s.starts_with("llvm.strip.invariant")
-            {
-                Ok(None) // these are all safe to ignore
-            } else {
-                unimplemented!("Call of a function named {:?}", s)
+        if let Some(hook) = self.config.function_hooks.get(funcname) {
+            hook.call_hook(&mut self.state, call)?;
+            Ok(None)
+        } else if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
+            assert_eq!(call.arguments.len(), callee.parameters.len());
+            let z3args: Vec<_> = call.arguments.iter().map(|arg| self.state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+            let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
+            self.state.push_callsite(instnum);
+            let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
+            self.state.cur_loc = Location {
+                module: callee_mod,
+                func: callee,
+                bbname: bb.name.clone(),
+            };
+            for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
+                self.state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
             }
+            let returned_bv = self.symex_from_bb_through_end_of_function(&bb).ok_or("No more valid paths through callee")?;
+            match self.state.pop_callsite() {
+                None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
+                Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
+                    self.state.cur_loc = saved_loc;
+                    self.state.record_in_path(PathEntry {
+                        modname: self.state.cur_loc.module.name.clone(),
+                        funcname: self.state.cur_loc.func.name.clone(),
+                        bbname: self.state.cur_loc.bbname.clone(),
+                    });
+                    match returned_bv {
+                        SymexResult::Returned(bv) => {
+                            // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
+                            self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
+                        },
+                        SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
+                    };
+                    debug!("Completed ordinary return to caller");
+                    Ok(None)
+                },
+                Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
+            }
+        } else if funcname.starts_with("llvm.memset") {
+            symex_memset(&mut self.state, call);
+            Ok(None)
+        } else if funcname.starts_with("llvm.memcpy") || funcname.starts_with("llvm.memmove") {
+            // Our memcpy implementation also works for memmove
+            symex_memcpy(&mut self.state, call);
+            Ok(None)
+        } else if funcname.starts_with("llvm.lifetime")
+            || funcname.starts_with("llvm.invariant")
+            || funcname.starts_with("llvm.launder.invariant")
+            || funcname.starts_with("llvm.strip.invariant")
+        {
+            Ok(None) // these are all safe to ignore
         } else {
-            panic!("Function with a numbered name, {:?}", funcname)
+            unimplemented!("Call of a function named {:?}", funcname)
         }
     }
 

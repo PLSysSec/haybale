@@ -2,6 +2,7 @@ use llvm_ir::*;
 use log::debug;
 use reduce::Reduce;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -34,8 +35,14 @@ pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     mem: B::Memory,
     alloc: Alloc,
     solver: B::Solver,
-    /// Map from `Name`s of global variables, to addresses at which they are allocated
+    /// Map from `Name`s of global variables and `Function`s, to addresses at
+    /// which they are allocated. Note that we have to pretend to allocate
+    /// `Function`s so that we can have pointers to them. (As of this writing, we
+    /// actually only allocate 64 bits for every `Function`)
     allocated_globals: HashMap<Name, B::BV>,
+    /// Somewhat a reverse of the above map: this is a map from an address to the
+    /// `Function` which was allocated at that address (if any)
+    addr_to_function: HashMap<u64, &'p Function>,
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
@@ -166,6 +173,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             alloc: Alloc::new(),
             solver: B::Solver::new(ctx, backend_state.clone()),
             allocated_globals: HashMap::new(),
+            addr_to_function: HashMap::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
 
@@ -184,16 +192,45 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             // modules - that is, no two modules will have different globals with the
             // same name. This assumption could theoretically fail in the presence
             // of module-private globals.
-            let alloc = &mut state.alloc;  // this is here so the closure below can capture just this field, not the whole &mut state
-            state.allocated_globals.entry(var.name.clone()).or_insert_with(|| {
-                if let Type::PointerType { pointee_type, .. } = &var.ty {
-                    let addr = alloc.alloc(size(&*pointee_type) as u64);
-                    debug!("Allocated {:?} at 0x{:x}", var.name, addr);
-                    BV::from_u64(ctx, addr, 64)
-                } else {
-                    panic!("Global variable has non-pointer type {:?}", &var.ty)
-                }
-            });
+            // TODO at least check for this case so we can warn the user with an error message.
+            //   [Note that it's not as simple as checking whether we see the same
+            //   name twice. Seeing the same name twice is normal and expected,
+            //   because global variables may be declared in several modules even
+            //   if they are only defined in one. (See further notes below in the
+            //   "Initializing global variables" section.) So in order to properly
+            //   detect when this is happening, we'd have to examine each
+            //   `GlobalVariable` to determine whether it's module-private, etc.]
+            if let Type::PointerType { pointee_type, .. } = &var.ty {
+                let addr = state.allocate(size(&*pointee_type) as u64);
+                debug!("Allocated {:?} at {:?}", var.name, addr);
+                state.allocated_globals.entry(var.name.clone()).or_insert(addr);
+            } else {
+                panic!("Global variable has non-pointer type {:?}", &var.ty);
+            }
+        }
+        // We also have to allocate (at least a tiny bit of) memory for each
+        // `Function`, just so that we can have pointers to those `Function`s.
+        // The `state.addr_to_function` map will help in interpreting these
+        // function pointers.
+        //
+        // We assume that functions do not share names, with other functions or
+        // with global variables, even across modules. This assumption could
+        // theoretically fail in the presence of module-private globals and/or functions.
+        // Unlike with global-variable-to-global-variable name collisions (see notes above),
+        // for function-to-global-variable and function-to-function name collisions
+        // we can actually detect when this is happening and panic.
+        // (This is because each `Function` only appears once in `project.all_functions()`;
+        // that is, we only iterate over function definitions, not declarations.)
+        debug!("Allocating functions");
+        for func in project.all_functions() {
+            let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
+            let addr_bv = BV::from_u64(ctx, addr, 64);
+            debug!("Allocated {:?} at {:?}", func.name, addr_bv);
+            match state.allocated_globals.entry(Name::Name(func.name.clone())) {
+                Entry::Occupied(_) => panic!("Function {:?} shares its name with another function or global variable in the Project", func.name),
+                Entry::Vacant(entry) => entry.insert(addr_bv),
+            };
+            state.addr_to_function.insert(addr, func);
         }
         // Now we do initialization of global variables.
         debug!("Initializing global variables");
@@ -617,6 +654,17 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             },
             _ => unimplemented!("const_to_bool for {:?}", c),
         }
+    }
+
+    /// Given a `BV`, interpret it as a function pointer, and return the
+    /// `Function` which it would point to.
+    ///
+    /// Returns `None` if:
+    ///   - the `BV` points to something that's not a `Function` in the `Project`, or
+    ///   - the `BV` couldn't easily be interpreted as a single value.
+    //       TODO: do we want to automatically do a solve here if `BV::as_u64()` fails?
+    pub fn interpret_as_function_ptr(&self, bv: B::BV) -> Option<&'p Function> {
+        bv.as_u64().and_then(|val| self.addr_to_function.get(&val).copied())
     }
 
     /// Read a value `bits` bits long from memory at `addr`.
