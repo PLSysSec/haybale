@@ -25,6 +25,14 @@ const struct StructWithPointers swp1 = { c, &swp0.field1, &ss2, &swp0 };
 const struct StructWithPointers crossMod0 = { 2, &crossMod1.field1, &ss1, &crossMod1};
 
 int foo() {
-  return a + b + c + ss0.field1 + ss1.field2 + ss2.field3 + *(swp0.intptr) + swp1.ssptr->field2 + swp0.swpptr->swpptr->field1;
-      // 2 + 2 + 6 + 0          + 6          + 102        + 6              + 102                + 2
+  return a  // 2
+       + b  // 2
+       + c  // 6
+       + ss0.field1  // 0
+       + ss1.field2  // 6
+       + ss2.field3  // 1
+       + *(swp0.intptr)  // 511
+       + swp1.ssptr->field2  // 515
+       + swp0.swpptr->swpptr->field1  // 2
+       + *(crossMod0.swpptr->swpptr->intptr);  // 2
 }

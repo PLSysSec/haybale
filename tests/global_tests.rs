@@ -128,6 +128,6 @@ fn globals_initialization() {
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
         get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default()),
-        ReturnValues::ExactlyOnePossibleValue(228),
+        ReturnValues::ExactlyOnePossibleValue(1047),
     )
 }
