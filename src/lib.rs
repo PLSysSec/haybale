@@ -12,7 +12,7 @@ pub use size::size;
 mod extend;
 
 mod config;
-pub use config::Config;
+pub use config::*;
 mod default_hooks;
 pub use default_hooks::*;
 
