@@ -9,6 +9,7 @@ use std::cell::RefCell;
 pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::backend::*;
 use crate::config::*;
+use crate::error::*;
 use crate::extend::*;
 use crate::possible_solutions::*;
 use crate::project::Project;
@@ -110,32 +111,35 @@ impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'c
         if self.fresh {
             self.fresh = false;
             info!("Beginning symex in function {:?}", self.state.cur_loc.func.name);
-            self.symex_from_bb_through_end_of_function(self.start_bb)
+            self.symex_from_bb_through_end_of_function(self.start_bb).unwrap()
         } else {
             debug!("ExecutionManager: requesting next path");
-            self.backtrack_and_continue()
+            self.backtrack_and_continue().unwrap()
         }
     }
 }
 
 impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// Symex from the current `Location` through the rest of the function.
-    /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-    fn symex_from_cur_loc_through_end_of_function(&mut self) -> Option<SymexResult<B::BV>> {
+    /// Returns the `SymexResult` representing the return value of the function,
+    /// or `Ok(None)` if no possible paths were found.
+    fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<SymexResult<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
         self.symex_from_bb_through_end_of_function(bb)
     }
 
     /// Symex the given bb, through the rest of the function.
-    /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-    fn symex_from_bb_through_end_of_function(&mut self, bb: &'p BasicBlock) -> Option<SymexResult<B::BV>> {
+    /// Returns the `SymexResult` representing the return value of the function,
+    /// or `Ok(None)` if no possible paths were found.
+    fn symex_from_bb_through_end_of_function(&mut self, bb: &'p BasicBlock) -> Result<Option<SymexResult<B::BV>>> {
         self.symex_from_inst_in_bb_through_end_of_function(bb, 0)
     }
 
     /// Symex starting from the given `inst` index in the given bb, through the rest of the function.
-    /// Returns the `SymexResult` representing the return value of the function, or `None` if no possible paths were found.
-    fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
+    /// Returns the `SymexResult` representing the return value of the function,
+    /// or `Ok(None)` if no possible paths were found.
+    fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<SymexResult<B::BV>>> {
         assert_eq!(bb.name, self.state.cur_loc.bbname);
         debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
         self.state.record_in_path(PathEntry {
@@ -164,19 +168,22 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     Instruction::Call(call) => match self.symex_call(call, instnum) {
                         Err(e) => Err(e),
                         Ok(None) => Ok(()),
-                        Ok(Some(symexresult)) => return Some(symexresult),
+                        Ok(Some(symexresult)) => return Ok(Some(symexresult)),
                     },
                     _ => unimplemented!("instruction {:?}", inst),
                 }
             };
-            if result.is_err() {
-                // Having an `Err` here indicates we can't continue down this path,
-                // for instance because we're unsat, or because loop bound was exceeded, etc
-                return self.backtrack_and_continue();
-            }
+            match result {
+                Ok(_) => {},  // no error, we can continue
+                Err(Error::Unsat) | Err(Error::LoopBoundExceeded) => {
+                    // we can't continue down this path anymore
+                    return self.backtrack_and_continue();
+                }
+                Err(e) => return Err(e),  // propagate any other errors
+            };
         }
         match &bb.term {
-            Terminator::Ret(ret) => Some(self.symex_return(ret)),
+            Terminator::Ret(ret) => Ok(Some(self.symex_return(ret))),
             Terminator::Br(br) => self.symex_br(br),
             Terminator::CondBr(condbr) => self.symex_condbr(condbr),
             term => unimplemented!("terminator {:?}", term),
@@ -187,15 +194,15 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// Will continue not just to the end of the function containing the backtrack point,
     /// but (using the saved callstack) all the way back to the end of the top-level function.
     ///
-    /// Returns the `SymexResult` representing the final return value, or `None` if
-    /// no possible paths were found.
-    fn backtrack_and_continue(&mut self) -> Option<SymexResult<B::BV>> {
+    /// Returns the `SymexResult` representing the final return value, or
+    /// `Ok(None)` if no possible paths were found.
+    fn backtrack_and_continue(&mut self) -> Result<Option<SymexResult<B::BV>>> {
         if self.state.revert_to_backtracking_point() {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
             self.symex_from_inst_in_cur_loc(0)
         } else {
             // No backtrack points (and therefore no paths) remain
-            None
+            Ok(None)
         }
     }
 
@@ -203,9 +210,9 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// (using the saved callstack) all the way back to the end of the top-level
     /// function.
     ///
-    /// Returns the `SymexResult` representing the final return value, or `None` if
-    /// no possible paths were found.
-    fn symex_from_inst_in_cur_loc(&mut self, inst: usize) -> Option<SymexResult<B::BV>> {
+    /// Returns the `SymexResult` representing the final return value, or
+    /// `Ok(None)` if no possible paths were found.
+    fn symex_from_inst_in_cur_loc(&mut self, inst: usize) -> Result<Option<SymexResult<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
         self.symex_from_inst_in_bb(&bb, inst)
@@ -215,10 +222,10 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// (using the saved callstack) all the way back to the end of the top-level
     /// function.
     ///
-    /// Returns the `SymexResult` representing the final return value, or `None` if
-    /// no possible paths were found.
-    fn symex_from_inst_in_bb(&mut self, bb: &'p BasicBlock, inst: usize) -> Option<SymexResult<B::BV>> {
-        match self.symex_from_inst_in_bb_through_end_of_function(bb, inst) {
+    /// Returns the `SymexResult` representing the final return value, or
+    /// `Ok(None)` if no possible paths were found.
+    fn symex_from_inst_in_bb(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<SymexResult<B::BV>>> {
+        match self.symex_from_inst_in_bb_through_end_of_function(bb, inst)? {
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => {
                     // Return to callsite
@@ -249,7 +256,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 },
                 None => {
                     // No callsite to return to, so we're done
-                    Some(symexresult)
+                    Ok(Some(symexresult))
                 }
             },
             None => {
@@ -294,7 +301,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_binop<F>(&mut self, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<(), &'static str>
+    fn symex_binop<F>(&mut self, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<()>
         where F: FnOnce(&B::BV, &B::BV) -> B::BV
     {
         debug!("Symexing binop {:?}", bop);
@@ -303,7 +310,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.state.record_bv_result(bop, z3op(&z3firstop, &z3secondop))
     }
 
-    fn symex_icmp(&mut self, icmp: &instruction::ICmp) -> Result<(), &'static str> {
+    fn symex_icmp(&mut self, icmp: &instruction::ICmp) -> Result<()> {
         debug!("Symexing icmp {:?}", icmp);
         let z3firstop = self.state.operand_to_bv(&icmp.operand0);
         let z3secondop = self.state.operand_to_bv(&icmp.operand1);
@@ -311,7 +318,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
     }
 
-    fn symex_zext(&mut self, zext: &instruction::ZExt) -> Result<(), &'static str> {
+    fn symex_zext(&mut self, zext: &instruction::ZExt) -> Result<()> {
         debug!("Symexing zext {:?}", zext);
         let z3op = self.state.operand_to_bv(&zext.operand);
         let source_size = z3op.get_size();
@@ -323,7 +330,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
     }
 
-    fn symex_sext(&mut self, sext: &instruction::SExt) -> Result<(), &'static str> {
+    fn symex_sext(&mut self, sext: &instruction::SExt) -> Result<()> {
         debug!("Symexing sext {:?}", sext);
         let z3op = self.state.operand_to_bv(&sext.operand);
         let source_size = z3op.get_size();
@@ -335,7 +342,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
     }
 
-    fn symex_trunc(&mut self, trunc: &instruction::Trunc) -> Result<(), &'static str> {
+    fn symex_trunc(&mut self, trunc: &instruction::Trunc) -> Result<()> {
         debug!("Symexing trunc {:?}", trunc);
         let z3op = self.state.operand_to_bv(&trunc.operand);
         let dest_size = match trunc.get_type() {
@@ -347,20 +354,20 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     }
 
     /// Use this for any unary operation that can be treated as a cast
-    fn symex_cast_op(&mut self, cast: &impl instruction::UnaryOp) -> Result<(), &'static str> {
+    fn symex_cast_op(&mut self, cast: &impl instruction::UnaryOp) -> Result<()> {
         debug!("Symexing cast op {:?}", cast);
         let z3op = self.state.operand_to_bv(&cast.get_operand());
         self.state.record_bv_result(cast, z3op)  // from Z3's perspective a cast is simply a no-op; the bit patterns are equal
     }
 
-    fn symex_load(&mut self, load: &instruction::Load) -> Result<(), &'static str> {
+    fn symex_load(&mut self, load: &instruction::Load) -> Result<()> {
         debug!("Symexing load {:?}", load);
         let z3addr = self.state.operand_to_bv(&load.address);
         let dest_size = size(&load.get_type());
         self.state.record_bv_result(load, self.state.read(&z3addr, dest_size as u32))
     }
 
-    fn symex_store(&mut self, store: &instruction::Store) -> Result<(), &'static str> {
+    fn symex_store(&mut self, store: &instruction::Store) -> Result<()> {
         debug!("Symexing store {:?}", store);
         let z3val = self.state.operand_to_bv(&store.value);
         let z3addr = self.state.operand_to_bv(&store.address);
@@ -368,7 +375,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         Ok(())
     }
 
-    fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<(), &'static str> {
+    fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<()> {
         debug!("Symexing gep {:?}", gep);
         let z3base = self.state.operand_to_bv(&gep.address);
         let offset = Self::get_offset(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
@@ -442,7 +449,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_alloca(&mut self, alloca: &instruction::Alloca) -> Result<(), &'static str> {
+    fn symex_alloca(&mut self, alloca: &instruction::Alloca) -> Result<()> {
         debug!("Symexing alloca {:?}", alloca);
         let allocation_size = size(&alloca.allocated_type);
         let allocated = self.state.allocate(allocation_size as u64);
@@ -452,7 +459,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
     /// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
-    fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>, &'static str> {
+    fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>> {
         debug!("Symexing call {:?}", call);
         let funcname: &str = match &call.function {
             // the first two cases are really just optimizations for the third case; things should still work without the first two lines
@@ -463,7 +470,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     PossibleSolutions::MoreThanNPossibleSolutions(1) => unimplemented!("calling a function pointer which has multiple possible targets"),
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
                     PossibleSolutions::PossibleSolutions(v) => match v.len() {
-                        0 => return Err("No valid solutions for function pointer"),
+                        0 => return Err(Error::Unsat),  // no valid solutions for the function pointer
                         1 => &v[0].name,
                         n => panic!("Got {} solutions even though we asked for a maximum of one", n),
                     }
@@ -503,7 +510,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 self.state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
             }
             info!("Entering function {:?} in module {:?}", funcname, &callee_mod.name);
-            let returned_bv = self.symex_from_bb_through_end_of_function(&bb).ok_or("No more valid paths through callee")?;
+            let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
             match self.state.pop_callsite() {
                 None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
                 Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
@@ -555,8 +562,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
     // Continues to the target of the `Br` and eventually returns the new `SymexResult`
     // representing the return value of the function (when it reaches the end of the
-    // function), or `None` if no possible paths were found.
-    fn symex_br(&mut self, br: &'p terminator::Br) -> Option<SymexResult<B::BV>> {
+    // function), or `Ok(None)` if no possible paths were found.
+    fn symex_br(&mut self, br: &'p terminator::Br) -> Result<Option<SymexResult<B::BV>>> {
         debug!("Symexing br {:?}", br);
         self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
         self.state.cur_loc.bbname = br.dest.clone();
@@ -566,8 +573,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     // Continues to the target(s) of the `CondBr` (saving a backtracking point if
     // necessary) and eventually returns the new `SymexResult` representing the
     // return value of the function (when it reaches the end of the function), or
-    // `None` if no possible paths were found.
-    fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Option<SymexResult<B::BV>> {
+    // `Ok(None)` if no possible paths were found.
+    fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<SymexResult<B::BV>>> {
         debug!("Symexing condbr {:?}", condbr);
         let z3cond = self.state.operand_to_bool(&condbr.condition);
         let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond)).unwrap();
@@ -594,7 +601,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_phi(&mut self, phi: &instruction::Phi) -> Result<(), &'static str> {
+    fn symex_phi(&mut self, phi: &instruction::Phi) -> Result<()> {
         debug!("Symexing phi {:?}", phi);
         let prev_bb = self.state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block");
         let mut chosen_value = None;
@@ -608,7 +615,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value))
     }
 
-    fn symex_select(&mut self, select: &instruction::Select) -> Result<(), &'static str> {
+    fn symex_select(&mut self, select: &instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
         let z3cond = self.state.operand_to_bool(&select.condition);
         let z3trueval = self.state.operand_to_bv(&select.true_value);
@@ -624,8 +631,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             self.state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
             self.state.record_bv_result(select, z3falseval)
         } else {
-            // returning `Err` marks us unsat and will cause us to backtrack
-            Err("discovered we're unsat while checking a switch condition")
+            // this path is unsat
+            Err(Error::Unsat)
         }
     }
 }

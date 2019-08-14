@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use crate::double_keyed_map::DoubleKeyedMap;
+use crate::error::*;
 use std::fmt;
 use log::debug;
 use crate::backend::*;
@@ -158,10 +159,11 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     ///
     /// Returns the new `BV`, or `Err` if it can't be created.
     ///
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new `BV` would exceed `max_versions_of_name` -- see
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new `BV`
+    /// would exceed `max_versions_of_name` -- see
     /// [`VarMap::new()`](struct.VarMap.html#method.new).)
-    pub fn new_bv_with_name(&mut self, funcname: String, name: Name, bits: u32) -> Result<V, &'static str> {
+    pub fn new_bv_with_name(&mut self, funcname: String, name: Name, bits: u32) -> Result<V> {
         let new_version = self.new_version_of_name(&funcname, &name)?;
         let bv = V::new(self.ctx, new_version, bits);
         debug!("Adding bv var {:?} = {:?}", name, bv);
@@ -176,10 +178,11 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     ///
     /// Returns the new `Bool`, or `Err` if it can't be created.
     ///
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new `Bool` would exceed `max_versions_of_name` -- see
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new `Bool`
+    /// would exceed `max_versions_of_name` -- see
     /// [`VarMap::new()`](struct.VarMap.html#method.new).)
-    pub fn new_bool_with_name(&mut self, funcname: String, name: Name) -> Result<B, &'static str>
+    pub fn new_bool_with_name(&mut self, funcname: String, name: Name) -> Result<B>
     {
         let new_version = self.new_version_of_name(&funcname, &name)?;
         let b = B::new(self.ctx, new_version);
@@ -195,15 +198,17 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     /// the current version.
     ///
     /// Returns `Err` if the assignment can't be performed.
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new version of the `BV` would exceed `max_versions_of_name`
-    /// -- see [`VarMap::new()`](struct.VarMap.html#method.new).)
-    pub fn assign_bv_to_name(&mut self, funcname: String, name: Name, bv: V) -> Result<(), &'static str> {
+    ///
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new version
+    /// of the `BV` would exceed `max_versions_of_name` -- see
+    /// [`VarMap::new()`](struct.VarMap.html#method.new).)
+    pub fn assign_bv_to_name(&mut self, funcname: String, name: Name, bv: V) -> Result<()> {
         let new_version_num = self.version_num.entry(funcname.clone(), name.clone())
             .and_modify(|v| *v += 1)  // increment if it already exists in map
             .or_insert(0);  // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
-            Err("Exceeded maximum number of versions of that `Name`")
+            Err(Error::LoopBoundExceeded)
         } else {
             // We don't actually use the new_version_num except for the above check,
             // since we aren't creating a new BV that needs a versioned name
@@ -220,15 +225,17 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     /// the current version.
     ///
     /// Returns `Err` if the assignment can't be performed.
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new version of the `Bool` would exceed `max_versions_of_name`
-    /// -- see [`VarMap::new()`](struct.VarMap.html#method.new).)
-    pub fn assign_bool_to_name(&mut self, funcname: String, name: Name, b: B) -> Result<(), &'static str> {
+    ///
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new version
+    /// of the `Bool` would exceed `max_versions_of_name` -- see
+    /// [`VarMap::new()`](struct.VarMap.html#method.new).)
+    pub fn assign_bool_to_name(&mut self, funcname: String, name: Name, b: B) -> Result<()> {
         let new_version_num = self.version_num.entry(funcname.clone(), name.clone())
             .and_modify(|v| *v += 1)  // increment if it already exists in map
             .or_insert(0);  // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
-            Err("Exceeded maximum number of versions of that `Name`")
+            Err(Error::LoopBoundExceeded)
         } else {
             // We don't actually use the new_version_num except for the above check,
             // since we aren't creating a new BV that needs a versioned name
@@ -274,13 +281,13 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
 
     /// Given a `Name` (from a particular function), creates a new version of it
     /// and returns the corresponding `z3::Symbol`
-    /// (or `Err` if it would exceed the `max_version_num`)
-    fn new_version_of_name(&mut self, funcname: &str, name: &Name) -> Result<z3::Symbol, &'static str> {
+    /// (or `Error::LoopBoundExceeded` if it would exceed the `max_version_num`)
+    fn new_version_of_name(&mut self, funcname: &str, name: &Name) -> Result<z3::Symbol> {
         let new_version_num = self.version_num.entry(funcname.to_owned(), name.clone())
             .and_modify(|v| *v += 1)  // increment if it already exists in map
             .or_insert(0);  // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
-            Err("Exceeded maximum number of versions of that `Name`")
+            Err(Error::LoopBoundExceeded)
         } else {
             Ok(Self::build_versioned_name(funcname, name, *new_version_num))
         }

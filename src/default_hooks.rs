@@ -1,5 +1,6 @@
 use crate::backend::Backend;
 use crate::config::*;
+use crate::error::*;
 use crate::state::State;
 use llvm_ir::*;
 use std::collections::HashMap;
@@ -10,7 +11,7 @@ pub fn default_hooks<'ctx, B>() -> HashMap<String, FunctionHook<'ctx, B>> where 
         .collect()
 }
 
-fn malloc_hook<'ctx, B>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> HookResult<B::BV> where B: Backend<'ctx> {
+fn malloc_hook<'ctx, B>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> where B: Backend<'ctx> {
     assert_eq!(call.arguments.len(), 1);
     match call.arguments[0].0.get_type() {
         Type::IntegerType { .. } => {},
@@ -32,7 +33,7 @@ fn malloc_hook<'ctx, B>(state: &mut State<'ctx, '_, B>, call: &instruction::Call
     Ok(ReturnValue::Return(addr))
 }
 
-fn free_hook<'ctx, B>(_state: &mut State<'ctx, '_, B>, _call: &instruction::Call) -> HookResult<B::BV> where B: Backend<'ctx> {
+fn free_hook<'ctx, B>(_state: &mut State<'ctx, '_, B>, _call: &instruction::Call) -> Result<ReturnValue<B::BV>> where B: Backend<'ctx> {
     // The simplest implementation of free() is a no-op.
     // Our malloc_hook() above won't ever reuse allocated addresses anyway.
     Ok(ReturnValue::ReturnVoid)

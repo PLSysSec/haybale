@@ -23,8 +23,11 @@ pub mod solver;
 mod varmap;
 mod double_keyed_map;
 mod global_allocations;
+
 mod possible_solutions;
 pub use possible_solutions::PossibleSolutions;
+mod error;
+pub use error::*;
 
 pub mod backend;
 use backend::*;
@@ -146,7 +149,7 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
     project: &'p Project,
     config: Config<'ctx, Z3Backend<'ctx>>,
     n: usize,
-) -> Result<PossibleSolutions<u64>, &'static str> {
+) -> PossibleSolutions<u64> {
     let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, funcname, project, config);
 
     let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
@@ -162,8 +165,8 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
             SymexResult::ReturnedVoid => panic!("This function shouldn't be called with functions that return void"),
             SymexResult::Returned(z3rval) => {
                 let state = em.mut_state();
-                match state.get_possible_solutions_for_bv(&z3rval, n)? {
-                    PossibleSolutions::MoreThanNPossibleSolutions(n) => return Ok(PossibleSolutions::MoreThanNPossibleSolutions(n)),
+                match state.get_possible_solutions_for_bv(&z3rval, n).unwrap() {
+                    PossibleSolutions::MoreThanNPossibleSolutions(n) => return PossibleSolutions::MoreThanNPossibleSolutions(n),
                     PossibleSolutions::PossibleSolutions(v) => {
                         candidate_values.extend(v);
                         if candidate_values.len() > n {
@@ -175,8 +178,8 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
         }
     }
     if candidate_values.len() > n {
-        Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
+        PossibleSolutions::MoreThanNPossibleSolutions(n)
     } else {
-        Ok(PossibleSolutions::PossibleSolutions(candidate_values.into_iter().collect()))
+        PossibleSolutions::PossibleSolutions(candidate_values.into_iter().collect())
     }
 }

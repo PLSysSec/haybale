@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use crate::alloc::Alloc;
 use crate::backend::*;
 use crate::config::Config;
+use crate::error::*;
 use crate::extend::*;
 use crate::global_allocations::*;
 use crate::possible_solutions::*;
@@ -259,47 +260,47 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
 
     /// Returns `true` if current constraints are satisfiable, `false` if not.
     ///
-    /// Returns `None` if the query failed (e.g., was interrupted or timed out).
+    /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// With the default `Z3Backend`, this function caches its result and will
     /// only call to Z3 if constraints have changed since the last call to
     /// `check()`.
-    pub fn check(&mut self) -> Result<bool, &'static str> {
+    pub fn check(&mut self) -> Result<bool> {
         self.solver.check()
     }
 
     /// Returns `true` if the current constraints plus the additional constraints `conds`
     /// are together satisfiable, or `false` if not.
     ///
-    /// Returns `None` if the query failed (e.g., was interrupted or timed out).
+    /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn check_with_extra_constraints<'a>(&'a mut self, conds: impl Iterator<Item = &'a B::Bool>) -> Result<bool, &'static str> {
+    pub fn check_with_extra_constraints<'a>(&'a mut self, conds: impl Iterator<Item = &'a B::Bool>) -> Result<bool> {
         self.solver.check_with_extra_constraints(conds)
     }
 
     /// Get one possible concrete value for the `BV`.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    pub fn get_a_solution_for_bv(&mut self, bv: &B::BV) -> Result<Option<u64>, &'static str> {
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    pub fn get_a_solution_for_bv(&mut self, bv: &B::BV) -> Result<Option<u64>> {
         self.solver.get_a_solution_for_bv(bv)
     }
 
     /// Get one possible concrete value for the `Bool`.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    pub fn get_a_solution_for_bool(&mut self, b: &B::Bool) -> Result<Option<bool>, &'static str> {
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    pub fn get_a_solution_for_bool(&mut self, b: &B::Bool) -> Result<Option<bool>> {
         self.solver.get_a_solution_for_bool(b)
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>, &'static str> {
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bv(&bv)
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bool.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<bool>, &'static str> {
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<bool>> {
         let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
     }
@@ -309,12 +310,16 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// `n`: Maximum number of distinct solutions to return.
     /// If there are more than `n` possible solutions, this simply
     /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
-    pub fn get_possible_solutions_for_bv(&mut self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    pub fn get_possible_solutions_for_bv(&mut self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<u64>> {
         self.solver.get_possible_solutions_for_bv(bv, n)
     }
 
     /// Get a description of the possible solutions for the `Bool`.
-    pub fn get_possible_solutions_for_bool(&mut self, b: &B::Bool) -> Result<PossibleSolutions<bool>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    pub fn get_possible_solutions_for_bool(&mut self, b: &B::Bool) -> Result<PossibleSolutions<bool>> {
         self.solver.get_possible_solutions_for_bool(b)
     }
 
@@ -323,13 +328,17 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// `n`: Maximum number of distinct solutions to return.
     /// If there are more than `n` possible solutions, this simply
     /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
-    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<u64>> {
         let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_possible_solutions_for_bv(&bv, n)
     }
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bool.
-    pub fn get_possible_solutions_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<bool>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    pub fn get_possible_solutions_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<bool>> {
         let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_possible_solutions_for_bool(&b)
     }
@@ -340,12 +349,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// with the same `Name`-`Function` pair, you will get two different `BV`s.
     ///
     /// Returns the new `BV`, or `Err` if it can't be created.
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new `BV` would exceed `max_versions_of_name` -- see
+    ///
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new `BV`
+    /// would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
     ///
     /// Also, we assume that no two `Function`s share the same name.
-    pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<B::BV, &'static str> {
+    pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<B::BV> {
         self.varmap.new_bv_with_name(self.cur_loc.func.name.clone(), name, bits)
     }
 
@@ -355,12 +366,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// with the same `Name`-`Function` pair, you will get two different `Bool`s.
     ///
     /// Returns the new `Bool`, or `Err` if it can't be created.
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new `Bool` would exceed `max_versions_of_name` -- see
+    ///
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new `Bool`
+    /// would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
     ///
     /// Also, we assume that no two `Function`s share the same name.
-    pub fn new_bool_with_name(&mut self, name: Name) -> Result<B::Bool, &'static str> {
+    pub fn new_bool_with_name(&mut self, name: Name) -> Result<B::Bool> {
         self.varmap.new_bool_with_name(self.cur_loc.func.name.clone(), name)
     }
 
@@ -371,10 +384,12 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// the current version.
     ///
     /// Returns `Err` if the assignment can't be performed.
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new version of the `BV` would exceed `max_versions_of_name`
-    /// -- see [`State::new()`](struct.State.html#method.new).)
-    pub fn assign_bv_to_name(&mut self, name: Name, bv: B::BV) -> Result<(), &'static str> {
+    ///
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new version
+    /// of the `BV` would exceed `max_versions_of_name` -- see
+    /// [`State::new()`](struct.State.html#method.new).)
+    pub fn assign_bv_to_name(&mut self, name: Name, bv: B::BV) -> Result<()> {
         self.varmap.assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
     }
 
@@ -385,24 +400,28 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// the current version.
     ///
     /// Returns `Err` if the assignment can't be performed.
-    /// (As of this writing, the only reason an `Err` might be returned is that
-    /// creating the new version of the `Bool` would exceed `max_versions_of_name`
-    /// -- see [`State::new()`](struct.State.html#method.new).)
-    pub fn assign_bool_to_name(&mut self, name: Name, b: B::Bool) -> Result<(), &'static str> {
+    ///
+    /// (As of this writing, the only `Err` that might be returned is
+    /// `Error::LoopBoundExceeded`, which is returned if creating the new version
+    /// of the `Bool` would exceed `max_versions_of_name` -- see
+    /// [`State::new()`](struct.State.html#method.new).)
+    pub fn assign_bool_to_name(&mut self, name: Name, b: B::Bool) -> Result<()> {
         self.varmap.assign_bool_to_name(self.cur_loc.func.name.clone(), name, b)
     }
 
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
-    /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
-    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<(), &'static str> {
+    /// Will fail with `Error::LoopBoundExceeded` if that would exceed
+    /// `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
+    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<()> {
         self.assign_bv_to_name(thing.get_result().clone(), resultval)
     }
 
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
-    /// Will fail if that would exceed `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
-    pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: B::Bool) -> Result<(), &'static str> {
+    /// Will fail with `Error::LoopBoundExceeded` if that would exceed
+    /// `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
+    pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: B::Bool) -> Result<()> {
         self.assign_bool_to_name(thing.get_result().clone(), resultval)
     }
 
@@ -679,10 +698,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// If there are more than `n` possible `Function`s, this simply returns
     /// `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
     ///
-    /// Returns `Err` if the solver query fails or if it finds that it is
-    /// possible that the `BV` points to something that's not a `Function` in
-    /// the `Project`.
-    pub fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<&'p Function>, String> {
+    /// Possible errors:
+    ///   - `Error::SolverError` if the solver query fails
+    ///   - `Error::OtherError` if it finds that it is possible that the `BV`
+    ///     points to something that's not a `Function` in the `Project`
+    pub fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<&'p Function>> {
         if n == 0 {
             unimplemented!("n == 0 in interpret_as_function_ptr")
         }
@@ -695,11 +715,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                     PossibleSolutions::PossibleSolutions(v) => {
                         v.into_iter()
                             .map(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
-                                .ok_or_else(|| format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv))
+                                .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
                             )
-                            .collect::<Vec<Result<_,_>>>()
+                            .collect::<Vec<Result<_>>>()
                             .into_iter()
-                            .collect::<Result<Vec<_>,_>>()
+                            .collect::<Result<Vec<_>>>()
                             .map(PossibleSolutions::PossibleSolutions)
                     }
                 }

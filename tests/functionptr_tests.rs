@@ -20,7 +20,7 @@ fn call_through_function_ptr() {
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
         get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        Ok(PossibleSolutions::PossibleSolutions(vec![22])),
+        PossibleSolutions::PossibleSolutions(vec![22]),
     );
 }
 
@@ -31,6 +31,6 @@ fn call_through_function_ptr_struct() {
     let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
         get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        Ok(PossibleSolutions::PossibleSolutions(vec![15])),
+        PossibleSolutions::PossibleSolutions(vec![15]),
     );
 }

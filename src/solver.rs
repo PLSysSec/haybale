@@ -1,3 +1,4 @@
+use crate::error::*;
 use crate::possible_solutions::*;
 use log::debug;
 use std::convert::TryInto;
@@ -14,6 +15,12 @@ pub struct Solver<'ctx> {
     // if `model` is `Some`, then `check_status` must be as well (but not necessarily vice versa)
     check_status: Option<z3::SatResult>,
     model: Option<z3::Model<'ctx>>,
+}
+
+impl<'ctx> fmt::Display for Solver<'ctx> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        self.z3_solver.fmt(f)
+    }
 }
 
 impl<'ctx> Solver<'ctx> {
@@ -43,17 +50,17 @@ impl<'ctx> Solver<'ctx> {
 
     /// Returns `true` if current constraints are satisfiable, `false` if not.
     ///
-    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
+    /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// This function caches its result and will only call to Z3 if constraints have changed
     /// since the last call to `check()`.
-    pub fn check(&mut self) -> Result<bool, &'static str> {
+    pub fn check(&mut self) -> Result<bool> {
         match self.check_status {
-            Some(status) => status.try_into(),
+            Some(status) => status.try_into().map_err(|e: &'static str| Error::SolverError(e.to_string())),
             None => {
                 debug!("Solving with constraints:\n{}", self.z3_solver);
                 self.check_status = Some(self.z3_solver.check());
-                self.check_status.unwrap().try_into()
+                self.check_status.unwrap().try_into().map_err(|e: &'static str| Error::SolverError(e.to_string()))
             }
         }
     }
@@ -61,10 +68,10 @@ impl<'ctx> Solver<'ctx> {
     /// Returns `true` if the current constraints plus the additional constraints `conds`
     /// are together satisfiable, or `false` if not.
     ///
-    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
+    /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn check_with_extra_constraints<'b>(&'b mut self, conds: impl Iterator<Item = &'b Bool<'ctx>>) -> Result<bool, &'static str> {
+    pub fn check_with_extra_constraints<'b>(&'b mut self, conds: impl Iterator<Item = &'b Bool<'ctx>>) -> Result<bool> {
         // This implementation is slightly more efficient than the default
         // implementation provided by the `crate::backend::Solver` trait.
         // Although the default implementation would be correct, it would
@@ -85,7 +92,7 @@ impl<'ctx> Solver<'ctx> {
         }
         let retval = self.z3_solver.check();
         self.z3_solver.pop(1);
-        retval.try_into()
+        retval.try_into().map_err(|e: &'static str| Error::SolverError(e.to_string()))
     }
 
     pub fn push(&mut self) {
@@ -99,8 +106,8 @@ impl<'ctx> Solver<'ctx> {
     }
 
     /// Get one possible concrete value for the `BV`.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Result<Option<u64>, &'static str> {
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    pub fn get_a_solution_for_bv(&mut self, bv: &BV<'ctx>) -> Result<Option<u64>> {
         self.refresh_model();
         if self.check()? {
             Ok(Some(self.model.as_ref().expect("check_status was true but we don't have a model")
@@ -113,8 +120,8 @@ impl<'ctx> Solver<'ctx> {
     }
 
     /// Get one possible concrete value for specified bits (`high`, `low`) of the `BV`, inclusive on both ends.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    pub fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &BV<'ctx>, high: u32, low: u32) -> Result<Option<u64>, &'static str> {
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    pub fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &BV<'ctx>, high: u32, low: u32) -> Result<Option<u64>> {
         assert!(high - low <= 63);  // this way the result will fit in a `u64`
         self.refresh_model();
         if self.check()? {
@@ -130,8 +137,8 @@ impl<'ctx> Solver<'ctx> {
     }
 
     /// Get one possible concrete value for the `Bool`.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Result<Option<bool>, &'static str> {
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    pub fn get_a_solution_for_bool(&mut self, b: &Bool<'ctx>) -> Result<Option<bool>> {
         self.refresh_model();
         if self.check()? {
             Ok(Some(self.model.as_ref().expect("check_status was true but we don't have a model")
@@ -148,7 +155,9 @@ impl<'ctx> Solver<'ctx> {
     /// `n`: Maximum number of distinct solutions to return.
     /// If there are more than `n` possible solutions, this simply
     /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
-    pub fn get_possible_solutions_for_bv(&mut self, bv: &BV<'ctx>, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    pub fn get_possible_solutions_for_bv(&mut self, bv: &BV<'ctx>, n: usize) -> Result<PossibleSolutions<u64>> {
         // This is the same as the default implementation provided by the
         // `crate::backend::Solver` trait, but is included here in case anyone
         // wants to use this `Solver` without the backend trait.
@@ -182,7 +191,9 @@ impl<'ctx> Solver<'ctx> {
     ///   - `PossibleSolutions::PossibleSolutions(vec![true])`,
     ///   - `PossibleSolutions::PossibleSolutions(vec![false])`,
     ///   - `PossibleSolutions::PossibleSolutions(vec![true, false])`
-    pub fn get_possible_solutions_for_bool(&mut self, b: &Bool<'ctx>) -> Result<PossibleSolutions<bool>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    pub fn get_possible_solutions_for_bool(&mut self, b: &Bool<'ctx>) -> Result<PossibleSolutions<bool>> {
         // This is the same as the default implementation provided by the
         // `crate::backend::Solver` trait, but is included here in case anyone
         // wants to use this `Solver` without the backend trait.
@@ -317,11 +328,5 @@ mod tests {
 
         // check that there are now no solutions
         assert_eq!(solver.get_possible_solutions_for_bv(&x, 2), Ok(PossibleSolutions::PossibleSolutions(vec![])));
-    }
-}
-
-impl<'ctx> fmt::Display for Solver<'ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.z3_solver.fmt(f)
     }
 }

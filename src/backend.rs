@@ -1,3 +1,4 @@
+use crate::error::*;
 use crate::possible_solutions::*;
 use std::fmt;
 use std::rc::Rc;
@@ -127,16 +128,16 @@ pub trait Solver<'ctx> {
 
     /// Returns `true` if current constraints are satisfiable, `false` if not.
     ///
-    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
-    fn check(&mut self) -> Result<bool, &'static str>;
+    /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
+    fn check(&mut self) -> Result<bool>;
 
     /// Returns `true` if the current constraints plus the additional constraints `conds`
     /// are together satisfiable, or `false` if not.
     ///
-    /// Returns `Err` if the query failed (e.g., was interrupted or timed out).
+    /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
-    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool, &'static str> where Self::Constraint: 'a {
+    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool> where Self::Constraint: 'a {
         // a default implementation in terms of check(), assert(), push(), and pop()
         self.push();
         for constraint in constraints {
@@ -153,23 +154,25 @@ pub trait Solver<'ctx> {
     fn pop(&mut self, n: usize);
 
     /// Get one possible concrete value for the `BV`.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>, &'static str>;
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>>;
 
     /// Get one possible concrete value for specified bits (`high`, `low`) of the `BV`, inclusive on both ends.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>, &'static str>;
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>>;
 
     /// Get one possible concrete value for the `Bool`.
-    /// Returns `Ok(None)` if no possible solution, or `Err` if solver query failed.
-    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>, &'static str>;
+    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>>;
 
     /// Get a description of the possible solutions for the `BV`.
     ///
     /// `n`: Maximum number of distinct solutions to return.
     /// If there are more than `n` possible solutions, this simply
     /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
-    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value, n: usize) -> Result<PossibleSolutions<u64>> {
         // a default implementation in terms of get_a_solution_for_bv(), assert(), get_context(), push(), and pop()
         let mut solutions = vec![];
         self.push();
@@ -200,7 +203,9 @@ pub trait Solver<'ctx> {
     ///   - `PossibleSolutions::PossibleSolutions(vec![true])`,
     ///   - `PossibleSolutions::PossibleSolutions(vec![false])`,
     ///   - `PossibleSolutions::PossibleSolutions(vec![true, false])`
-    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>, &'static str> {
+    ///
+    /// Only returns `Err` if the solver query itself fails.
+    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>> {
         // a default implementation in terms of get_a_solution_for_bool(), assert(), get_context(), push(), and pop()
         self.push();
         let retval = match self.get_a_solution_for_bool(b)? {
@@ -435,10 +440,10 @@ impl<'ctx> Solver<'ctx> for crate::solver::Solver<'ctx> {
     fn assert(&mut self, constraint: &Self::Constraint) {
         self.assert(constraint)
     }
-    fn check(&mut self) -> Result<bool, &'static str> {
+    fn check(&mut self) -> Result<bool> {
         self.check()
     }
-    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool, &'static str> {
+    fn check_with_extra_constraints<'a>(&'a mut self, constraints: impl Iterator<Item = &'a Self::Constraint>) -> Result<bool> {
         self.check_with_extra_constraints(constraints)
     }
     fn push(&mut self) {
@@ -447,19 +452,19 @@ impl<'ctx> Solver<'ctx> for crate::solver::Solver<'ctx> {
     fn pop(&mut self, n: usize) {
         self.pop(n)
     }
-    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>, &'static str> {
+    fn get_a_solution_for_bv(&mut self, bv: &Self::Value) -> Result<Option<u64>> {
         self.get_a_solution_for_bv(bv)
     }
-    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>, &'static str> {
+    fn get_a_solution_for_specified_bits_of_bv(&mut self, bv: &Self::Value, high: u32, low: u32) -> Result<Option<u64>> {
         self.get_a_solution_for_specified_bits_of_bv(bv, high, low)
     }
-    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>, &'static str> {
+    fn get_a_solution_for_bool(&mut self, b: &Self::Constraint) -> Result<Option<bool>> {
         self.get_a_solution_for_bool(b)
     }
-    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value, n: usize) -> Result<PossibleSolutions<u64>, &'static str> {
+    fn get_possible_solutions_for_bv(&mut self, bv: &Self::Value, n: usize) -> Result<PossibleSolutions<u64>> {
         self.get_possible_solutions_for_bv(bv, n)
     }
-    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>, &'static str> {
+    fn get_possible_solutions_for_bool(&mut self, b: &Self::Constraint) -> Result<PossibleSolutions<bool>> {
         self.get_possible_solutions_for_bool(b)
     }
     fn current_model_to_pretty_string(&self) -> String {
