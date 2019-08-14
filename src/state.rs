@@ -806,6 +806,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             false
         }
     }
+
+    /// returns the number of saved backtracking points
+    pub fn count_backtracking_points(&self) -> usize {
+        self.backtrack_points.len()
+    }
 }
 
 #[cfg(test)]
