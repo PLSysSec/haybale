@@ -485,7 +485,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
                 self.state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
             }
-            info!("Entering function {:?}", funcname);
+            info!("Entering function {:?} in module {:?}", funcname, &callee_mod.name);
             let returned_bv = self.symex_from_bb_through_end_of_function(&bb).ok_or("No more valid paths through callee")?;
             match self.state.pop_callsite() {
                 None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
@@ -504,7 +504,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                         SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
                     };
                     debug!("Completed ordinary return to caller");
-                    info!("Leaving function {:?}", funcname);
+                    info!("Leaving function {:?}, continuing in caller {:?} in module {:?}", funcname, &self.state.cur_loc.func.name, &self.state.cur_loc.module.name);
                     Ok(None)
                 },
                 Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
