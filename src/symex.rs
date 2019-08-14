@@ -148,18 +148,20 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 self.symex_binop(&binop, z3binop)
             } else {
                 match inst {
-                    Instruction::ICmp(icmp) => self.symex_icmp(&icmp),
-                    Instruction::Load(load) => self.symex_load(&load),
-                    Instruction::Store(store) => self.symex_store(&store),
-                    Instruction::GetElementPtr(gep) => self.symex_gep(&gep),
-                    Instruction::Alloca(alloca) => self.symex_alloca(&alloca),
-                    Instruction::ZExt(zext) => self.symex_zext(&zext),
-                    Instruction::SExt(sext) => self.symex_sext(&sext),
-                    Instruction::Trunc(trunc) => self.symex_trunc(&trunc),
-                    Instruction::BitCast(bitcast) => self.symex_bitcast(&bitcast),
-                    Instruction::Phi(phi) => self.symex_phi(&phi),
-                    Instruction::Select(select) => self.symex_select(&select),
-                    Instruction::Call(call) => match self.symex_call(&call, instnum) {
+                    Instruction::ICmp(icmp) => self.symex_icmp(icmp),
+                    Instruction::Load(load) => self.symex_load(load),
+                    Instruction::Store(store) => self.symex_store(store),
+                    Instruction::GetElementPtr(gep) => self.symex_gep(gep),
+                    Instruction::Alloca(alloca) => self.symex_alloca(alloca),
+                    Instruction::ZExt(zext) => self.symex_zext(zext),
+                    Instruction::SExt(sext) => self.symex_sext(sext),
+                    Instruction::Trunc(trunc) => self.symex_trunc(trunc),
+                    Instruction::PtrToInt(pti) => self.symex_cast_op(pti),
+                    Instruction::IntToPtr(itp) => self.symex_cast_op(itp),
+                    Instruction::BitCast(bitcast) => self.symex_cast_op(bitcast),
+                    Instruction::Phi(phi) => self.symex_phi(phi),
+                    Instruction::Select(select) => self.symex_select(select),
+                    Instruction::Call(call) => match self.symex_call(call, instnum) {
                         Err(e) => Err(e),
                         Ok(None) => Ok(()),
                         Ok(Some(symexresult)) => return Some(symexresult),
@@ -344,10 +346,11 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
     }
 
-    fn symex_bitcast(&mut self, bitcast: &instruction::BitCast) -> Result<(), &'static str> {
-        debug!("Symexing bitcast {:?}", bitcast);
-        let z3op = self.state.operand_to_bv(&bitcast.operand);
-        self.state.record_bv_result(bitcast, z3op)  // from Z3's perspective the bitcast is simply a no-op; the bit patterns are equal
+    /// Use this for any unary operation that can be treated as a cast
+    fn symex_cast_op(&mut self, cast: &impl instruction::UnaryOp) -> Result<(), &'static str> {
+        debug!("Symexing cast op {:?}", cast);
+        let z3op = self.state.operand_to_bv(&cast.get_operand());
+        self.state.record_bv_result(cast, z3op)  // from Z3's perspective a cast is simply a no-op; the bit patterns are equal
     }
 
     fn symex_load(&mut self, load: &instruction::Load) -> Result<(), &'static str> {
