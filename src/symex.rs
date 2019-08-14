@@ -8,7 +8,7 @@ use std::cell::RefCell;
 
 pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::backend::*;
-use crate::config::Config;
+use crate::config::*;
 use crate::extend::*;
 use crate::possible_solutions::*;
 use crate::project::Project;
@@ -469,7 +469,21 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Either::Left(_) => unimplemented!("inline assembly"),
         };
         if let Some(hook) = self.config.function_hooks.get(funcname) {
-            hook.call_hook(&mut self.state, call)?;
+            match hook.call_hook(&mut self.state, call)? {
+                ReturnValue::ReturnVoid => {
+                    if call.get_type() != Type::VoidType {
+                        panic!("Hook returned void but call needs a return value");
+                    }
+                },
+                ReturnValue::Return(retval) => {
+                    if call.get_type() == Type::VoidType {
+                        panic!("Hook returned a value but call is void-typed");
+                    } else {
+                        // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
+                        self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
+                    }
+                }
+            }
             Ok(None)
         } else if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
             assert_eq!(call.arguments.len(), callee.parameters.len());

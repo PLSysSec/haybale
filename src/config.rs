@@ -43,21 +43,30 @@ pub struct Config<'ctx, B> where B: Backend<'ctx> {
 /// Function hooks are given mutable access to the `State`, and read-only access
 /// to the `Call` they are hooking (which includes arguments etc).
 ///
-pub struct FunctionHook<'ctx, B>(Box<Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> HookResult + 'ctx>)
+pub struct FunctionHook<'ctx, B>(Box<Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> HookResult<B::BV> + 'ctx>)
     where B: Backend<'ctx>;
 
-/// Function hooks should return `Ok(())` if processing succeeded.
+/// Function hooks should return the `BV` representing the return value of the
+/// call.
 ///
 /// If they return `Err`, this will be treated as an indication that the current
 /// path should be killed (and not some other type of error).
-pub type HookResult = Result<(), &'static str>;
+pub type HookResult<V> = Result<ReturnValue<V>, &'static str>;
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum ReturnValue<V> {
+    /// Return this value
+    Return(V),
+    /// The hooked call returns void
+    ReturnVoid,
+}
 
 impl<'ctx, B> FunctionHook<'ctx, B> where B: Backend<'ctx> {
-    pub fn new(f: &'ctx Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> HookResult) -> Self {
+    pub fn new(f: &'ctx Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> HookResult<B::BV>) -> Self {
         Self(Box::new(f))
     }
 
-    pub fn call_hook(&self, state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> HookResult {
+    pub fn call_hook(&self, state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> HookResult<B::BV> {
         (self.0)(state, call)
     }
 }
