@@ -97,9 +97,19 @@ pub trait Memory<'ctx> : Clone + PartialEq + Eq {
     type Value: BV<'ctx>;
     type BackendState;
 
+    /// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)
     fn new_uninitialized(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+
+    /// A new `Memory`, whose contents at all addresses are initialized to be `0`
     fn new_zero_initialized(ctx: &'ctx z3::Context, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+
+    /// Read any number (>0) of bits of memory, at any alignment.
+    /// Reads more than the cell size must start at a cell boundary.
+    /// Returned `BV` will have size `bits`.
     fn read(&self, index: &Self::Index, bits: u32) -> Self::Value;
+
+    /// Write any number (>0) of bits of memory, at any alignment.
+    /// Writes more than the cell size must start at a cell boundary.
     fn write(&mut self, index: &Self::Index, value: Self::Value);
 }
 
