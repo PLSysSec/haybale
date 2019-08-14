@@ -708,15 +708,13 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Read a value `bits` bits long from memory at `addr`.
-    /// Caller is responsible for ensuring that reads more than the cell size
-    /// start at a cell boundary.
+    /// Note that `bits` can be arbitrarily large.
     pub fn read(&self, addr: &B::BV, bits: u32) -> B::BV {
         self.mem.read(addr, bits)
     }
 
     /// Write a value into memory at `addr`.
-    /// Caller is responsible for ensuring that writes more than the cell size
-    /// start at a cell boundary.
+    /// Note that `val` can be an arbitrarily large bitvector.
     pub fn write(&mut self, addr: &B::BV, val: B::BV) {
         self.mem.write(addr, val)
     }

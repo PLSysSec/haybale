@@ -630,62 +630,31 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
             let addr = state.operand_to_bv(&addr);
             let val = state.operand_to_bv(&val);
 
-            // a `BV`, `n` bytes long, which is just `val` repeated over and over
-            let val_for_n_bytes = |n| std::iter::repeat(val.clone()).take(n).reduce(|a,b| a.concat(&b)).unwrap().simplify();
-
-            if *num_bytes <= 8 {
-                // We can do this in a single write without worrying about the
-                // alignment restrictions on state.write()
-                let totalval = val_for_n_bytes(*num_bytes as usize);
-                state.write(&addr, totalval);
-            } else {
-                // We'd still like to do one large write, as this is the most efficient for `crate::memory::Memory`.
-                // But `state.write()` requires that caller ensure large writes start at a cell boundary.
-                if let Some(addr_u64) = addr.as_u64() {
-                    // addr is constrained to a single concrete value, which we could find without a solve. Yay!
-                    let cell_offset = addr_u64 & 0x7;  // we assume that the cell size is 64 bits
-                    if cell_offset == 0 {
-                        // the address is cell-aligned, and we're free to do the large write
-                        let totalval = val_for_n_bytes(*num_bytes as usize);
-                        state.write(&addr, totalval);
-                    } else {
-                        let bytes_till_cell_boundary = 8 - cell_offset;  // again assuming that the cell size is 64 bits
-                        // first write the remainder of the cell to bring us to a cell boundary
-                        let first = val_for_n_bytes(bytes_till_cell_boundary as usize);
-                        state.write(&addr, first);
-                        // now write the rest, which will be a cell-aligned write
-                        let rest = val_for_n_bytes((*num_bytes - bytes_till_cell_boundary) as usize);
-                        state.write(&addr.add(&B::BV::from_u64(state.ctx, bytes_till_cell_boundary, addr.get_size())), rest);
-                    }
-                } else {
-                    // Not sure what the alignment of `addr` is, we'll just use the safe fallback
-                    let addr_size = addr.get_size();
-                    for i in 0 .. *num_bytes {
-                        state.write(&addr.add(&B::BV::from_u64(state.ctx, i, addr_size)), val.clone());
-                    }
-                }
-            }
+            // Do this as just one large write; let the memory choose the most efficient way to implement that.
+            state.write(&addr, std::iter::repeat(val).take(*num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap().simplify());
         }
-   } else {
+    } else {
         unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", num_bytes)
     }
 }
 
 fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) where B: Backend<'ctx> {
     assert_eq!(call.arguments.len(), 4);
-    assert_eq!(call.arguments[0].0.get_type(), Type::pointer_to(Type::i8()));
-    assert_eq!(call.arguments[1].0.get_type(), Type::pointer_to(Type::i8()));
+    let dest = &call.arguments[0].0;
+    let src = &call.arguments[1].0;
+    let num_bytes = &call.arguments[2].0;
+    assert_eq!(dest.get_type(), Type::pointer_to(Type::i8()));
+    assert_eq!(src.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(call.get_type(), Type::VoidType);
-    if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = call.arguments[2].0 {
-        let dest = state.operand_to_bv(&call.arguments[0].0);
-        let src = state.operand_to_bv(&call.arguments[1].0);
-        // TODO: this isn't necessarily efficient
-        for i in 0 .. num_bytes {
-            let val = state.read(&src.add(&BV::from_u64(state.ctx, i, src.get_size())), 8);
-            state.write(&dest.add(&BV::from_u64(state.ctx, i, dest.get_size())), val);
-        }
+    if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = num_bytes {
+        let dest = state.operand_to_bv(&dest);
+        let src = state.operand_to_bv(&src);
+
+        // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
+        let val = state.read(&src, *num_bytes as u32 * 8);
+        state.write(&dest, val);
     } else {
-        unimplemented!("LLVM memcpy or memmove with non-constant-int num_bytes {:?}", call.arguments[2].0)
+        unimplemented!("LLVM memcpy or memmove with non-constant-int num_bytes {:?}", num_bytes)
     }
 }
 
