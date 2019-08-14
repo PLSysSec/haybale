@@ -87,7 +87,7 @@ impl<'p> Eq for Location<'p> {}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Location: module {:?}, func {:?}, bb {:?}", self.module.name, self.func.name, self.bbname)
+        write!(f, "<Location: module {:?}, func {:?}, bb {:?}>", self.module.name, self.func.name, self.bbname)
     }
 }
 
