@@ -623,18 +623,19 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(addr.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(val.get_type(), Type::i8());
     assert_eq!(call.get_type(), Type::VoidType);
-    if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = num_bytes {
-        if *num_bytes == 0 {
-            debug!("Ignoring an LLVM memset of 0 num_bytes")
-        } else {
-            let addr = state.operand_to_bv(&addr);
-            let val = state.operand_to_bv(&val);
-
-            // Do this as just one large write; let the memory choose the most efficient way to implement that.
-            state.write(&addr, std::iter::repeat(val).take(*num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap().simplify());
-        }
+    let num_bytes = state.operand_to_bv(num_bytes);
+    let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1).unwrap() {
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => panic!("LLVM memset with non-constant num_bytes {:?}", num_bytes),
+        PossibleSolutions::PossibleSolutions(v) => v[0],
+    };
+    if num_bytes == 0 {
+        debug!("Ignoring an LLVM memset of 0 num_bytes");
     } else {
-        unimplemented!("LLVM memset with non-constant-int num_bytes {:?}", num_bytes)
+        let addr = state.operand_to_bv(&addr);
+        let val = state.operand_to_bv(&val);
+
+        // Do this as just one large write; let the memory choose the most efficient way to implement that.
+        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap().simplify());
     }
 }
 
@@ -646,15 +647,20 @@ fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(dest.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(src.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(call.get_type(), Type::VoidType);
-    if let Operand::ConstantOperand(Constant::Int { value: num_bytes, .. }) = num_bytes {
+    let num_bytes = state.operand_to_bv(num_bytes);
+    let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1).unwrap() {
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => panic!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes),
+        PossibleSolutions::PossibleSolutions(v) => v[0],
+    };
+    if num_bytes == 0 {
+        debug!("Ignoring an LLVM memcpy or memmove of 0 num_bytes");
+    } else {
         let dest = state.operand_to_bv(&dest);
         let src = state.operand_to_bv(&src);
 
         // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
-        let val = state.read(&src, *num_bytes as u32 * 8);
+        let val = state.read(&src, num_bytes as u32 * 8);
         state.write(&dest, val);
-    } else {
-        unimplemented!("LLVM memcpy or memmove with non-constant-int num_bytes {:?}", num_bytes)
     }
 }
 
