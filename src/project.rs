@@ -24,9 +24,7 @@ impl Project {
             modules: paths
                 .into_iter()
                 .map(|p| Module::from_bc_path(p.as_ref()))
-                .collect::<Vec<Result<_,_>>>()
-                .into_iter()
-                .collect::<Result<Vec<_>,_>>()?,  // The final into_iter().collect() converts Vec<Result<T, E>> to Result<Vec<T>, E>, failing if any of the items were Err
+                .collect::<Result<Vec<_>,_>>()?,
         })
     }
 
@@ -116,9 +114,7 @@ impl Project {
             })
             .map(|path| path.and_then(|path| Module::from_bc_path(path)
                 .map_err(|s| io::Error::new(io::ErrorKind::Other, s))))
-            .collect::<Vec<Result<_,_>>>()  // Turns Iterator<Item = Result<_, _>> into Vec<Result<_, _>>
-            .into_iter()
-            .collect()  // Turns Vec<Result<T, E>> into Result<Vec<T>, E>, failing if any of the results were Err
+            .collect()
     }
 
     /// For testing only: construct a `Project` directly from a `Module`

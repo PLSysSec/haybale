@@ -744,8 +744,6 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                             .map(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
                                 .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
                             )
-                            .collect::<Vec<Result<_>>>()
-                            .into_iter()
                             .collect::<Result<Vec<_>>>()
                             .map(PossibleSolutions::PossibleSolutions)
                     }

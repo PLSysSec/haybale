@@ -503,8 +503,6 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             assert_eq!(call.arguments.len(), callee.parameters.len());
             let z3args: Vec<B::BV> = call.arguments.iter()
                 .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
-                .collect::<Vec<Result<B::BV>>>()
-                .into_iter()
                 .collect::<Result<Vec<B::BV>>>()?;
             let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
             self.state.push_callsite(instnum);
