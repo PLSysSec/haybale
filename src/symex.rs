@@ -758,7 +758,7 @@ mod tests {
         type Item = Path;
 
         fn next(&mut self) -> Option<Self::Item> {
-            self.em.next().map(|_| self.em.state().path.clone())
+            self.em.next().map(|_| self.em.state().get_path().clone())
         }
     }
 

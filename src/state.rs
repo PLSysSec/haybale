@@ -25,8 +25,6 @@ pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// or `None` if this is the first `BasicBlock` being executed
     /// or the first `BasicBlock` of a function
     pub prev_bb_name: Option<Name>,
-    /// Log of the basic blocks which have been executed to get to this point
-    pub path: Vec<PathEntry>,
     /// A place where `Backend`s can put any additional state they need for
     /// themselves
     pub backend_state: Rc<RefCell<B::State>>,
@@ -48,6 +46,8 @@ pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// These backtrack points are places where execution can be resumed later
     /// (efficiently, thanks to the incremental solving capabilities of Z3).
     backtrack_points: Vec<BacktrackPoint<'ctx, 'p, B>>,
+    /// Log of the basic blocks which have been executed to get to this point
+    path: Vec<PathEntry>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
@@ -132,12 +132,12 @@ struct BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Copies of a `Memory` should be cheap (just a Z3 object pointer), so it's
     /// not a huge concern that we need a full copy here in order to revert later.
     mem: B::Memory,
+    /// The backend state at the `BacktrackPoint`.
+    backend_state: B::State,
     /// The length of `path` at the `BacktrackPoint`.
     /// If we ever revert to this `BacktrackPoint`, we will truncate the `path` to
     /// its first `path_len` entries.
     path_len: usize,
-    /// The backend state at the `BacktrackPoint`.
-    backend_state: B::State,
 }
 
 impl<'ctx, 'p, B> fmt::Display for BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
@@ -161,7 +161,6 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             ctx,
             cur_loc: start_loc.clone(),
             prev_bb_name: None,
-            path: Vec::new(),
             varmap: VarMap::new(ctx, config.loop_bound),
             mem: Memory::new_uninitialized(ctx, backend_state.clone()),
             alloc: Alloc::new(),
@@ -169,6 +168,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             global_allocations: GlobalAllocations::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
+            path: Vec::new(),
 
             // listed last (out-of-order) so that it can be used above but moved in now
             backend_state,
@@ -749,6 +749,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     pub fn record_in_path(&mut self, entry: PathEntry) {
         debug!("Recording a path entry {:?}", entry);
         self.path.push(entry);
+    }
+
+    /// Get the `PathEntry`s that have been recorded, in order
+    pub fn get_path(&self) -> &Vec<PathEntry> {
+        &self.path
     }
 
     /// Record entering a call at the given `inst` in the current location's `BasicBlock`
