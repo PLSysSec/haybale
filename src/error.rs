@@ -10,6 +10,8 @@ pub enum Error {
     SolverError(String),
     /// Encountered an LLVM instruction which is not currently supported
     UnsupportedInstruction(String),
+    /// Encountered an LLVM instruction which was malformed, or at least didn't conform to our expected invariants
+    MalformedInstruction(String),
     /// Some kind of error which doesn't fall into one of the above categories
     OtherError(String),
 }

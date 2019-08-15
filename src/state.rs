@@ -245,7 +245,9 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                     .get_global_address(&var.name, module)
                     .unwrap_or_else(|| panic!("Trying to initialize global variable {:?} in module {:?} but failed to find its allocated address", var.name, &module.name));
                 state.cur_loc.module = module;  // have to do this prior to call to state.const_to_bv(), to ensure the correct module is used for resolution of references to other globals
-                state.mem.write(&addr, state.const_to_bv(initial_val));
+                let write_val = state.const_to_bv(initial_val)
+                    .unwrap_or_else(|e| panic!("While trying to initialize global variable {:?} in module {:?}, received the following error: {:?}", var.name, &module.name, e));
+                state.mem.write(&addr, write_val);
             }
         }
         debug!("Done allocating and initializing global variables");
@@ -441,96 +443,108 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Convert an `Operand` to the appropriate `BV`.
     /// Assumes the `Operand` is in the current function.
     /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
-    pub fn operand_to_bv(&self, op: &Operand) -> B::BV {
+    pub fn operand_to_bv(&self, op: &Operand) -> Result<B::BV> {
         match op {
             Operand::ConstantOperand(c) => self.const_to_bv(c),
-            Operand::LocalOperand { name, .. } => self.varmap.lookup_bv_var(&self.cur_loc.func.name, name).clone(),
+            Operand::LocalOperand { name, .. } => Ok(self.varmap.lookup_bv_var(&self.cur_loc.func.name, name).clone()),
             Operand::MetadataOperand => panic!("Can't convert {:?} to BV", op),
         }
     }
 
     /// Convert a `Constant` to the appropriate `BV`.
-    fn const_to_bv(&self, c: &Constant) -> B::BV {
+    fn const_to_bv(&self, c: &Constant) -> Result<B::BV> {
         match c {
-            Constant::Int { bits, value } => BV::from_u64(self.ctx, *value, *bits),
-            Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty)
-                => BV::from_u64(self.ctx, 0, size(ty) as u32),
-            Constant::Struct { values, .. } => values.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
-            Constant::Array { elements, .. } => elements.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
-            Constant::Vector(elements) => elements.iter().map(|c| self.const_to_bv(c)).reduce(|a,b| b.concat(&a)).unwrap(),
+            Constant::Int { bits, value } => Ok(BV::from_u64(self.ctx, *value, *bits)),
+            Constant::Null(ty)
+            | Constant::AggregateZero(ty)
+            | Constant::Undef(ty)
+                => Ok(BV::from_u64(self.ctx, 0, size(ty) as u32)),
+            Constant::Struct { values: elements, .. }
+            | Constant::Array { elements, .. }
+            | Constant::Vector(elements)
+                => elements.iter()
+                    .map(|c| self.const_to_bv(c))  // produces an iterator over Result<B::BV>
+                    .reduce(|a,b| Ok(b?.concat(&a?)))  // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
+                    .unwrap(),  // unwrap the Option<> produced by reduce(), leaving the final return type Result<B::BV>
             Constant::GlobalReference { name, .. } => {
                 if let Some(addr) = self.global_allocations.get_global_address(name, self.cur_loc.module) {
-                    addr.clone()
+                    Ok(addr.clone())
                 } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
                     self.const_to_bv(&alias.aliasee)
                 } else {
                     panic!("const_to_bv: GlobalReference to {:?} which was not found (current module is {:?})", name, &self.cur_loc.module.name)
                 }
             },
-            Constant::Add(a) => self.const_to_bv(&a.operand0).add(&self.const_to_bv(&a.operand1)),
-            Constant::Sub(s) => self.const_to_bv(&s.operand0).sub(&self.const_to_bv(&s.operand1)),
-            Constant::Mul(m) => self.const_to_bv(&m.operand0).mul(&self.const_to_bv(&m.operand1)),
-            Constant::UDiv(u) => self.const_to_bv(&u.operand0).udiv(&self.const_to_bv(&u.operand1)),
-            Constant::SDiv(s) => self.const_to_bv(&s.operand0).sdiv(&self.const_to_bv(&s.operand1)),
-            Constant::URem(u) => self.const_to_bv(&u.operand0).urem(&self.const_to_bv(&u.operand1)),
-            Constant::SRem(s) => self.const_to_bv(&s.operand0).srem(&self.const_to_bv(&s.operand1)),
-            Constant::And(a) => self.const_to_bv(&a.operand0).and(&self.const_to_bv(&a.operand1)),
-            Constant::Or(o) => self.const_to_bv(&o.operand0).or(&self.const_to_bv(&o.operand1)),
-            Constant::Xor(x) => self.const_to_bv(&x.operand0).xor(&self.const_to_bv(&x.operand1)),
-            Constant::Shl(s) => self.const_to_bv(&s.operand0).shl(&self.const_to_bv(&s.operand1)),
-            Constant::LShr(s) => self.const_to_bv(&s.operand0).lshr(&self.const_to_bv(&s.operand1)),
-            Constant::AShr(s) => self.const_to_bv(&s.operand0).ashr(&self.const_to_bv(&s.operand1)),
+            Constant::Add(a) => Ok(self.const_to_bv(&a.operand0)?.add(&self.const_to_bv(&a.operand1)?)),
+            Constant::Sub(s) => Ok(self.const_to_bv(&s.operand0)?.sub(&self.const_to_bv(&s.operand1)?)),
+            Constant::Mul(m) => Ok(self.const_to_bv(&m.operand0)?.mul(&self.const_to_bv(&m.operand1)?)),
+            Constant::UDiv(u) => Ok(self.const_to_bv(&u.operand0)?.udiv(&self.const_to_bv(&u.operand1)?)),
+            Constant::SDiv(s) => Ok(self.const_to_bv(&s.operand0)?.sdiv(&self.const_to_bv(&s.operand1)?)),
+            Constant::URem(u) => Ok(self.const_to_bv(&u.operand0)?.urem(&self.const_to_bv(&u.operand1)?)),
+            Constant::SRem(s) => Ok(self.const_to_bv(&s.operand0)?.srem(&self.const_to_bv(&s.operand1)?)),
+            Constant::And(a) => Ok(self.const_to_bv(&a.operand0)?.and(&self.const_to_bv(&a.operand1)?)),
+            Constant::Or(o) => Ok(self.const_to_bv(&o.operand0)?.or(&self.const_to_bv(&o.operand1)?)),
+            Constant::Xor(x) => Ok(self.const_to_bv(&x.operand0)?.xor(&self.const_to_bv(&x.operand1)?)),
+            Constant::Shl(s) => Ok(self.const_to_bv(&s.operand0)?.shl(&self.const_to_bv(&s.operand1)?)),
+            Constant::LShr(s) => Ok(self.const_to_bv(&s.operand0)?.lshr(&self.const_to_bv(&s.operand1)?)),
+            Constant::AShr(s) => Ok(self.const_to_bv(&s.operand0)?.ashr(&self.const_to_bv(&s.operand1)?)),
             Constant::ExtractElement(ee) => match &ee.index {
                 Constant::Int { value: index, .. } => match &ee.vector {
-                    Constant::Vector(els) => self.const_to_bv(&els.get(*index as usize).expect("Constant::ExtractElement index out of range")),
-                    c => panic!("Expected ExtractElement.vector to be a Constant::Vector, got {:?}", c),
+                    Constant::Vector(els) => {
+                        let el = els.get(*index as usize)
+                            .ok_or_else(|| Error::MalformedInstruction("Constant::ExtractElement index out of range".to_owned()))?;
+                        self.const_to_bv(el)
+                    },
+                    c => Err(Error::MalformedInstruction(format!("Expected ExtractElement.vector to be a Constant::Vector, got {:?}", c))),
                 },
-                index => unimplemented!("ExtractElement.index is not a Constant::Int, instead it is {:?}", index),
+                index => Err(Error::MalformedInstruction(format!("Expected ExtractElement.index to be a Constant::Int, but got {:?}", index))),
             },
             Constant::InsertElement(ie) => match &ie.index {
                 Constant::Int { value: index, .. } => match &ie.vector {
                     Constant::Vector(els) => {
                         let mut els = els.clone();
-                        *els.get_mut(*index as usize).expect("Constant::InsertElement index out of range") = ie.element.clone();
+                        let el: &mut Constant = els.get_mut(*index as usize)
+                            .ok_or_else(|| Error::MalformedInstruction("Constant::InsertElement index out of range".to_owned()))?;
+                        *el = ie.element.clone();
                         self.const_to_bv(&Constant::Vector(els))
                     },
-                    c => panic!("Expected InsertElement.vector to be a Constant::Vector, got {:?}", c),
+                    c => Err(Error::MalformedInstruction(format!("Expected InsertElement.vector to be a Constant::Vector, got {:?}", c))),
                 },
-                index => unimplemented!("InsertElement.index is not a Constant::Int, instead it is {:?}", index),
+                index => Err(Error::MalformedInstruction(format!("Expected InsertElement.index to be a Constant::Int, but got {:?}", index))),
             }
-            Constant::ExtractValue(ev) => self.const_to_bv(Self::simplify_const_ev(&ev.aggregate, ev.indices.iter().copied())),
-            Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(iv.aggregate.clone(), iv.element.clone(), iv.indices.iter().copied())),
+            Constant::ExtractValue(ev) => self.const_to_bv(Self::simplify_const_ev(&ev.aggregate, ev.indices.iter().copied())?),
+            Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(iv.aggregate.clone(), iv.element.clone(), iv.indices.iter().copied())?),
             Constant::GetElementPtr(gep) => {
                 // heavily inspired by `ExecutionManager::symex_gep()` in symex.rs. TODO could try to share more code
-                let z3base = self.const_to_bv(&gep.address);
-                let offset = self.get_offset(gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
-                z3base.add(&offset).simplify()
+                let z3base = self.const_to_bv(&gep.address)?;
+                let offset = self.get_offset(gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
+                Ok(z3base.add(&offset).simplify())
             },
-            Constant::Trunc(t) => self.const_to_bv(&t.operand).extract(size(&t.to_type) as u32 - 1, 0),
-            Constant::ZExt(z) => zero_extend_to_bits(self.const_to_bv(&z.operand), size(&z.to_type) as u32),
-            Constant::SExt(s) => sign_extend_to_bits(self.const_to_bv(&s.operand), size(&s.to_type) as u32),
+            Constant::Trunc(t) => self.const_to_bv(&t.operand).map(|bv| bv.extract(size(&t.to_type) as u32 - 1, 0)),
+            Constant::ZExt(z) => self.const_to_bv(&z.operand).map(|bv| zero_extend_to_bits(bv, size(&z.to_type) as u32)),
+            Constant::SExt(s) => self.const_to_bv(&s.operand).map(|bv| sign_extend_to_bits(bv, size(&s.to_type) as u32)),
             Constant::PtrToInt(pti) => {
-                let bv = self.const_to_bv(&pti.operand);
+                let bv = self.const_to_bv(&pti.operand)?;
                 assert_eq!(bv.get_size(), size(&pti.to_type) as u32);
-                bv  // just a cast, it's the same bits underneath
+                Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::IntToPtr(itp) => {
-                let bv = self.const_to_bv(&itp.operand);
+                let bv = self.const_to_bv(&itp.operand)?;
                 assert_eq!(bv.get_size(), size(&itp.to_type) as u32);
-                bv  // just a cast, it's the same bits underneath
+                Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::BitCast(bc) => {
-                let bv = self.const_to_bv(&bc.operand);
+                let bv = self.const_to_bv(&bc.operand)?;
                 assert_eq!(bv.get_size(), size(&bc.to_type) as u32);
-                bv  // just a cast, it's the same bits underneath
+                Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::AddrSpaceCast(ac) => {
-                let bv = self.const_to_bv(&ac.operand);
+                let bv = self.const_to_bv(&ac.operand)?;
                 assert_eq!(bv.get_size(), size(&ac.to_type) as u32);
-                bv  // just a cast, it's the same bits underneath
+                Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::Select(s) => {
-                let b = self.const_to_bool(&s.condition).simplify().as_bool().expect("Constant::Select: Expected a constant condition");
+                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or(Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
                 if b {
                     self.const_to_bv(&s.true_value)
                 } else {
@@ -543,12 +557,12 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
 
     /// Given a `Constant::Struct` and a series of `ExtractValue` indices, get the
     /// final `Constant` referred to
-    fn simplify_const_ev(s: &Constant, mut indices: impl Iterator<Item = u32>) -> &Constant {
+    fn simplify_const_ev(s: &Constant, mut indices: impl Iterator<Item = u32>) -> Result<&Constant> {
         match indices.next() {
-            None => s,
+            None => Ok(s),
             Some(index) => {
                 if let Constant::Struct { values, .. } = s {
-                    let val = values.get(index as usize).expect("Constant::ExtractValue index out of range");
+                    let val = values.get(index as usize).ok_or(Error::MalformedInstruction("Constant::ExtractValue index out of range".to_owned()))?;
                     Self::simplify_const_ev(val, indices)
                 } else {
                     panic!("simplify_const_ev: not a Constant::Struct: {:?}", s)
@@ -560,14 +574,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
 
     /// Given a `Constant::Struct`, a value to insert, and a series of
     /// `InsertValue` indices, get the final `Constant` referred to
-    fn simplify_const_iv(s: Constant, val: Constant, mut indices: impl Iterator<Item = u32>) -> Constant {
+    fn simplify_const_iv(s: Constant, val: Constant, mut indices: impl Iterator<Item = u32>) -> Result<Constant> {
         match indices.next() {
-            None => val,
+            None => Ok(val),
             Some(index) => {
                 if let Constant::Struct { name, mut values, is_packed } = s {
-                    let to_replace = values.get(index as usize).expect("Constant::InsertValue index out of range").clone();
-                    values[index as usize] = Self::simplify_const_iv(to_replace, val, indices);
-                    Constant::Struct { name, values, is_packed }
+                    let to_replace = values.get(index as usize).ok_or(Error::MalformedInstruction("Constant::InsertValue index out of range".to_owned()))?.clone();
+                    values[index as usize] = Self::simplify_const_iv(to_replace, val, indices)?;
+                    Ok(Constant::Struct { name, values, is_packed })
                 } else {
                     panic!("simplify_const_iv: not a Constant::Struct: {:?}", s)
                 }
@@ -578,9 +592,9 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
     //
     // Heavily inspired by `ExecutionManager::get_offset()` in symex.rs. TODO could try to share more code
-    fn get_offset(&self, mut indices: impl Iterator<Item = &'p Constant>, base_type: &Type, result_bits: u32) -> B::BV {
+    fn get_offset(&self, mut indices: impl Iterator<Item = &'p Constant>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         match indices.next() {
-            None => BV::from_u64(self.ctx, 0, result_bits),
+            None => Ok(BV::from_u64(self.ctx, 0, result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { pointee_type, .. }
                 | Type::ArrayType { element_type: pointee_type, .. }
@@ -588,12 +602,12 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 => {
                     let el_size_bits = size(pointee_type) as u64;
                     if el_size_bits % 8 != 0 {
-                        unimplemented!("Type with size {} bits", el_size_bits);
+                        return Err(Error::UnsupportedInstruction(format!("GetElementPtr involving a type with size {} bits", el_size_bits)));
                     }
                     let el_size_bytes = el_size_bits / 8;
-                    zero_extend_to_bits(self.const_to_bv(index), result_bits)
+                    Ok(zero_extend_to_bits(self.const_to_bv(index)?, result_bits)
                         .mul(&B::BV::from_u64(self.ctx, el_size_bytes, result_bits))
-                        .add(&self.get_offset(indices, pointee_type, result_bits))
+                        .add(&self.get_offset(indices, pointee_type, result_bits)?))
                 },
                 Type::StructType { element_types, .. } => match index {
                     Constant::Int { value: index, .. } => {
@@ -602,17 +616,17 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                             offset_bits += size(ty) as u64;
                         }
                         if offset_bits % 8 != 0 {
-                            unimplemented!("Struct offset of {} bits", offset_bits);
+                            return Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)));
                         }
                         let offset_bytes = offset_bits / 8;
-                        B::BV::from_u64(self.ctx, offset_bytes, result_bits)
-                            .add(&self.get_offset(indices, &element_types[*index as usize], result_bits))
+                        Ok(B::BV::from_u64(self.ctx, offset_bytes, result_bits)
+                            .add(&self.get_offset(indices, &element_types[*index as usize], result_bits)?))
                     },
-                    _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                    _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                 },
                 Type::NamedStructType { ty, .. } => {
                     let rc: Rc<RefCell<Type>> = ty.as_ref()
-                        .expect("get_offset on an opaque struct type")
+                        .ok_or(Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
                         .upgrade()
                         .expect("Failed to upgrade weak reference");
                     let actual_ty: &Type = &rc.borrow();
@@ -625,16 +639,16 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                                     offset_bits += size(ty) as u64;
                                 }
                                 if offset_bits % 8 != 0 {
-                                    unimplemented!("Struct offset of {} bits", offset_bits);
+                                    return Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)));
                                 }
                                 let offset_bytes = offset_bits / 8;
-                                B::BV::from_u64(self.ctx, offset_bytes, result_bits)
-                                    .add(&self.get_offset(indices, &element_types[*index as usize], result_bits))
+                                Ok(B::BV::from_u64(self.ctx, offset_bytes, result_bits)
+                                    .add(&self.get_offset(indices, &element_types[*index as usize], result_bits)?))
                             },
-                            _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                            _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                         }
                     } else {
-                        panic!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)
+                        Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
                     }
                 }
                 _ => panic!("get_offset with base type {:?}", base_type),
@@ -648,26 +662,38 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// This will panic if the `Operand` doesn't have type `Type::bool()`.
     pub fn operand_to_bool(&self, op: &Operand) -> Result<B::Bool> {
         match op {
-            Operand::ConstantOperand(c) => Ok(self.const_to_bool(c)),
+            Operand::ConstantOperand(c) => self.const_to_bool(c),
             Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).map(|b| b.clone()),
             op => panic!("Can't convert {:?} to Bool", op),
         }
     }
 
     /// Convert a `Constant` to the appropriate `Bool`.
-    fn const_to_bool(&self, c: &Constant) -> B::Bool {
+    fn const_to_bool(&self, c: &Constant) -> Result<B::Bool> {
         match c {
             Constant::Int { bits, value } => {
                 assert_eq!(*bits, 1);
-                B::Bool::from_bool(self.ctx, *value != 0)
+                Ok(B::Bool::from_bool(self.ctx, *value != 0))
             },
-            Constant::And(a) => self.const_to_bool(&a.operand0).and(&[&self.const_to_bool(&a.operand1)]),
-            Constant::Or(o) => self.const_to_bool(&o.operand0).or(&[&self.const_to_bool(&o.operand1)]),
-            Constant::Xor(x) => self.const_to_bool(&x.operand0).xor(&self.const_to_bool(&x.operand1)),
+            Constant::And(a) => {
+                let bv0 = self.const_to_bool(&a.operand0)?;
+                let bv1 = self.const_to_bool(&a.operand1)?;
+                Ok(bv0.and(&[&bv1]))
+            },
+            Constant::Or(o) => {
+                let bv0 = self.const_to_bool(&o.operand0)?;
+                let bv1 = self.const_to_bool(&o.operand1)?;
+                Ok(bv0.or(&[&bv1]))
+            },
+            Constant::Xor(x) => {
+                let bv0 = self.const_to_bool(&x.operand0)?;
+                let bv1 = self.const_to_bool(&x.operand1)?;
+                Ok(bv0.xor(&bv1))
+            },
             Constant::ICmp(icmp) => {
-                let bv0 = self.const_to_bv(&icmp.operand0);
-                let bv1 = self.const_to_bv(&icmp.operand1);
-                match icmp.predicate {
+                let bv0 = self.const_to_bv(&icmp.operand0)?;
+                let bv1 = self.const_to_bv(&icmp.operand1)?;
+                Ok(match icmp.predicate {
                     IntPredicate::EQ => bv0._eq(&bv1),
                     IntPredicate::NE => bv0._eq(&bv1).not(),
                     IntPredicate::UGT => bv0.ugt(&bv1),
@@ -678,10 +704,10 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                     IntPredicate::SGE => bv0.sge(&bv1),
                     IntPredicate::SLT => bv0.slt(&bv1),
                     IntPredicate::SLE => bv0.sle(&bv1),
-                }
+                })
             },
             Constant::Select(s) => {
-                let b = self.const_to_bool(&s.condition).simplify().as_bool().expect("Constant::Select: Expected a constant condition");
+                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or(Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
                 if b {
                     self.const_to_bool(&s.true_value)
                 } else {
@@ -896,7 +922,7 @@ mod tests {
         // check that we can look up the correct Z3 values via LocalOperands
         let valop = Operand::LocalOperand { name: valname, ty: Type::i32() };
         let boolop = Operand::LocalOperand { name: boolname, ty: Type::bool() };
-        assert_eq!(state.operand_to_bv(&valop), valvar);
+        assert_eq!(state.operand_to_bv(&valop), Ok(valvar));
         assert_eq!(state.operand_to_bool(&boolop), Ok(boolvar));
     }
 
@@ -911,7 +937,7 @@ mod tests {
         let constint = Constant::Int { bits: 64, value: 3 };
 
         // this should create a corresponding Z3 value which is also constant 3
-        let bv = state.operand_to_bv(&Operand::ConstantOperand(constint));
+        let bv = state.operand_to_bv(&Operand::ConstantOperand(constint)).unwrap();
 
         // check that the Z3 value was evaluated to 3
         assert_eq!(state.get_a_solution_for_bv(&bv), Ok(Some(3)));

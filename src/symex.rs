@@ -187,7 +187,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             };
         }
         match &bb.term {
-            Terminator::Ret(ret) => Ok(Some(self.symex_return(ret))),
+            Terminator::Ret(ret) => self.symex_return(ret).map(Some),
             Terminator::Br(br) => self.symex_br(br),
             Terminator::CondBr(condbr) => self.symex_condbr(condbr),
             term => Err(Error::UnsupportedInstruction(format!("terminator {:?}", term))),
@@ -309,50 +309,50 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         where F: FnOnce(&B::BV, &B::BV) -> B::BV
     {
         debug!("Symexing binop {:?}", bop);
-        let z3firstop = self.state.operand_to_bv(&bop.get_operand0());
-        let z3secondop = self.state.operand_to_bv(&bop.get_operand1());
+        let z3firstop = self.state.operand_to_bv(&bop.get_operand0())?;
+        let z3secondop = self.state.operand_to_bv(&bop.get_operand1())?;
         self.state.record_bv_result(bop, z3op(&z3firstop, &z3secondop))
     }
 
     fn symex_icmp(&mut self, icmp: &instruction::ICmp) -> Result<()> {
         debug!("Symexing icmp {:?}", icmp);
-        let z3firstop = self.state.operand_to_bv(&icmp.operand0);
-        let z3secondop = self.state.operand_to_bv(&icmp.operand1);
+        let z3firstop = self.state.operand_to_bv(&icmp.operand0)?;
+        let z3secondop = self.state.operand_to_bv(&icmp.operand1)?;
         let z3pred = Self::intpred_to_z3pred(icmp.predicate);
         self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
     }
 
     fn symex_zext(&mut self, zext: &instruction::ZExt) -> Result<()> {
         debug!("Symexing zext {:?}", zext);
-        let z3op = self.state.operand_to_bv(&zext.operand);
+        let z3op = self.state.operand_to_bv(&zext.operand)?;
         let source_size = z3op.get_size();
         let dest_size = match zext.get_type() {
             Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("ZExt on vectors".to_owned())),
-            ty => panic!("ZExt result should be integer or vector of integers; got {:?}", ty),
+            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("ZExt on a vector".to_owned())),
+            ty => return Err(Error::MalformedInstruction(format!("Expected ZExt result type to be integer or vector of integers; got {:?}", ty))),
         };
         self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
     }
 
     fn symex_sext(&mut self, sext: &instruction::SExt) -> Result<()> {
         debug!("Symexing sext {:?}", sext);
-        let z3op = self.state.operand_to_bv(&sext.operand);
+        let z3op = self.state.operand_to_bv(&sext.operand)?;
         let source_size = z3op.get_size();
         let dest_size = match sext.get_type() {
             Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("SExt on vectors".to_owned())),
-            ty => panic!("SExt result should be integer or vector of integers; got {:?}", ty),
+            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("SExt on a vector".to_owned())),
+            ty => return Err(Error::MalformedInstruction(format!("Expected SExt result type to be integer or vector of integers; got {:?}", ty))),
         };
         self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
     }
 
     fn symex_trunc(&mut self, trunc: &instruction::Trunc) -> Result<()> {
         debug!("Symexing trunc {:?}", trunc);
-        let z3op = self.state.operand_to_bv(&trunc.operand);
+        let z3op = self.state.operand_to_bv(&trunc.operand)?;
         let dest_size = match trunc.get_type() {
             Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("Trunc on vectors".to_owned())),
-            ty => panic!("Trunc result should be integer or vector of integers; got {:?}", ty),
+            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("Trunc on a vector".to_owned())),
+            ty => return Err(Error::MalformedInstruction(format!("Expected Trunc result type to be integer or vector of integers; got {:?}", ty))),
         };
         self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
     }
@@ -360,37 +360,37 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// Use this for any unary operation that can be treated as a cast
     fn symex_cast_op(&mut self, cast: &impl instruction::UnaryOp) -> Result<()> {
         debug!("Symexing cast op {:?}", cast);
-        let z3op = self.state.operand_to_bv(&cast.get_operand());
+        let z3op = self.state.operand_to_bv(&cast.get_operand())?;
         self.state.record_bv_result(cast, z3op)  // from Z3's perspective a cast is simply a no-op; the bit patterns are equal
     }
 
     fn symex_load(&mut self, load: &instruction::Load) -> Result<()> {
         debug!("Symexing load {:?}", load);
-        let z3addr = self.state.operand_to_bv(&load.address);
+        let z3addr = self.state.operand_to_bv(&load.address)?;
         let dest_size = size(&load.get_type());
         self.state.record_bv_result(load, self.state.read(&z3addr, dest_size as u32))
     }
 
     fn symex_store(&mut self, store: &instruction::Store) -> Result<()> {
         debug!("Symexing store {:?}", store);
-        let z3val = self.state.operand_to_bv(&store.value);
-        let z3addr = self.state.operand_to_bv(&store.address);
+        let z3val = self.state.operand_to_bv(&store.value)?;
+        let z3addr = self.state.operand_to_bv(&store.address)?;
         self.state.write(&z3addr, z3val);
         Ok(())
     }
 
     fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<()> {
         debug!("Symexing gep {:?}", gep);
-        let z3base = self.state.operand_to_bv(&gep.address);
-        let offset = Self::get_offset(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size());
+        let z3base = self.state.operand_to_bv(&gep.address)?;
+        let offset = Self::get_offset(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
         self.state.record_bv_result(gep, z3base.add(&offset).simplify())
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-    fn get_offset(state: &State<'ctx, 'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> B::BV {
+    fn get_offset(state: &State<'ctx, 'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         let index = indices.next();
         if index.is_none() {
-            return BV::from_u64(state.ctx, 0, result_bits);
+            return Ok(BV::from_u64(state.ctx, 0, result_bits));
         }
         let index = index.unwrap();  // we just handled the `None` case, so now it must have been `Some`
         match base_type {
@@ -400,12 +400,12 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             => {
                 let el_size_bits = size(pointee_type) as u64;
                 if el_size_bits % 8 != 0 {
-                    unimplemented!("Type with size {} bits", el_size_bits);
+                    return Err(Error::UnsupportedInstruction(format!("GetElementPtr involving a type with size {} bits", el_size_bits)));
                 }
                 let el_size_bytes = el_size_bits / 8;
-                zero_extend_to_bits(state.operand_to_bv(index), result_bits)
+                Ok(zero_extend_to_bits(state.operand_to_bv(index)?, result_bits)
                     .mul(&B::BV::from_u64(state.ctx, el_size_bytes, result_bits))
-                    .add(&Self::get_offset(state, indices, pointee_type, result_bits))
+                    .add(&Self::get_offset(state, indices, pointee_type, result_bits)?))
             },
             Type::StructType { element_types, .. } => match index {
                 Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
@@ -414,13 +414,13 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                         offset_bits += size(ty) as u64;
                     }
                     if offset_bits % 8 != 0 {
-                        unimplemented!("Struct offset of {} bits", offset_bits);
+                        return Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)));
                     }
                     let offset_bytes = offset_bits / 8;
-                    B::BV::from_u64(state.ctx, offset_bytes, result_bits)
-                        .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits))
+                    Ok(B::BV::from_u64(state.ctx, offset_bytes, result_bits)
+                        .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits)?))
                 },
-                _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
             },
             Type::NamedStructType { ty, .. } => {
                 let rc: Rc<RefCell<Type>> = ty.as_ref()
@@ -437,16 +437,16 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                                 offset_bits += size(ty) as u64;
                             }
                             if offset_bits % 8 != 0 {
-                                unimplemented!("Struct offset of {} bits", offset_bits);
+                                return Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)));
                             }
                             let offset_bytes = offset_bits / 8;
-                            B::BV::from_u64(state.ctx, offset_bytes, result_bits)
-                                .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits))
+                            Ok(B::BV::from_u64(state.ctx, offset_bytes, result_bits)
+                                .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits)?))
                         },
-                        _ => panic!("Can't get_offset from struct type with index {:?}", index),
+                        _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                     }
                 } else {
-                    panic!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)
+                    Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
                 }
             }
             _ => panic!("get_offset with base type {:?}", base_type),
@@ -470,7 +470,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => name,
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
             Either::Right(operand) => {
-                match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand), 1)? {
+                match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
                     PossibleSolutions::MoreThanNPossibleSolutions(1) => unimplemented!("calling a function pointer which has multiple possible targets"),
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
                     PossibleSolutions::PossibleSolutions(v) => match v.len() {
@@ -501,7 +501,11 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Ok(None)
         } else if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
             assert_eq!(call.arguments.len(), callee.parameters.len());
-            let z3args: Vec<_> = call.arguments.iter().map(|arg| self.state.operand_to_bv(&arg.0)).collect();  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+            let z3args: Vec<B::BV> = call.arguments.iter()
+                .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+                .collect::<Vec<Result<B::BV>>>()
+                .into_iter()
+                .collect::<Result<Vec<B::BV>>>()?;
             let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
             self.state.push_callsite(instnum);
             let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
@@ -556,12 +560,14 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     }
 
     // Returns the `SymexResult` representing the return value
-    fn symex_return(&self, ret: &terminator::Ret) -> SymexResult<B::BV> {
+    fn symex_return(&self, ret: &terminator::Ret) -> Result<SymexResult<B::BV>> {
         debug!("Symexing return {:?}", ret);
-        ret.return_operand
+        Ok(ret.return_operand
             .as_ref()
-            .map(|op| SymexResult::Returned(self.state.operand_to_bv(op)))
-            .unwrap_or(SymexResult::ReturnedVoid)
+            .map(|op| self.state.operand_to_bv(op))
+            .transpose()?  // turns Option<Result<_>> into Result<Option<_>>, then ?'s away the Result
+            .map(SymexResult::Returned)
+            .unwrap_or(SymexResult::ReturnedVoid))
     }
 
     // Continues to the target of the `Br` and eventually returns the new `SymexResult`
@@ -616,14 +622,14 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             }
         }
         let chosen_value = chosen_value.ok_or_else(|| Error::OtherError(format!("Failed to find a Phi member matching previous BasicBlock. Phi incoming_values are {:?} but we were looking for {:?}", phi.incoming_values, prev_bb)))?;
-        self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value))
+        self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value)?)
     }
 
     fn symex_select(&mut self, select: &instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
         let z3cond = self.state.operand_to_bool(&select.condition)?;
-        let z3trueval = self.state.operand_to_bv(&select.true_value);
-        let z3falseval = self.state.operand_to_bv(&select.false_value);
+        let z3trueval = self.state.operand_to_bv(&select.true_value)?;
+        let z3falseval = self.state.operand_to_bv(&select.false_value)?;
         let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
         let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()))?;
         if true_feasible && false_feasible {
@@ -651,7 +657,7 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(addr.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(val.get_type(), Type::i8());
     assert_eq!(call.get_type(), Type::VoidType);
-    let num_bytes = state.operand_to_bv(num_bytes);
+    let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
         PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::OtherError(format!("LLVM memset with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v[0],
@@ -659,8 +665,8 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memset of 0 num_bytes");
     } else {
-        let addr = state.operand_to_bv(&addr);
-        let val = state.operand_to_bv(&val);
+        let addr = state.operand_to_bv(&addr)?;
+        let val = state.operand_to_bv(&val)?;
 
         // Do this as just one large write; let the memory choose the most efficient way to implement that.
         state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap().simplify());
@@ -676,7 +682,7 @@ fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(dest.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(src.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(call.get_type(), Type::VoidType);
-    let num_bytes = state.operand_to_bv(num_bytes);
+    let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
         PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::OtherError(format!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v[0],
@@ -684,8 +690,8 @@ fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memcpy or memmove of 0 num_bytes");
     } else {
-        let dest = state.operand_to_bv(&dest);
-        let src = state.operand_to_bv(&src);
+        let dest = state.operand_to_bv(&dest)?;
+        let src = state.operand_to_bv(&src)?;
 
         // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
         let val = state.read(&src, num_bytes as u32 * 8);
