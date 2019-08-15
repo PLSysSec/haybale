@@ -4,6 +4,8 @@ pub enum Error {
     Unsat,
     /// The current path has exceeded the configured `loop_bound` (see [`Config`](struct.Config.html))
     LoopBoundExceeded,
+    /// An operation attempted to coerce a `BV` more than one bit long into a `Bool`
+    BoolCoercionError(String),
     /// The solver returned this processing error while evaluating a query
     SolverError(String),
     /// Some kind of error which doesn't fall into one of the above categories

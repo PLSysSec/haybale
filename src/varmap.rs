@@ -91,17 +91,17 @@ impl<'ctx, V, B> BVorBool<'ctx, V, B>
 impl<'ctx, V, B> BVorBool<'ctx, V, B>
     where V: BV<'ctx, AssociatedBool = B>, B: Bool<'ctx, AssociatedBV = V>
 {
-    fn as_bv(&self) -> &V {
+    fn as_bv(&self) -> Result<&V> {
         match self {
-            BVorBool::BV(bv, _) => &bv,
-            _ => panic!("Can't convert {:?} to BV", self),
+            BVorBool::BV(bv, _) => Ok(&bv),
+            _ => Err(Error::OtherError(format!("Can't convert {:?} to BV", self))),
         }
     }
 
-    fn as_bool(&self) -> &B {
+    fn as_bool(&self) -> Result<&B> {
         match self {
-            BVorBool::Bool(b, _) => &b,
-            _ => panic!("Can't convert {:?} to Bool", self),
+            BVorBool::Bool(b, _) => Ok(&b),
+            _ => Err(Error::OtherError(format!("Can't convert {:?} to Bool", self))),
         }
     }
 }
@@ -118,14 +118,14 @@ impl<'ctx, V, B> BVorBool<'ctx, V, B>
         }
     }
 
-    fn into_bool(self, ctx: &'ctx z3::Context) -> B {
+    fn into_bool(self, ctx: &'ctx z3::Context) -> Result<B> {
         match self {
-            BVorBool::Bool(b, _) => b,
+            BVorBool::Bool(b, _) => Ok(b),
             BVorBool::BV(bv, _) => {
                 if bv.get_size() == 1 {
-                    bv._eq(&BV::from_u64(ctx, 1, 1))
+                    Ok(bv._eq(&BV::from_u64(ctx, 1, 1)))
                 } else {
-                    panic!("Can't convert BV {:?} of size {} to Bool", bv, bv.get_size())
+                    Err(Error::BoolCoercionError(format!("Can't convert BV {:?} of size {} to Bool", bv, bv.get_size())))
                 }
             },
         }
@@ -245,7 +245,10 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
         }
     }
 
-    /// Look up the most recent `BV` created for the given `(String, Name)` pair
+    /// Look up the most recent `BV` created for the given `(String, Name)` pair.
+    ///
+    /// If the `(String, Name)` pair was most recently created as a `Bool`, this
+    /// will silently convert it into a 1-bit `BV`.
     pub fn lookup_bv_var(&self, funcname: &String, name: &Name) -> V {
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
@@ -253,8 +256,12 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
         }).clone().into_bv(self.ctx)
     }
 
-    /// Look up the most recent `Bool` created for the given `(String, Name)` pair
-    pub fn lookup_bool_var(&self, funcname: &String, name: &Name) -> B {
+    /// Look up the most recent `Bool` created for the given `(String, Name)` pair.
+    ///
+    /// If the `(String, Name)` pair was most recently created as a `BV`, this
+    /// will silently convert a 1-bit `BV` to the appropriate `Bool`, or fail
+    /// with `Error::BoolCoercionError` if the `BV` was more than one bit.
+    pub fn lookup_bool_var(&self, funcname: &String, name: &Name) -> Result<B> {
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
             panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
@@ -266,7 +273,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     pub fn overwrite_latest_version_of_bv(&mut self, funcname: &String, name: &Name, bv: V) {
         let mapvalue: &mut BVorBool<V, B> = self.active_version
             .get_mut(funcname, name)
-            .expect("failed to find current active version in map");
+            .unwrap_or_else(|| panic!("failed to find current active version of {:?} (function {:?}) in map", name, funcname));
         *mapvalue = BVorBool::bv(bv);
     }
 
@@ -275,7 +282,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     pub fn overwrite_latest_version_of_bool(&mut self, funcname: &String, name: &Name, b: B) {
         let mapvalue: &mut BVorBool<V, B> = self.active_version
             .get_mut(funcname, name)
-            .expect("failed to find current active version in map");
+            .unwrap_or_else(|| panic!("failed to find current active version {:?} (function {:?}) in map", name, funcname));
         *mapvalue = BVorBool::bool(b);
     }
 
@@ -364,7 +371,7 @@ mod tests {
 
         // check that looking up the llvm-ir values gives the correct Z3 ones
         assert_eq!(varmap.lookup_bv_var(&funcname, &valname), valvar);
-        assert_eq!(varmap.lookup_bool_var(&funcname, &boolname), boolvar);
+        assert_eq!(varmap.lookup_bool_var(&funcname, &boolname), Ok(boolvar));
     }
 
     #[test]

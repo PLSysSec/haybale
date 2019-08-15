@@ -111,10 +111,14 @@ impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'c
         if self.fresh {
             self.fresh = false;
             info!("Beginning symex in function {:?}", self.state.cur_loc.func.name);
-            self.symex_from_bb_through_end_of_function(self.start_bb).unwrap()
+            self.symex_from_bb_through_end_of_function(self.start_bb).unwrap_or_else(|e| {
+                panic!("Received the following error:\n  {:?}\nat location {:?}", e, self.state.cur_loc);
+            })
         } else {
             debug!("ExecutionManager: requesting next path");
-            self.backtrack_and_continue().unwrap()
+            self.backtrack_and_continue().unwrap_or_else(|e| {
+                panic!("Received the following error:\n  {:?}\nat location {:?}", e, self.state.cur_loc);
+            })
         }
     }
 }
@@ -466,7 +470,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => name,
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
             Either::Right(operand) => {
-                match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand), 1).unwrap() {
+                match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand), 1)? {
                     PossibleSolutions::MoreThanNPossibleSolutions(1) => unimplemented!("calling a function pointer which has multiple possible targets"),
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
                     PossibleSolutions::PossibleSolutions(v) => match v.len() {
@@ -482,12 +486,12 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             match hook.call_hook(&mut self.state, call)? {
                 ReturnValue::ReturnVoid => {
                     if call.get_type() != Type::VoidType {
-                        panic!("Hook returned void but call needs a return value");
+                        return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", funcname)));
                     }
                 },
                 ReturnValue::Return(retval) => {
                     if call.get_type() == Type::VoidType {
-                        panic!("Hook returned a value but call is void-typed");
+                        return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", funcname)));
                     } else {
                         // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
                         self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
@@ -534,11 +538,11 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
             }
         } else if funcname.starts_with("llvm.memset") {
-            symex_memset(&mut self.state, call);
+            symex_memset(&mut self.state, call)?;
             Ok(None)
         } else if funcname.starts_with("llvm.memcpy") || funcname.starts_with("llvm.memmove") {
             // Our memcpy implementation also works for memmove
-            symex_memcpy(&mut self.state, call);
+            symex_memcpy(&mut self.state, call)?;
             Ok(None)
         } else if funcname.starts_with("llvm.lifetime")
             || funcname.starts_with("llvm.invariant")
@@ -576,9 +580,9 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     // `Ok(None)` if no possible paths were found.
     fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<SymexResult<B::BV>>> {
         debug!("Symexing condbr {:?}", condbr);
-        let z3cond = self.state.operand_to_bool(&condbr.condition);
-        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond)).unwrap();
-        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not())).unwrap();
+        let z3cond = self.state.operand_to_bool(&condbr.condition)?;
+        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
+        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()))?;
         if true_feasible && false_feasible {
             // for now we choose to explore true first, and backtrack to false if necessary
             self.state.save_backtracking_point(condbr.false_dest.clone(), z3cond.not());
@@ -611,17 +615,17 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 break;
             }
         }
-        let chosen_value = chosen_value.expect("Failed to find a Phi member matching previous BasicBlock");
+        let chosen_value = chosen_value.ok_or_else(|| Error::OtherError(format!("Failed to find a Phi member matching previous BasicBlock. Phi incoming_values are {:?} but we were looking for {:?}", phi.incoming_values, prev_bb)))?;
         self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value))
     }
 
     fn symex_select(&mut self, select: &instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
-        let z3cond = self.state.operand_to_bool(&select.condition);
+        let z3cond = self.state.operand_to_bool(&select.condition)?;
         let z3trueval = self.state.operand_to_bv(&select.true_value);
         let z3falseval = self.state.operand_to_bv(&select.false_value);
-        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond)).unwrap();
-        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not())).unwrap();
+        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
+        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()))?;
         if true_feasible && false_feasible {
             self.state.record_bv_result(select, B::Bool::bvite(&z3cond, &z3trueval, &z3falseval))
         } else if true_feasible {
@@ -639,7 +643,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
 // Built-in "hooks" for LLVM intrinsics
 
-fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) where B: Backend<'ctx> {
+fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) -> Result<()> where B: Backend<'ctx> {
     assert_eq!(call.arguments.len(), 4);
     let addr = &call.arguments[0].0;
     let val = &call.arguments[1].0;
@@ -648,8 +652,8 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(val.get_type(), Type::i8());
     assert_eq!(call.get_type(), Type::VoidType);
     let num_bytes = state.operand_to_bv(num_bytes);
-    let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1).unwrap() {
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => panic!("LLVM memset with non-constant num_bytes {:?}", num_bytes),
+    let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::OtherError(format!("LLVM memset with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v[0],
     };
     if num_bytes == 0 {
@@ -661,9 +665,10 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
         // Do this as just one large write; let the memory choose the most efficient way to implement that.
         state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap().simplify());
     }
+    Ok(())
 }
 
-fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) where B: Backend<'ctx> {
+fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) -> Result<()> where B: Backend<'ctx> {
     assert_eq!(call.arguments.len(), 4);
     let dest = &call.arguments[0].0;
     let src = &call.arguments[1].0;
@@ -672,8 +677,8 @@ fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(src.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(call.get_type(), Type::VoidType);
     let num_bytes = state.operand_to_bv(num_bytes);
-    let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1).unwrap() {
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => panic!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes),
+    let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::OtherError(format!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v[0],
     };
     if num_bytes == 0 {
@@ -686,6 +691,7 @@ fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
         let val = state.read(&src, num_bytes as u32 * 8);
         state.write(&dest, val);
     }
+    Ok(())
 }
 
 #[cfg(test)]

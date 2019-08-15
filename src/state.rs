@@ -300,8 +300,9 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bool.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    /// May also return `Error::BoolCoercionError` (if the given `Name` represents a `BV` more than one bit long).
     pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<bool>> {
-        let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
+        let b = self.varmap.lookup_bool_var(funcname, name)?.clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
     }
 
@@ -337,9 +338,9 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bool.
     ///
-    /// Only returns `Err` if the solver query itself fails.
+    /// Only returns `Err` if the solver query itself fails or if the `Name` didn't actually represent a bool.
     pub fn get_possible_solutions_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<bool>> {
-        let b = self.varmap.lookup_bool_var(funcname, name).clone();  // clone() so that the borrow of self is released
+        let b = self.varmap.lookup_bool_var(funcname, name)?.clone();  // clone() so that the borrow of self is released
         self.get_possible_solutions_for_bool(&b)
     }
 
@@ -644,11 +645,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Convert an `Operand` to the appropriate `Bool`.
     /// Assumes the `Operand` is in the current function.
     /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
-    /// This will panic if the `Operand` doesn't have type `Type::bool()`
-    pub fn operand_to_bool(&self, op: &Operand) -> B::Bool {
+    /// This will panic if the `Operand` doesn't have type `Type::bool()`.
+    pub fn operand_to_bool(&self, op: &Operand) -> Result<B::Bool> {
         match op {
-            Operand::ConstantOperand(c) => self.const_to_bool(c),
-            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).clone(),
+            Operand::ConstantOperand(c) => Ok(self.const_to_bool(c)),
+            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).map(|b| b.clone()),
             op => panic!("Can't convert {:?} to Bool", op),
         }
     }
@@ -896,7 +897,7 @@ mod tests {
         let valop = Operand::LocalOperand { name: valname, ty: Type::i32() };
         let boolop = Operand::LocalOperand { name: boolname, ty: Type::bool() };
         assert_eq!(state.operand_to_bv(&valop), valvar);
-        assert_eq!(state.operand_to_bool(&boolop), boolvar);
+        assert_eq!(state.operand_to_bool(&boolop), Ok(boolvar));
     }
 
     #[test]
@@ -928,8 +929,8 @@ mod tests {
         let constfalse = Constant::Int { bits: 1, value: 0 };
 
         // this should create Z3 values true and false
-        let bvtrue = state.operand_to_bool(&Operand::ConstantOperand(consttrue));
-        let bvfalse = state.operand_to_bool(&Operand::ConstantOperand(constfalse));
+        let bvtrue = state.operand_to_bool(&Operand::ConstantOperand(consttrue)).unwrap();
+        let bvfalse = state.operand_to_bool(&Operand::ConstantOperand(constfalse)).unwrap();
 
         // check that the Z3 values are evaluated to true and false respectively
         assert_eq!(state.get_a_solution_for_bool(&bvtrue), Ok(Some(true)));

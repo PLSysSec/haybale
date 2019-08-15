@@ -15,11 +15,11 @@ fn malloc_hook<'ctx, B>(state: &mut State<'ctx, '_, B>, call: &instruction::Call
     assert_eq!(call.arguments.len(), 1);
     match call.arguments[0].0.get_type() {
         Type::IntegerType { .. } => {},
-        ty => panic!("malloc_hook: expected argument to have integer type, but got {:?}", ty),
+        ty => return Err(Error::OtherError(format!("malloc_hook: expected argument to have integer type, but got {:?}", ty))),
     };
     match call.get_type() {
         Type::PointerType { .. } => {},
-        ty => panic!("malloc_hook: expected return type to be a pointer type, but got {:?}", ty),
+        ty => return Err(Error::OtherError(format!("malloc_hook: expected return type to be a pointer type, but got {:?}", ty))),
     };
     let allocation_size = if let Operand::ConstantOperand(Constant::Int { value, .. }) = call.arguments[0].0 {
         value
