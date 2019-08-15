@@ -295,6 +295,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bv(&bv)
@@ -303,6 +304,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bool.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
     /// May also return `Error::BoolCoercionError` (if the given `Name` represents a `BV` more than one bit long).
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<bool>> {
         let b = self.varmap.lookup_bool_var(funcname, name)?.clone();  // clone() so that the borrow of self is released
         self.get_a_solution_for_bool(&b)
@@ -333,6 +335,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
     ///
     /// Only returns `Err` if the solver query itself fails.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<u64>> {
         let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
         self.get_possible_solutions_for_bv(&bv, n)
@@ -341,6 +344,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bool.
     ///
     /// Only returns `Err` if the solver query itself fails or if the `Name` didn't actually represent a bool.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn get_possible_solutions_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<bool>> {
         let b = self.varmap.lookup_bool_var(funcname, name)?.clone();  // clone() so that the borrow of self is released
         self.get_possible_solutions_for_bool(&b)
@@ -544,7 +548,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::Select(s) => {
-                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or(Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
+                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or_else(|| Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
                 if b {
                     self.const_to_bv(&s.true_value)
                 } else {
@@ -562,7 +566,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             None => Ok(s),
             Some(index) => {
                 if let Constant::Struct { values, .. } = s {
-                    let val = values.get(index as usize).ok_or(Error::MalformedInstruction("Constant::ExtractValue index out of range".to_owned()))?;
+                    let val = values.get(index as usize).ok_or_else(|| Error::MalformedInstruction("Constant::ExtractValue index out of range".to_owned()))?;
                     Self::simplify_const_ev(val, indices)
                 } else {
                     panic!("simplify_const_ev: not a Constant::Struct: {:?}", s)
@@ -579,7 +583,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             None => Ok(val),
             Some(index) => {
                 if let Constant::Struct { name, mut values, is_packed } = s {
-                    let to_replace = values.get(index as usize).ok_or(Error::MalformedInstruction("Constant::InsertValue index out of range".to_owned()))?.clone();
+                    let to_replace = values.get(index as usize).ok_or_else(|| Error::MalformedInstruction("Constant::InsertValue index out of range".to_owned()))?.clone();
                     values[index as usize] = Self::simplify_const_iv(to_replace, val, indices)?;
                     Ok(Constant::Struct { name, values, is_packed })
                 } else {
@@ -626,7 +630,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 },
                 Type::NamedStructType { ty, .. } => {
                     let rc: Rc<RefCell<Type>> = ty.as_ref()
-                        .ok_or(Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
+                        .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
                         .upgrade()
                         .expect("Failed to upgrade weak reference");
                     let actual_ty: &Type = &rc.borrow();
@@ -707,7 +711,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 })
             },
             Constant::Select(s) => {
-                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or(Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
+                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or_else(|| Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
                 if b {
                     self.const_to_bool(&s.true_value)
                 } else {

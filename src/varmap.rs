@@ -249,6 +249,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     ///
     /// If the `(String, Name)` pair was most recently created as a `Bool`, this
     /// will silently convert it into a 1-bit `BV`.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn lookup_bv_var(&self, funcname: &String, name: &Name) -> V {
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
@@ -261,6 +262,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
     /// If the `(String, Name)` pair was most recently created as a `BV`, this
     /// will silently convert a 1-bit `BV` to the appropriate `Bool`, or fail
     /// with `Error::BoolCoercionError` if the `BV` was more than one bit.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn lookup_bool_var(&self, funcname: &String, name: &Name) -> Result<B> {
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
@@ -270,6 +272,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
 
     /// Overwrite the latest version of the given `(String, Name)` pair to instead be `bv`.
     /// The `(String, Name)` pair must have already been previously assigned a value.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn overwrite_latest_version_of_bv(&mut self, funcname: &String, name: &Name, bv: V) {
         let mapvalue: &mut BVorBool<V, B> = self.active_version
             .get_mut(funcname, name)
@@ -279,6 +282,7 @@ impl<'ctx, V, B> VarMap<'ctx, V, B>
 
     /// Overwrite the latest version of the given `(String, Name)` pair to instead be `b`.
     /// The `(String, Name)` pair must have already been previously assigned a value.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn overwrite_latest_version_of_bool(&mut self, funcname: &String, name: &Name, b: B) {
         let mapvalue: &mut BVorBool<V, B> = self.active_version
             .get_mut(funcname, name)

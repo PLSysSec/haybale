@@ -424,7 +424,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             },
             Type::NamedStructType { ty, .. } => {
                 let rc: Rc<RefCell<Type>> = ty.as_ref()
-                    .expect("get_offset on an opaque struct type")
+                    .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
                     .upgrade()
                     .expect("Failed to upgrade weak reference");
                 let actual_ty: &Type = &rc.borrow();
