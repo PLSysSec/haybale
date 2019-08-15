@@ -174,7 +174,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                         Ok(None) => Ok(()),
                         Ok(Some(symexresult)) => return Ok(Some(symexresult)),
                     },
-                    _ => unimplemented!("instruction {:?}", inst),
+                    _ => return Err(Error::UnsupportedInstruction(format!("instruction {:?}", inst))),
                 }
             };
             match result {
@@ -190,7 +190,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Terminator::Ret(ret) => Ok(Some(self.symex_return(ret))),
             Terminator::Br(br) => self.symex_br(br),
             Terminator::CondBr(condbr) => self.symex_condbr(condbr),
-            term => unimplemented!("terminator {:?}", term),
+            term => Err(Error::UnsupportedInstruction(format!("terminator {:?}", term))),
         }
     }
 
@@ -328,7 +328,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         let source_size = z3op.get_size();
         let dest_size = match zext.get_type() {
             Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => unimplemented!("ZExt on vectors"),
+            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("ZExt on vectors".to_owned())),
             ty => panic!("ZExt result should be integer or vector of integers; got {:?}", ty),
         };
         self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
@@ -340,7 +340,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         let source_size = z3op.get_size();
         let dest_size = match sext.get_type() {
             Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => unimplemented!("SExt on vectors"),
+            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("SExt on vectors".to_owned())),
             ty => panic!("SExt result should be integer or vector of integers; got {:?}", ty),
         };
         self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
@@ -351,7 +351,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         let z3op = self.state.operand_to_bv(&trunc.operand);
         let dest_size = match trunc.get_type() {
             Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => unimplemented!("Trunc on vectors"),
+            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("Trunc on vectors".to_owned())),
             ty => panic!("Trunc result should be integer or vector of integers; got {:?}", ty),
         };
         self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
@@ -480,7 +480,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     }
                 }
             },
-            Either::Left(_) => unimplemented!("inline assembly"),
+            Either::Left(_) => return Err(Error::UnsupportedInstruction("inline assembly".to_owned())),
         };
         if let Some(hook) = self.config.function_hooks.get(funcname) {
             match hook.call_hook(&mut self.state, call)? {

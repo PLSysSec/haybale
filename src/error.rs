@@ -8,6 +8,8 @@ pub enum Error {
     BoolCoercionError(String),
     /// The solver returned this processing error while evaluating a query
     SolverError(String),
+    /// Encountered an LLVM instruction which is not currently supported
+    UnsupportedInstruction(String),
     /// Some kind of error which doesn't fall into one of the above categories
     OtherError(String),
 }
