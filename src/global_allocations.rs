@@ -1,4 +1,5 @@
-use crate::backend::BV;
+use crate::backend::Backend;
+use crate::config::FunctionHook;
 use llvm_ir::*;
 use llvm_ir::module::{GlobalVariable, Linkage};
 use log::debug;
@@ -10,24 +11,22 @@ use std::collections::hash_map::Entry;
 ///
 /// It has to take into account both module-private and public definitions, of
 /// both the strong and weak varieties.
-pub struct GlobalAllocations<'ctx, 'p, V> where V: BV<'ctx> {
+pub struct GlobalAllocations<'ctx, 'p, B: Backend<'ctx>> {
     /// Map from `Name`s of global variables and `Function`s, to addresses at
     /// which they are allocated. These definitions can be either "strong" or
     /// "weak"; see notes on [`Definition`](enum.Definition.html).
-    allocated_globals: HashMap<Name, Definition<V>>,
+    allocated_globals: HashMap<Name, Definition<B::BV>>,
     /// Somewhat a reverse of the above map: this is a map from an address to the
-    /// `Function` which was allocated at that address (if any)
-    addr_to_function: HashMap<u64, &'p Function>,
+    /// `Callable` which was allocated at that address (if any)
+    addr_to_function: HashMap<u64, Callable<'ctx, 'p, B>>,
     /// While `allocated_globals` is for "public" (non-module-private) globals,
     /// this is a similar map for module-private globals.
     /// It maps module names to maps of global names to allocated addresses.
     /// Module-private definitions are always strong; they can never be weak.
-    module_private_allocated_globals: HashMap<String, HashMap<Name, V>>,
+    module_private_allocated_globals: HashMap<String, HashMap<Name, B::BV>>,
     /// This is to `module_private_allocated_globals` as `addr_to_function` is
     /// to `allocated_globals`
-    module_private_addr_to_function: HashMap<String, HashMap<u64, &'p Function>>,
-    /// Avoid errors about 'ctx parameter being unused
-    phantomdata: std::marker::PhantomData<&'ctx ()>,
+    module_private_addr_to_function: HashMap<String, HashMap<u64, Callable<'ctx, 'p, B>>>,
 }
 
 /// Strong and weak definitions.
@@ -50,6 +49,13 @@ impl<V> Definition<V> {
             Definition::Weak(v) => &v,
         }
     }
+}
+
+/// Both LLVM `Function`s and `FunctionHook`s can be assigned addresses, and
+/// function pointers can point to either
+pub enum Callable<'ctx, 'p, B: Backend<'ctx>> {
+    LLVMFunction(&'p Function),
+    FunctionHook(FunctionHook<'ctx, B>),
 }
 
 /// Trait which unifies `GlobalVariable` and `Function`, which are both global objects in LLVM
@@ -86,14 +92,13 @@ enum AllocationResult {
     NoAllocate,
 }
 
-impl<'ctx, 'p, V> GlobalAllocations<'ctx, 'p, V> where V: BV<'ctx> {
+impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
     pub fn new() -> Self {
         Self {
             allocated_globals: HashMap::new(),
             addr_to_function: HashMap::new(),
             module_private_allocated_globals: HashMap::new(),
             module_private_addr_to_function: HashMap::new(),
-            phantomdata: std::marker::PhantomData,
         }
     }
 
@@ -102,7 +107,7 @@ impl<'ctx, 'p, V> GlobalAllocations<'ctx, 'p, V> where V: BV<'ctx> {
     /// `module`: `Module` in which the definition appears
     ///
     /// `addr`: Address at which the global variable should be allocated
-    pub fn allocate_global_var(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: V) {
+    pub fn allocate_global_var(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: B::BV) {
         if var.initializer.is_none() {
             panic!("Can't call allocate_global() with a global declaration, only a definition");
         }
@@ -118,10 +123,10 @@ impl<'ctx, 'p, V> GlobalAllocations<'ctx, 'p, V> where V: BV<'ctx> {
     /// Note that we have to pretend to allocate `Function`s so that we can have
     /// pointers to them. (As of this writing, we actually only allocate 64 bits
     /// for every `Function`)
-    pub fn allocate_function(&mut self, func: &'p Function, module: &'p Module, addr: u64, addr_bv: V) {
+    pub fn allocate_function(&mut self, func: &'p Function, module: &'p Module, addr: u64, addr_bv: B::BV) {
         match self.allocate_global(func, module, addr_bv) {
             AllocationResult::Public => {
-                self.addr_to_function.insert(addr, func);
+                self.addr_to_function.insert(addr, Callable::LLVMFunction(func));
             },
             AllocationResult::ModulePrivate => {
                 self.module_private_addr_to_function
@@ -133,7 +138,24 @@ impl<'ctx, 'p, V> GlobalAllocations<'ctx, 'p, V> where V: BV<'ctx> {
         }
     }
 
-    fn allocate_global(&mut self, global: &'p impl Global, module: &'p Module, addr: V) -> AllocationResult {
+    /// `hook`: a `FunctionHook`
+    ///
+    /// `addr`: Address at which the function hook should be allocated.
+    /// Pointers with this value will be considered to point to `hook`.
+    ///
+    /// Note that all function hooks are considered to have global visibility; we
+    /// don't at this time support module-private function hooks.
+    /// You can still hook module-private functions, but those hooks will apply
+    /// to all functions of that name in all modules.
+    pub fn allocate_function_hook(&mut self, hook: FunctionHook<'ctx, 'p, B>, addr: u64, addr_bv: B::BV) {
+        // We don't need to add these to `allocated_globals`, as we'll never
+        // encounter a `FunctionHook`'s `Name` in LLVM code and thus will never
+        // need to do that lookup.
+        // Instead, we only need to add these to `addr_to_function`.
+        self.addr_to_function.insert(addr, Callable::FunctionHook(hook));
+    }
+
+    fn allocate_global(&mut self, global: &'p impl Global, module: &'p Module, addr: B::BV) -> AllocationResult {
         match global.get_linkage() {
             Linkage::Private | Linkage::Internal => {
                 // Module-private global, strong definition
@@ -197,7 +219,7 @@ impl<'ctx, 'p, V> GlobalAllocations<'ctx, 'p, V> where V: BV<'ctx> {
     /// `module`: The `Module` in which the `Name` appeared. Note that modules
     /// may have their own module-private globals with the same name, so the name
     /// alone is not sufficient to identify a unique global.
-    pub fn get_global_address(&self, name: &Name, module: &Module) -> Option<&V> {
+    pub fn get_global_address(&self, name: &Name, module: &Module) -> Option<&B::BV> {
         // First look for a module-private definition. We allow this to have precedence over any public definition that may exist.
         self.module_private_allocated_globals
             .get(&module.name)
@@ -208,13 +230,13 @@ impl<'ctx, 'p, V> GlobalAllocations<'ctx, 'p, V> where V: BV<'ctx> {
             })
     }
 
-    /// Given an address, get the `Function` which was allocated at that address;
-    /// or `None` if no `Function` was allocated at that address.
+    /// Given an address, get the `Callable` which was allocated at that address;
+    /// or `None` if no `Callable` was allocated at that address.
     ///
     /// `module`: The `Module` in which the address appeared. Note that modules
     /// may have their own module-private functions with the same name, so the
     /// name alone is not sufficient to identify a unique global.
-    pub fn get_func_for_address(&self, addr: u64, module: &Module) -> Option<&'p Function> {
+    pub fn get_func_for_address(&self, addr: u64, module: &Module) -> Option<Callable<'ctx, 'p, B>> {
         self.addr_to_function
             .get(&addr)
             .copied()

@@ -202,14 +202,23 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         }
         // We also have to allocate (at least a tiny bit of) memory for each
         // `Function`, just so that we can have pointers to those `Function`s.
-        // The `state.addr_to_function` map will help in interpreting these
-        // function pointers.
+        // We can use `global_allocations.get_func_for_address()` to interpret
+        // these function pointers.
+        // Similarly, we allocate tiny bits of memory for each function hook,
+        // so that we can have pointers to those hooks.
         debug!("Allocating functions");
         for (func, module) in project.all_functions() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
             let addr_bv = BV::from_u64(state.ctx, addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
             state.global_allocations.allocate_function(func, module, addr, addr_bv);
+       }
+       debug!("Allocating function hooks");
+       for (funcname, func) in config.function_hooks.iter() {
+           let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
+           let addr_bv = BV::from_u64(state.ctx, addr, 64);
+           debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
+           state.global_allocations.allocate_function_hook(func, addr, addr_bv);
        }
         // Now we do initialization of global variables.
         debug!("Initializing global variables");
