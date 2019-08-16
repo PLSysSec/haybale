@@ -471,7 +471,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
             Either::Right(operand) => {
                 match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
-                    PossibleSolutions::MoreThanNPossibleSolutions(1) => unimplemented!("calling a function pointer which has multiple possible targets"),
+                    PossibleSolutions::MoreThanNPossibleSolutions(1) => return Err(Error::OtherError("calling a function pointer which has multiple possible targets".to_owned())),
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
                     PossibleSolutions::PossibleSolutions(v) => match v.len() {
                         0 => return Err(Error::Unsat),  // no valid solutions for the function pointer
