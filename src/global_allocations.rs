@@ -5,19 +5,23 @@ use llvm_ir::module::{GlobalVariable, Linkage};
 use log::debug;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::fmt;
 
 /// `GlobalAllocations` is responsible for keeping track of which global variable
 /// names in which modules resolve to which addresses.
 ///
 /// It has to take into account both module-private and public definitions, of
 /// both the strong and weak varieties.
-pub struct GlobalAllocations<'ctx, 'p, B: Backend<'ctx>> {
+pub(crate) struct GlobalAllocations<'ctx, 'p, B: Backend<'ctx>> {
     /// Map from `Name`s of global variables and `Function`s, to addresses at
     /// which they are allocated. These definitions can be either "strong" or
     /// "weak"; see notes on [`Definition`](enum.Definition.html).
     allocated_globals: HashMap<Name, Definition<B::BV>>,
-    /// Somewhat a reverse of the above map: this is a map from an address to the
-    /// `Callable` which was allocated at that address (if any)
+    /// Map from `FunctionHook`s to addresses at which they are allocated.
+    /// Currently, `FunctionHook` definitions are always "strong".
+    allocated_hooks: HashMap<FunctionHook<'ctx, B>, B::BV>,
+    /// Somewhat a reverse of the above two maps: this is a map from an address
+    /// to the `Callable` which was allocated at that address (if any)
     addr_to_function: HashMap<u64, Callable<'ctx, 'p, B>>,
     /// While `allocated_globals` is for "public" (non-module-private) globals,
     /// this is a similar map for module-private globals.
@@ -53,9 +57,29 @@ impl<V> Definition<V> {
 
 /// Both LLVM `Function`s and `FunctionHook`s can be assigned addresses, and
 /// function pointers can point to either
-pub enum Callable<'ctx, 'p, B: Backend<'ctx>> {
+pub(crate) enum Callable<'ctx, 'p, B: Backend<'ctx>> {
     LLVMFunction(&'p Function),
     FunctionHook(FunctionHook<'ctx, B>),
+}
+
+impl<'ctx, 'p, B: Backend<'ctx>> Clone for Callable<'ctx, 'p, B> {
+    fn clone(&self) -> Self {
+        match self {
+            Callable::LLVMFunction(f) => Callable::LLVMFunction(f),
+            Callable::FunctionHook(h) => Callable::FunctionHook(h.clone()),
+        }
+    }
+}
+
+impl<'ctx, 'p, B: Backend<'ctx>> fmt::Debug for Callable<'ctx, 'p, B> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Callable::LLVMFunction(func) => {
+                write!(f, "<Function {:?}>", &func.name)
+            },
+            Callable::FunctionHook(_) => write!(f, "<FunctionHook>"),
+        }
+    }
 }
 
 /// Trait which unifies `GlobalVariable` and `Function`, which are both global objects in LLVM
@@ -96,6 +120,7 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
     pub fn new() -> Self {
         Self {
             allocated_globals: HashMap::new(),
+            allocated_hooks: HashMap::new(),
             addr_to_function: HashMap::new(),
             module_private_allocated_globals: HashMap::new(),
             module_private_addr_to_function: HashMap::new(),
@@ -132,7 +157,7 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
                 self.module_private_addr_to_function
                     .entry(module.name.clone())
                     .or_default()
-                    .insert(addr, func);
+                    .insert(addr, Callable::LLVMFunction(func));
             },
             AllocationResult::NoAllocate => {},
         }
@@ -147,11 +172,8 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
     /// don't at this time support module-private function hooks.
     /// You can still hook module-private functions, but those hooks will apply
     /// to all functions of that name in all modules.
-    pub fn allocate_function_hook(&mut self, hook: FunctionHook<'ctx, 'p, B>, addr: u64, addr_bv: B::BV) {
-        // We don't need to add these to `allocated_globals`, as we'll never
-        // encounter a `FunctionHook`'s `Name` in LLVM code and thus will never
-        // need to do that lookup.
-        // Instead, we only need to add these to `addr_to_function`.
+    pub fn allocate_function_hook(&mut self, hook: FunctionHook<'ctx, B>, addr: u64, addr_bv: B::BV) {
+        self.allocated_hooks.insert(hook.clone(), addr_bv);
         self.addr_to_function.insert(addr, Callable::FunctionHook(hook));
     }
 
@@ -230,6 +252,12 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
             })
     }
 
+    /// Get the address at which the given `FunctionHook` has been allocated; or
+    /// `None` if not found.
+    pub fn get_function_hook_address(&self, hook: &FunctionHook<'ctx, B>) -> Option<&B::BV> {
+        self.allocated_hooks.get(hook)
+    }
+
     /// Given an address, get the `Callable` which was allocated at that address;
     /// or `None` if no `Callable` was allocated at that address.
     ///
@@ -239,11 +267,11 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
     pub fn get_func_for_address(&self, addr: u64, module: &Module) -> Option<Callable<'ctx, 'p, B>> {
         self.addr_to_function
             .get(&addr)
-            .copied()
+            .cloned()
             .or_else(|| {
                 self.module_private_addr_to_function
                     .get(&module.name)
-                    .and_then(|hm| hm.get(&addr).copied())
+                    .and_then(|hm| hm.get(&addr).cloned())
             })
     }
 }

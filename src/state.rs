@@ -19,6 +19,8 @@ use crate::varmap::{VarMap, RestoreInfo};
 pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Reference to the Z3 context being used
     pub ctx: &'ctx z3::Context,
+    /// The configuration being used
+    pub config: Config<'ctx, B>,
     /// Indicates the `BasicBlock` which is currently being executed
     pub cur_loc: Location<'p>,
     /// `Name` of the `BasicBlock` which was executed before this one;
@@ -34,7 +36,7 @@ pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     mem: B::Memory,
     alloc: Alloc,
     solver: B::Solver,
-    global_allocations: GlobalAllocations<'ctx, 'p, B::BV>,
+    global_allocations: GlobalAllocations<'ctx, 'p, B>,
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
@@ -154,7 +156,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         ctx: &'ctx z3::Context,
         project: &'p Project,
         start_loc: Location<'p>,
-        config: &Config<'ctx, B>,
+        config: Config<'ctx, B>,
     ) -> Self {
         let backend_state = Rc::new(RefCell::new(B::State::default()));
         let mut state = Self {
@@ -170,7 +172,8 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             backtrack_points: Vec::new(),
             path: Vec::new(),
 
-            // listed last (out-of-order) so that it can be used above but moved in now
+            // listed last (out-of-order) so that they can be used above but moved in now
+            config,
             backend_state,
         };
         // Here we do allocation and initialization of the global variables in the Project.
@@ -214,11 +217,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             state.global_allocations.allocate_function(func, module, addr, addr_bv);
        }
        debug!("Allocating function hooks");
-       for (funcname, func) in config.function_hooks.iter() {
+       for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
            let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
            let addr_bv = BV::from_u64(state.ctx, addr, 64);
            debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
-           state.global_allocations.allocate_function_hook(func, addr, addr_bv);
+           state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
        }
         // Now we do initialization of global variables.
         debug!("Initializing global variables");
@@ -742,7 +745,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     ///   - `Error::SolverError` if the solver query fails
     ///   - `Error::OtherError` if it finds that it is possible that the `BV`
     ///     points to something that's not a `Function` in the `Project`
-    pub fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<&'p Function>> {
+    pub(crate) fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<Callable<'ctx, 'p, B>>> {
         if n == 0 {
             unimplemented!("n == 0 in interpret_as_function_ptr")
         }
@@ -763,6 +766,21 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 }
             }
         }
+    }
+
+    /// Get a pointer to the given function name. The name will be resolved in the current module.
+    ///
+    /// Returns `None` if no function was found with that name.
+    pub fn get_pointer_to_function(&self, funcname: impl Into<String>) -> Option<&B::BV> {
+        self.global_allocations.get_global_address(&Name::Name(funcname.into()), self.cur_loc.module)
+    }
+
+    /// Get a pointer to the currently active _hook_ for the given function name.
+    ///
+    /// Returns `None` if no function was found with that name, _or_ if there is no currently
+    /// active hook for that function.
+    pub fn get_pointer_to_function_hook(&self, funcname: &str) -> Option<&B::BV> {
+        self.global_allocations.get_function_hook_address(self.config.function_hooks.get_hook_for(funcname)?)
     }
 
     /// Read a value `bits` bits long from memory at `addr`.
@@ -890,7 +908,7 @@ mod tests {
             func,
             bbname: "test_bb".to_owned().into(),
         };
-        State::new(ctx, project, start_loc, &Config::default())
+        State::new(ctx, project, start_loc, Config::default())
     }
 
     /// Utility that creates a simple `Project` for testing.

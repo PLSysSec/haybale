@@ -3,15 +3,8 @@ use crate::config::*;
 use crate::error::*;
 use crate::state::State;
 use llvm_ir::*;
-use std::collections::HashMap;
 
-pub fn default_hooks<'ctx, B>() -> HashMap<String, FunctionHook<'ctx, B>> where B: Backend<'ctx> {
-    std::iter::once(("malloc".to_owned(), FunctionHook::new(&malloc_hook::<B>)))
-        .chain(std::iter::once(("free".to_owned(), FunctionHook::new(&free_hook::<B>))))
-        .collect()
-}
-
-fn malloc_hook<'ctx, B>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> where B: Backend<'ctx> {
+pub(crate) fn malloc_hook<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 1);
     match call.arguments[0].0.get_type() {
         Type::IntegerType { .. } => {},
@@ -33,7 +26,7 @@ fn malloc_hook<'ctx, B>(state: &mut State<'ctx, '_, B>, call: &instruction::Call
     Ok(ReturnValue::Return(addr))
 }
 
-fn free_hook<'ctx, B>(_state: &mut State<'ctx, '_, B>, _call: &instruction::Call) -> Result<ReturnValue<B::BV>> where B: Backend<'ctx> {
+pub(crate) fn free_hook<'ctx, B: Backend<'ctx>>(_state: &mut State<'ctx, '_, B>, _call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
     // The simplest implementation of free() is a no-op.
     // Our malloc_hook() above won't ever reuse allocated addresses anyway.
     Ok(ReturnValue::ReturnVoid)

@@ -37,11 +37,11 @@ pub fn symex_function<'ctx, 'p, B>(
         func,
         bbname: bb.name.clone(),
     };
-    let mut state = State::new(ctx, project, start_loc, &config);
+    let mut state = State::new(ctx, project, start_loc, config);
     let z3params: Vec<_> = func.parameters.iter().map(|param| {
         state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
     }).collect();
-    ExecutionManager::new(state, project, config, z3params, &bb)
+    ExecutionManager::new(state, project, z3params, &bb)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a function.
@@ -56,7 +56,6 @@ pub fn symex_function<'ctx, 'p, B>(
 pub struct ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
     state: State<'ctx, 'p, B>,
     project: &'p Project,
-    config: Config<'ctx, B>,
     z3params: Vec<B::BV>,
     start_bb: &'p BasicBlock,
     /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
@@ -66,11 +65,10 @@ pub struct ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
 }
 
 impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
-    fn new(state: State<'ctx, 'p, B>, project: &'p Project, config: Config<'ctx, B>, z3params: Vec<B::BV>, start_bb: &'p BasicBlock) -> Self {
+    fn new(state: State<'ctx, 'p, B>, project: &'p Project, z3params: Vec<B::BV>, start_bb: &'p BasicBlock) -> Self {
         Self {
             state,
             project,
-            config,
             z3params,
             start_bb,
             fresh: true,
@@ -465,9 +463,10 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
     fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>> {
         debug!("Symexing call {:?}", call);
-        let funcname: &str = match &call.function {
+        use crate::global_allocations::Callable;
+        let funcname_or_hook: Either<&str, FunctionHook<'ctx, B>> = match &call.function {
             // the first two cases are really just optimizations for the third case; things should still work without the first two lines
-            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => name,
+            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => Either::Left(name),
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
             Either::Right(operand) => {
                 match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
@@ -475,22 +474,35 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
                     PossibleSolutions::PossibleSolutions(v) => match v.len() {
                         0 => return Err(Error::Unsat),  // no valid solutions for the function pointer
-                        1 => &v[0].name,
+                        1 => match &v[0] {
+                            Callable::LLVMFunction(f) => Either::Left(&f.name),
+                            Callable::FunctionHook(h) => Either::Right(h.clone()),
+                        },
                         n => panic!("Got {} solutions even though we asked for a maximum of one", n),
                     }
                 }
             },
             Either::Left(_) => return Err(Error::UnsupportedInstruction("inline assembly".to_owned())),
         };
-        if let Some(hook) = self.config.function_hooks.get(funcname) {
+        // If a hook is active for this function, `hook` will be `Some`. If
+        // we're hooking a real function as opposed to a function pointer,
+        // `funcname` will hold the name of the function being hooked.
+        let (hook, funcname): (Option<FunctionHook<'ctx, B>>, Option<&str>) = match funcname_or_hook {
+            Either::Left(funcname) => (self.state.config.function_hooks.get_hook_for(funcname).cloned(), Some(funcname)),
+            Either::Right(ref hook) => (Some(hook.clone()), None),
+        };
+        // If a hook is active, process the hook
+        if let Some(hook) = hook {
             match hook.call_hook(&mut self.state, call)? {
                 ReturnValue::ReturnVoid => {
                     if call.get_type() != Type::VoidType {
+                        let funcname = funcname.unwrap_or("a function pointer");
                         return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", funcname)));
                     }
                 },
                 ReturnValue::Return(retval) => {
                     if call.get_type() == Type::VoidType {
+                        let funcname = funcname.unwrap_or("a function pointer");
                         return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", funcname)));
                     } else {
                         // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
@@ -498,8 +510,11 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     }
                 }
             }
-            Ok(None)
-        } else if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
+            return Ok(None);
+        }
+        // If we're still here, there's no hook active
+        let funcname = funcname_or_hook.left().unwrap();  // must have been an Either::Left at this point
+        if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
             assert_eq!(call.arguments.len(), callee.parameters.len());
             let z3args: Vec<B::BV> = call.arguments.iter()
                 .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
