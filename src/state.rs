@@ -468,7 +468,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Convert a `Constant` to the appropriate `BV`.
-    fn const_to_bv(&self, c: &Constant) -> Result<B::BV> {
+    pub fn const_to_bv(&self, c: &Constant) -> Result<B::BV> {
         match c {
             Constant::Int { bits, value } => Ok(BV::from_u64(self.ctx, *value, *bits)),
             Constant::Null(ty)
@@ -661,7 +661,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Convert a `Constant` to the appropriate `Bool`.
-    fn const_to_bool(&self, c: &Constant) -> Result<B::Bool> {
+    pub fn const_to_bool(&self, c: &Constant) -> Result<B::Bool> {
         match c {
             Constant::Int { bits, value } => {
                 assert_eq!(*bits, 1);

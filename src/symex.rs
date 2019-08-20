@@ -188,6 +188,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             Terminator::Ret(ret) => self.symex_return(ret).map(Some),
             Terminator::Br(br) => self.symex_br(br),
             Terminator::CondBr(condbr) => self.symex_condbr(condbr),
+            Terminator::Switch(switch) => self.symex_switch(switch),
             term => Err(Error::UnsupportedInstruction(format!("terminator {:?}", term))),
         }
     }
@@ -549,7 +550,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    // Returns the `SymexResult` representing the return value
+    /// Returns the `SymexResult` representing the return value
     fn symex_return(&self, ret: &terminator::Ret) -> Result<SymexResult<B::BV>> {
         debug!("Symexing return {:?}", ret);
         Ok(ret.return_operand
@@ -560,9 +561,9 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             .unwrap_or(SymexResult::ReturnedVoid))
     }
 
-    // Continues to the target of the `Br` and eventually returns the new `SymexResult`
-    // representing the return value of the function (when it reaches the end of the
-    // function), or `Ok(None)` if no possible paths were found.
+    /// Continues to the target of the `Br` and eventually returns the new `SymexResult`
+    /// representing the return value of the function (when it reaches the end of the
+    /// function), or `Ok(None)` if no possible paths were found.
     fn symex_br(&mut self, br: &'p terminator::Br) -> Result<Option<SymexResult<B::BV>>> {
         debug!("Symexing br {:?}", br);
         self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
@@ -570,10 +571,10 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.symex_from_cur_loc_through_end_of_function()
     }
 
-    // Continues to the target(s) of the `CondBr` (saving a backtracking point if
-    // necessary) and eventually returns the new `SymexResult` representing the
-    // return value of the function (when it reaches the end of the function), or
-    // `Ok(None)` if no possible paths were found.
+    /// Continues to the target(s) of the `CondBr` (saving a backtracking point if
+    /// necessary) and eventually returns the new `SymexResult` representing the
+    /// return value of the function (when it reaches the end of the function), or
+    /// `Ok(None)` if no possible paths were found.
     fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<SymexResult<B::BV>>> {
         debug!("Symexing condbr {:?}", condbr);
         let z3cond = self.state.operand_to_bool(&condbr.condition)?;
@@ -598,6 +599,57 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             self.backtrack_and_continue()
+        }
+    }
+
+    /// Continues to the target(s) of the `Switch` (saving backtracking points if
+    /// necessary) and eventually returns the new `SymexResult` representing the
+    /// return value of the function (when it reaches the end of the function), or
+    /// `Ok(None)` if no possible paths were found.
+    fn symex_switch(&mut self, switch: &'p terminator::Switch) -> Result<Option<SymexResult<B::BV>>> {
+        debug!("Symexing switch {:?}", switch);
+        let switchval = self.state.operand_to_bv(&switch.operand)?;
+        let dests = switch.dests
+            .iter()
+            .map(|(c,n)| {
+                self.state.const_to_bv(c)
+                    .map(|c| (c,n))
+            })
+            .collect::<Result<Vec<(B::BV, &Name)>>>()?;
+        let feasible_dests: Vec<_> = dests.iter()
+            .map(|(c,n)| {
+                self.state.check_with_extra_constraints(std::iter::once(&c._eq(&switchval)))
+                    .map(|b| (c,*n,b))
+            })
+            .collect::<Result<Vec<(&B::BV, &Name, bool)>>>()?
+            .into_iter()
+            .filter(|(_,_,b)| *b)
+            .map(|(c,n,_)| (c,n))
+            .collect::<Vec<(&B::BV, &Name)>>();
+        if feasible_dests.is_empty() {
+            // none of the dests are feasible, we will always end up in the default dest
+            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
+            self.state.cur_loc.bbname = switch.default_dest.clone();
+            self.symex_from_cur_loc_through_end_of_function()
+        } else {
+            // make backtracking points for all but the first destination
+            for (val, name) in feasible_dests.iter().skip(1) {
+                self.state.save_backtracking_point((*name).clone(), val._eq(&switchval));
+            }
+            // if the default dest is feasible, make a backtracking point for it
+            let default_dest_constraint = dests.iter()
+                .map(|(c,_)| c._eq(&switchval).not())
+                .reduce(|a,b| a.and(&[&b]))
+                .unwrap_or_else(|| B::Bool::from_bool(self.state.ctx, true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
+            if self.state.check_with_extra_constraints(std::iter::once(&default_dest_constraint))? {
+                self.state.save_backtracking_point(switch.default_dest.clone(), default_dest_constraint);
+            }
+            // follow the first destination
+            let (val, name) = &feasible_dests[0];
+            self.state.assert(&val._eq(&switchval));  // unnecessary, but may help Z3 more than it hurts?
+            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
+            self.state.cur_loc.bbname = (*name).clone();
+            self.symex_from_cur_loc_through_end_of_function()
         }
     }
 
@@ -808,6 +860,27 @@ mod tests {
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14]));
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![2, 14]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
+    }
+
+    #[test]
+    fn switch() {
+        let modname = "tests/bcfiles/basic.bc";
+        let funcname = "has_switch";
+        init_logging();
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
+        let ctx = z3::Context::new(&z3::Config::new());
+        let config = Config { loop_bound: 5, ..Config::default() };
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 14]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 5, 14]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 7, 14]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![2, 10, 14]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![2, 11, 14]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![2, 12, 14]));
+        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![2, 14]));
+        assert_eq!(paths.len(), 7);  // ensure there are no more paths
+
     }
 
     #[test]

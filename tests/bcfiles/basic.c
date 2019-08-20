@@ -73,6 +73,18 @@ int conditional_with_and(int a, int b) {
   }
 }
 
+int has_switch(int a, int b) {
+  switch (a - b) {
+    case 0: return -1;
+    case 1: return 3;
+    case 2: return a - 3;
+    case 3: return a * b + 1;
+    case 33: return -300;
+    case 451: return -5;
+    default: return a - b - 1;
+  }
+}
+
 int8_t int8t(int8_t a, int8_t b) {
   return a + b - 3;
 }

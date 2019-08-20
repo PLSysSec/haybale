@@ -165,6 +165,21 @@ fn conditional_with_and() {
 }
 
 #[test]
+fn switch() {
+    let funcname = "has_switch";
+    init_logging();
+    let proj = get_project();
+    let ctx = z3::Context::new(&z3::Config::new());
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    assert_eq!(args.len(), 2);
+    let a = args[0].unwrap_to_i32();
+    let b = args[1].unwrap_to_i32();
+    println!("a = {}, b = {}", a, b);
+    assert_eq!(a, 3);
+    assert_eq!(b, 1);
+}
+
+#[test]
 fn int8t() {
     let funcname = "int8t";
     init_logging();

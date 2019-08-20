@@ -153,6 +153,45 @@ define i32 @conditional_with_and(i32, i32) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: norecurse nounwind readnone ssp uwtable
+define i32 @has_switch(i32, i32) local_unnamed_addr #0 {
+  %3 = sub nsw i32 %0, %1
+  switch i32 %3, label %12 [
+    i32 0, label %14
+    i32 1, label %4
+    i32 2, label %5
+    i32 3, label %7
+    i32 33, label %10
+    i32 451, label %11
+  ]
+
+; <label>:4:                                      ; preds = %2
+  br label %14
+
+; <label>:5:                                      ; preds = %2
+  %6 = add nsw i32 %0, -3
+  br label %14
+
+; <label>:7:                                      ; preds = %2
+  %8 = mul nsw i32 %1, %0
+  %9 = add nsw i32 %8, 1
+  br label %14
+
+; <label>:10:                                     ; preds = %2
+  br label %14
+
+; <label>:11:                                     ; preds = %2
+  br label %14
+
+; <label>:12:                                     ; preds = %2
+  %13 = add nsw i32 %3, -1
+  br label %14
+
+; <label>:14:                                     ; preds = %2, %12, %11, %10, %7, %5, %4
+  %15 = phi i32 [ %13, %12 ], [ -5, %11 ], [ -300, %10 ], [ %9, %7 ], [ %6, %5 ], [ 3, %4 ], [ -1, %2 ]
+  ret i32 %15
+}
+
+; Function Attrs: norecurse nounwind readnone ssp uwtable
 define signext i8 @int8t(i8 signext, i8 signext) local_unnamed_addr #0 {
   %3 = add i8 %0, -3
   %4 = add i8 %3, %1
