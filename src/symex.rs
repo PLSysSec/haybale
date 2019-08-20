@@ -14,6 +14,7 @@ use crate::extend::*;
 use crate::layout::*;
 use crate::possible_solutions::*;
 use crate::project::Project;
+use crate::return_value::*;
 
 /// Begin symbolic execution of the function named `funcname`, obtaining an
 /// `ExecutionManager`. The function's parameters will start completely
@@ -97,13 +98,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 }
 
-pub enum SymexResult<V> {
-    Returned(V),
-    ReturnedVoid,
-}
-
 impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
-    type Item = SymexResult<B::BV>;
+    type Item = ReturnValue<B::BV>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.fresh {
@@ -123,25 +119,25 @@ impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'c
 
 impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// Symex from the current `Location` through the rest of the function.
-    /// Returns the `SymexResult` representing the return value of the function,
+    /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
-    fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
         self.symex_from_bb_through_end_of_function(bb)
     }
 
     /// Symex the given bb, through the rest of the function.
-    /// Returns the `SymexResult` representing the return value of the function,
+    /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
-    fn symex_from_bb_through_end_of_function(&mut self, bb: &'p BasicBlock) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_from_bb_through_end_of_function(&mut self, bb: &'p BasicBlock) -> Result<Option<ReturnValue<B::BV>>> {
         self.symex_from_inst_in_bb_through_end_of_function(bb, 0)
     }
 
     /// Symex starting from the given `inst` index in the given bb, through the rest of the function.
-    /// Returns the `SymexResult` representing the return value of the function,
+    /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
-    fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
         assert_eq!(bb.name, self.state.cur_loc.bbname);
         debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
         self.state.record_in_path(PathEntry {
@@ -197,9 +193,9 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// Will continue not just to the end of the function containing the backtrack point,
     /// but (using the saved callstack) all the way back to the end of the top-level function.
     ///
-    /// Returns the `SymexResult` representing the final return value, or
+    /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
-    fn backtrack_and_continue(&mut self) -> Result<Option<SymexResult<B::BV>>> {
+    fn backtrack_and_continue(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         if self.state.revert_to_backtracking_point() {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
             self.symex_from_inst_in_cur_loc(0)
@@ -213,9 +209,9 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// (using the saved callstack) all the way back to the end of the top-level
     /// function.
     ///
-    /// Returns the `SymexResult` representing the final return value, or
+    /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_from_inst_in_cur_loc(&mut self, inst: usize) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_from_inst_in_cur_loc(&mut self, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
         self.symex_from_inst_in_bb(&bb, inst)
@@ -225,9 +221,9 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// (using the saved callstack) all the way back to the end of the top-level
     /// function.
     ///
-    /// Returns the `SymexResult` representing the final return value, or
+    /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_from_inst_in_bb(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_from_inst_in_bb(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
         match self.symex_from_inst_in_bb_through_end_of_function(bb, inst)? {
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => {
@@ -236,7 +232,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     self.state.cur_loc = callsite.loc.clone();
                     // Assign the returned value as the result of the caller's call instruction
                     match symexresult {
-                        SymexResult::Returned(bv) => {
+                        ReturnValue::Return(bv) => {
                             let call: &Instruction = callsite.loc.func
                                 .get_bb_by_name(&callsite.loc.bbname)
                                 .expect("Malformed callsite (bb not found)")
@@ -252,7 +248,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                                 return self.backtrack_and_continue();
                             };
                         },
-                        SymexResult::ReturnedVoid => { },
+                        ReturnValue::ReturnVoid => { },
                     };
                     // Continue execution in caller, with the instruction after the call instruction
                     self.symex_from_inst_in_cur_loc(callsite.inst + 1)
@@ -439,7 +435,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
     /// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
-    fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing call {:?}", call);
         use crate::global_allocations::Callable;
         let funcname_or_hook: Either<&str, FunctionHook<'ctx, B>> = match &call.function {
@@ -520,11 +516,11 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                         bbname: self.state.cur_loc.bbname.clone(),
                     });
                     match returned_bv {
-                        SymexResult::Returned(bv) => {
+                        ReturnValue::Return(bv) => {
                             // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
                             self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
                         },
-                        SymexResult::ReturnedVoid => assert_eq!(call.dest, None),
+                        ReturnValue::ReturnVoid => assert_eq!(call.dest, None),
                     };
                     debug!("Completed ordinary return to caller");
                     info!("Leaving function {:?}, continuing in caller {:?} in module {:?}", funcname, &self.state.cur_loc.func.name, &self.state.cur_loc.module.name);
@@ -550,21 +546,21 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    /// Returns the `SymexResult` representing the return value
-    fn symex_return(&self, ret: &terminator::Ret) -> Result<SymexResult<B::BV>> {
+    /// Returns the `ReturnValue` representing the return value
+    fn symex_return(&self, ret: &terminator::Ret) -> Result<ReturnValue<B::BV>> {
         debug!("Symexing return {:?}", ret);
         Ok(ret.return_operand
             .as_ref()
             .map(|op| self.state.operand_to_bv(op))
             .transpose()?  // turns Option<Result<_>> into Result<Option<_>>, then ?'s away the Result
-            .map(SymexResult::Returned)
-            .unwrap_or(SymexResult::ReturnedVoid))
+            .map(ReturnValue::Return)
+            .unwrap_or(ReturnValue::ReturnVoid))
     }
 
-    /// Continues to the target of the `Br` and eventually returns the new `SymexResult`
+    /// Continues to the target of the `Br` and eventually returns the new `ReturnValue`
     /// representing the return value of the function (when it reaches the end of the
     /// function), or `Ok(None)` if no possible paths were found.
-    fn symex_br(&mut self, br: &'p terminator::Br) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_br(&mut self, br: &'p terminator::Br) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing br {:?}", br);
         self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
         self.state.cur_loc.bbname = br.dest.clone();
@@ -572,10 +568,10 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     }
 
     /// Continues to the target(s) of the `CondBr` (saving a backtracking point if
-    /// necessary) and eventually returns the new `SymexResult` representing the
+    /// necessary) and eventually returns the new `ReturnValue` representing the
     /// return value of the function (when it reaches the end of the function), or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing condbr {:?}", condbr);
         let z3cond = self.state.operand_to_bool(&condbr.condition)?;
         let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
@@ -603,10 +599,10 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     }
 
     /// Continues to the target(s) of the `Switch` (saving backtracking points if
-    /// necessary) and eventually returns the new `SymexResult` representing the
+    /// necessary) and eventually returns the new `ReturnValue` representing the
     /// return value of the function (when it reaches the end of the function), or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_switch(&mut self, switch: &'p terminator::Switch) -> Result<Option<SymexResult<B::BV>>> {
+    fn symex_switch(&mut self, switch: &'p terminator::Switch) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing switch {:?}", switch);
         let switchval = self.state.operand_to_bv(&switch.operand)?;
         let dests = switch.dests

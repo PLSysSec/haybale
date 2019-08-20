@@ -25,6 +25,8 @@ mod global_allocations;
 
 mod possible_solutions;
 pub use possible_solutions::PossibleSolutions;
+mod return_value;
+pub use return_value::ReturnValue;
 mod error;
 pub use error::*;
 
@@ -95,8 +97,8 @@ pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, proje
     let mut found = false;
     while let Some(z3rval) = em.next() {
         match z3rval {
-            SymexResult::ReturnedVoid => panic!("Function shouldn't return void"),
-            SymexResult::Returned(z3rval) => {
+            ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
+            ReturnValue::Return(z3rval) => {
                 let state = em.mut_state();
                 state.assert(&z3rval._eq(&zero));
                 if state.check().unwrap() {
@@ -161,8 +163,8 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
     let mut candidate_values = HashSet::<u64>::new();
     while let Some(z3rval) = em.next() {
         match z3rval {
-            SymexResult::ReturnedVoid => panic!("This function shouldn't be called with functions that return void"),
-            SymexResult::Returned(z3rval) => {
+            ReturnValue::ReturnVoid => panic!("This function shouldn't be called with functions that return void"),
+            ReturnValue::Return(z3rval) => {
                 let state = em.mut_state();
                 match state.get_possible_solutions_for_bv(&z3rval, n).unwrap() {
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => return PossibleSolutions::MoreThanNPossibleSolutions(n),

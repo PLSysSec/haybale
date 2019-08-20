@@ -1,6 +1,7 @@
 use crate::backend::Backend;
 use crate::default_hooks;
 use crate::error::*;
+use crate::return_value::*;
 use crate::state::State;
 use llvm_ir::instruction;
 use std::collections::HashMap;
@@ -164,14 +165,6 @@ impl<'ctx, B: Backend<'ctx>> Hash for FunctionHook<'ctx, B> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum ReturnValue<V> {
-    /// Return this value
-    Return(V),
-    /// The hooked call returns void
-    ReturnVoid,
 }
 
 impl<'ctx, B: Backend<'ctx>> FunctionHook<'ctx, B> {
