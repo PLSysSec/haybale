@@ -7,8 +7,8 @@ pub use project::Project;
 mod symex;
 pub use symex::*;
 
-mod size;
-pub use size::size;
+mod layout;
+pub use layout::*;
 mod extend;
 
 mod config;

@@ -11,9 +11,9 @@ use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
 use crate::extend::*;
+use crate::layout::*;
 use crate::possible_solutions::*;
 use crate::project::Project;
-use crate::size::size;
 
 /// Begin symbolic execution of the function named `funcname`, obtaining an
 /// `ExecutionManager`. The function's parameters will start completely
@@ -380,74 +380,51 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<()> {
         debug!("Symexing gep {:?}", gep);
         let z3base = self.state.operand_to_bv(&gep.address)?;
-        let offset = Self::get_offset(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
+        let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
         self.state.record_bv_result(gep, z3base.add(&offset).simplify())
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-    fn get_offset(state: &State<'ctx, 'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
-        let index = indices.next();
-        if index.is_none() {
-            return Ok(BV::from_u64(state.ctx, 0, result_bits));
-        }
-        let index = index.unwrap();  // we just handled the `None` case, so now it must have been `Some`
-        match base_type {
-            Type::PointerType { pointee_type, .. }
-            | Type::ArrayType { element_type: pointee_type, .. }
-            | Type::VectorType { element_type: pointee_type, .. }
-            => {
-                let el_size_bits = size(pointee_type) as u64;
-                if el_size_bits % 8 != 0 {
-                    return Err(Error::UnsupportedInstruction(format!("GetElementPtr involving a type with size {} bits", el_size_bits)));
-                }
-                let el_size_bytes = el_size_bits / 8;
-                Ok(zero_extend_to_bits(state.operand_to_bv(index)?, result_bits)
-                    .mul(&B::BV::from_u64(state.ctx, el_size_bytes, result_bits))
-                    .add(&Self::get_offset(state, indices, pointee_type, result_bits)?))
-            },
-            Type::StructType { element_types, .. } => match index {
-                Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                    let mut offset_bits = 0;
-                    for ty in element_types.iter().take(*index as usize) {
-                        offset_bits += size(ty) as u64;
-                    }
-                    if offset_bits % 8 != 0 {
-                        return Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)));
-                    }
-                    let offset_bytes = offset_bits / 8;
-                    Ok(B::BV::from_u64(state.ctx, offset_bytes, result_bits)
-                        .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits)?))
+    fn get_offset_recursive(state: &State<'ctx, 'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
+        match indices.next() {
+            None => Ok(BV::from_u64(state.ctx, 0, result_bits)),
+            Some(index) => match base_type {
+                Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
+                    let index = zero_extend_to_bits(state.operand_to_bv(index)?, result_bits);
+                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, state.ctx)?;
+                    Self::get_offset_recursive(state, indices, nested_ty, result_bits)
+                        .map(|bv| bv.add(&offset))
                 },
-                _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
-            },
-            Type::NamedStructType { ty, .. } => {
-                let rc: Rc<RefCell<Type>> = ty.as_ref()
-                    .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
-                    .upgrade()
-                    .expect("Failed to upgrade weak reference");
-                let actual_ty: &Type = &rc.borrow();
-                if let Type::StructType { ref element_types, .. } = actual_ty {
-                    // this code copied from the StructType case, unfortunately
-                    match index {
-                        Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                            let mut offset_bits = 0;
-                            for ty in element_types.iter().take(*index as usize) {
-                                offset_bits += size(ty) as u64;
-                            }
-                            if offset_bits % 8 != 0 {
-                                return Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)));
-                            }
-                            let offset_bytes = offset_bits / 8;
-                            Ok(B::BV::from_u64(state.ctx, offset_bytes, result_bits)
-                                .add(&Self::get_offset(state, indices, &element_types[*index as usize], result_bits)?))
-                        },
-                        _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
+                Type::StructType { .. } => match index {
+                    Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                        let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
+                        Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
+                            .map(|bv| bv.add(&B::BV::from_u64(state.ctx, offset as u64, result_bits)))
+                    },
+                    _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
+                },
+                Type::NamedStructType { ty, .. } => {
+                    let rc: Rc<RefCell<Type>> = ty.as_ref()
+                        .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
+                        .upgrade()
+                        .expect("Failed to upgrade weak reference");
+                    let actual_ty: &Type = &rc.borrow();
+                    if let Type::StructType { .. } = actual_ty {
+                        // this code copied from the StructType case
+                        match index {
+                            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                                let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
+                                Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
+                                    .map(|bv| bv.add(&B::BV::from_u64(state.ctx, offset as u64, result_bits)))
+                            },
+                            _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
+                        }
+                    } else {
+                        Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
                     }
-                } else {
-                    Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
                 }
+                _ => panic!("get_offset_recursive with base type {:?}", base_type),
             }
-            _ => panic!("get_offset with base type {:?}", base_type),
         }
     }
 
