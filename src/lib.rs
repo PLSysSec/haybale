@@ -7,9 +7,8 @@ pub use project::Project;
 mod symex;
 pub use symex::*;
 
-mod layout;
-pub use layout::*;
-mod extend;
+pub mod layout;
+use layout::*;
 
 mod config;
 pub use config::*;
@@ -29,6 +28,7 @@ mod return_value;
 pub use return_value::ReturnValue;
 mod error;
 pub use error::*;
+mod extend;
 
 pub mod backend;
 use backend::*;
