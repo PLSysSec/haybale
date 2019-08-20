@@ -1,3 +1,6 @@
+//! A `Solver` based on the Z3 solver, but with an extra layer for caching
+//! generated models, and some additional higher-level methods.
+
 use crate::error::*;
 use crate::possible_solutions::*;
 use log::debug;

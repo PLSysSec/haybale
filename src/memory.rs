@@ -1,3 +1,7 @@
+//! Implementation of a `Memory` based on a Z3 array and 64-bit cells.
+//! Handles fully general read and write operations: arbitrary addresses,
+//! sizes, and alignments.
+
 use std::convert::TryInto;
 use log::debug;
 use reduce::Reduce;

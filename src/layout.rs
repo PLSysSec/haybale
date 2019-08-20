@@ -1,4 +1,4 @@
-//! Functions related to the in-memory layout of data types
+//! Functions related to the in-memory layout of data types.
 
 use crate::backend::*;
 use crate::error::*;

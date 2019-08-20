@@ -1,3 +1,6 @@
+//! Traits which abstract over the backend (BV types, memory implementation,
+//! SMT solver) being used.
+
 use crate::error::*;
 use crate::possible_solutions::*;
 use std::fmt;
