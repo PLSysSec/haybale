@@ -1,9 +1,14 @@
 use crate::memory::Memory;
 use log::debug;
+use std::collections::HashMap;
 
 /// An extremely simple bump-allocator which never frees
 pub struct Alloc {
+    /// Pointer to available, unallocated memory
     cursor: u64,
+
+    /// Map from allocation address to its size in bits
+    sizes: HashMap<u64, u64>,
 }
 
 impl Alloc {
@@ -12,6 +17,7 @@ impl Alloc {
     pub fn new() -> Self {
         Self {
             cursor: Self::ALLOC_START,
+            sizes: HashMap::new(),
         }
     }
 
@@ -35,7 +41,14 @@ impl Alloc {
         }
         let rval = self.cursor;
         self.cursor += bytes;
+        self.sizes.insert(rval, bits);
         debug!("Allocated {} bits at 0x{:x}", bits, rval);
         rval
+    }
+
+    /// Get the size, in bits, of the allocation at the given address, or `None`
+    /// if that address is not the result of an `alloc()`.
+    pub fn get_allocation_size(&self, addr: impl Into<u64>) -> Option<u64> {
+        self.sizes.get(&addr.into()).copied()
     }
 }

@@ -37,7 +37,8 @@ impl<'ctx, B: Backend<'ctx>> Default for Config<'ctx, B> {
     /// In particular, this uses
     /// [`FunctionHooks::default()`](struct.FunctionHooks.html#method.default),
     /// and therefore comes with a set of predefined hooks for common functions.
-    /// (At the time of this writing, only `malloc()` and `free()`.)
+    /// (At the time of this writing, only `malloc()`, `calloc()`, `realloc()`,
+    /// and `free()`.)
     ///
     /// For more information, see
     /// [`FunctionHooks::default()`](struct.FunctionHooks.html#method.default).
@@ -118,7 +119,7 @@ impl<'ctx, B: Backend<'ctx>> FunctionHooks<'ctx, B> {
 
 impl<'ctx, B: Backend<'ctx>> Default for FunctionHooks<'ctx, B> {
     /// Provides predefined hooks for common functions. (At the time of this
-    /// writing, only `malloc()` and `free()`.)
+    /// writing, only `malloc()`, `calloc()`, `realloc()`, and `free()`.)
     ///
     /// If you don't want these hooks, you can use
     /// [`FunctionHooks::remove_function_hook()`](struct.FunctionHooks.html#method.remove_function_hook)
@@ -127,6 +128,8 @@ impl<'ctx, B: Backend<'ctx>> Default for FunctionHooks<'ctx, B> {
     fn default() -> Self {
         let mut fhooks = Self::new();
         fhooks.add("malloc", &default_hooks::malloc_hook);
+        fhooks.add("calloc", &default_hooks::calloc_hook);
+        fhooks.add("realloc", &default_hooks::realloc_hook);
         fhooks.add("free", &default_hooks::free_hook);
         fhooks
     }

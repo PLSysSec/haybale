@@ -777,6 +777,22 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         BV::from_u64(self.ctx, raw_ptr, 64)
     }
 
+    /// Get the size, in bits, of the allocation at the given address, or `None`
+    /// if that address is not the result of an `alloc()`.
+    pub fn get_allocation_size(&mut self, addr: &B::BV) -> Result<Option<u64>> {
+        // First try to obtain the address without a full solve (i.e., with `as_u64()`)
+        match addr.as_u64() {
+            Some(addr) => Ok(self.alloc.get_allocation_size(addr)),
+            None => {
+                match self.get_possible_solutions_for_bv(addr, 1)? {
+                    PossibleSolutions::MoreThanNPossibleSolutions(1) => Err(Error::OtherError(format!("get_allocation_size: address is not a constant: {:?}", addr))),
+                    PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n == {:?}", n),
+                    PossibleSolutions::PossibleSolutions(v) => Ok(self.alloc.get_allocation_size(v[0])),
+                }
+            }
+        }
+    }
+
     /// Record a `PathEntry` in the current path.
     pub fn record_in_path(&mut self, entry: PathEntry) {
         debug!("Recording a path entry {:?}", entry);
