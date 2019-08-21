@@ -542,7 +542,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         {
             Ok(None) // these are all safe to ignore
         } else {
-            unimplemented!("Call of a function named {:?}", funcname)
+            Err(Error::FunctionNotFound(funcname.to_owned()))
         }
     }
 

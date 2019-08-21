@@ -4,6 +4,8 @@ pub enum Error {
     Unsat,
     /// The current path has exceeded the configured `loop_bound` (see [`Config`](struct.Config.html))
     LoopBoundExceeded,
+    /// Processing a call of a function with the given name, but failed to find an LLVM definition, a function hook, or a built-in handler for it
+    FunctionNotFound(String),
     /// An operation attempted to coerce a `BV` more than one bit long into a `Bool`
     BoolCoercionError(String),
     /// The solver returned this processing error while evaluating a query
