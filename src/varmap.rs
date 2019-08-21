@@ -125,7 +125,7 @@ impl<'ctx, V, B> BVorBool<'ctx, V, B>
                 if bv.get_size() == 1 {
                     Ok(bv._eq(&BV::from_u64(ctx, 1, 1)))
                 } else {
-                    Err(Error::BoolCoercionError(format!("Can't convert BV {:?} of size {} to Bool", bv, bv.get_size())))
+                    Err(Error::BoolCoercionError(format!("{:?}", bv), bv.get_size()))
                 }
             },
         }

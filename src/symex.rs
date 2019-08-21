@@ -106,12 +106,12 @@ impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'c
             self.fresh = false;
             info!("Beginning symex in function {:?}", self.state.cur_loc.func.name);
             self.symex_from_bb_through_end_of_function(self.start_bb).unwrap_or_else(|e| {
-                panic!("Received the following error:\n  {:?}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
+                panic!("Received the following error:\n  {}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
             })
         } else {
             debug!("ExecutionManager: requesting next path");
             self.backtrack_and_continue().unwrap_or_else(|e| {
-                panic!("Received the following error:\n  {:?}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
+                panic!("Received the following error:\n  {}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
             })
         }
     }
