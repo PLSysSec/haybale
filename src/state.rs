@@ -94,6 +94,16 @@ impl<'p> fmt::Debug for Location<'p> {
     }
 }
 
+impl<'p> From<Location<'p>> for PathEntry {
+    fn from(loc: Location<'p>) -> PathEntry {
+        PathEntry {
+            modname: loc.module.name.clone(),
+            funcname: loc.func.name.clone(),
+            bbname: loc.bbname,
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Callsite<'p> {
     /// `Module`, `Function`, and `BasicBlock` of the callsite
@@ -881,6 +891,15 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// returns the number of saved backtracking points
     pub fn count_backtracking_points(&self) -> usize {
         self.backtrack_points.len()
+    }
+
+    /// returns a `String` containing a formatted view of the current LLVM backtrace
+    pub fn pretty_llvm_backtrace(&self) -> String {
+        std::iter::once(format!("  #1: {:?}\n", PathEntry::from(self.cur_loc.clone())))
+            .chain(self.stack.iter().rev().zip(2..).map(|(frame, num)| {
+                format!("  #{}: {:?}\n", num, PathEntry::from(frame.callsite.loc.clone()))
+            }))
+            .collect()
     }
 }
 
