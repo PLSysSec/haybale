@@ -13,12 +13,20 @@ all: basic.bc basic.ll \
 			globals_initialization_1.bc globals_initialization_1.ll \
 			globals_initialization_2.bc globals_initialization_2.ll \
 			functionptr.bc functionptr.ll \
+			simd.bc simd.ll \
+			simd_cl.bc simd_cl.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
 
 %.bc : %.c
 	$(CC) $(CFLAGS) -c -emit-llvm $^ -o $@
+
+%.ll : %.cl
+	$(CC) $(CFLAGS) -Xclang -finclude-default-header -S -emit-llvm $^ -o $@
+
+%.bc : %.cl
+	$(CC) $(CFLAGS) -Xclang -finclude-default-header -c -emit-llvm $^ -o $@
 
 # use -O1 on loop.c
 loop.ll : loop.c
