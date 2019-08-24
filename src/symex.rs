@@ -304,52 +304,88 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         where F: FnOnce(&B::BV, &B::BV) -> B::BV
     {
         debug!("Symexing binop {:?}", bop);
-        let z3firstop = self.state.operand_to_bv(&bop.get_operand0())?;
-        let z3secondop = self.state.operand_to_bv(&bop.get_operand1())?;
-        self.state.record_bv_result(bop, z3op(&z3firstop, &z3secondop))
+        // We expect these binops to only operate on integers or vectors of integers
+        let op0 = &bop.get_operand0();
+        let op1 = &bop.get_operand1();
+        let op0_type = op0.get_type();
+        let op1_type = op1.get_type();
+        if op0_type != op1_type {
+            return Err(Error::MalformedInstruction(format!("Expected binary op to have two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
+        }
+        match op0_type {
+            Type::IntegerType { .. } => {
+                let z3op0 = self.state.operand_to_bv(op0)?;
+                let z3op1 = self.state.operand_to_bv(op1)?;
+                self.state.record_bv_result(bop, z3op(&z3op0, &z3op1))
+            },
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("Binary operation on vectors".to_owned())),
+            ty => Err(Error::MalformedInstruction(format!("Expected binary operation to have operands of type integer or vector of integers, but got type {:?}", ty))),
+        }
     }
 
     fn symex_icmp(&mut self, icmp: &instruction::ICmp) -> Result<()> {
         debug!("Symexing icmp {:?}", icmp);
-        let z3firstop = self.state.operand_to_bv(&icmp.operand0)?;
-        let z3secondop = self.state.operand_to_bv(&icmp.operand1)?;
-        let z3pred = Self::intpred_to_z3pred(icmp.predicate);
-        self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
-    }
+        match icmp.get_type() {
+            Type::IntegerType { bits } if bits == 1 => {
+                let op0_type = icmp.operand0.get_type();
+                let op1_type = icmp.operand1.get_type();
+                if op0_type != op1_type {
+                    return Err(Error::MalformedInstruction(format!("Expected icmp to compare two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
+                }
+                match op0_type {
+                    Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
+                        let z3firstop = self.state.operand_to_bv(&icmp.operand0)?;
+                        let z3secondop = self.state.operand_to_bv(&icmp.operand1)?;
+                        let z3pred = Self::intpred_to_z3pred(icmp.predicate);
+                        self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
+                    },
+                    ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
+                }
+            },
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("ICmp producing a vector result".to_owned())),
+            ty => Err(Error::MalformedInstruction(format!("Expected ICmp result type to be i1 or vector of i1; got {:?}", ty))),
+        }
+   }
 
     fn symex_zext(&mut self, zext: &instruction::ZExt) -> Result<()> {
         debug!("Symexing zext {:?}", zext);
-        let z3op = self.state.operand_to_bv(&zext.operand)?;
-        let source_size = z3op.get_size();
-        let dest_size = match zext.get_type() {
-            Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("ZExt on a vector".to_owned())),
-            ty => return Err(Error::MalformedInstruction(format!("Expected ZExt result type to be integer or vector of integers; got {:?}", ty))),
-        };
-        self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
+        match zext.operand.get_type() {
+            Type::IntegerType { .. } => {
+                let z3op = self.state.operand_to_bv(&zext.operand)?;
+                let source_size = z3op.get_size();
+                let dest_size = size(&zext.get_type()) as u32;
+                self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
+            },
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("ZExt on a vector".to_owned())),
+            ty => Err(Error::MalformedInstruction(format!("Expected ZExt operand type to be integer or vector of integers; got {:?}", ty))),
+        }
     }
 
     fn symex_sext(&mut self, sext: &instruction::SExt) -> Result<()> {
         debug!("Symexing sext {:?}", sext);
-        let z3op = self.state.operand_to_bv(&sext.operand)?;
-        let source_size = z3op.get_size();
-        let dest_size = match sext.get_type() {
-            Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("SExt on a vector".to_owned())),
-            ty => return Err(Error::MalformedInstruction(format!("Expected SExt result type to be integer or vector of integers; got {:?}", ty))),
-        };
-        self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
+        match sext.operand.get_type() {
+            Type::IntegerType { .. } => {
+                let z3op = self.state.operand_to_bv(&sext.operand)?;
+                let source_size = z3op.get_size();
+                let dest_size = size(&sext.get_type()) as u32;
+                self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
+            },
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("SExt on a vector".to_owned())),
+            ty => Err(Error::MalformedInstruction(format!("Expected SExt operand type to be integer or vector of integers; got {:?}", ty))),
+        }
     }
 
     fn symex_trunc(&mut self, trunc: &instruction::Trunc) -> Result<()> {
         debug!("Symexing trunc {:?}", trunc);
-        let z3op = self.state.operand_to_bv(&trunc.operand)?;
-        let dest_size = match trunc.get_type() {
-            Type::IntegerType { bits } => bits,
-            Type::VectorType { .. } => return Err(Error::UnsupportedInstruction("Trunc on a vector".to_owned())),
-            ty => return Err(Error::MalformedInstruction(format!("Expected Trunc result type to be integer or vector of integers; got {:?}", ty))),
-        };
-        self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
+        match trunc.operand.get_type() {
+            Type::IntegerType { .. } => {
+                let z3op = self.state.operand_to_bv(&trunc.operand)?;
+                let dest_size = size(&trunc.get_type()) as u32;
+                self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
+            },
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("Trunc on a vector".to_owned())),
+            ty => Err(Error::MalformedInstruction(format!("Expected Trunc operand type to be integer or vector of integers; got {:?}", ty))),
+        }
     }
 
     /// Use this for any unary operation that can be treated as a cast
@@ -376,9 +412,15 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
     fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<()> {
         debug!("Symexing gep {:?}", gep);
-        let z3base = self.state.operand_to_bv(&gep.address)?;
-        let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
-        self.state.record_bv_result(gep, z3base.add(&offset).simplify())
+        match gep.get_type() {
+            Type::PointerType { .. } => {
+                let z3base = self.state.operand_to_bv(&gep.address)?;
+                let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
+                self.state.record_bv_result(gep, z3base.add(&offset).simplify())
+            },
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("GEP calculating a vector of pointers".to_owned())),
+            ty => Err(Error::MalformedInstruction(format!("Expected GEP result type to be pointer or vector of pointers; got {:?}", ty))),
+        }
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
@@ -665,22 +707,28 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
     fn symex_select(&mut self, select: &instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
-        let z3cond = self.state.operand_to_bool(&select.condition)?;
-        let z3trueval = self.state.operand_to_bv(&select.true_value)?;
-        let z3falseval = self.state.operand_to_bv(&select.false_value)?;
-        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
-        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()))?;
-        if true_feasible && false_feasible {
-            self.state.record_bv_result(select, B::Bool::bvite(&z3cond, &z3trueval, &z3falseval))
-        } else if true_feasible {
-            self.state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
-            self.state.record_bv_result(select, z3trueval)
-        } else if false_feasible {
-            self.state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
-            self.state.record_bv_result(select, z3falseval)
-        } else {
-            // this path is unsat
-            Err(Error::Unsat)
+        match select.condition.get_type() {
+            Type::IntegerType { bits } if bits == 1 => {
+                let z3cond = self.state.operand_to_bool(&select.condition)?;
+                let z3trueval = self.state.operand_to_bv(&select.true_value)?;
+                let z3falseval = self.state.operand_to_bv(&select.false_value)?;
+                let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
+                let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()))?;
+                if true_feasible && false_feasible {
+                    self.state.record_bv_result(select, B::Bool::bvite(&z3cond, &z3trueval, &z3falseval))
+                } else if true_feasible {
+                    self.state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
+                    self.state.record_bv_result(select, z3trueval)
+                } else if false_feasible {
+                    self.state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
+                    self.state.record_bv_result(select, z3falseval)
+                } else {
+                    // this path is unsat
+                    Err(Error::Unsat)
+                }
+            },
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("Select with a vector condition".to_owned())),
+            ty => Err(Error::MalformedInstruction(format!("Expected select condition to be i1 or vector of i1, but got {:?}", ty))),
         }
     }
 }

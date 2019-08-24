@@ -49,3 +49,17 @@ int pointer_arith(volatile int* ptr, int a) {
 
   return ptr[3];
 }
+
+int pointer_compare(int a) {
+  volatile int x, y;
+  volatile int* volatile ptr_x = &x;
+  volatile int* volatile ptr_y = &y;
+
+  *ptr_x = a - 3;
+
+  if (ptr_x == ptr_y) {
+    return *ptr_x - 100;
+  } else {
+    return *ptr_x;
+  }
+}

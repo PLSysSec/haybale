@@ -77,3 +77,14 @@ fn pointer_arith() {
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
+
+#[test]
+fn pointer_compare() {
+    let funcname = "pointer_compare";
+    init_logging();
+    let proj = get_project();
+    let ctx = z3::Context::new(&z3::Config::new());
+    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(3));
+}
