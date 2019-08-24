@@ -469,9 +469,14 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
     fn symex_alloca(&mut self, alloca: &instruction::Alloca) -> Result<()> {
         debug!("Symexing alloca {:?}", alloca);
-        let allocation_size = size(&alloca.allocated_type);
-        let allocated = self.state.allocate(allocation_size as u64);
-        self.state.record_bv_result(alloca, allocated)
+        match &alloca.num_elements {
+            Operand::ConstantOperand(Constant::Int { value: num_elements, .. }) => {
+                let allocation_size = size(&alloca.allocated_type) as u64 * num_elements;
+                let allocated = self.state.allocate(allocation_size);
+                self.state.record_bv_result(alloca, allocated)
+            },
+            op => Err(Error::UnsupportedInstruction(format!("Alloca with num_elements not a constant int: {:?}", op))),
+        }
     }
 
     /// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
