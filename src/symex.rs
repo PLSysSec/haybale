@@ -157,6 +157,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     Instruction::Alloca(alloca) => self.symex_alloca(alloca),
                     Instruction::ExtractElement(ee) => self.symex_extractelement(ee),
                     Instruction::InsertElement(ie) => self.symex_insertelement(ie),
+                    Instruction::ShuffleVector(sv) => self.symex_shufflevector(sv),
                     Instruction::ZExt(zext) => self.symex_zext(zext),
                     Instruction::SExt(sext) => self.symex_sext(sext),
                     Instruction::Trunc(trunc) => self.symex_trunc(trunc),
@@ -644,6 +645,52 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 }
             },
             op => Err(Error::UnsupportedInstruction(format!("InsertElement with index not a constant int: {:?}", op))),
+        }
+    }
+
+    fn symex_shufflevector(&mut self, sv: &instruction::ShuffleVector) -> Result<()> {
+        debug!("Symexing shufflevector {:?}", sv);
+        let op0_type = sv.operand0.get_type();
+        let op1_type = sv.operand1.get_type();
+        if op0_type != op1_type {
+            return Err(Error::MalformedInstruction(format!("Expected ShuffleVector operands to be exactly the same type, but they are {:?} and {:?}", op0_type, op1_type)));
+        }
+        let op_type = op0_type;
+        match op_type {
+            Type::VectorType { element_type, num_elements } => {
+                let mask: Vec<u32> = match &sv.mask {
+                    Constant::Vector(mask) => mask.iter()
+                        .map(|c| match c {
+                            Constant::Int { value: idx, .. } => Ok(*idx as u32),
+                            Constant::Undef(_) => Ok(0),
+                            _ => Err(Error::UnsupportedInstruction(format!("ShuffleVector with a mask entry which is not a Constant::Int or Constant::Undef but instead {:?}", c))),
+                        })
+                        .collect::<Result<Vec<u32>>>()?,
+                    Constant::AggregateZero(ty) | Constant::Undef(ty) => match ty {
+                        Type::VectorType { num_elements, .. } => itertools::repeat_n(0, *num_elements).collect(),
+                        _ => return Err(Error::MalformedInstruction(format!("Expected ShuffleVector mask (which is an AggregateZero or Undef) to have vector type, but its type is {:?}", ty))),
+                    },
+                    c => return Err(Error::MalformedInstruction(format!("Expected ShuffleVector mask to be a Constant::Vector, Constant::AggregateZero, or Constant::Undef, but got {:?}", c))),
+                };
+                let op0 = self.state.operand_to_bv(&sv.operand0)?;
+                let op1 = self.state.operand_to_bv(&sv.operand1)?;
+                assert_eq!(op0.get_size(), op1.get_size());
+                let el_size = size(&element_type) as u32;
+                let num_elements = num_elements as u32;
+                assert_eq!(op0.get_size(), el_size * num_elements);
+                let final_bv = mask.into_iter()
+                    .map(|idx| {
+                        if idx < num_elements {
+                            op0.extract((idx+1) * el_size - 1, idx * el_size)
+                        } else {
+                            let idx = idx - num_elements;
+                            op1.extract((idx+1) * el_size - 1, idx * el_size)
+                        }
+                    })
+                    .reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("ShuffleVector mask had 0 elements".to_owned()))?;
+                self.state.record_bv_result(sv, final_bv)
+            },
+            ty => Err(Error::MalformedInstruction(format!("Expected ShuffleVector operands to be vectors, got {:?}", ty))),
         }
     }
 
