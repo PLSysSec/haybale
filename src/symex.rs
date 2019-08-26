@@ -999,7 +999,7 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(call.get_type(), Type::VoidType);
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::OtherError(format!("LLVM memset with non-constant num_bytes {:?}", num_bytes))),
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::UnsupportedInstruction(format!("LLVM memset with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v[0],
     };
     if num_bytes == 0 {
@@ -1024,7 +1024,7 @@ fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     assert_eq!(call.get_type(), Type::VoidType);
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::OtherError(format!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes))),
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::UnsupportedInstruction(format!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v[0],
     };
     if num_bytes == 0 {
