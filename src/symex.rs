@@ -267,7 +267,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn inst_to_binop<V>(inst: &Instruction) -> Option<(instruction::groups::BinaryOp, Box<FnOnce(&V, &V) -> V + 'ctx>)> where V: BV<'ctx> + 'ctx {
+    fn inst_to_binop<V>(inst: &Instruction) -> Option<(instruction::groups::BinaryOp, Box<Fn(&V, &V) -> V + 'ctx>)> where V: BV<'ctx> + 'ctx {
         match inst {
             // TODO: how to not clone the inner instruction here
             Instruction::Add(i) => Some((i.clone().into(), Box::new(<V as BV<'ctx>>::add))),
@@ -287,7 +287,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn intpred_to_z3pred(pred: IntPredicate) -> Box<FnOnce(&B::BV, &B::BV) -> B::Bool + 'ctx> {
+    fn intpred_to_z3pred(pred: IntPredicate) -> Box<Fn(&B::BV, &B::BV) -> B::Bool + 'ctx> {
         match pred {
             IntPredicate::EQ => Box::new(|a,b| B::BV::_eq(a,b)),
             IntPredicate::NE => Box::new(|a,b| B::Bool::not(&B::BV::_eq(a,b))),
@@ -302,8 +302,30 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_binop<F>(&mut self, bop: &instruction::groups::BinaryOp, z3op: F) -> Result<()>
-        where F: FnOnce(&B::BV, &B::BV) -> B::BV
+    // Apply the given unary scalar operation to a vector
+    fn unary_on_vector(in_vector: &B::BV, num_elements: u32, mut op: impl FnMut(&B::BV) -> B::BV) -> Result<B::BV> {
+        let in_vector_size = in_vector.get_size();
+        assert_eq!(in_vector_size % num_elements, 0);
+        let in_el_size = in_vector_size / num_elements;
+        let in_scalars = (0 .. num_elements).map(|i| in_vector.extract((i+1)*in_el_size - 1, i*in_el_size));
+        let out_scalars = in_scalars.map(|s| op(&s));
+        out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::OtherError("Vector operation with 0 elements".to_owned()))
+    }
+
+    // Apply the given binary scalar operation to a vector
+    fn binary_on_vector(in_vector_0: &B::BV, in_vector_1: &B::BV, num_elements: u32, mut op: impl FnMut(&B::BV, &B::BV) -> B::BV) -> Result<B::BV> {
+        let in_vector_size = in_vector_0.get_size();
+        assert_eq!(in_vector_size, in_vector_1.get_size());
+        assert_eq!(in_vector_size % num_elements, 0);
+        let in_el_size = in_vector_size / num_elements;
+        let in_scalars_0 = (0 .. num_elements).map(|i| in_vector_0.extract((i+1)*in_el_size - 1, i*in_el_size));
+        let in_scalars_1 = (0 .. num_elements).map(|i| in_vector_1.extract((i+1)*in_el_size - 1, i*in_el_size));
+        let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0,s1)| op(&s0, &s1));
+        out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::OtherError("Vector operation with 0 elements".to_owned()))
+    }
+
+    fn symex_binop<F>(&mut self, bop: &instruction::groups::BinaryOp, mut z3op: F) -> Result<()>
+        where F: FnMut(&B::BV, &B::BV) -> B::BV
     {
         debug!("Symexing binop {:?}", bop);
         // We expect these binops to only operate on integers or vectors of integers
@@ -314,37 +336,53 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         if op0_type != op1_type {
             return Err(Error::MalformedInstruction(format!("Expected binary op to have two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
         }
+        let z3op0 = self.state.operand_to_bv(op0)?;
+        let z3op1 = self.state.operand_to_bv(op1)?;
         match op0_type {
             Type::IntegerType { .. } => {
-                let z3op0 = self.state.operand_to_bv(op0)?;
-                let z3op1 = self.state.operand_to_bv(op1)?;
                 self.state.record_bv_result(bop, z3op(&z3op0, &z3op1))
             },
-            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("Binary operation on vectors".to_owned())),
+            Type::VectorType { element_type, num_elements } => {
+                match *element_type {
+                    Type::IntegerType { .. } => {
+                        self.state.record_bv_result(bop, Self::binary_on_vector(&z3op0, &z3op1, num_elements as u32, z3op)?)
+                    },
+                    ty => Err(Error::MalformedInstruction(format!("Expected binary operation's vector operands to have integer elements, but elements are type {:?}", ty))),
+                }
+            }
             ty => Err(Error::MalformedInstruction(format!("Expected binary operation to have operands of type integer or vector of integers, but got type {:?}", ty))),
         }
     }
 
     fn symex_icmp(&mut self, icmp: &instruction::ICmp) -> Result<()> {
         debug!("Symexing icmp {:?}", icmp);
+        let z3firstop = self.state.operand_to_bv(&icmp.operand0)?;
+        let z3secondop = self.state.operand_to_bv(&icmp.operand1)?;
+        let z3pred = Self::intpred_to_z3pred(icmp.predicate);
+        let op0_type = icmp.operand0.get_type();
+        let op1_type = icmp.operand1.get_type();
+        if op0_type != op1_type {
+            return Err(Error::MalformedInstruction(format!("Expected icmp to compare two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
+        }
         match icmp.get_type() {
-            Type::IntegerType { bits } if bits == 1 => {
-                let op0_type = icmp.operand0.get_type();
-                let op1_type = icmp.operand1.get_type();
-                if op0_type != op1_type {
-                    return Err(Error::MalformedInstruction(format!("Expected icmp to compare two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
-                }
-                match op0_type {
+            Type::IntegerType { bits } if bits == 1 => match op0_type {
+                Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
+                    self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
+                },
+                ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
+            },
+            Type::VectorType { element_type, num_elements } => match *element_type {
+                Type::IntegerType { bits } if bits == 1 => match op0_type {
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
-                        let z3firstop = self.state.operand_to_bv(&icmp.operand0)?;
-                        let z3secondop = self.state.operand_to_bv(&icmp.operand1)?;
-                        let z3pred = Self::intpred_to_z3pred(icmp.predicate);
-                        self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
+                        let zero = B::BV::from_u64(self.state.ctx, 0, 1);
+                        let one = B::BV::from_u64(self.state.ctx, 1, 1);
+                        let final_bv = Self::binary_on_vector(&z3firstop, &z3secondop, num_elements as u32, |a,b| z3pred(a,b).bvite(&one, &zero))?;
+                        self.state.record_bv_result(icmp, final_bv)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
-                }
-            },
-            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("ICmp producing a vector result".to_owned())),
+                },
+                ty => Err(Error::MalformedInstruction(format!("Expected ICmp result type to be i1 or vector of i1; got vector of {:?}", ty))),
+            }
             ty => Err(Error::MalformedInstruction(format!("Expected ICmp result type to be i1 or vector of i1; got {:?}", ty))),
         }
    }
