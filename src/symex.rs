@@ -927,6 +927,12 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
     fn symex_select(&mut self, select: &instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
+        let truetype = select.true_value.get_type();
+        let falsetype = select.false_value.get_type();
+        if truetype != falsetype {
+            return Err(Error::MalformedInstruction(format!("Expected Select operands to have identical type, but they have types {:?} and {:?}", truetype, falsetype)));
+        }
+        let optype = truetype;
         match select.condition.get_type() {
             Type::IntegerType { bits } if bits == 1 => {
                 let z3cond = self.state.operand_to_bool(&select.condition)?;
@@ -947,7 +953,35 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     Err(Error::Unsat)
                 }
             },
-            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("Select with a vector condition".to_owned())),
+            Type::VectorType { element_type, num_elements } => {
+                match *element_type {
+                    Type::IntegerType { bits: 1 } => {},
+                    ty => return Err(Error::MalformedInstruction(format!("Expected Select vector condition to be vector of i1, but got vector of {:?}", ty))),
+                };
+                let el_size = match optype {
+                    Type::VectorType { element_type: op_el_type, num_elements: op_num_els } => {
+                        if num_elements != op_num_els {
+                            return Err(Error::MalformedInstruction(format!("Select condition is a vector of {} elements but operands are vectors with {} elements", num_elements, op_num_els)));
+                        }
+                        size(&op_el_type) as u32
+                    },
+                    _ => return Err(Error::MalformedInstruction(format!("Expected Select with vector condition to have vector operands, but operands are of type {:?}", optype))),
+                };
+                let condvec = self.state.operand_to_bv(&select.condition)?;
+                let truevec = self.state.operand_to_bv(&select.true_value)?;
+                let falsevec = self.state.operand_to_bv(&select.false_value)?;
+                let final_bv = (0 .. num_elements as u32)
+                    .map(|idx| {
+                        let bit = condvec.extract(idx, idx)._eq(&B::BV::from_u64(self.state.ctx, 1, 1));
+                        bit.bvite(
+                            &truevec.extract((idx+1) * el_size - 1, idx * el_size),
+                            &falsevec.extract((idx+1) * el_size - 1, idx * el_size),
+                        )
+                    })
+                    .reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("Select with vectors of 0 elements".to_owned()))?
+                    .simplify();
+                self.state.record_bv_result(select, final_bv)
+            }
             ty => Err(Error::MalformedInstruction(format!("Expected select condition to be i1 or vector of i1, but got {:?}", ty))),
         }
     }
