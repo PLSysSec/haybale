@@ -390,13 +390,29 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     fn symex_zext(&mut self, zext: &instruction::ZExt) -> Result<()> {
         debug!("Symexing zext {:?}", zext);
         match zext.operand.get_type() {
-            Type::IntegerType { .. } => {
+            Type::IntegerType { bits } => {
                 let z3op = self.state.operand_to_bv(&zext.operand)?;
-                let source_size = z3op.get_size();
+                let source_size = bits;
                 let dest_size = size(&zext.get_type()) as u32;
                 self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
             },
-            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("ZExt on a vector".to_owned())),
+            Type::VectorType { element_type, num_elements } => {
+                let in_vector = self.state.operand_to_bv(&zext.operand)?;
+                let in_el_size = size(&element_type) as u32;
+                let out_el_size = match zext.get_type() {
+                    Type::VectorType { element_type: out_el_type, num_elements: out_num_els } => {
+                        if out_num_els != num_elements {
+                            return Err(Error::MalformedInstruction(format!("ZExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
+                        }
+                        size(&out_el_type) as u32
+                    },
+                    ty => return Err(Error::MalformedInstruction(format!("ZExt operand is a vector type, but output is not: it is {:?}", ty))),
+                };
+                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
+                    el.zero_ext(out_el_size - in_el_size)
+                })?;
+                self.state.record_bv_result(zext, final_bv)
+            },
             ty => Err(Error::MalformedInstruction(format!("Expected ZExt operand type to be integer or vector of integers; got {:?}", ty))),
         }
     }
@@ -404,13 +420,29 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     fn symex_sext(&mut self, sext: &instruction::SExt) -> Result<()> {
         debug!("Symexing sext {:?}", sext);
         match sext.operand.get_type() {
-            Type::IntegerType { .. } => {
+            Type::IntegerType { bits } => {
                 let z3op = self.state.operand_to_bv(&sext.operand)?;
-                let source_size = z3op.get_size();
+                let source_size = bits;
                 let dest_size = size(&sext.get_type()) as u32;
                 self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
             },
-            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("SExt on a vector".to_owned())),
+            Type::VectorType { element_type, num_elements } => {
+                let in_vector = self.state.operand_to_bv(&sext.operand)?;
+                let in_el_size = size(&element_type) as u32;
+                let out_el_size = match sext.get_type() {
+                    Type::VectorType { element_type: out_el_type, num_elements: out_num_els } => {
+                        if out_num_els != num_elements {
+                            return Err(Error::MalformedInstruction(format!("SExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
+                        }
+                        size(&out_el_type) as u32
+                    },
+                    ty => return Err(Error::MalformedInstruction(format!("SExt operand is a vector type, but output is not: it is {:?}", ty))),
+                };
+                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
+                    el.sign_ext(out_el_size - in_el_size)
+                })?;
+                self.state.record_bv_result(sext, final_bv)
+            },
             ty => Err(Error::MalformedInstruction(format!("Expected SExt operand type to be integer or vector of integers; got {:?}", ty))),
         }
     }
@@ -423,7 +455,20 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 let dest_size = size(&trunc.get_type()) as u32;
                 self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
             },
-            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("Trunc on a vector".to_owned())),
+            Type::VectorType { num_elements, .. } => {
+                let in_vector = self.state.operand_to_bv(&trunc.operand)?;
+                let dest_el_size = match trunc.get_type() {
+                    Type::VectorType { element_type: out_el_type, num_elements: out_num_els } => {
+                        if out_num_els != num_elements {
+                            return Err(Error::MalformedInstruction(format!("Trunc operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
+                        }
+                        size(&out_el_type) as u32
+                    },
+                    ty => return Err(Error::MalformedInstruction(format!("Trunc operand is a vector type, but output is not: it is {:?}", ty))),
+                };
+                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| el.extract(dest_el_size-1, 0))?;
+                self.state.record_bv_result(trunc, final_bv)
+            },
             ty => Err(Error::MalformedInstruction(format!("Expected Trunc operand type to be integer or vector of integers; got {:?}", ty))),
         }
     }
