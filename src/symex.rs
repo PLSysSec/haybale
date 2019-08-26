@@ -155,6 +155,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     Instruction::Store(store) => self.symex_store(store),
                     Instruction::GetElementPtr(gep) => self.symex_gep(gep),
                     Instruction::Alloca(alloca) => self.symex_alloca(alloca),
+                    Instruction::ExtractElement(ee) => self.symex_extractelement(ee),
+                    Instruction::InsertElement(ie) => self.symex_insertelement(ie),
                     Instruction::ZExt(zext) => self.symex_zext(zext),
                     Instruction::SExt(sext) => self.symex_sext(sext),
                     Instruction::Trunc(trunc) => self.symex_trunc(trunc),
@@ -476,6 +478,89 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 self.state.record_bv_result(alloca, allocated)
             },
             op => Err(Error::UnsupportedInstruction(format!("Alloca with num_elements not a constant int: {:?}", op))),
+        }
+    }
+
+    fn symex_extractelement(&mut self, ee: &instruction::ExtractElement) -> Result<()> {
+        debug!("Symexing extractelement {:?}", ee);
+        let vector = self.state.operand_to_bv(&ee.vector)?;
+        match &ee.index {
+            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                let index = *index as u32;
+                match ee.vector.get_type() {
+                    Type::VectorType { element_type, num_elements } => {
+                        if index >= num_elements as u32 {
+                            Err(Error::MalformedInstruction(format!("ExtractElement index out of range: index {} with {} elements", index, num_elements)))
+                        } else {
+                            let el_size = size(&element_type) as u32;
+                            self.state.record_bv_result(ee, vector.extract((index+1)*el_size - 1, index*el_size))
+                        }
+                    },
+                    ty => Err(Error::MalformedInstruction(format!("Expected ExtractElement vector to be a vector type, got {:?}", ty))),
+                }
+            },
+            op => Err(Error::UnsupportedInstruction(format!("ExtractElement with index not a constant int: {:?}", op))),
+        }
+    }
+
+    fn symex_insertelement(&mut self, ie: &instruction::InsertElement) -> Result<()> {
+        debug!("Symexing insertelement {:?}", ie);
+        let vector = self.state.operand_to_bv(&ie.vector)?;
+        let element = self.state.operand_to_bv(&ie.element)?;
+        match &ie.index {
+            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                let index = *index as u32;
+                match ie.vector.get_type() {
+                    Type::VectorType { element_type, num_elements } => {
+                        if index >= num_elements as u32 {
+                            Err(Error::MalformedInstruction(format!("InsertElement index out of range: index {} with {} elements", index, num_elements)))
+                        } else {
+                            let vec_size = vector.get_size();
+                            let highest_bit_index = vec_size - 1;
+                            let el_size = size(&element_type) as u32;
+                            assert_eq!(vec_size, el_size * num_elements as u32);
+                            let insertion_bitindex_low = index * el_size;  // lowest bit number in the vector which will be overwritten
+                            let insertion_bitindex_high = (index+1) * el_size - 1;  // highest bit number in the vector which will be overwritten
+
+                            // mask_clear is 0's in the bit positions that will be written, 1's elsewhere
+                            let zeroes = B::BV::from_u64(self.state.ctx, 0, el_size);
+                            let mask_clear = if insertion_bitindex_high == highest_bit_index {
+                                if insertion_bitindex_low == 0 {
+                                    zeroes
+                                } else {
+                                    zeroes.concat(&B::BV::from_u64(self.state.ctx, 0, insertion_bitindex_low).not())
+                                }
+                            } else {
+                                let top = B::BV::from_u64(self.state.ctx, 0, highest_bit_index - insertion_bitindex_high)
+                                    .not()
+                                    .concat(&zeroes);
+                                if insertion_bitindex_low == 0 {
+                                    top
+                                } else {
+                                    top.concat(&B::BV::from_u64(self.state.ctx, 0, insertion_bitindex_low).not())
+                                }
+                            };
+
+                            // mask_insert is the insertion data in the appropriate bit positions, 0's elsewhere
+                            let top = zero_extend_to_bits(element, vec_size - insertion_bitindex_low);
+                            let mask_insert = if insertion_bitindex_low == 0 {
+                                top
+                            } else {
+                                top.concat(&B::BV::from_u64(self.state.ctx, 0, insertion_bitindex_low))
+                            };
+
+                            let with_insertion = vector
+                                .and(&mask_clear)  // zero out the element we'll be writing
+                                .or(&mask_insert)  // write the data into the element's position
+                                .simplify();
+
+                            self.state.record_bv_result(ie, with_insertion)
+                        }
+                    },
+                    ty => Err(Error::MalformedInstruction(format!("Expected InsertElement vector to be a vector type, got {:?}", ty))),
+                }
+            },
+            op => Err(Error::UnsupportedInstruction(format!("InsertElement with index not a constant int: {:?}", op))),
         }
     }
 
