@@ -442,6 +442,21 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Assumes `thing` is in the current function.
     /// Will fail with `Error::LoopBoundExceeded` if that would exceed
     /// `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
+    #[cfg(debug_assertions)]
+    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<()> {
+        if size(&thing.get_type()) as u32 != resultval.get_size() {
+            Err(Error::OtherError(format!(
+                "Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}",
+                thing,
+                size(&thing.get_type()),
+                resultval,
+                resultval.get_size()
+            )))
+        } else {
+            self.assign_bv_to_name(thing.get_result().clone(), resultval)
+        }
+    }
+    #[cfg(not(debug_assertions))]
     pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<()> {
         self.assign_bv_to_name(thing.get_result().clone(), resultval)
     }

@@ -315,14 +315,18 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
     // Apply the given binary scalar operation to a vector
     fn binary_on_vector(in_vector_0: &B::BV, in_vector_1: &B::BV, num_elements: u32, mut op: impl FnMut(&B::BV, &B::BV) -> B::BV) -> Result<B::BV> {
-        let in_vector_size = in_vector_0.get_size();
-        assert_eq!(in_vector_size, in_vector_1.get_size());
+        let in_vector_0_size = in_vector_0.get_size();
+        let in_vector_1_size = in_vector_1.get_size();
+        if in_vector_0_size != in_vector_1_size {
+            return Err(Error::MalformedInstruction(format!("Binary operation's vector operands are different total sizes: {} vs. {}", in_vector_0_size, in_vector_1_size)));
+        }
+        let in_vector_size = in_vector_0_size;
         assert_eq!(in_vector_size % num_elements, 0);
         let in_el_size = in_vector_size / num_elements;
         let in_scalars_0 = (0 .. num_elements).map(|i| in_vector_0.extract((i+1)*in_el_size - 1, i*in_el_size));
         let in_scalars_1 = (0 .. num_elements).map(|i| in_vector_1.extract((i+1)*in_el_size - 1, i*in_el_size));
         let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0,s1)| op(&s0, &s1));
-        out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::OtherError("Vector operation with 0 elements".to_owned()))
+        out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned()))
     }
 
     fn symex_binop<F>(&mut self, bop: &instruction::groups::BinaryOp, mut z3op: F) -> Result<()>
@@ -337,9 +341,10 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         if op0_type != op1_type {
             return Err(Error::MalformedInstruction(format!("Expected binary op to have two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
         }
+        let op_type = op0_type;
         let z3op0 = self.state.operand_to_bv(op0)?;
         let z3op1 = self.state.operand_to_bv(op1)?;
-        match op0_type {
+        match op_type {
             Type::IntegerType { .. } => {
                 self.state.record_bv_result(bop, z3op(&z3op0, &z3op1))
             },
