@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 llvm-ir = "0.2.2"
-z3 = { path = "../z3.rs/z3" }
+z3 = "0.4.0"
 either = "1.5.2"
 itertools = "0.8.0"
 reduce = "0.1"

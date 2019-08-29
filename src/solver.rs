@@ -4,7 +4,6 @@
 use crate::error::*;
 use crate::possible_solutions::*;
 use log::debug;
-use std::convert::TryInto;
 use std::fmt;
 use z3::ast::{Ast, BV, Bool};
 
@@ -58,13 +57,14 @@ impl<'ctx> Solver<'ctx> {
     /// This function caches its result and will only call to Z3 if constraints have changed
     /// since the last call to `check()`.
     pub fn check(&mut self) -> Result<bool> {
-        match self.check_status {
-            Some(status) => status.try_into().map_err(|e: &'static str| Error::SolverError(e.to_string())),
-            None => {
-                debug!("Solving with constraints:\n{}", self.z3_solver);
-                self.check_status = Some(self.z3_solver.check());
-                self.check_status.unwrap().try_into().map_err(|e: &'static str| Error::SolverError(e.to_string()))
-            }
+        if let None = self.check_status {
+            debug!("Solving with constraints:\n{}", self.z3_solver);
+            self.check_status = Some(self.z3_solver.check());
+        }
+        match self.check_status.unwrap() {
+            z3::SatResult::Sat => Ok(true),
+            z3::SatResult::Unsat => Ok(false),
+            z3::SatResult::Unknown => Err(Error::SolverError("The query was interrupted, timed out, or otherwise failed".to_owned())),
         }
     }
 
@@ -95,7 +95,11 @@ impl<'ctx> Solver<'ctx> {
         }
         let retval = self.z3_solver.check();
         self.z3_solver.pop(1);
-        retval.try_into().map_err(|e: &'static str| Error::SolverError(e.to_string()))
+        match retval {
+            z3::SatResult::Sat => Ok(true),
+            z3::SatResult::Unsat => Ok(false),
+            z3::SatResult::Unknown => Err(Error::SolverError("The query was interrupted, timed out, or otherwise failed".to_owned())),
+        }
     }
 
     pub fn push(&mut self) {
