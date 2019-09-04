@@ -1,6 +1,8 @@
 use haybale::*;
 use haybale::backend::{Backend, BV};
 use llvm_ir::*;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -9,9 +11,9 @@ fn init_logging() {
 }
 
 // Hook call.c's "simple_callee" to just return 5 instead of executing its actual body
-fn hook_for_simple_callee<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+fn hook_for_simple_callee<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
-    Ok(ReturnValue::Return(B::BV::from_u64(state.ctx, 5, layout::size(&call.get_type()) as u32)))
+    Ok(ReturnValue::Return(B::BV::from_u32(state.btor.clone(), 5, layout::size(&call.get_type()) as u32)))
 }
 
 #[test]
@@ -19,18 +21,17 @@ fn hook_a_function() {
     init_logging();
     let proj = Project::from_bc_path(&Path::new("tests/bcfiles/call.bc"))
         .unwrap_or_else(|e| panic!("Failed to parse module call.bc: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
     let mut config = Config::default();
     config.function_hooks.add("simple_callee", &hook_for_simple_callee);
     // with that hook, simple_caller should always return 5 regardless of the value of its argument
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, "simple_caller", std::iter::once(None), &proj, config, 3),
-        PossibleSolutions::PossibleSolutions(vec![5]),
+        get_possible_return_values_of_func("simple_caller", std::iter::once(None), &proj, config, 3),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(5))),
     );
 }
 
 // Hook functionptr.c's "get_function_ptr" to return a pointer to our hook "target_hook" instead of "foo" or "bar" like it normally does
-fn hook_for_get_function_ptr<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+fn hook_for_get_function_ptr<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 1);
     state.get_pointer_to_function_hook("asdfjkl")
         .cloned()
@@ -38,9 +39,9 @@ fn hook_for_get_function_ptr<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_,
         .map(ReturnValue::Return)
 }
 
-fn target_hook<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+fn target_hook<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
-    Ok(ReturnValue::Return(B::BV::from_u64(state.ctx, 5, layout::size(&call.get_type()) as u32)))
+    Ok(ReturnValue::Return(B::BV::from_u32(state.btor.clone(), 5, layout::size(&call.get_type()) as u32)))
 }
 
 #[test]
@@ -48,7 +49,6 @@ fn hook_a_function_ptr() {
     init_logging();
     let proj = Project::from_bc_path(&Path::new("tests/bcfiles/functionptr.bc"))
         .unwrap_or_else(|e| panic!("Failed to parse module functionptr.bc: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
     let mut config = Config::default();
     config.function_hooks.add("get_function_ptr", &hook_for_get_function_ptr);
     // With the current API, in order for `state.get_pointer_to_function_hook()`
@@ -58,7 +58,7 @@ fn hook_a_function_ptr() {
     // with these hooks, now `get_function_ptr` should return a pointer to `target_hook` instead of `foo` like it normally does,
     // and therefore fptr_driver() should return 15 instead of 22
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, "fptr_driver", std::iter::empty(), &proj, config, 3),
-        PossibleSolutions::PossibleSolutions(vec![15]),
+        get_possible_return_values_of_func("fptr_driver", std::iter::empty(), &proj, config, 3),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(15))),
     );
 }

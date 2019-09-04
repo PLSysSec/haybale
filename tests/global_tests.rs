@@ -1,4 +1,6 @@
 use haybale::*;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -25,10 +27,9 @@ fn read_global() {
     let funcname = "read_global";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -37,10 +38,9 @@ fn modify_global() {
     let funcname = "modify_global";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     )
 }
 
@@ -49,10 +49,9 @@ fn modify_global_with_call() {
     let funcname = "modify_global_with_call";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     )
 }
 
@@ -61,10 +60,9 @@ fn dont_confuse_globals() {
     let funcname = "dont_confuse_globals";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     )
 }
 
@@ -75,10 +73,9 @@ fn cross_module_read_global() {
     let funcname = "cross_module_read_global";
     init_logging();
     let proj = get_cross_module_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -87,10 +84,9 @@ fn cross_module_read_global_via_call() {
     let funcname = "cross_module_read_global_via_call";
     init_logging();
     let proj = get_cross_module_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -99,10 +95,9 @@ fn cross_module_modify_global() {
     let funcname = "cross_module_modify_global";
     init_logging();
     let proj = get_cross_module_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -111,10 +106,9 @@ fn cross_module_modify_global_via_call() {
     let funcname = "cross_module_modify_global_via_call";
     init_logging();
     let proj = get_cross_module_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![3]),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -125,9 +119,8 @@ fn globals_initialization() {
     init_logging();
     let proj = Project::from_bc_paths(modnames.into_iter().map(Path::new))
         .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![1052]),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(1052))),
     )
 }

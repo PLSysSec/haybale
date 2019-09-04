@@ -1,7 +1,10 @@
+use boolector::{Btor, BVSolution, option::BtorOption, option::ModelGen};
 use llvm_ir::*;
 use log::debug;
 use reduce::Reduce;
+use std::collections::HashSet;
 use std::fmt;
+use std::iter::FromIterator;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -14,13 +17,14 @@ use crate::global_allocations::*;
 use crate::layout::*;
 use crate::possible_solutions::*;
 use crate::project::Project;
+use crate::sat::sat;
 use crate::varmap::{VarMap, RestoreInfo};
 
-pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
-    /// Reference to the Z3 context being used
-    pub ctx: &'ctx z3::Context,
+pub struct State<'p, B: Backend> {
+    /// Reference to the Boolector instance being used
+    pub btor: Rc<Btor>,
     /// The configuration being used
-    pub config: Config<'ctx, B>,
+    pub config: Config<'p, B>,
     /// Indicates the `BasicBlock` which is currently being executed
     pub cur_loc: Location<'p>,
     /// `Name` of the `BasicBlock` which was executed before this one;
@@ -32,11 +36,10 @@ pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     pub backend_state: Rc<RefCell<B::State>>,
 
     // Private members
-    varmap: VarMap<'ctx, B::BV, B::Bool>,
+    varmap: VarMap<B::BV>,
     mem: B::Memory,
     alloc: Alloc,
-    solver: B::Solver,
-    global_allocations: GlobalAllocations<'ctx, 'p, B>,
+    global_allocations: GlobalAllocations<'p, B>,
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
@@ -44,10 +47,10 @@ pub struct State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// We won't have a `StackFrame` for the current function here, only each of
     /// its callers. For instance, while we are executing the top-level function,
     /// this stack will be empty.
-    stack: Vec<StackFrame<'ctx, 'p, B::BV, B::Bool>>,
+    stack: Vec<StackFrame<'p, B::BV>>,
     /// These backtrack points are places where execution can be resumed later
-    /// (efficiently, thanks to the incremental solving capabilities of Z3).
-    backtrack_points: Vec<BacktrackPoint<'ctx, 'p, B>>,
+    /// (efficiently, thanks to the incremental solving capabilities of Boolector).
+    backtrack_points: Vec<BacktrackPoint<'p, B>>,
     /// Log of the basic blocks which have been executed to get to this point
     path: Vec<PathEntry>,
 }
@@ -113,16 +116,16 @@ pub struct Callsite<'p> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-struct StackFrame<'ctx, 'p, V, B> where V: BV<'ctx, AssociatedBool = B>, B: Bool<'ctx, AssociatedBV = V> {
+struct StackFrame<'p, V: BV> {
     /// Indicates the call instruction which was responsible for the call
     callsite: Callsite<'p>,
     /// Caller's local variables, so they can be restored when we return to the caller.
     /// This is necessary in the case of (direct or indirect) recursion.
     /// See notes on `VarMap.get_restore_info_for_fn()`.
-    restore_info: RestoreInfo<'ctx, V, B>,
+    restore_info: RestoreInfo<V>,
 }
 
-struct BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
+struct BacktrackPoint<'p, B: Backend> {
     /// Where to resume execution
     loc: Location<'p>,
     /// `Name` of the `BasicBlock` executed just prior to the `BacktrackPoint`.
@@ -132,17 +135,18 @@ struct BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Call stack at the `BacktrackPoint`.
     /// This is a vector of `StackFrame`s where the first entry is the top-level
     /// caller, and the last entry is the caller of the `BacktrackPoint`'s function.
-    stack: Vec<StackFrame<'ctx, 'p, B::BV, B::Bool>>,
+    stack: Vec<StackFrame<'p, B::BV>>,
     /// Constraint to add before restarting execution at `next_bb`.
     /// (Intended use of this is to constrain the branch in that direction.)
-    constraint: B::Bool,
+    constraint: B::BV,
     /// `VarMap` representing the state of things at the `BacktrackPoint`.
     /// For now, we require making a full copy of the `VarMap` in order to revert
     /// later.
-    varmap: VarMap<'ctx, B::BV, B::Bool>,
+    varmap: VarMap<B::BV>,
     /// `Memory` representing the state of things at the `BacktrackPoint`.
-    /// Copies of a `Memory` should be cheap (just a Z3 object pointer), so it's
-    /// not a huge concern that we need a full copy here in order to revert later.
+    /// Copies of a `Memory` should be cheap (just a Boolector refcounted
+    /// pointer), so it's not a huge concern that we need a full copy here in
+    /// order to revert later.
     mem: B::Memory,
     /// The backend state at the `BacktrackPoint`.
     backend_state: B::State,
@@ -152,37 +156,38 @@ struct BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
     path_len: usize,
 }
 
-impl<'ctx, 'p, B> fmt::Display for BacktrackPoint<'ctx, 'p, B> where B: Backend<'ctx> {
+impl<'p, B: Backend> fmt::Display for BacktrackPoint<'p, B> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<BacktrackPoint to execute bb {:?} with constraint {:?} and {} frames on the callstack>", self.loc.bbname, self.constraint, self.stack.len())
     }
 }
 
-impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
+impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// `start_loc`: the `Location` where the `State` should begin executing.
     /// As of this writing, `start_loc` should be the entry point of a
     /// function, or you will have problems.
     pub fn new(
-        ctx: &'ctx z3::Context,
         project: &'p Project,
         start_loc: Location<'p>,
-        config: Config<'ctx, B>,
+        config: Config<'p, B>,
     ) -> Self {
+        let btor = Rc::new(Btor::new());
+        btor.set_opt(BtorOption::ModelGen(ModelGen::All));
+        btor.set_opt(BtorOption::Incremental(true));
         let backend_state = Rc::new(RefCell::new(B::State::default()));
         let mut state = Self {
-            ctx,
             cur_loc: start_loc.clone(),
             prev_bb_name: None,
-            varmap: VarMap::new(ctx, config.loop_bound),
-            mem: Memory::new_uninitialized(ctx, backend_state.clone()),
+            varmap: VarMap::new(btor.clone(), config.loop_bound),
+            mem: Memory::new_uninitialized(btor.clone(), backend_state.clone()),
             alloc: Alloc::new(),
-            solver: B::Solver::new(ctx, backend_state.clone()),
             global_allocations: GlobalAllocations::new(),
             stack: Vec::new(),
             backtrack_points: Vec::new(),
             path: Vec::new(),
 
             // listed last (out-of-order) so that they can be used above but moved in now
+            btor,
             config,
             backend_state,
         };
@@ -222,14 +227,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         debug!("Allocating functions");
         for (func, module) in project.all_functions() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-            let addr_bv = BV::from_u64(state.ctx, addr, 64);
+            let addr_bv = BV::from_u64(state.btor.clone(), addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
             state.global_allocations.allocate_function(func, module, addr, addr_bv);
        }
        debug!("Allocating function hooks");
        for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
            let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-           let addr_bv = BV::from_u64(state.ctx, addr, 64);
+           let addr_bv = BV::from_u64(state.btor.clone(), addr, 64);
            debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
            state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
        }
@@ -277,20 +282,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         state
     }
 
-    /// Add `cond` as a constraint, i.e., assert that `cond` must be true
-    pub fn assert(&mut self, cond: &B::Bool) {
-        self.solver.assert(cond)
-    }
-
     /// Returns `true` if current constraints are satisfiable, `false` if not.
     ///
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
-    ///
-    /// With the default `Z3Backend`, this function caches its result and will
-    /// only call to Z3 if constraints have changed since the last call to
-    /// `check()`.
-    pub fn check(&mut self) -> Result<bool> {
-        self.solver.check()
+    pub fn sat(&self) -> Result<bool> {
+        sat(&self.btor)
     }
 
     /// Returns `true` if the current constraints plus the additional constraints `conds`
@@ -299,37 +295,32 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn check_with_extra_constraints<'a>(&'a mut self, conds: impl Iterator<Item = &'a B::Bool>) -> Result<bool> {
-        self.solver.check_with_extra_constraints(conds)
+    pub fn sat_with_extra_constraints<'b>(&'b self, constraints: impl Iterator<Item = &'b B::BV>) -> Result<bool> {
+        self.btor.push(1);
+        for constraint in constraints {
+            constraint.assert();
+        }
+        let retval = self.sat();
+        self.btor.pop(1);
+        retval
     }
 
     /// Get one possible concrete value for the `BV`.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
-    pub fn get_a_solution_for_bv(&mut self, bv: &B::BV) -> Result<Option<u64>> {
-        self.solver.get_a_solution_for_bv(bv)
-    }
-
-    /// Get one possible concrete value for the `Bool`.
-    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
-    pub fn get_a_solution_for_bool(&mut self, b: &B::Bool) -> Result<Option<bool>> {
-        self.solver.get_a_solution_for_bool(b)
+    pub fn get_a_solution_for_bv(&self, bv: &B::BV) -> Result<Option<BVSolution>> {
+        if self.sat()? {
+            Ok(Some(bv.get_a_solution()))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
-        let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
-        self.get_a_solution_for_bv(&bv)
-    }
-
-    /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bool.
-    /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
-    /// May also return `Error::BoolCoercionError` (if the given `Name` represents a `BV` more than one bit long).
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_a_solution_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<bool>> {
-        let b = self.varmap.lookup_bool_var(funcname, name)?.clone();  // clone() so that the borrow of self is released
-        self.get_a_solution_for_bool(&b)
+    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<BVSolution>> {
+        let bv = self.varmap.lookup_var(funcname, name);
+        self.get_a_solution_for_bv(bv)
     }
 
     /// Get a description of the possible solutions for the `BV`.
@@ -339,15 +330,8 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
     ///
     /// Only returns `Err` if the solver query itself fails.
-    pub fn get_possible_solutions_for_bv(&mut self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<u64>> {
-        self.solver.get_possible_solutions_for_bv(bv, n)
-    }
-
-    /// Get a description of the possible solutions for the `Bool`.
-    ///
-    /// Only returns `Err` if the solver query itself fails.
-    pub fn get_possible_solutions_for_bool(&mut self, b: &B::Bool) -> Result<PossibleSolutions<bool>> {
-        self.solver.get_possible_solutions_for_bool(b)
+    pub fn get_possible_solutions_for_bv(&self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<BVSolution>> {
+        get_possible_solutions_for_bv(self.btor.clone(), bv, n)
     }
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bitvector.
@@ -358,18 +342,9 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     ///
     /// Only returns `Err` if the solver query itself fails.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<u64>> {
-        let bv = self.varmap.lookup_bv_var(funcname, name).clone();  // clone() so that the borrow of self is released
-        self.get_possible_solutions_for_bv(&bv, n)
-    }
-
-    /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bool.
-    ///
-    /// Only returns `Err` if the solver query itself fails or if the `Name` didn't actually represent a bool.
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_possible_solutions_for_bool_by_irname(&mut self, funcname: &String, name: &Name) -> Result<PossibleSolutions<bool>> {
-        let b = self.varmap.lookup_bool_var(funcname, name)?.clone();  // clone() so that the borrow of self is released
-        self.get_possible_solutions_for_bool(&b)
+    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<BVSolution>> {
+        let bv = self.varmap.lookup_var(funcname, name);
+        self.get_possible_solutions_for_bv(bv, n)
     }
 
     /// Create a new (unconstrained) `BV` for the given `Name` (in the current function).
@@ -389,23 +364,6 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         self.varmap.new_bv_with_name(self.cur_loc.func.name.clone(), name, bits)
     }
 
-    /// Create a new (unconstrained) `Bool` for the given `Name` (in the current function).
-    ///
-    /// This function performs uniquing, so if you call it twice
-    /// with the same `Name`-`Function` pair, you will get two different `Bool`s.
-    ///
-    /// Returns the new `Bool`, or `Err` if it can't be created.
-    ///
-    /// (As of this writing, the only `Err` that might be returned is
-    /// `Error::LoopBoundExceeded`, which is returned if creating the new `Bool`
-    /// would exceed `max_versions_of_name` -- see
-    /// [`State::new()`](struct.State.html#method.new).)
-    ///
-    /// Also, we assume that no two `Function`s share the same name.
-    pub fn new_bool_with_name(&mut self, name: Name) -> Result<B::Bool> {
-        self.varmap.new_bool_with_name(self.cur_loc.func.name.clone(), name)
-    }
-
     /// Assign the given `BV` to the given `Name` (in the current function).
     ///
     /// This function performs uniquing, so it creates a new version of the
@@ -422,35 +380,19 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         self.varmap.assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
     }
 
-    /// Assign the given `Bool` to the given `Name` (in the current function).
-    ///
-    /// This function performs uniquing, so it creates a new version of the
-    /// variable represented by the `(String, Name)` pair rather than overwriting
-    /// the current version.
-    ///
-    /// Returns `Err` if the assignment can't be performed.
-    ///
-    /// (As of this writing, the only `Err` that might be returned is
-    /// `Error::LoopBoundExceeded`, which is returned if creating the new version
-    /// of the `Bool` would exceed `max_versions_of_name` -- see
-    /// [`State::new()`](struct.State.html#method.new).)
-    pub fn assign_bool_to_name(&mut self, name: Name, b: B::Bool) -> Result<()> {
-        self.varmap.assign_bool_to_name(self.cur_loc.func.name.clone(), name, b)
-    }
-
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
     /// Will fail with `Error::LoopBoundExceeded` if that would exceed
     /// `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
     #[cfg(debug_assertions)]
     pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<()> {
-        if size(&thing.get_type()) as u32 != resultval.get_size() {
+        if size(&thing.get_type()) as u32 != resultval.get_width() {
             Err(Error::OtherError(format!(
                 "Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}",
                 thing,
                 size(&thing.get_type()),
                 resultval,
-                resultval.get_size()
+                resultval.get_width()
             )))
         } else {
             self.assign_bv_to_name(thing.get_result().clone(), resultval)
@@ -461,24 +403,10 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         self.assign_bv_to_name(thing.get_result().clone(), resultval)
     }
 
-    /// Record the result of `thing` to be `resultval`.
-    /// Assumes `thing` is in the current function.
-    /// Will fail with `Error::LoopBoundExceeded` if that would exceed
-    /// `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
-    pub fn record_bool_result(&mut self, thing: &impl instruction::HasResult, resultval: B::Bool) -> Result<()> {
-        self.assign_bool_to_name(thing.get_result().clone(), resultval)
-    }
-
     /// Overwrite the latest version of the given `Name` to instead be `bv`.
     /// Assumes `Name` is in the current function.
     pub fn overwrite_latest_version_of_bv(&mut self, name: &Name, bv: B::BV) {
         self.varmap.overwrite_latest_version_of_bv(&self.cur_loc.func.name, name, bv)
-    }
-
-    /// Overwrite the latest version of the given `Name` to instead be `b`.
-    /// Assumes `Name` is in the current function.
-    pub fn overwrite_latest_version_of_bool(&mut self, name: &Name, b: B::Bool) {
-        self.varmap.overwrite_latest_version_of_bool(&self.cur_loc.func.name, name, b)
     }
 
     /// Convert an `Operand` to the appropriate `BV`.
@@ -487,7 +415,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     pub fn operand_to_bv(&self, op: &Operand) -> Result<B::BV> {
         match op {
             Operand::ConstantOperand(c) => self.const_to_bv(c),
-            Operand::LocalOperand { name, .. } => Ok(self.varmap.lookup_bv_var(&self.cur_loc.func.name, name).clone()),
+            Operand::LocalOperand { name, .. } => Ok(self.varmap.lookup_var(&self.cur_loc.func.name, name).clone()),
             Operand::MetadataOperand => panic!("Can't convert {:?} to BV", op),
         }
     }
@@ -495,11 +423,11 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Convert a `Constant` to the appropriate `BV`.
     pub fn const_to_bv(&self, c: &Constant) -> Result<B::BV> {
         match c {
-            Constant::Int { bits, value } => Ok(BV::from_u64(self.ctx, *value, *bits)),
+            Constant::Int { bits, value } => Ok(BV::from_u64(self.btor.clone(), *value, *bits)),
             Constant::Null(ty)
             | Constant::AggregateZero(ty)
             | Constant::Undef(ty)
-                => Ok(BV::from_u64(self.ctx, 0, size(ty) as u32)),
+                => Ok(BV::zero(self.btor.clone(), size(ty) as u32)),
             Constant::Struct { values: elements, .. }
             | Constant::Array { elements, .. }
             | Constant::Vector(elements)
@@ -526,9 +454,9 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             Constant::And(a) => Ok(self.const_to_bv(&a.operand0)?.and(&self.const_to_bv(&a.operand1)?)),
             Constant::Or(o) => Ok(self.const_to_bv(&o.operand0)?.or(&self.const_to_bv(&o.operand1)?)),
             Constant::Xor(x) => Ok(self.const_to_bv(&x.operand0)?.xor(&self.const_to_bv(&x.operand1)?)),
-            Constant::Shl(s) => Ok(self.const_to_bv(&s.operand0)?.shl(&self.const_to_bv(&s.operand1)?)),
-            Constant::LShr(s) => Ok(self.const_to_bv(&s.operand0)?.lshr(&self.const_to_bv(&s.operand1)?)),
-            Constant::AShr(s) => Ok(self.const_to_bv(&s.operand0)?.ashr(&self.const_to_bv(&s.operand1)?)),
+            Constant::Shl(s) => Ok(self.const_to_bv(&s.operand0)?.sll(&self.const_to_bv(&s.operand1)?)),
+            Constant::LShr(s) => Ok(self.const_to_bv(&s.operand0)?.srl(&self.const_to_bv(&s.operand1)?)),
+            Constant::AShr(s) => Ok(self.const_to_bv(&s.operand0)?.sra(&self.const_to_bv(&s.operand1)?)),
             Constant::ExtractElement(ee) => match &ee.index {
                 Constant::Int { value: index, .. } => match &ee.vector {
                     Constant::Vector(els) => {
@@ -557,39 +485,55 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(iv.aggregate.clone(), iv.element.clone(), iv.indices.iter().copied())?),
             Constant::GetElementPtr(gep) => {
                 // heavily inspired by `ExecutionManager::symex_gep()` in symex.rs. TODO could try to share more code
-                let z3base = self.const_to_bv(&gep.address)?;
-                let offset = self.get_offset_recursive(gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
-                Ok(z3base.add(&offset).simplify())
+                let bvbase = self.const_to_bv(&gep.address)?;
+                let offset = self.get_offset_recursive(gep.indices.iter(), &gep.address.get_type(), bvbase.get_width())?;
+                Ok(bvbase.add(&offset))
             },
-            Constant::Trunc(t) => self.const_to_bv(&t.operand).map(|bv| bv.extract(size(&t.to_type) as u32 - 1, 0)),
+            Constant::Trunc(t) => self.const_to_bv(&t.operand).map(|bv| bv.slice(size(&t.to_type) as u32 - 1, 0)),
             Constant::ZExt(z) => self.const_to_bv(&z.operand).map(|bv| zero_extend_to_bits(bv, size(&z.to_type) as u32)),
             Constant::SExt(s) => self.const_to_bv(&s.operand).map(|bv| sign_extend_to_bits(bv, size(&s.to_type) as u32)),
             Constant::PtrToInt(pti) => {
                 let bv = self.const_to_bv(&pti.operand)?;
-                assert_eq!(bv.get_size(), size(&pti.to_type) as u32);
+                assert_eq!(bv.get_width(), size(&pti.to_type) as u32);
                 Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::IntToPtr(itp) => {
                 let bv = self.const_to_bv(&itp.operand)?;
-                assert_eq!(bv.get_size(), size(&itp.to_type) as u32);
+                assert_eq!(bv.get_width(), size(&itp.to_type) as u32);
                 Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::BitCast(bc) => {
                 let bv = self.const_to_bv(&bc.operand)?;
-                assert_eq!(bv.get_size(), size(&bc.to_type) as u32);
+                assert_eq!(bv.get_width(), size(&bc.to_type) as u32);
                 Ok(bv)  // just a cast, it's the same bits underneath
             },
             Constant::AddrSpaceCast(ac) => {
                 let bv = self.const_to_bv(&ac.operand)?;
-                assert_eq!(bv.get_size(), size(&ac.to_type) as u32);
+                assert_eq!(bv.get_width(), size(&ac.to_type) as u32);
                 Ok(bv)  // just a cast, it's the same bits underneath
             },
+            Constant::ICmp(icmp) => {
+                let bv0 = self.const_to_bv(&icmp.operand0)?;
+                let bv1 = self.const_to_bv(&icmp.operand1)?;
+                Ok(match icmp.predicate {
+                    IntPredicate::EQ => bv0._eq(&bv1),
+                    IntPredicate::NE => bv0._ne(&bv1),
+                    IntPredicate::UGT => bv0.ugt(&bv1),
+                    IntPredicate::UGE => bv0.ugte(&bv1),
+                    IntPredicate::ULT => bv0.ult(&bv1),
+                    IntPredicate::ULE => bv0.ulte(&bv1),
+                    IntPredicate::SGT => bv0.sgt(&bv1),
+                    IntPredicate::SGE => bv0.sgte(&bv1),
+                    IntPredicate::SLT => bv0.slt(&bv1),
+                    IntPredicate::SLE => bv0.slte(&bv1),
+                })
+            },
             Constant::Select(s) => {
-                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or_else(|| Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
-                if b {
-                    self.const_to_bv(&s.true_value)
-                } else {
-                    self.const_to_bv(&s.false_value)
+                let b = self.const_to_bv(&s.condition)?;
+                match b.as_bool() {
+                    None => Err(Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned())),
+                    Some(true) => self.const_to_bv(&s.true_value),
+                    Some(false) => self.const_to_bv(&s.false_value),
                 }
             },
             _ => unimplemented!("const_to_bv for {:?}", c),
@@ -631,13 +575,13 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-    fn get_offset_recursive(&self, mut indices: impl Iterator<Item = &'p Constant>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
+    fn get_offset_recursive<'a>(&self, mut indices: impl Iterator<Item = &'a Constant>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         match indices.next() {
-            None => Ok(BV::from_u64(self.ctx, 0, result_bits)),
+            None => Ok(BV::zero(self.btor.clone(), result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = zero_extend_to_bits(self.const_to_bv(index)?, result_bits);
-                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, self.ctx)?;
+                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, self.btor.clone())?;
                     self.get_offset_recursive(indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
                 },
@@ -645,7 +589,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                     Constant::Int { value: index, .. } => {
                         let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                         self.get_offset_recursive(indices, &nested_ty, result_bits)
-                            .map(|bv| bv.add(&B::BV::from_u64(self.ctx, offset as u64, result_bits)))
+                            .map(|bv| bv.add(&B::BV::from_u64(self.btor.clone(), offset as u64, result_bits)))
                     },
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                 },
@@ -660,7 +604,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                         match index {
                             Constant::Int { value: index, .. } => {
                                 let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
-                                self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&B::BV::from_u64(self.ctx, offset as u64, result_bits)))
+                                self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&B::BV::from_u64(self.btor.clone(), offset as u64, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                         }
@@ -670,68 +614,6 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 }
                 _ => panic!("get_offset_recursive with base type {:?}", base_type),
             }
-        }
-    }
-
-    /// Convert an `Operand` to the appropriate `Bool`.
-    /// Assumes the `Operand` is in the current function.
-    /// (All `Operand`s should be either a constant or a variable we previously added to the state.)
-    /// This will panic if the `Operand` doesn't have type `Type::bool()`.
-    pub fn operand_to_bool(&self, op: &Operand) -> Result<B::Bool> {
-        match op {
-            Operand::ConstantOperand(c) => self.const_to_bool(c),
-            Operand::LocalOperand { name, .. } => self.varmap.lookup_bool_var(&self.cur_loc.func.name, name).map(|b| b.clone()),
-            op => panic!("Can't convert {:?} to Bool", op),
-        }
-    }
-
-    /// Convert a `Constant` to the appropriate `Bool`.
-    pub fn const_to_bool(&self, c: &Constant) -> Result<B::Bool> {
-        match c {
-            Constant::Int { bits, value } => {
-                assert_eq!(*bits, 1);
-                Ok(B::Bool::from_bool(self.ctx, *value != 0))
-            },
-            Constant::And(a) => {
-                let bv0 = self.const_to_bool(&a.operand0)?;
-                let bv1 = self.const_to_bool(&a.operand1)?;
-                Ok(bv0.and(&[&bv1]))
-            },
-            Constant::Or(o) => {
-                let bv0 = self.const_to_bool(&o.operand0)?;
-                let bv1 = self.const_to_bool(&o.operand1)?;
-                Ok(bv0.or(&[&bv1]))
-            },
-            Constant::Xor(x) => {
-                let bv0 = self.const_to_bool(&x.operand0)?;
-                let bv1 = self.const_to_bool(&x.operand1)?;
-                Ok(bv0.xor(&bv1))
-            },
-            Constant::ICmp(icmp) => {
-                let bv0 = self.const_to_bv(&icmp.operand0)?;
-                let bv1 = self.const_to_bv(&icmp.operand1)?;
-                Ok(match icmp.predicate {
-                    IntPredicate::EQ => bv0._eq(&bv1),
-                    IntPredicate::NE => bv0._eq(&bv1).not(),
-                    IntPredicate::UGT => bv0.ugt(&bv1),
-                    IntPredicate::UGE => bv0.uge(&bv1),
-                    IntPredicate::ULT => bv0.ult(&bv1),
-                    IntPredicate::ULE => bv0.ule(&bv1),
-                    IntPredicate::SGT => bv0.sgt(&bv1),
-                    IntPredicate::SGE => bv0.sge(&bv1),
-                    IntPredicate::SLT => bv0.slt(&bv1),
-                    IntPredicate::SLE => bv0.sle(&bv1),
-                })
-            },
-            Constant::Select(s) => {
-                let b = self.const_to_bool(&s.condition)?.simplify().as_bool().ok_or_else(|| Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned()))?;
-                if b {
-                    self.const_to_bool(&s.true_value)
-                } else {
-                    self.const_to_bool(&s.false_value)
-                }
-            },
-            _ => unimplemented!("const_to_bool for {:?}", c),
         }
     }
 
@@ -746,22 +628,24 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     ///   - `Error::SolverError` if the solver query fails
     ///   - `Error::OtherError` if it finds that it is possible that the `BV`
     ///     points to something that's not a `Function` in the `Project`
-    pub(crate) fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<Callable<'ctx, 'p, B>>> {
+    pub(crate) fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<Callable<'p, B>>> {
         if n == 0 {
             unimplemented!("n == 0 in interpret_as_function_ptr")
         }
         // First try to interpret without a full solve (i.e., with `as_u64()`)
         match bv.as_u64().and_then(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)) {
-            Some(f) => Ok(PossibleSolutions::PossibleSolutions(vec![f])),  // there is only one possible solution, and it's this `f`
+            Some(f) => Ok(PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(f)))),  // there is only one possible solution, and it's this `f`
             None => {
                 match self.get_possible_solutions_for_bv(&bv, n)? {
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => Ok(PossibleSolutions::MoreThanNPossibleSolutions(n)),
                     PossibleSolutions::PossibleSolutions(v) => {
                         v.into_iter()
-                            .map(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
-                                .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
-                            )
-                            .collect::<Result<Vec<_>>>()
+                            .map(|addr| {
+                                let addr = addr.as_u64().unwrap();
+                                self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
+                                    .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
+                            })
+                            .collect::<Result<HashSet<_>>>()
                             .map(PossibleSolutions::PossibleSolutions)
                     }
                 }
@@ -799,7 +683,7 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Allocate a value of size `bits`; return a pointer to the newly allocated object
     pub fn allocate(&mut self, bits: impl Into<u64>) -> B::BV {
         let raw_ptr = self.alloc.alloc(bits);
-        BV::from_u64(self.ctx, raw_ptr, 64)
+        BV::from_u64(self.btor.clone(), raw_ptr, 64)
     }
 
     /// Get the size, in bits, of the allocation at the given address, or `None`
@@ -812,7 +696,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
                 match self.get_possible_solutions_for_bv(addr, 1)? {
                     PossibleSolutions::MoreThanNPossibleSolutions(1) => Err(Error::OtherError(format!("get_allocation_size: address is not a constant: {:?}", addr))),
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n == {:?}", n),
-                    PossibleSolutions::PossibleSolutions(v) => Ok(self.alloc.get_allocation_size(v[0])),
+                    PossibleSolutions::PossibleSolutions(v) => {
+                        let addr = v.iter()
+                            .next()
+                            .ok_or(Error::Unsat)?
+                            .as_u64()
+                            .ok_or_else(|| Error::OtherError("get_allocation_size: address is more than 64 bits wide".to_owned()))?;
+                        Ok(self.alloc.get_allocation_size(addr))
+                    },
                 }
             }
         }
@@ -857,15 +748,14 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
         } else {
             None
         }
-
     }
 
     /// Save the current state, about to enter the `BasicBlock` with the given `Name` (which must be
     /// in the same `Module` and `Function` as `state.cur_loc`), as a backtracking point.
     /// The constraint will be added only if we end up backtracking to this point, and only then.
-    pub fn save_backtracking_point(&mut self, bb_to_enter: Name, constraint: B::Bool) {
+    pub fn save_backtracking_point(&mut self, bb_to_enter: Name, constraint: B::BV) {
         debug!("Saving a backtracking point, which would enter bb {:?} with constraint {:?}", bb_to_enter, constraint);
-        self.solver.push();
+        self.btor.push(1);
         let backtrack_loc = Location {
             module: self.cur_loc.module,
             func: self.cur_loc.func,
@@ -888,8 +778,8 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
     pub fn revert_to_backtracking_point(&mut self) -> bool {
         if let Some(bp) = self.backtrack_points.pop() {
             debug!("Reverting to backtracking point {}", bp);
-            self.solver.pop(1);
-            self.assert(&bp.constraint);
+            self.btor.pop(1);
+            bp.constraint.assert();
             self.varmap = bp.varmap;
             self.mem = bp.mem;
             self.stack = bp.stack;
@@ -916,25 +806,37 @@ impl<'ctx, 'p, B> State<'ctx, 'p, B> where B: Backend<'ctx> {
             }))
             .collect()
     }
+
+    /// returns a `String` describing a set of satisfying assignments for all variables
+    pub fn current_assignments_as_pretty_string(&self) -> Result<String> {
+        if self.sat()? {
+            let printed = self.btor.print_model();
+            let sorted = itertools::sorted(printed.lines());
+            Ok(sorted.fold(String::new(), |s, line| s + "\n" + line))
+        } else {
+            Ok("<state is unsatisfiable>".to_owned())
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use boolector::BV;
     use std::collections::HashMap;
 
-    // we don't include tests here for Solver, Memory, Alloc, or VarMap; those are tested in their own modules.
-    // Instead, here we just test the nontrivial functionality that State has itself.
+    // we don't include tests here for Memory, Alloc, or VarMap; those are tested in their own modules.
+    // Instead, here we just test the underlying solver, and the nontrivial functionality that State has itself.
 
-    /// utility to initialize a `State` out of a `z3::Context`, a `Project`, and a function name
-    fn blank_state<'ctx, 'p>(ctx: &'ctx z3::Context, project: &'p Project, funcname: &str) -> State<'ctx, 'p, Z3Backend<'ctx>> {
+    /// utility to initialize a `State` out of a `Btor`, a `Project`, and a function name
+    fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, BtorBackend> {
         let (func, module) = project.get_func_by_name(funcname).expect("Failed to find function");
         let start_loc = Location {
             module,
             func,
             bbname: "test_bb".to_owned().into(),
         };
-        State::new(ctx, project, start_loc, Config::default())
+        State::new(project, start_loc, Config::default())
     }
 
     /// Utility that creates a simple `Project` for testing.
@@ -960,95 +862,201 @@ mod tests {
     }
 
     #[test]
-    fn lookup_vars_via_operand() {
-        let ctx = z3::Context::new(&z3::Config::new());
+    fn sat() {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let mut state = blank_state(&ctx, &project, "test_func");
+        let state = blank_state(&project, "test_func");
+
+        // empty state should be sat
+        assert_eq!(state.sat(), Ok(true));
+
+        // adding True constraint should still be sat
+        BV::from_bool(state.btor.clone(), true).assert();
+        assert_eq!(state.sat(), Ok(true));
+
+        // adding x > 0 constraint should still be sat
+        let x = BV::new(state.btor.clone(), 64, Some("x"));
+        x.sgt(&BV::zero(state.btor.clone(), 64)).assert();
+        assert_eq!(state.sat(), Ok(true));
+    }
+
+    #[test]
+    fn unsat() {
+        let func = blank_function("test_func");
+        let project = blank_project("test_mod", func);
+        let state = blank_state(&project, "test_func");
+
+        // adding False constraint should be unsat
+        BV::from_bool(state.btor.clone(), false).assert();
+        assert_eq!(state.sat(), Ok(false));
+    }
+
+    #[test]
+    fn unsat_with_extra_constraints() {
+        let func = blank_function("test_func");
+        let project = blank_project("test_mod", func);
+        let state = blank_state(&project, "test_func");
+
+        // adding x > 3 constraint should still be sat
+        let x = BV::new(state.btor.clone(), 64, Some("x"));
+        x.ugt(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+        assert_eq!(state.sat(), Ok(true));
+
+        // adding x < 3 constraint should make us unsat
+        let bad_constraint = x.ult(&BV::from_u64(state.btor.clone(), 3, 64));
+        assert_eq!(state.sat_with_extra_constraints(std::iter::once(&bad_constraint)), Ok(false));
+
+        // the state itself should still be sat, extra constraints weren't permanently added
+        assert_eq!(state.sat(), Ok(true));
+    }
+
+    #[test]
+    fn get_a_solution() {
+        let func = blank_function("test_func");
+        let project = blank_project("test_mod", func);
+        let state = blank_state(&project, "test_func");
+
+        // add x > 3 constraint
+        let x = BV::new(state.btor.clone(), 64, Some("x"));
+        x.ugt(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+
+        // check that the computed value of x is > 3
+        let x_value = state.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x").as_u64().unwrap();
+        assert!(x_value > 3);
+    }
+
+    #[test]
+    fn possible_solutions() {
+        let func = blank_function("test_func");
+        let project = blank_project("test_mod", func);
+        let state = blank_state(&project, "test_func");
+
+        // add x > 3 constraint
+        let x = BV::new(state.btor.clone(), 64, Some("x"));
+        x.ugt(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+
+        // check that there are more than 2 solutions
+        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
+        assert_eq!(solutions, Some(PossibleSolutions::MoreThanNPossibleSolutions(2)));
+
+        // add x < 6 constraint
+        x.ult(&BV::from_u64(state.btor.clone(), 6, 64)).assert();
+
+        // check that there are now exactly two solutions
+        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
+        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::from_iter(vec![4,5].into_iter()))));
+
+        // add x < 5 constraint
+        x.ult(&BV::from_u64(state.btor.clone(), 5, 64)).assert();
+
+        // check that there is now exactly one solution
+        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
+        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(4)))));
+
+        // add x < 3 constraint
+        x.ult(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+
+        // check that there are now no solutions
+        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
+        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::new())));
+    }
+
+    #[test]
+    fn lookup_vars_via_operand() {
+        let func = blank_function("test_func");
+        let project = blank_project("test_mod", func);
+        let mut state = blank_state(&project, "test_func");
 
         // create llvm-ir names
-        let valname = Name::Name("val".to_owned());
-        let boolname = Name::Number(2);
+        let name1 = Name::Name("val".to_owned());
+        let name2 = Name::Number(2);
 
-        // create corresponding Z3 values
-        let valvar = state.new_bv_with_name(valname.clone(), 64).unwrap();
-        let boolvar = state.new_bool_with_name(boolname.clone()).unwrap();  // these clone()s wouldn't normally be necessary but we want to reuse the names to create `Operand`s later
+        // create corresponding BV values
+        let var1 = state.new_bv_with_name(name1.clone(), 64).unwrap();
+        let var2 = state.new_bv_with_name(name2.clone(), 1).unwrap();  // these clone()s wouldn't normally be necessary but we want to reuse the names to create `Operand`s later
 
-        // check that we can look up the correct Z3 values via LocalOperands
-        let valop = Operand::LocalOperand { name: valname, ty: Type::i32() };
-        let boolop = Operand::LocalOperand { name: boolname, ty: Type::bool() };
-        assert_eq!(state.operand_to_bv(&valop), Ok(valvar));
-        assert_eq!(state.operand_to_bool(&boolop), Ok(boolvar));
+        // check that we can look up the correct BV values via LocalOperands
+        let op1 = Operand::LocalOperand { name: name1, ty: Type::i32() };
+        let op2 = Operand::LocalOperand { name: name2, ty: Type::bool() };
+        assert_eq!(state.operand_to_bv(&op1), Ok(var1));
+        assert_eq!(state.operand_to_bv(&op2), Ok(var2));
     }
 
     #[test]
     fn const_bv() {
-        let ctx = z3::Context::new(&z3::Config::new());
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let mut state = blank_state(&ctx, &project, "test_func");
+        let state = blank_state(&project, "test_func");
 
         // create an llvm-ir value which is constant 3
         let constint = Constant::Int { bits: 64, value: 3 };
 
-        // this should create a corresponding Z3 value which is also constant 3
+        // this should create a corresponding BV value which is also constant 3
         let bv = state.operand_to_bv(&Operand::ConstantOperand(constint)).unwrap();
 
-        // check that the Z3 value was evaluated to 3
-        assert_eq!(state.get_a_solution_for_bv(&bv), Ok(Some(3)));
+        // check that the BV value was evaluated to 3
+        let solution = state.get_a_solution_for_bv(&bv).unwrap().expect("Expected a solution for the bv").as_u64().unwrap();
+        assert_eq!(solution, 3);
     }
 
     #[test]
     fn const_bool() {
-        let ctx = z3::Context::new(&z3::Config::new());
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let mut state = blank_state(&ctx, &project, "test_func");
+        let state = blank_state(&project, "test_func");
 
         // create llvm-ir constants true and false
         let consttrue = Constant::Int { bits: 1, value: 1 };
         let constfalse = Constant::Int { bits: 1, value: 0 };
 
-        // this should create Z3 values true and false
-        let bvtrue = state.operand_to_bool(&Operand::ConstantOperand(consttrue)).unwrap();
-        let bvfalse = state.operand_to_bool(&Operand::ConstantOperand(constfalse)).unwrap();
+        // this should create BV values true and false
+        let bvtrue = state.operand_to_bv(&Operand::ConstantOperand(consttrue)).unwrap();
+        let bvfalse = state.operand_to_bv(&Operand::ConstantOperand(constfalse)).unwrap();
 
-        // check that the Z3 values are evaluated to true and false respectively
-        assert_eq!(state.get_a_solution_for_bool(&bvtrue), Ok(Some(true)));
-        assert_eq!(state.get_a_solution_for_bool(&bvfalse), Ok(Some(false)));
+        // check that the BV values are evaluated to true and false respectively
+        assert_eq!(
+            state.get_a_solution_for_bv(&bvtrue).unwrap().expect("Expected a solution for bvtrue").as_bool().unwrap(),
+            true,
+        );
+        assert_eq!(
+            state.get_a_solution_for_bv(&bvfalse).unwrap().expect("Expected a solution for bvfalse").as_bool().unwrap(),
+            false,
+        );
 
         // assert the first one, which should be true, so we should still be sat
-        state.assert(&bvtrue);
-        assert_eq!(state.check(), Ok(true));
+        bvtrue.assert();
+        assert_eq!(state.sat(), Ok(true));
 
         // assert the second one, which should be false, so we should be unsat
-        state.assert(&bvfalse);
-        assert_eq!(state.check(), Ok(false));
+        bvfalse.assert();
+        assert_eq!(state.sat(), Ok(false));
     }
 
     #[test]
     fn backtracking() {
-        let ctx = z3::Context::new(&z3::Config::new());
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let mut state = blank_state(&ctx, &project, "test_func");
+        let mut state = blank_state(&project, "test_func");
 
         // assert x > 11
-        let x = z3::ast::BV::new_const(&ctx, "x", 64);
-        state.assert(&x.bvsgt(&BV::from_i64(&ctx, 11, 64)));
+        let x = BV::new(state.btor.clone(), 64, Some("x"));
+        x.sgt(&BV::from_i64(state.btor.clone(), 11, 64)).assert();
 
         // create a backtrack point with constraint y > 5
-        let y = z3::ast::BV::new_const(&ctx, "y", 64);
-        let constraint = y.bvsgt(&BV::from_i64(&ctx, 5, 64));
+        let y = BV::new(state.btor.clone(), 64, Some("y"));
+        let constraint = y.sgt(&BV::from_i64(state.btor.clone(), 5, 64));
         let bb = BasicBlock::new(Name::Name("bb_target".to_owned()));
         state.save_backtracking_point(bb.name.clone(), constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
-        assert_eq!(state.check_with_extra_constraints(std::iter::once(&y.bvslt(&BV::from_i64(&ctx, 4, 64)))), Ok(true));
+        assert_eq!(
+            state.sat_with_extra_constraints(std::iter::once(&y.slt(&BV::from_i64(state.btor.clone(), 4, 64)))),
+            Ok(true),
+        );
 
         // assert x < 8 to make us unsat
-        state.assert(&x.bvslt(&BV::from_i64(&ctx, 8, 64)));
-        assert_eq!(state.check(), Ok(false));
+        x.slt(&BV::from_i64(state.btor.clone(), 8, 64)).assert();
+        assert_eq!(state.sat(), Ok(false));
 
         // note the pre-rollback location
         let pre_rollback = state.cur_loc.clone();
@@ -1061,13 +1069,13 @@ mod tests {
         assert_eq!(state.prev_bb_name, Some("test_bb".to_owned().into()));  // the `blank_state` comes with this as the current bb name
 
         // check that the constraint x < 8 was removed: we're sat again
-        assert_eq!(state.check(), Ok(true));
+        assert_eq!(state.sat(), Ok(true));
 
         // check that the constraint y > 5 was added: y evaluates to something > 5
-        assert!(state.get_a_solution_for_bv(&y).unwrap().unwrap() > 5);
+        assert!(state.get_a_solution_for_bv(&y).unwrap().expect("Expected a solution for y").as_u64().unwrap() > 5);
 
         // check that the first constraint remained in place: x > 11
-        assert!(state.get_a_solution_for_bv(&x).unwrap().unwrap() > 11);
+        assert!(state.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x").as_u64().unwrap() > 11);
 
         // check that trying to backtrack again fails
         assert!(!state.revert_to_backtracking_point());

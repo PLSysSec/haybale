@@ -8,17 +8,17 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-pub struct Config<'ctx, B> where B: Backend<'ctx> {
+pub struct Config<'p, B> where B: Backend {
     /// Maximum number of times to execute any given line of LLVM IR.
     /// This bounds both the number of iterations of loops, and also the depth of recursion.
     /// For inner loops, this bounds the number of total iterations across all invocations of the loop.
     pub loop_bound: usize,
 
     /// Active function hooks
-    pub function_hooks: FunctionHooks<'ctx, B>,
+    pub function_hooks: FunctionHooks<'p, B>,
 }
 
-impl<'ctx, B: Backend<'ctx>> Config<'ctx, B> {
+impl<'p, B: Backend> Config<'p, B> {
     /// Creates a new `Config` with the given `loop_bound` and no function hooks.
     ///
     /// You may want to consider `Config::default()` which provides defaults for
@@ -31,7 +31,7 @@ impl<'ctx, B: Backend<'ctx>> Config<'ctx, B> {
     }
 }
 
-impl<'ctx, B: Backend<'ctx>> Default for Config<'ctx, B> {
+impl<'p, B: Backend> Default for Config<'p, B> {
     /// Default values for all configuration parameters.
     ///
     /// In particular, this uses
@@ -50,16 +50,16 @@ impl<'ctx, B: Backend<'ctx>> Default for Config<'ctx, B> {
     }
 }
 
-pub struct FunctionHooks<'ctx, B> where B: Backend<'ctx> {
+pub struct FunctionHooks<'p, B: Backend + 'p> {
     /// Map from function names to the hook to use.
     /// If a function name isn't in this map, the function isn't hooked.
-    hooks: HashMap<String, FunctionHook<'ctx, B>>,
+    hooks: HashMap<String, FunctionHook<'p, B>>,
 
     /// For internal use in creating unique `id`s for `FunctionHook`s
     cur_id: usize,
 }
 
-impl<'ctx, B: Backend<'ctx>> FunctionHooks<'ctx, B> {
+impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Create a blank `FunctionHooks` instance with no function hooks.
     ///
     /// You may want to consider `FunctionHooks::default()` which provides
@@ -92,8 +92,8 @@ impl<'ctx, B: Backend<'ctx>> FunctionHooks<'ctx, B> {
     /// (4) If none of the above options apply, an error will be raised.
     /// Note that this means that calls to external functions will always
     /// error unless a hook for them is provided here.
-    pub fn add<H>(&mut self, hooked_function: impl Into<String>, hook: &'ctx H)
-        where H: Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> Result<ReturnValue<B::BV>>
+    pub fn add<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
+        where H: Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>
     {
         self.hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
         self.cur_id += 1;
@@ -106,18 +106,18 @@ impl<'ctx, B: Backend<'ctx>> FunctionHooks<'ctx, B> {
     }
 
     /// Iterate over all function hooks, as (function name, hook) pairs.
-    pub(crate) fn get_all_hooks(&self) -> impl Iterator<Item = (&String, &FunctionHook<'ctx, B>)> {
+    pub(crate) fn get_all_hooks(&self) -> impl Iterator<Item = (&String, &FunctionHook<'p, B>)> {
         self.hooks.iter()
     }
 
     /// Get the `FunctionHook` active for the given `funcname`, or `None` if
     /// there is no hook active for the function.
-    pub(crate) fn get_hook_for(&self, funcname: &str) -> Option<&FunctionHook<'ctx, B>> {
+    pub(crate) fn get_hook_for(&self, funcname: &str) -> Option<&FunctionHook<'p, B>> {
         self.hooks.get(funcname)
     }
 }
 
-impl<'ctx, B: Backend<'ctx>> Default for FunctionHooks<'ctx, B> {
+impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
     /// Provides predefined hooks for common functions. (At the time of this
     /// writing, only `malloc()`, `calloc()`, `realloc()`, and `free()`.)
     ///
@@ -141,43 +141,43 @@ impl<'ctx, B: Backend<'ctx>> Default for FunctionHooks<'ctx, B> {
 /// They should return the [`ReturnValue`](enum.ReturnValue.html) representing
 /// the return value of the call, or an appropriate [`Error`](enum.Error.html) if
 /// they cannot.
-pub(crate) struct FunctionHook<'ctx, B: Backend<'ctx>> {
+pub(crate) struct FunctionHook<'p, B: Backend> {
     /// The actual hook to be executed
-    hook: Rc<Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> Result<ReturnValue<B::BV>> + 'ctx>,
+    hook: Rc<Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + 'p>,
 
     /// A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
     id: usize,
 }
 
-impl<'ctx, B: Backend<'ctx>> Clone for FunctionHook<'ctx, B> {
+impl<'p, B: Backend> Clone for FunctionHook<'p, B> {
     fn clone(&self) -> Self {
         Self { hook: self.hook.clone(), id: self.id }
     }
 }
 
-impl<'ctx, B: Backend<'ctx>> PartialEq for FunctionHook<'ctx, B> {
+impl<'p, B: Backend> PartialEq for FunctionHook<'p, B> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<'ctx, B: Backend<'ctx>> Eq for FunctionHook<'ctx, B> {}
+impl<'p, B: Backend> Eq for FunctionHook<'p, B> {}
 
-impl<'ctx, B: Backend<'ctx>> Hash for FunctionHook<'ctx, B> {
+impl<'p, B: Backend> Hash for FunctionHook<'p, B> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
 }
 
-impl<'ctx, B: Backend<'ctx>> FunctionHook<'ctx, B> {
+impl<'p, B: Backend> FunctionHook<'p, B> {
     /// `id`: A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
-    pub fn new(id: usize, f: &'ctx Fn(&mut State<'ctx, '_, B>, &instruction::Call) -> Result<ReturnValue<B::BV>>) -> Self {
+    pub fn new(id: usize, f: &'p Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>) -> Self {
         Self { hook: Rc::new(f), id }
     }
 
-    pub fn call_hook(&self, state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+    pub fn call_hook(&self, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
         (self.hook)(state, call)
     }
 }

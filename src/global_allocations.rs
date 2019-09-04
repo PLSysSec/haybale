@@ -6,23 +6,24 @@ use log::debug;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 /// `GlobalAllocations` is responsible for keeping track of which global variable
 /// names in which modules resolve to which addresses.
 ///
 /// It has to take into account both module-private and public definitions, of
 /// both the strong and weak varieties.
-pub(crate) struct GlobalAllocations<'ctx, 'p, B: Backend<'ctx>> {
+pub(crate) struct GlobalAllocations<'p, B: Backend> {
     /// Map from `Name`s of global variables and `Function`s, to addresses at
     /// which they are allocated. These definitions can be either "strong" or
     /// "weak"; see notes on [`Definition`](enum.Definition.html).
     allocated_globals: HashMap<Name, Definition<B::BV>>,
     /// Map from `FunctionHook`s to addresses at which they are allocated.
     /// Currently, `FunctionHook` definitions are always "strong".
-    allocated_hooks: HashMap<FunctionHook<'ctx, B>, B::BV>,
+    allocated_hooks: HashMap<FunctionHook<'p, B>, B::BV>,
     /// Somewhat a reverse of the above two maps: this is a map from an address
     /// to the `Callable` which was allocated at that address (if any)
-    addr_to_function: HashMap<u64, Callable<'ctx, 'p, B>>,
+    addr_to_function: HashMap<u64, Callable<'p, B>>,
     /// While `allocated_globals` is for "public" (non-module-private) globals,
     /// this is a similar map for module-private globals.
     /// It maps module names to maps of global names to allocated addresses.
@@ -30,7 +31,7 @@ pub(crate) struct GlobalAllocations<'ctx, 'p, B: Backend<'ctx>> {
     module_private_allocated_globals: HashMap<String, HashMap<Name, B::BV>>,
     /// This is to `module_private_allocated_globals` as `addr_to_function` is
     /// to `allocated_globals`
-    module_private_addr_to_function: HashMap<String, HashMap<u64, Callable<'ctx, 'p, B>>>,
+    module_private_addr_to_function: HashMap<String, HashMap<u64, Callable<'p, B>>>,
 }
 
 /// Strong and weak definitions.
@@ -57,12 +58,12 @@ impl<V> Definition<V> {
 
 /// Both LLVM `Function`s and `FunctionHook`s can be assigned addresses, and
 /// function pointers can point to either
-pub(crate) enum Callable<'ctx, 'p, B: Backend<'ctx>> {
+pub(crate) enum Callable<'p, B: Backend> {
     LLVMFunction(&'p Function),
-    FunctionHook(FunctionHook<'ctx, B>),
+    FunctionHook(FunctionHook<'p, B>),
 }
 
-impl<'ctx, 'p, B: Backend<'ctx>> Clone for Callable<'ctx, 'p, B> {
+impl<'p, B: Backend> Clone for Callable<'p, B> {
     fn clone(&self) -> Self {
         match self {
             Callable::LLVMFunction(f) => Callable::LLVMFunction(f),
@@ -71,13 +72,35 @@ impl<'ctx, 'p, B: Backend<'ctx>> Clone for Callable<'ctx, 'p, B> {
     }
 }
 
-impl<'ctx, 'p, B: Backend<'ctx>> fmt::Debug for Callable<'ctx, 'p, B> {
+impl<'p, B: Backend> fmt::Debug for Callable<'p, B> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Callable::LLVMFunction(func) => {
                 write!(f, "<Function {:?}>", &func.name)
             },
             Callable::FunctionHook(_) => write!(f, "<FunctionHook>"),
+        }
+    }
+}
+
+impl<'p, B: Backend> PartialEq for Callable<'p, B> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Callable::LLVMFunction(f1), Callable::LLVMFunction(f2)) => f1.name == f2.name,  // assume functions are unique by name
+            (Callable::FunctionHook(f1), Callable::FunctionHook(f2)) => f1 == f2,
+            (_, _) => false,
+        }
+    }
+}
+
+// our implementation of `PartialEq` satisfies `Eq` under our assumptions
+impl<'p, B: Backend> Eq for Callable<'p, B> {}
+
+impl<'p, B: Backend> Hash for Callable<'p, B> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Callable::LLVMFunction(f) => f.name.hash(state),  // assume functions are unique by name
+            Callable::FunctionHook(fh) => fh.hash(state),
         }
     }
 }
@@ -116,7 +139,7 @@ enum AllocationResult {
     NoAllocate,
 }
 
-impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
+impl<'p, B: Backend> GlobalAllocations<'p, B> {
     pub fn new() -> Self {
         Self {
             allocated_globals: HashMap::new(),
@@ -172,7 +195,7 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
     /// don't at this time support module-private function hooks.
     /// You can still hook module-private functions, but those hooks will apply
     /// to all functions of that name in all modules.
-    pub fn allocate_function_hook(&mut self, hook: FunctionHook<'ctx, B>, addr: u64, addr_bv: B::BV) {
+    pub fn allocate_function_hook(&mut self, hook: FunctionHook<'p, B>, addr: u64, addr_bv: B::BV) {
         self.allocated_hooks.insert(hook.clone(), addr_bv);
         self.addr_to_function.insert(addr, Callable::FunctionHook(hook));
     }
@@ -254,7 +277,7 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
 
     /// Get the address at which the given `FunctionHook` has been allocated; or
     /// `None` if not found.
-    pub fn get_function_hook_address(&self, hook: &FunctionHook<'ctx, B>) -> Option<&B::BV> {
+    pub fn get_function_hook_address(&self, hook: &FunctionHook<'p, B>) -> Option<&B::BV> {
         self.allocated_hooks.get(hook)
     }
 
@@ -264,7 +287,7 @@ impl<'ctx, 'p, B: Backend<'ctx>> GlobalAllocations<'ctx, 'p, B> {
     /// `module`: The `Module` in which the address appeared. Note that modules
     /// may have their own module-private functions with the same name, so the
     /// name alone is not sufficient to identify a unique global.
-    pub fn get_func_for_address(&self, addr: u64, module: &Module) -> Option<Callable<'ctx, 'p, B>> {
+    pub fn get_func_for_address(&self, addr: u64, module: &Module) -> Option<Callable<'p, B>> {
         self.addr_to_function
             .get(&addr)
             .cloned()

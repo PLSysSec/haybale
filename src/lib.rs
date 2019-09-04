@@ -17,7 +17,6 @@ mod default_hooks;
 mod state;
 pub mod memory;
 mod alloc;
-pub mod solver;
 mod varmap;
 mod double_keyed_map;
 mod global_allocations;
@@ -29,6 +28,7 @@ pub use return_value::ReturnValue;
 mod error;
 pub use error::*;
 mod extend;
+mod sat;
 
 pub mod backend;
 use backend::*;
@@ -89,19 +89,19 @@ impl SolutionValue {
 /// Note: `find_zero_of_func()` may be of some use itself, but is included in the
 /// crate more as an example of how you can use the other public functions in the
 /// crate.
-pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, project: &'p Project, config: Config<'ctx, Z3Backend<'ctx>>) -> Option<Vec<SolutionValue>> {
-    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, funcname, project, config);
+pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Config<'p, BtorBackend>) -> Option<Vec<SolutionValue>> {
+    let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
     let start_func = em.state().cur_loc.func;
     let returnwidth = size(&start_func.return_type);
-    let zero = z3::ast::BV::from_u64(ctx, 0, returnwidth as u32);
+    let zero = BV::zero(em.state().btor.clone(), returnwidth as u32);
     let mut found = false;
     while let Some(z3rval) = em.next() {
         match z3rval {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
             ReturnValue::Return(z3rval) => {
                 let state = em.mut_state();
-                state.assert(&z3rval._eq(&zero));
-                if state.check().unwrap() {
+                z3rval._eq(&zero).assert();
+                if state.sat().unwrap() {
                     found = true;
                     break;
                 }
@@ -115,7 +115,9 @@ pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, proje
         // in this case state.check() must have passed
         Some(start_func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
             let param_as_u64 = state.get_a_solution_for_bv(bv).unwrap()
-                .expect("since state.check() passed, expected a solution for each var");
+                .expect("since state.check() passed, expected a solution for each var")
+                .as_u64()
+                .expect("parameter more than 64 bits wide");
             match &p.ty {
                 Type::IntegerType { bits: 8 } => SolutionValue::I8(param_as_u64 as i8),
                 Type::IntegerType { bits: 16 } => SolutionValue::I16(param_as_u64 as i16),
@@ -143,20 +145,20 @@ pub fn find_zero_of_func<'ctx, 'p>(ctx: &'ctx z3::Context, funcname: &str, proje
 /// `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
 ///
 /// For detailed descriptions of the other arguments, see [`symex_function`](fn.symex_function.html).
-pub fn get_possible_return_values_of_func<'ctx, 'p>(
-    ctx: &'ctx z3::Context,
+pub fn get_possible_return_values_of_func<'p>(
     funcname: &str,
     args: impl IntoIterator<Item = Option<u64>>,
     project: &'p Project,
-    config: Config<'ctx, Z3Backend<'ctx>>,
+    config: Config<'p, BtorBackend>,
     n: usize,
 ) -> PossibleSolutions<u64> {
-    let mut em: ExecutionManager<Z3Backend> = symex_function(ctx, funcname, project, config);
+    let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
 
     let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
     for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
         if let Some(val) = arg {
-            em.mut_state().overwrite_latest_version_of_bv(&param.name, BV::from_u64(ctx, val, size(&param.ty) as u32));
+            let val = BV::from_u64(em.state().btor.clone(), val, size(&param.ty) as u32);
+            em.mut_state().overwrite_latest_version_of_bv(&param.name, val);
         }
     }
 
@@ -169,7 +171,7 @@ pub fn get_possible_return_values_of_func<'ctx, 'p>(
                 match state.get_possible_solutions_for_bv(&z3rval, n).unwrap() {
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => return PossibleSolutions::MoreThanNPossibleSolutions(n),
                     PossibleSolutions::PossibleSolutions(v) => {
-                        candidate_values.extend(v);
+                        candidate_values.extend(v.iter().map(|bvsol| bvsol.as_u64().unwrap()));
                         if candidate_values.len() > n {
                             break;
                         }

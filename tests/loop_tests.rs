@@ -17,8 +17,7 @@ fn while_loop() {
     let funcname = "while_loop";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -28,8 +27,7 @@ fn for_loop() {
     let funcname = "for_loop";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -39,8 +37,7 @@ fn loop_zero_iterations() {
     let funcname = "loop_zero_iterations";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(0));
 }
@@ -50,8 +47,7 @@ fn loop_with_cond() {
     let funcname = "loop_with_cond";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(7));
 }
@@ -61,8 +57,7 @@ fn loop_inside_cond() {
     let funcname = "loop_inside_cond";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert!(args[0].unwrap_to_i32() > 7);
 }
@@ -72,8 +67,7 @@ fn loop_over_array() {
     let funcname = "loop_over_array";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -83,8 +77,7 @@ fn sum_of_array() {
     let funcname = "sum_of_array";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -94,8 +87,7 @@ fn search_array() {
     let funcname = "search_array";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(4));
 }
@@ -105,9 +97,8 @@ fn nested_loop() {
     let funcname = "nested_loop";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     let config = Config { loop_bound: 50, ..Config::default() };
-    let args = find_zero_of_func(&ctx, funcname, &proj, config).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, config).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }

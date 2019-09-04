@@ -5,6 +5,7 @@ use either::Either;
 use reduce::Reduce;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::convert::TryInto;
 
 pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::backend::*;
@@ -24,12 +25,11 @@ use crate::return_value::*;
 /// should take place. In the absence of function hooks (see
 /// [`Config`](struct.Config.html)), we will try to enter calls to any functions
 /// defined in the `Project`.
-pub fn symex_function<'ctx, 'p, B>(
-    ctx: &'ctx z3::Context,
+pub fn symex_function<'p, B: Backend>(
     funcname: &str,
     project: &'p Project,
-    config: Config<'ctx, B>,
-) -> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
+    config: Config<'p, B>,
+) -> ExecutionManager<'p, B> {
     debug!("Symexing function {}", funcname);
     let (func, module) = project.get_func_by_name(funcname).unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
     let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
@@ -38,11 +38,11 @@ pub fn symex_function<'ctx, 'p, B>(
         func,
         bbname: bb.name.clone(),
     };
-    let mut state = State::new(ctx, project, start_loc, config);
-    let z3params: Vec<_> = func.parameters.iter().map(|param| {
+    let mut state = State::new(project, start_loc, config);
+    let bvparams: Vec<_> = func.parameters.iter().map(|param| {
         state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
     }).collect();
-    ExecutionManager::new(state, project, z3params, &bb)
+    ExecutionManager::new(state, project, bvparams, &bb)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a function.
@@ -54,10 +54,10 @@ pub fn symex_function<'ctx, 'p, B>(
 /// from the end of that path using the `state()` or `mut_state()` methods.
 /// When `next()` returns `None`, there are no more possible paths through the
 /// function.
-pub struct ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
-    state: State<'ctx, 'p, B>,
+pub struct ExecutionManager<'p, B: Backend> {
+    state: State<'p, B>,
     project: &'p Project,
-    z3params: Vec<B::BV>,
+    bvparams: Vec<B::BV>,
     start_bb: &'p BasicBlock,
     /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
     /// has not yet produced its first path, i.e., `next()` has not been called
@@ -65,12 +65,12 @@ pub struct ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
     fresh: bool,
 }
 
-impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
-    fn new(state: State<'ctx, 'p, B>, project: &'p Project, z3params: Vec<B::BV>, start_bb: &'p BasicBlock) -> Self {
+impl<'p, B: Backend> ExecutionManager<'p, B> {
+    fn new(state: State<'p, B>, project: &'p Project, bvparams: Vec<B::BV>, start_bb: &'p BasicBlock) -> Self {
         Self {
             state,
             project,
-            z3params,
+            bvparams,
             start_bb,
             fresh: true,
         }
@@ -79,7 +79,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
     /// Provides access to the `State` resulting from the end of the most recently
     /// explored path (or, if `next()` has never been called on this `ExecutionManager`,
     /// then simply the initial `State` which was passed in).
-    pub fn state(&self) -> &State<'ctx, 'p, B> {
+    pub fn state(&self) -> &State<'p, B> {
         &self.state
     }
 
@@ -88,17 +88,17 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> {
     /// "sticky", and will persist through all executions of the function.
     /// However, changes made to a final state (after a call to `next()`) will be
     /// completely wiped away the next time that `next()` is called.
-    pub fn mut_state(&mut self) -> &mut State<'ctx, 'p, B> {
+    pub fn mut_state(&mut self) -> &mut State<'p, B> {
         &mut self.state
     }
 
     /// Provides access to the `BV` objects representing each of the function's parameters
     pub fn param_bvs(&self) -> &Vec<B::BV> {
-        &self.z3params
+        &self.bvparams
     }
 }
 
-impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
+impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
     type Item = ReturnValue<B::BV>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -117,7 +117,7 @@ impl<'ctx, 'p, B> Iterator for ExecutionManager<'ctx, 'p, B> where B: Backend<'c
     }
 }
 
-impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
+impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Symex from the current `Location` through the rest of the function.
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
@@ -146,8 +146,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             bbname: bb.name.clone(),
         });
         for (instnum, inst) in bb.instrs.iter().skip(inst).enumerate() {
-            let result = if let Some((binop, z3binop)) = Self::inst_to_binop(&inst) {
-                self.symex_binop(&binop, z3binop)
+            let result = if let Ok(binop) = inst.clone().try_into() {
+                self.symex_binop(&binop)
             } else {
                 match inst {
                     Instruction::ICmp(icmp) => self.symex_icmp(icmp),
@@ -268,70 +268,72 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn inst_to_binop<V>(inst: &Instruction) -> Option<(instruction::groups::BinaryOp, Box<Fn(&V, &V) -> V + 'ctx>)> where V: BV<'ctx> + 'ctx {
-        match inst {
+    fn binop_to_btorbinop<'a, V: BV + 'a>(bop: &instruction::groups::BinaryOp) -> Result<Box<for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
+        match bop {
             // TODO: how to not clone the inner instruction here
-            Instruction::Add(i) => Some((i.clone().into(), Box::new(<V as BV<'ctx>>::add))),
-            Instruction::Sub(i) => Some((i.clone().into(), Box::new(V::sub))),
-            Instruction::Mul(i) => Some((i.clone().into(), Box::new(V::mul))),
-            Instruction::UDiv(i) => Some((i.clone().into(), Box::new(V::udiv))),
-            Instruction::SDiv(i) => Some((i.clone().into(), Box::new(V::sdiv))),
-            Instruction::URem(i) => Some((i.clone().into(), Box::new(V::urem))),
-            Instruction::SRem(i) => Some((i.clone().into(), Box::new(V::srem))),
-            Instruction::And(i) => Some((i.clone().into(), Box::new(V::and))),
-            Instruction::Or(i) => Some((i.clone().into(), Box::new(V::or))),
-            Instruction::Xor(i) => Some((i.clone().into(), Box::new(V::xor))),
-            Instruction::Shl(i) => Some((i.clone().into(), Box::new(V::shl))),
-            Instruction::LShr(i) => Some((i.clone().into(), Box::new(V::lshr))),
-            Instruction::AShr(i) => Some((i.clone().into(), Box::new(V::ashr))),
-            _ => None,
+            instruction::groups::BinaryOp::Add(_) => Ok(Box::new(V::add)),
+            instruction::groups::BinaryOp::Sub(_) => Ok(Box::new(V::sub)),
+            instruction::groups::BinaryOp::Mul(_) => Ok(Box::new(V::mul)),
+            instruction::groups::BinaryOp::UDiv(_) => Ok(Box::new(V::udiv)),
+            instruction::groups::BinaryOp::SDiv(_) => Ok(Box::new(V::sdiv)),
+            instruction::groups::BinaryOp::URem(_) => Ok(Box::new(V::urem)),
+            instruction::groups::BinaryOp::SRem(_) => Ok(Box::new(V::srem)),
+            instruction::groups::BinaryOp::And(_) => Ok(Box::new(V::and)),
+            instruction::groups::BinaryOp::Or(_) => Ok(Box::new(V::or)),
+            instruction::groups::BinaryOp::Xor(_) => Ok(Box::new(V::xor)),
+            instruction::groups::BinaryOp::Shl(_) => Ok(Box::new(V::sll)),
+            instruction::groups::BinaryOp::LShr(_) => Ok(Box::new(V::srl)),
+            instruction::groups::BinaryOp::AShr(_) => Ok(Box::new(V::sra)),
+            _ => Err(Error::UnsupportedInstruction(format!("BinaryOp {:?}", bop))),
         }
     }
 
-    fn intpred_to_z3pred(pred: IntPredicate) -> Box<Fn(&B::BV, &B::BV) -> B::Bool + 'ctx> {
+    fn intpred_to_btorpred(pred: IntPredicate) -> Box<Fn(&B::BV, &B::BV) -> B::BV + 'p> {
         match pred {
-            IntPredicate::EQ => Box::new(|a,b| B::BV::_eq(a,b)),
-            IntPredicate::NE => Box::new(|a,b| B::Bool::not(&B::BV::_eq(a,b))),
+            IntPredicate::EQ => Box::new(B::BV::_eq),
+            IntPredicate::NE => Box::new(B::BV::_ne),
             IntPredicate::UGT => Box::new(B::BV::ugt),
-            IntPredicate::UGE => Box::new(B::BV::uge),
+            IntPredicate::UGE => Box::new(B::BV::ugte),
             IntPredicate::ULT => Box::new(B::BV::ult),
-            IntPredicate::ULE => Box::new(B::BV::ule),
+            IntPredicate::ULE => Box::new(B::BV::ulte),
             IntPredicate::SGT => Box::new(B::BV::sgt),
-            IntPredicate::SGE => Box::new(B::BV::sge),
+            IntPredicate::SGE => Box::new(B::BV::sgte),
             IntPredicate::SLT => Box::new(B::BV::slt),
-            IntPredicate::SLE => Box::new(B::BV::sle),
+            IntPredicate::SLE => Box::new(B::BV::slte),
         }
     }
 
     // Apply the given unary scalar operation to a vector
-    fn unary_on_vector(in_vector: &B::BV, num_elements: u32, mut op: impl FnMut(&B::BV) -> B::BV) -> Result<B::BV> {
-        let in_vector_size = in_vector.get_size();
+    fn unary_on_vector<F>(in_vector: &B::BV, num_elements: u32, mut op: F) -> Result<B::BV>
+        where F: FnMut(&B::BV) -> B::BV
+    {
+        let in_vector_size = in_vector.get_width();
         assert_eq!(in_vector_size % num_elements, 0);
         let in_el_size = in_vector_size / num_elements;
-        let in_scalars = (0 .. num_elements).map(|i| in_vector.extract((i+1)*in_el_size - 1, i*in_el_size));
+        let in_scalars = (0 .. num_elements).map(|i| in_vector.slice((i+1)*in_el_size - 1, i*in_el_size));
         let out_scalars = in_scalars.map(|s| op(&s));
         out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::OtherError("Vector operation with 0 elements".to_owned()))
     }
 
     // Apply the given binary scalar operation to a vector
-    fn binary_on_vector(in_vector_0: &B::BV, in_vector_1: &B::BV, num_elements: u32, mut op: impl FnMut(&B::BV, &B::BV) -> B::BV) -> Result<B::BV> {
-        let in_vector_0_size = in_vector_0.get_size();
-        let in_vector_1_size = in_vector_1.get_size();
+    fn binary_on_vector<F>(in_vector_0: &B::BV, in_vector_1: &B::BV, num_elements: u32, mut op: F) -> Result<B::BV>
+        where F: for<'a> FnMut(&'a B::BV, &'a B::BV) -> B::BV
+    {
+        let in_vector_0_size = in_vector_0.get_width();
+        let in_vector_1_size = in_vector_1.get_width();
         if in_vector_0_size != in_vector_1_size {
             return Err(Error::MalformedInstruction(format!("Binary operation's vector operands are different total sizes: {} vs. {}", in_vector_0_size, in_vector_1_size)));
         }
         let in_vector_size = in_vector_0_size;
         assert_eq!(in_vector_size % num_elements, 0);
         let in_el_size = in_vector_size / num_elements;
-        let in_scalars_0 = (0 .. num_elements).map(|i| in_vector_0.extract((i+1)*in_el_size - 1, i*in_el_size));
-        let in_scalars_1 = (0 .. num_elements).map(|i| in_vector_1.extract((i+1)*in_el_size - 1, i*in_el_size));
+        let in_scalars_0 = (0 .. num_elements).map(|i| in_vector_0.slice((i+1)*in_el_size - 1, i*in_el_size));
+        let in_scalars_1 = (0 .. num_elements).map(|i| in_vector_1.slice((i+1)*in_el_size - 1, i*in_el_size));
         let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0,s1)| op(&s0, &s1));
         out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned()))
     }
 
-    fn symex_binop<F>(&mut self, bop: &instruction::groups::BinaryOp, mut z3op: F) -> Result<()>
-        where F: FnMut(&B::BV, &B::BV) -> B::BV
-    {
+    fn symex_binop(&mut self, bop: &instruction::groups::BinaryOp) -> Result<()> {
         debug!("Symexing binop {:?}", bop);
         // We expect these binops to only operate on integers or vectors of integers
         let op0 = &bop.get_operand0();
@@ -342,16 +344,17 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             return Err(Error::MalformedInstruction(format!("Expected binary op to have two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
         }
         let op_type = op0_type;
-        let z3op0 = self.state.operand_to_bv(op0)?;
-        let z3op1 = self.state.operand_to_bv(op1)?;
+        let btorop0 = self.state.operand_to_bv(op0)?;
+        let btorop1 = self.state.operand_to_bv(op1)?;
+        let btoroperation = Self::binop_to_btorbinop(bop)?;
         match op_type {
             Type::IntegerType { .. } => {
-                self.state.record_bv_result(bop, z3op(&z3op0, &z3op1))
+                self.state.record_bv_result(bop, btoroperation(&btorop0, &btorop1))
             },
             Type::VectorType { element_type, num_elements } => {
                 match *element_type {
                     Type::IntegerType { .. } => {
-                        self.state.record_bv_result(bop, Self::binary_on_vector(&z3op0, &z3op1, num_elements as u32, z3op)?)
+                        self.state.record_bv_result(bop, Self::binary_on_vector(&btorop0, &btorop1, num_elements as u32, btoroperation)?)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected binary operation's vector operands to have integer elements, but elements are type {:?}", ty))),
                 }
@@ -360,11 +363,11 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_icmp(&mut self, icmp: &instruction::ICmp) -> Result<()> {
+    fn symex_icmp(&mut self, icmp: &'p instruction::ICmp) -> Result<()> {
         debug!("Symexing icmp {:?}", icmp);
-        let z3firstop = self.state.operand_to_bv(&icmp.operand0)?;
-        let z3secondop = self.state.operand_to_bv(&icmp.operand1)?;
-        let z3pred = Self::intpred_to_z3pred(icmp.predicate);
+        let btorfirstop = self.state.operand_to_bv(&icmp.operand0)?;
+        let btorsecondop = self.state.operand_to_bv(&icmp.operand1)?;
+        let btorpred = Self::intpred_to_btorpred(icmp.predicate);
         let op0_type = icmp.operand0.get_type();
         let op1_type = icmp.operand1.get_type();
         if op0_type != op1_type {
@@ -373,16 +376,16 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         match icmp.get_type() {
             Type::IntegerType { bits } if bits == 1 => match op0_type {
                 Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
-                    self.state.record_bool_result(icmp, z3pred(&z3firstop, &z3secondop))
+                    self.state.record_bv_result(icmp, btorpred(&btorfirstop, &btorsecondop))
                 },
                 ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
             },
             Type::VectorType { element_type, num_elements } => match *element_type {
                 Type::IntegerType { bits } if bits == 1 => match op0_type {
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
-                        let zero = B::BV::from_u64(self.state.ctx, 0, 1);
-                        let one = B::BV::from_u64(self.state.ctx, 1, 1);
-                        let final_bv = Self::binary_on_vector(&z3firstop, &z3secondop, num_elements as u32, |a,b| z3pred(a,b).bvite(&one, &zero))?;
+                        let zero = B::BV::zero(self.state.btor.clone(), 1);
+                        let one = B::BV::one(self.state.btor.clone(), 1);
+                        let final_bv = Self::binary_on_vector(&btorfirstop, &btorsecondop, num_elements as u32, |a,b| btorpred(a,b).cond_bv(&one, &zero))?;
                         self.state.record_bv_result(icmp, final_bv)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
@@ -393,14 +396,14 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
    }
 
-    fn symex_zext(&mut self, zext: &instruction::ZExt) -> Result<()> {
+    fn symex_zext(&mut self, zext: &'p instruction::ZExt) -> Result<()> {
         debug!("Symexing zext {:?}", zext);
         match zext.operand.get_type() {
             Type::IntegerType { bits } => {
-                let z3op = self.state.operand_to_bv(&zext.operand)?;
+                let btorop = self.state.operand_to_bv(&zext.operand)?;
                 let source_size = bits;
                 let dest_size = size(&zext.get_type()) as u32;
-                self.state.record_bv_result(zext, z3op.zero_ext(dest_size - source_size))
+                self.state.record_bv_result(zext, btorop.zext(dest_size - source_size))
             },
             Type::VectorType { element_type, num_elements } => {
                 let in_vector = self.state.operand_to_bv(&zext.operand)?;
@@ -415,7 +418,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     ty => return Err(Error::MalformedInstruction(format!("ZExt operand is a vector type, but output is not: it is {:?}", ty))),
                 };
                 let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
-                    el.zero_ext(out_el_size - in_el_size)
+                    el.zext(out_el_size - in_el_size)
                 })?;
                 self.state.record_bv_result(zext, final_bv)
             },
@@ -423,14 +426,14 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_sext(&mut self, sext: &instruction::SExt) -> Result<()> {
+    fn symex_sext(&mut self, sext: &'p instruction::SExt) -> Result<()> {
         debug!("Symexing sext {:?}", sext);
         match sext.operand.get_type() {
             Type::IntegerType { bits } => {
-                let z3op = self.state.operand_to_bv(&sext.operand)?;
+                let btorop = self.state.operand_to_bv(&sext.operand)?;
                 let source_size = bits;
                 let dest_size = size(&sext.get_type()) as u32;
-                self.state.record_bv_result(sext, z3op.sign_ext(dest_size - source_size))
+                self.state.record_bv_result(sext, btorop.sext(dest_size - source_size))
             },
             Type::VectorType { element_type, num_elements } => {
                 let in_vector = self.state.operand_to_bv(&sext.operand)?;
@@ -445,7 +448,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     ty => return Err(Error::MalformedInstruction(format!("SExt operand is a vector type, but output is not: it is {:?}", ty))),
                 };
                 let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
-                    el.sign_ext(out_el_size - in_el_size)
+                    el.sext(out_el_size - in_el_size)
                 })?;
                 self.state.record_bv_result(sext, final_bv)
             },
@@ -453,13 +456,13 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_trunc(&mut self, trunc: &instruction::Trunc) -> Result<()> {
+    fn symex_trunc(&mut self, trunc: &'p instruction::Trunc) -> Result<()> {
         debug!("Symexing trunc {:?}", trunc);
         match trunc.operand.get_type() {
             Type::IntegerType { .. } => {
-                let z3op = self.state.operand_to_bv(&trunc.operand)?;
+                let btorop = self.state.operand_to_bv(&trunc.operand)?;
                 let dest_size = size(&trunc.get_type()) as u32;
-                self.state.record_bv_result(trunc, z3op.extract(dest_size-1, 0))
+                self.state.record_bv_result(trunc, btorop.slice(dest_size-1, 0))
             },
             Type::VectorType { num_elements, .. } => {
                 let in_vector = self.state.operand_to_bv(&trunc.operand)?;
@@ -472,7 +475,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     },
                     ty => return Err(Error::MalformedInstruction(format!("Trunc operand is a vector type, but output is not: it is {:?}", ty))),
                 };
-                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| el.extract(dest_el_size-1, 0))?;
+                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| el.slice(dest_el_size-1, 0))?;
                 self.state.record_bv_result(trunc, final_bv)
             },
             ty => Err(Error::MalformedInstruction(format!("Expected Trunc operand type to be integer or vector of integers; got {:?}", ty))),
@@ -480,24 +483,24 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     }
 
     /// Use this for any unary operation that can be treated as a cast
-    fn symex_cast_op(&mut self, cast: &impl instruction::UnaryOp) -> Result<()> {
+    fn symex_cast_op(&mut self, cast: &'p impl instruction::UnaryOp) -> Result<()> {
         debug!("Symexing cast op {:?}", cast);
-        let z3op = self.state.operand_to_bv(&cast.get_operand())?;
-        self.state.record_bv_result(cast, z3op)  // from Z3's perspective a cast is simply a no-op; the bit patterns are equal
+        let btorop = self.state.operand_to_bv(&cast.get_operand())?;
+        self.state.record_bv_result(cast, btorop)  // from Boolector's perspective a cast is simply a no-op; the bit patterns are equal
     }
 
-    fn symex_load(&mut self, load: &instruction::Load) -> Result<()> {
+    fn symex_load(&mut self, load: &'p instruction::Load) -> Result<()> {
         debug!("Symexing load {:?}", load);
-        let z3addr = self.state.operand_to_bv(&load.address)?;
+        let btoraddr = self.state.operand_to_bv(&load.address)?;
         let dest_size = size(&load.get_type());
-        self.state.record_bv_result(load, self.state.read(&z3addr, dest_size as u32))
+        self.state.record_bv_result(load, self.state.read(&btoraddr, dest_size as u32))
     }
 
-    fn symex_store(&mut self, store: &instruction::Store) -> Result<()> {
+    fn symex_store(&mut self, store: &'p instruction::Store) -> Result<()> {
         debug!("Symexing store {:?}", store);
-        let z3val = self.state.operand_to_bv(&store.value)?;
-        let z3addr = self.state.operand_to_bv(&store.address)?;
-        self.state.write(&z3addr, z3val);
+        let btorval = self.state.operand_to_bv(&store.value)?;
+        let btoraddr = self.state.operand_to_bv(&store.address)?;
+        self.state.write(&btoraddr, btorval);
         Ok(())
     }
 
@@ -505,9 +508,9 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         debug!("Symexing gep {:?}", gep);
         match gep.get_type() {
             Type::PointerType { .. } => {
-                let z3base = self.state.operand_to_bv(&gep.address)?;
-                let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), z3base.get_size())?;
-                self.state.record_bv_result(gep, z3base.add(&offset).simplify())
+                let btorbase = self.state.operand_to_bv(&gep.address)?;
+                let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), btorbase.get_width())?;
+                self.state.record_bv_result(gep, btorbase.add(&offset))
             },
             Type::VectorType { .. } => Err(Error::UnsupportedInstruction("GEP calculating a vector of pointers".to_owned())),
             ty => Err(Error::MalformedInstruction(format!("Expected GEP result type to be pointer or vector of pointers; got {:?}", ty))),
@@ -515,13 +518,13 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-    fn get_offset_recursive(state: &State<'ctx, 'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
+    fn get_offset_recursive(state: &State<'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         match indices.next() {
-            None => Ok(BV::from_u64(state.ctx, 0, result_bits)),
+            None => Ok(BV::zero(state.btor.clone(), result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = zero_extend_to_bits(state.operand_to_bv(index)?, result_bits);
-                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, state.ctx)?;
+                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, state.btor.clone())?;
                     Self::get_offset_recursive(state, indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
                 },
@@ -529,7 +532,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                     Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                         let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                         Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                            .map(|bv| bv.add(&B::BV::from_u64(state.ctx, offset as u64, result_bits)))
+                            .map(|bv| bv.add(&B::BV::from_u32(state.btor.clone(), offset as u32, result_bits)))
                     },
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                 },
@@ -545,7 +548,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                                 let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                                 Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                                    .map(|bv| bv.add(&B::BV::from_u64(state.ctx, offset as u64, result_bits)))
+                                    .map(|bv| bv.add(&B::BV::from_u32(state.btor.clone(), offset as u32, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                         }
@@ -558,7 +561,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_alloca(&mut self, alloca: &instruction::Alloca) -> Result<()> {
+    fn symex_alloca(&mut self, alloca: &'p instruction::Alloca) -> Result<()> {
         debug!("Symexing alloca {:?}", alloca);
         match &alloca.num_elements {
             Operand::ConstantOperand(Constant::Int { value: num_elements, .. }) => {
@@ -570,7 +573,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_extractelement(&mut self, ee: &instruction::ExtractElement) -> Result<()> {
+    fn symex_extractelement(&mut self, ee: &'p instruction::ExtractElement) -> Result<()> {
         debug!("Symexing extractelement {:?}", ee);
         let vector = self.state.operand_to_bv(&ee.vector)?;
         match &ee.index {
@@ -582,7 +585,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                             Err(Error::MalformedInstruction(format!("ExtractElement index out of range: index {} with {} elements", index, num_elements)))
                         } else {
                             let el_size = size(&element_type) as u32;
-                            self.state.record_bv_result(ee, vector.extract((index+1)*el_size - 1, index*el_size))
+                            self.state.record_bv_result(ee, vector.slice((index+1)*el_size - 1, index*el_size))
                         }
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected ExtractElement vector to be a vector type, got {:?}", ty))),
@@ -592,7 +595,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_insertelement(&mut self, ie: &instruction::InsertElement) -> Result<()> {
+    fn symex_insertelement(&mut self, ie: &'p instruction::InsertElement) -> Result<()> {
         debug!("Symexing insertelement {:?}", ie);
         let vector = self.state.operand_to_bv(&ie.vector)?;
         let element = self.state.operand_to_bv(&ie.element)?;
@@ -604,7 +607,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                         if index >= num_elements as u32 {
                             Err(Error::MalformedInstruction(format!("InsertElement index out of range: index {} with {} elements", index, num_elements)))
                         } else {
-                            let vec_size = vector.get_size();
+                            let vec_size = vector.get_width();
                             let highest_bit_index = vec_size - 1;
                             let el_size = size(&element_type) as u32;
                             assert_eq!(vec_size, el_size * num_elements as u32);
@@ -612,21 +615,20 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                             let insertion_bitindex_high = (index+1) * el_size - 1;  // highest bit number in the vector which will be overwritten
 
                             // mask_clear is 0's in the bit positions that will be written, 1's elsewhere
-                            let zeroes = B::BV::from_u64(self.state.ctx, 0, el_size);
+                            let zeroes = B::BV::zero(self.state.btor.clone(), el_size);
                             let mask_clear = if insertion_bitindex_high == highest_bit_index {
                                 if insertion_bitindex_low == 0 {
                                     zeroes
                                 } else {
-                                    zeroes.concat(&B::BV::from_u64(self.state.ctx, 0, insertion_bitindex_low).not())
+                                    zeroes.concat(&B::BV::ones(self.state.btor.clone(), insertion_bitindex_low))
                                 }
                             } else {
-                                let top = B::BV::from_u64(self.state.ctx, 0, highest_bit_index - insertion_bitindex_high)
-                                    .not()
+                                let top = B::BV::ones(self.state.btor.clone(), highest_bit_index - insertion_bitindex_high)
                                     .concat(&zeroes);
                                 if insertion_bitindex_low == 0 {
                                     top
                                 } else {
-                                    top.concat(&B::BV::from_u64(self.state.ctx, 0, insertion_bitindex_low).not())
+                                    top.concat(&B::BV::ones(self.state.btor.clone(), insertion_bitindex_low))
                                 }
                             };
 
@@ -635,13 +637,12 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                             let mask_insert = if insertion_bitindex_low == 0 {
                                 top
                             } else {
-                                top.concat(&B::BV::from_u64(self.state.ctx, 0, insertion_bitindex_low))
+                                top.concat(&B::BV::zero(self.state.btor.clone(), insertion_bitindex_low))
                             };
 
                             let with_insertion = vector
                                 .and(&mask_clear)  // zero out the element we'll be writing
-                                .or(&mask_insert)  // write the data into the element's position
-                                .simplify();
+                                .or(&mask_insert);  // write the data into the element's position
 
                             self.state.record_bv_result(ie, with_insertion)
                         }
@@ -653,7 +654,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         }
     }
 
-    fn symex_shufflevector(&mut self, sv: &instruction::ShuffleVector) -> Result<()> {
+    fn symex_shufflevector(&mut self, sv: &'p instruction::ShuffleVector) -> Result<()> {
         debug!("Symexing shufflevector {:?}", sv);
         let op0_type = sv.operand0.get_type();
         let op1_type = sv.operand1.get_type();
@@ -679,17 +680,17 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 };
                 let op0 = self.state.operand_to_bv(&sv.operand0)?;
                 let op1 = self.state.operand_to_bv(&sv.operand1)?;
-                assert_eq!(op0.get_size(), op1.get_size());
+                assert_eq!(op0.get_width(), op1.get_width());
                 let el_size = size(&element_type) as u32;
                 let num_elements = num_elements as u32;
-                assert_eq!(op0.get_size(), el_size * num_elements);
+                assert_eq!(op0.get_width(), el_size * num_elements);
                 let final_bv = mask.into_iter()
                     .map(|idx| {
                         if idx < num_elements {
-                            op0.extract((idx+1) * el_size - 1, idx * el_size)
+                            op0.slice((idx+1) * el_size - 1, idx * el_size)
                         } else {
                             let idx = idx - num_elements;
-                            op1.extract((idx+1) * el_size - 1, idx * el_size)
+                            op1.slice((idx+1) * el_size - 1, idx * el_size)
                         }
                     })
                     .reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("ShuffleVector mask had 0 elements".to_owned()))?;
@@ -705,7 +706,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing call {:?}", call);
         use crate::global_allocations::Callable;
-        let funcname_or_hook: Either<&str, FunctionHook<'ctx, B>> = match &call.function {
+        let funcname_or_hook: Either<&str, FunctionHook<B>> = match &call.function {
             // the first two cases are really just optimizations for the third case; things should still work without the first two lines
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => Either::Left(name),
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
@@ -713,13 +714,10 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
                     PossibleSolutions::MoreThanNPossibleSolutions(1) => return Err(Error::OtherError("calling a function pointer which has multiple possible targets".to_owned())),
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
-                    PossibleSolutions::PossibleSolutions(v) => match v.len() {
-                        0 => return Err(Error::Unsat),  // no valid solutions for the function pointer
-                        1 => match &v[0] {
-                            Callable::LLVMFunction(f) => Either::Left(&f.name),
-                            Callable::FunctionHook(h) => Either::Right(h.clone()),
-                        },
-                        n => panic!("Got {} solutions even though we asked for a maximum of one", n),
+                    PossibleSolutions::PossibleSolutions(v) => match v.iter().next() {
+                        None => return Err(Error::Unsat),  // no valid solutions for the function pointer
+                        Some(Callable::LLVMFunction(f)) => Either::Left(&f.name),
+                        Some(Callable::FunctionHook(h)) => Either::Right(h.clone()),
                     }
                 }
             },
@@ -728,7 +726,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         // If a hook is active for this function, `hook` will be `Some`. If
         // we're hooking a real function as opposed to a function pointer,
         // `funcname` will hold the name of the function being hooked.
-        let (hook, funcname): (Option<FunctionHook<'ctx, B>>, Option<&str>) = match funcname_or_hook {
+        let (hook, funcname): (Option<FunctionHook<B>>, Option<&str>) = match funcname_or_hook {
             Either::Left(funcname) => (self.state.config.function_hooks.get_hook_for(funcname).cloned(), Some(funcname)),
             Either::Right(ref hook) => (Some(hook.clone()), None),
         };
@@ -757,7 +755,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         let funcname = funcname_or_hook.left().unwrap();  // must have been an Either::Left at this point
         if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
             assert_eq!(call.arguments.len(), callee.parameters.len());
-            let z3args: Vec<B::BV> = call.arguments.iter()
+            let btorargs: Vec<B::BV> = call.arguments.iter()
                 .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                 .collect::<Result<Vec<B::BV>>>()?;
             let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
@@ -768,8 +766,8 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 func: callee,
                 bbname: bb.name.clone(),
             };
-            for (z3arg, param) in z3args.into_iter().zip(callee.parameters.iter()) {
-                self.state.assign_bv_to_name(param.name.clone(), z3arg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
+            for (btorarg, param) in btorargs.into_iter().zip(callee.parameters.iter()) {
+                self.state.assign_bv_to_name(param.name.clone(), btorarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
             }
             info!("Entering function {:?} in module {:?}", funcname, &callee_mod.name);
             let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
@@ -814,7 +812,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     }
 
     /// Returns the `ReturnValue` representing the return value
-    fn symex_return(&self, ret: &terminator::Ret) -> Result<ReturnValue<B::BV>> {
+    fn symex_return(&self, ret: &'p terminator::Ret) -> Result<ReturnValue<B::BV>> {
         debug!("Symexing return {:?}", ret);
         Ok(ret.return_operand
             .as_ref()
@@ -840,23 +838,23 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
     /// `Ok(None)` if no possible paths were found.
     fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing condbr {:?}", condbr);
-        let z3cond = self.state.operand_to_bool(&condbr.condition)?;
-        let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
-        let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()))?;
+        let btorcond = self.state.operand_to_bv(&condbr.condition)?;
+        let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond))?;
+        let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
         if true_feasible && false_feasible {
             // for now we choose to explore true first, and backtrack to false if necessary
-            self.state.save_backtracking_point(condbr.false_dest.clone(), z3cond.not());
-            self.state.assert(&z3cond);
+            self.state.save_backtracking_point(condbr.false_dest.clone(), btorcond.not());
+            btorcond.assert();
             self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
-            self.state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
+            btorcond.assert();  // unnecessary, but may help Boolector more than it hurts?
             self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
-            self.state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
+            btorcond.not().assert();  // unnecessary, but may help Boolector more than it hurts?
             self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = condbr.false_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
@@ -881,7 +879,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             .collect::<Result<Vec<(B::BV, &Name)>>>()?;
         let feasible_dests: Vec<_> = dests.iter()
             .map(|(c,n)| {
-                self.state.check_with_extra_constraints(std::iter::once(&c._eq(&switchval)))
+                self.state.sat_with_extra_constraints(std::iter::once(&c._eq(&switchval)))
                     .map(|b| (c,*n,b))
             })
             .collect::<Result<Vec<(&B::BV, &Name, bool)>>>()?
@@ -902,21 +900,21 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
             // if the default dest is feasible, make a backtracking point for it
             let default_dest_constraint = dests.iter()
                 .map(|(c,_)| c._eq(&switchval).not())
-                .reduce(|a,b| a.and(&[&b]))
-                .unwrap_or_else(|| B::Bool::from_bool(self.state.ctx, true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
-            if self.state.check_with_extra_constraints(std::iter::once(&default_dest_constraint))? {
+                .reduce(|a,b| a.and(&b))
+                .unwrap_or_else(|| B::BV::from_bool(self.state.btor.clone(), true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
+            if self.state.sat_with_extra_constraints(std::iter::once(&default_dest_constraint))? {
                 self.state.save_backtracking_point(switch.default_dest.clone(), default_dest_constraint);
             }
             // follow the first destination
             let (val, name) = &feasible_dests[0];
-            self.state.assert(&val._eq(&switchval));  // unnecessary, but may help Z3 more than it hurts?
+            val._eq(&switchval).assert();  // unnecessary, but may help Boolector more than it hurts?
             self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = (*name).clone();
             self.symex_from_cur_loc_through_end_of_function()
         }
     }
 
-    fn symex_phi(&mut self, phi: &instruction::Phi) -> Result<()> {
+    fn symex_phi(&mut self, phi: &'p instruction::Phi) -> Result<()> {
         debug!("Symexing phi {:?}", phi);
         let prev_bb = self.state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block");
         let mut chosen_value = None;
@@ -930,7 +928,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value)?)
     }
 
-    fn symex_select(&mut self, select: &instruction::Select) -> Result<()> {
+    fn symex_select(&mut self, select: &'p instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
         let truetype = select.true_value.get_type();
         let falsetype = select.false_value.get_type();
@@ -940,19 +938,19 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
         let optype = truetype;
         match select.condition.get_type() {
             Type::IntegerType { bits } if bits == 1 => {
-                let z3cond = self.state.operand_to_bool(&select.condition)?;
-                let z3trueval = self.state.operand_to_bv(&select.true_value)?;
-                let z3falseval = self.state.operand_to_bv(&select.false_value)?;
-                let true_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond))?;
-                let false_feasible = self.state.check_with_extra_constraints(std::iter::once(&z3cond.not()))?;
+                let btorcond = self.state.operand_to_bv(&select.condition)?;
+                let btortrueval = self.state.operand_to_bv(&select.true_value)?;
+                let btorfalseval = self.state.operand_to_bv(&select.false_value)?;
+                let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond))?;
+                let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
                 if true_feasible && false_feasible {
-                    self.state.record_bv_result(select, B::Bool::bvite(&z3cond, &z3trueval, &z3falseval))
+                    self.state.record_bv_result(select, btorcond.cond_bv(&btortrueval, &btorfalseval))
                 } else if true_feasible {
-                    self.state.assert(&z3cond);  // unnecessary, but may help Z3 more than it hurts?
-                    self.state.record_bv_result(select, z3trueval)
+                    btorcond.assert();  // unnecessary, but may help Boolector more than it hurts?
+                    self.state.record_bv_result(select, btortrueval)
                 } else if false_feasible {
-                    self.state.assert(&z3cond.not());  // unnecessary, but may help Z3 more than it hurts?
-                    self.state.record_bv_result(select, z3falseval)
+                    btorcond.not().assert();  // unnecessary, but may help Boolector more than it hurts?
+                    self.state.record_bv_result(select, btorfalseval)
                 } else {
                     // this path is unsat
                     Err(Error::Unsat)
@@ -977,14 +975,13 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
                 let falsevec = self.state.operand_to_bv(&select.false_value)?;
                 let final_bv = (0 .. num_elements as u32)
                     .map(|idx| {
-                        let bit = condvec.extract(idx, idx)._eq(&B::BV::from_u64(self.state.ctx, 1, 1));
-                        bit.bvite(
-                            &truevec.extract((idx+1) * el_size - 1, idx * el_size),
-                            &falsevec.extract((idx+1) * el_size - 1, idx * el_size),
+                        let bit = condvec.slice(idx, idx);
+                        bit.cond_bv(
+                            &truevec.slice((idx+1) * el_size - 1, idx * el_size),
+                            &falsevec.slice((idx+1) * el_size - 1, idx * el_size),
                         )
                     })
-                    .reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("Select with vectors of 0 elements".to_owned()))?
-                    .simplify();
+                    .reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("Select with vectors of 0 elements".to_owned()))?;
                 self.state.record_bv_result(select, final_bv)
             }
             ty => Err(Error::MalformedInstruction(format!("Expected select condition to be i1 or vector of i1, but got {:?}", ty))),
@@ -994,7 +991,7 @@ impl<'ctx, 'p, B> ExecutionManager<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
 
 // Built-in "hooks" for LLVM intrinsics
 
-fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) -> Result<()> where B: Backend<'ctx> {
+fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<()> {
     assert_eq!(call.arguments.len(), 4);
     let addr = &call.arguments[0].0;
     let val = &call.arguments[1].0;
@@ -1005,7 +1002,7 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
         PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::UnsupportedInstruction(format!("LLVM memset with non-constant num_bytes {:?}", num_bytes))),
-        PossibleSolutions::PossibleSolutions(v) => v[0],
+        PossibleSolutions::PossibleSolutions(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
     };
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memset of 0 num_bytes");
@@ -1014,12 +1011,12 @@ fn symex_memset<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
         let val = state.operand_to_bv(&val)?;
 
         // Do this as just one large write; let the memory choose the most efficient way to implement that.
-        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap().simplify());
+        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap());
     }
     Ok(())
 }
 
-fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instruction::Call) -> Result<()> where B: Backend<'ctx> {
+fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<()> {
     assert_eq!(call.arguments.len(), 4);
     let dest = &call.arguments[0].0;
     let src = &call.arguments[1].0;
@@ -1030,7 +1027,7 @@ fn symex_memcpy<'ctx, 'p, B>(state: &mut State<'ctx, 'p, B>, call: &'p instructi
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
         PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::UnsupportedInstruction(format!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes))),
-        PossibleSolutions::PossibleSolutions(v) => v[0],
+        PossibleSolutions::PossibleSolutions(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
     };
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memcpy or memmove of 0 num_bytes");
@@ -1095,23 +1092,22 @@ mod tests {
     }
 
     /// Iterator over the paths through a function
-    struct PathIterator<'ctx, 'p, B> where B: Backend<'ctx> {
-        em: ExecutionManager<'ctx, 'p, B>,
+    struct PathIterator<'p, B: Backend> {
+        em: ExecutionManager<'p, B>,
     }
 
-    impl<'ctx, 'p, B> PathIterator<'ctx, 'p, B> where B: Backend<'ctx> {
+    impl<'p, B: Backend> PathIterator<'p, B> {
         /// For argument descriptions, see notes on `symex_function`
         pub fn new(
-            ctx: &'ctx z3::Context,
             funcname: &str,
             project: &'p Project,
-            config: Config<'ctx, B>,
+            config: Config<'p, B>,
         ) -> Self {
-            Self { em: symex_function(ctx, funcname, project, config) }
+            Self { em: symex_function(funcname, project, config) }
         }
     }
 
-    impl<'ctx, 'p, B> Iterator for PathIterator<'ctx, 'p, B> where B: Backend<'ctx> + 'p {
+    impl<'p, B: Backend> Iterator for PathIterator<'p, B> where B: 'p {
         type Item = Path;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -1126,9 +1122,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config).collect();
+        let paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1140,9 +1135,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 12]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 8, 12]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
@@ -1155,9 +1149,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 6, 14]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14]));
@@ -1172,9 +1165,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 14]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 5, 14]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 7, 14]));
@@ -1193,9 +1185,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12]));
@@ -1211,9 +1202,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 9, 6]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 9, 9, 6]));
@@ -1230,9 +1220,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 8, 18]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18]));
@@ -1250,9 +1239,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
                                                                          6, 10, 16,
                                                                          6, 10, 16,
@@ -1278,9 +1266,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
                                                                          11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
@@ -1293,9 +1280,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                      10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                      10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
@@ -1316,9 +1302,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&modname, vec![
             ("simple_caller", 1),
             ("simple_callee", 2),
@@ -1335,9 +1320,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_simple_caller", 1),
             (callee_modname, "simple_callee", 2),
@@ -1353,9 +1337,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("conditional_caller", 2),
             ("conditional_caller", 4),
@@ -1374,9 +1357,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("twice_caller", 1),
             ("simple_callee", 2),
@@ -1395,9 +1377,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_twice_caller", 1),
             (callee_modname, "simple_callee", 2),
@@ -1415,9 +1396,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("nested_caller", 2),
             ("simple_caller", 1),
@@ -1436,9 +1416,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_nested_near_caller", 2),
             (caller_modname, "cross_module_simple_caller", 1),
@@ -1457,9 +1436,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_nested_far_caller", 2),
             (callee_modname, "simple_caller", 1),
@@ -1477,9 +1455,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
@@ -1541,9 +1518,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_with_loop", 1),
             ("caller_with_loop", 8),
@@ -1591,9 +1567,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
@@ -1614,9 +1589,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 4, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 20, 8]));
@@ -1637,9 +1611,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 3, 15]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 10, 15]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 12, 15]));
@@ -1657,9 +1630,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 3),
@@ -1723,9 +1695,8 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let ctx = z3::Context::new(&z3::Config::new());
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<Z3Backend>::new(&ctx, funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),

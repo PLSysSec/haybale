@@ -1,5 +1,6 @@
 //! Functions related to the in-memory layout of data types.
 
+use boolector::Btor;
 use crate::backend::*;
 use crate::error::*;
 use llvm_ir::types::{Type, FPType};
@@ -100,7 +101,7 @@ pub fn get_offset_constant_index(base_type: &Type, index: usize) -> Result<(usiz
 /// as a `BV`.
 ///
 /// The result `BV` will have the same width as the input `index`.
-pub fn get_offset_bv_index<'ctx, 't, V: BV<'ctx>>(base_type: &'t Type, index: &V, ctx: &'ctx z3::Context) -> Result<(V, &'t Type)> {
+pub fn get_offset_bv_index<'t, V: BV>(base_type: &'t Type, index: &V, btor: Rc<Btor>) -> Result<(V, &'t Type)> {
     match base_type {
         Type::PointerType { pointee_type: element_type, .. }
         | Type::ArrayType { element_type, .. }
@@ -111,7 +112,7 @@ pub fn get_offset_bv_index<'ctx, 't, V: BV<'ctx>>(base_type: &'t Type, index: &V
                 Err(Error::UnsupportedInstruction(format!("Encountered a type with size {} bits", el_size_bits)))
             } else {
                 let el_size_bytes = el_size_bits / 8;
-                Ok((index.mul(&V::from_u64(ctx, el_size_bytes as u64, index.get_size())), &element_type))
+                Ok((index.mul(&V::from_u64(btor, el_size_bytes as u64, index.get_width())), &element_type))
             }
         },
         Type::StructType { .. } | Type::NamedStructType { .. } => {

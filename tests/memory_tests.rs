@@ -17,8 +17,7 @@ fn load_and_store() {
     let funcname = "load_and_store";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -28,8 +27,7 @@ fn local_ptr() {
     let funcname = "local_ptr";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -39,8 +37,7 @@ fn overwrite() {
     let funcname = "overwrite";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -50,8 +47,7 @@ fn load_and_store_mult() {
     let funcname = "load_and_store_mult";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -61,8 +57,7 @@ fn array() {
     let funcname = "array";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -72,8 +67,7 @@ fn pointer_arith() {
     let funcname = "pointer_arith";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -83,8 +77,7 @@ fn pointer_compare() {
     let funcname = "pointer_compare";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
-    let args = find_zero_of_func(&ctx, funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }

@@ -1,4 +1,6 @@
 use haybale::*;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -12,14 +14,13 @@ fn simd_add() {
     init_logging();
     let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
 
     // This function effectively computes 4x + 4y + 6.
     // So with x=3 and y=5, we should have 12 + 20 + 6 = 38.
     let args = std::iter::once(3).chain(std::iter::once(5)).map(Some);
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![38]),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(38))),
     );
 }
 
@@ -29,7 +30,6 @@ fn simd_ops() {
     init_logging();
     let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
 
     // We compute the function's output for x=4, y=7
     let args = std::iter::once(4).chain(std::iter::once(7)).map(Some);
@@ -63,8 +63,8 @@ fn simd_ops() {
     let g_4: u32 = f_4 << 5;
     let retval: u32 = g_1 + g_2 + g_3 + g_4;
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![retval as u64]),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(retval as u64))),
     );
 }
 
@@ -74,7 +74,6 @@ fn simd_select() {
     init_logging();
     let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
 
     // We compute the function's output for x=4, y=3
     let args = std::iter::once(4).chain(std::iter::once(3)).map(Some);
@@ -92,8 +91,8 @@ fn simd_select() {
     let c_4: u32 = if a_4 < b_4 { a_4 } else { b_4 };
     let retval = c_1 + c_2 + c_3 + c_4;
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![retval as u64]),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(retval as u64))),
     );
 }
 
@@ -103,14 +102,13 @@ fn simd_add_autovectorized() {
     init_logging();
     let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd.bc"))
         .unwrap_or_else(|e| panic!("Failed to parse simd.bc module: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
 
     let x_sum: u32 = (0 .. 16).sum();
     let y_sum: u32 = (2 .. 18).sum();
     let z_sum: u32 = x_sum + y_sum;
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![z_sum as u64]),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(z_sum as u64))),
     );
 }
 
@@ -120,7 +118,6 @@ fn simd_typeconversions() {
     init_logging();
     let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
-    let ctx = z3::Context::new(&z3::Config::new());
 
     // We compute the function's output for x=3, y=5
     let args = std::iter::once(3).chain(std::iter::once(5)).map(Some);
@@ -150,7 +147,7 @@ fn simd_typeconversions() {
     let f_4: u32 = e_4 as u32;
     let retval = f_1 + f_2 + f_3 + f_4;
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![retval as u64]),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(retval as u64))),
     )
 }

@@ -8,7 +8,7 @@ use log::warn;
 /// Assume that allocations never exceed this size.
 const MAX_ALLOCATION_SIZE_BYTES: u64 = 1 << 20;
 
-pub(crate) fn malloc_hook<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn malloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 1);
     let bytes = &call.arguments[0].0;
     match bytes.get_type() {
@@ -32,7 +32,7 @@ pub(crate) fn malloc_hook<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>
     Ok(ReturnValue::Return(addr))
 }
 
-pub(crate) fn calloc_hook<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn calloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
     let num = &call.arguments[0].0;
     let size = &call.arguments[1].0;
@@ -60,7 +60,7 @@ pub(crate) fn calloc_hook<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>
     }
     let bits = bytes * 8;
     let addr = state.allocate(bits);
-    state.write(&addr, B::BV::from_u64(state.ctx, 0, bits as u32));  // calloc() requires zeroed memory
+    state.write(&addr, B::BV::zero(state.btor.clone(), bits as u32));  // calloc() requires zeroed memory
     Ok(ReturnValue::Return(addr))
 }
 
@@ -73,13 +73,13 @@ fn try_as_u64(op: &Operand) -> Option<u64> {
     }
 }
 
-pub(crate) fn free_hook<'ctx, B: Backend<'ctx>>(_state: &mut State<'ctx, '_, B>, _call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn free_hook<'p, B: Backend + 'p>(_state: &mut State<'p, B>, _call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     // The simplest implementation of free() is a no-op.
     // Our malloc_hook() above won't ever reuse allocated addresses anyway.
     Ok(ReturnValue::ReturnVoid)
 }
 
-pub(crate) fn realloc_hook<'ctx, B: Backend<'ctx>>(state: &mut State<'ctx, '_, B>, call: &instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn realloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
     let addr = &call.arguments[0].0;
     let new_size = &call.arguments[1].0;

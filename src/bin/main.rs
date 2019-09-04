@@ -20,10 +20,9 @@ fn main() {
     } else {
         functions = Box::new(proj.all_functions().map(|(f,_)| f.name.clone()));
     }
-    let ctx = z3::Context::new(&z3::Config::new());
     for funcname in functions {
         println!("Finding zero of function {:?}...", funcname);
-        if let Some(args) = find_zero_of_func(&ctx, &funcname, &proj, Config::default()) {
+        if let Some(args) = find_zero_of_func(&funcname, &proj, Config::default()) {
             match args.len() {
                 0 => println!("Function returns zero when passed no arguments\n"),
                 1 => println!("Function returns zero when passed the argument {:?}\n", args[0]),

@@ -1,4 +1,6 @@
 use haybale::*;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -17,10 +19,9 @@ fn call_through_function_ptr() {
     let funcname = "fptr_driver";
     init_logging();
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![22]),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(22))),
     );
 }
 
@@ -28,9 +29,8 @@ fn call_through_function_ptr() {
 fn call_through_function_ptr_struct() {
     let funcname = "struct_driver";
     let proj = get_project();
-    let ctx = z3::Context::new(&z3::Config::new());
     assert_eq!(
-        get_possible_return_values_of_func(&ctx, funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(vec![15]),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
+        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(15))),
     );
 }
