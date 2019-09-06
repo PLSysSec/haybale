@@ -93,7 +93,7 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
     let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
     let start_func = em.state().cur_loc.func;
     let returnwidth = size(&start_func.return_type);
-    let zero = BV::zero(em.state().btor.clone(), returnwidth as u32);
+    let zero = BV::zero(em.state().solver.clone(), returnwidth as u32);
     let mut found = false;
     while let Some(z3rval) = em.next() {
         match z3rval {
@@ -157,7 +157,7 @@ pub fn get_possible_return_values_of_func<'p>(
     let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
     for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
         if let Some(val) = arg {
-            let val = BV::from_u64(em.state().btor.clone(), val, size(&param.ty) as u32);
+            let val = BV::from_u64(em.state().solver.clone(), val, size(&param.ty) as u32);
             em.mut_state().overwrite_latest_version_of_bv(&param.name, val);
         }
     }

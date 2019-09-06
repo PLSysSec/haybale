@@ -383,8 +383,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Type::VectorType { element_type, num_elements } => match *element_type {
                 Type::IntegerType { bits } if bits == 1 => match op0_type {
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
-                        let zero = B::BV::zero(self.state.btor.clone(), 1);
-                        let one = B::BV::one(self.state.btor.clone(), 1);
+                        let zero = B::BV::zero(self.state.solver.clone(), 1);
+                        let one = B::BV::one(self.state.solver.clone(), 1);
                         let final_bv = Self::binary_on_vector(&btorfirstop, &btorsecondop, num_elements as u32, |a,b| btorpred(a,b).cond_bv(&one, &zero))?;
                         self.state.record_bv_result(icmp, final_bv)
                     },
@@ -520,11 +520,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
     fn get_offset_recursive(state: &State<'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         match indices.next() {
-            None => Ok(BV::zero(state.btor.clone(), result_bits)),
+            None => Ok(BV::zero(state.solver.clone(), result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = zero_extend_to_bits(state.operand_to_bv(index)?, result_bits);
-                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, state.btor.clone())?;
+                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, state.solver.clone())?;
                     Self::get_offset_recursive(state, indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
                 },
@@ -532,7 +532,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                         let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                         Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                            .map(|bv| bv.add(&B::BV::from_u32(state.btor.clone(), offset as u32, result_bits)))
+                            .map(|bv| bv.add(&B::BV::from_u32(state.solver.clone(), offset as u32, result_bits)))
                     },
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                 },
@@ -548,7 +548,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                                 let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                                 Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                                    .map(|bv| bv.add(&B::BV::from_u32(state.btor.clone(), offset as u32, result_bits)))
+                                    .map(|bv| bv.add(&B::BV::from_u32(state.solver.clone(), offset as u32, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                         }
@@ -615,20 +615,20 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             let insertion_bitindex_high = (index+1) * el_size - 1;  // highest bit number in the vector which will be overwritten
 
                             // mask_clear is 0's in the bit positions that will be written, 1's elsewhere
-                            let zeroes = B::BV::zero(self.state.btor.clone(), el_size);
+                            let zeroes = B::BV::zero(self.state.solver.clone(), el_size);
                             let mask_clear = if insertion_bitindex_high == highest_bit_index {
                                 if insertion_bitindex_low == 0 {
                                     zeroes
                                 } else {
-                                    zeroes.concat(&B::BV::ones(self.state.btor.clone(), insertion_bitindex_low))
+                                    zeroes.concat(&B::BV::ones(self.state.solver.clone(), insertion_bitindex_low))
                                 }
                             } else {
-                                let top = B::BV::ones(self.state.btor.clone(), highest_bit_index - insertion_bitindex_high)
+                                let top = B::BV::ones(self.state.solver.clone(), highest_bit_index - insertion_bitindex_high)
                                     .concat(&zeroes);
                                 if insertion_bitindex_low == 0 {
                                     top
                                 } else {
-                                    top.concat(&B::BV::ones(self.state.btor.clone(), insertion_bitindex_low))
+                                    top.concat(&B::BV::ones(self.state.solver.clone(), insertion_bitindex_low))
                                 }
                             };
 
@@ -637,7 +637,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             let mask_insert = if insertion_bitindex_low == 0 {
                                 top
                             } else {
-                                top.concat(&B::BV::zero(self.state.btor.clone(), insertion_bitindex_low))
+                                top.concat(&B::BV::zero(self.state.solver.clone(), insertion_bitindex_low))
                             };
 
                             let with_insertion = vector
@@ -901,7 +901,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             let default_dest_constraint = dests.iter()
                 .map(|(c,_)| c._eq(&switchval).not())
                 .reduce(|a,b| a.and(&b))
-                .unwrap_or_else(|| B::BV::from_bool(self.state.btor.clone(), true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
+                .unwrap_or_else(|| B::BV::from_bool(self.state.solver.clone(), true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
             if self.state.sat_with_extra_constraints(std::iter::once(&default_dest_constraint))? {
                 self.state.save_backtracking_point(switch.default_dest.clone(), default_dest_constraint);
             }

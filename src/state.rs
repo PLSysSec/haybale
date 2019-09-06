@@ -1,4 +1,4 @@
-use boolector::{Btor, BVSolution, option::BtorOption, option::ModelGen};
+use boolector::BVSolution;
 use llvm_ir::*;
 use log::debug;
 use reduce::Reduce;
@@ -21,8 +21,8 @@ use crate::sat::sat;
 use crate::varmap::{VarMap, RestoreInfo};
 
 pub struct State<'p, B: Backend> {
-    /// Reference to the Boolector instance being used
-    pub btor: Rc<Btor>,
+    /// Reference to the solver instance being used
+    pub solver: B::SolverRef,
     /// The configuration being used
     pub config: Config<'p, B>,
     /// Indicates the `BasicBlock` which is currently being executed
@@ -31,9 +31,6 @@ pub struct State<'p, B: Backend> {
     /// or `None` if this is the first `BasicBlock` being executed
     /// or the first `BasicBlock` of a function
     pub prev_bb_name: Option<Name>,
-    /// A place where `Backend`s can put any additional state they need for
-    /// themselves
-    pub backend_state: Rc<RefCell<B::State>>,
 
     // Private members
     varmap: VarMap<B::BV>,
@@ -148,8 +145,6 @@ struct BacktrackPoint<'p, B: Backend> {
     /// pointer), so it's not a huge concern that we need a full copy here in
     /// order to revert later.
     mem: B::Memory,
-    /// The backend state at the `BacktrackPoint`.
-    backend_state: B::State,
     /// The length of `path` at the `BacktrackPoint`.
     /// If we ever revert to this `BacktrackPoint`, we will truncate the `path` to
     /// its first `path_len` entries.
@@ -171,15 +166,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         start_loc: Location<'p>,
         config: Config<'p, B>,
     ) -> Self {
-        let btor = Rc::new(Btor::new());
-        btor.set_opt(BtorOption::ModelGen(ModelGen::All));
-        btor.set_opt(BtorOption::Incremental(true));
-        let backend_state = Rc::new(RefCell::new(B::State::default()));
+        let solver = B::SolverRef::default();
         let mut state = Self {
             cur_loc: start_loc.clone(),
             prev_bb_name: None,
-            varmap: VarMap::new(btor.clone(), config.loop_bound),
-            mem: Memory::new_uninitialized(btor.clone(), backend_state.clone()),
+            varmap: VarMap::new(solver.clone(), config.loop_bound),
+            mem: Memory::new_uninitialized(solver.clone()),
             alloc: Alloc::new(),
             global_allocations: GlobalAllocations::new(),
             stack: Vec::new(),
@@ -187,9 +179,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             path: Vec::new(),
 
             // listed last (out-of-order) so that they can be used above but moved in now
-            btor,
+            solver,
             config,
-            backend_state,
         };
         // Here we do allocation and initialization of the global variables in the Project.
         // We need to do these in two separate passes - first allocating them
@@ -227,14 +218,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         debug!("Allocating functions");
         for (func, module) in project.all_functions() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-            let addr_bv = BV::from_u64(state.btor.clone(), addr, 64);
+            let addr_bv = BV::from_u64(state.solver.clone(), addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
             state.global_allocations.allocate_function(func, module, addr, addr_bv);
        }
        debug!("Allocating function hooks");
        for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
            let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-           let addr_bv = BV::from_u64(state.btor.clone(), addr, 64);
+           let addr_bv = BV::from_u64(state.solver.clone(), addr, 64);
            debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
            state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
        }
@@ -286,7 +277,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     pub fn sat(&self) -> Result<bool> {
-        sat(&self.btor)
+        sat(&self.solver)
     }
 
     /// Returns `true` if the current constraints plus the additional constraints `conds`
@@ -296,12 +287,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
     pub fn sat_with_extra_constraints<'b>(&'b self, constraints: impl Iterator<Item = &'b B::BV>) -> Result<bool> {
-        self.btor.push(1);
+        self.solver.push(1);
         for constraint in constraints {
             constraint.assert();
         }
         let retval = self.sat();
-        self.btor.pop(1);
+        self.solver.pop(1);
         retval
     }
 
@@ -331,7 +322,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Only returns `Err` if the solver query itself fails.
     pub fn get_possible_solutions_for_bv(&self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<BVSolution>> {
-        get_possible_solutions_for_bv(self.btor.clone(), bv, n)
+        get_possible_solutions_for_bv(self.solver.clone(), bv, n)
     }
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bitvector.
@@ -423,11 +414,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Convert a `Constant` to the appropriate `BV`.
     pub fn const_to_bv(&self, c: &Constant) -> Result<B::BV> {
         match c {
-            Constant::Int { bits, value } => Ok(BV::from_u64(self.btor.clone(), *value, *bits)),
+            Constant::Int { bits, value } => Ok(BV::from_u64(self.solver.clone(), *value, *bits)),
             Constant::Null(ty)
             | Constant::AggregateZero(ty)
             | Constant::Undef(ty)
-                => Ok(BV::zero(self.btor.clone(), size(ty) as u32)),
+                => Ok(BV::zero(self.solver.clone(), size(ty) as u32)),
             Constant::Struct { values: elements, .. }
             | Constant::Array { elements, .. }
             | Constant::Vector(elements)
@@ -577,11 +568,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
     fn get_offset_recursive<'a>(&self, mut indices: impl Iterator<Item = &'a Constant>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         match indices.next() {
-            None => Ok(BV::zero(self.btor.clone(), result_bits)),
+            None => Ok(BV::zero(self.solver.clone(), result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = zero_extend_to_bits(self.const_to_bv(index)?, result_bits);
-                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, self.btor.clone())?;
+                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, self.solver.clone())?;
                     self.get_offset_recursive(indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
                 },
@@ -589,7 +580,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                     Constant::Int { value: index, .. } => {
                         let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                         self.get_offset_recursive(indices, &nested_ty, result_bits)
-                            .map(|bv| bv.add(&B::BV::from_u64(self.btor.clone(), offset as u64, result_bits)))
+                            .map(|bv| bv.add(&B::BV::from_u64(self.solver.clone(), offset as u64, result_bits)))
                     },
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                 },
@@ -604,7 +595,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                         match index {
                             Constant::Int { value: index, .. } => {
                                 let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
-                                self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&B::BV::from_u64(self.btor.clone(), offset as u64, result_bits)))
+                                self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&B::BV::from_u64(self.solver.clone(), offset as u64, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                         }
@@ -683,7 +674,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Allocate a value of size `bits`; return a pointer to the newly allocated object
     pub fn allocate(&mut self, bits: impl Into<u64>) -> B::BV {
         let raw_ptr = self.alloc.alloc(bits);
-        BV::from_u64(self.btor.clone(), raw_ptr, 64)
+        BV::from_u64(self.solver.clone(), raw_ptr, 64)
     }
 
     /// Get the size, in bits, of the allocation at the given address, or `None`
@@ -755,7 +746,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// The constraint will be added only if we end up backtracking to this point, and only then.
     pub fn save_backtracking_point(&mut self, bb_to_enter: Name, constraint: B::BV) {
         debug!("Saving a backtracking point, which would enter bb {:?} with constraint {:?}", bb_to_enter, constraint);
-        self.btor.push(1);
+        self.solver.push(1);
         let backtrack_loc = Location {
             module: self.cur_loc.module,
             func: self.cur_loc.func,
@@ -769,7 +760,6 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             varmap: self.varmap.clone(),
             mem: self.mem.clone(),
             path_len: self.path.len(),
-            backend_state: self.backend_state.borrow().clone(),
         });
     }
 
@@ -778,13 +768,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn revert_to_backtracking_point(&mut self) -> bool {
         if let Some(bp) = self.backtrack_points.pop() {
             debug!("Reverting to backtracking point {}", bp);
-            self.btor.pop(1);
+            self.solver.pop(1);
             bp.constraint.assert();
             self.varmap = bp.varmap;
             self.mem = bp.mem;
             self.stack = bp.stack;
             self.path.truncate(bp.path_len);
-            *self.backend_state.borrow_mut() = bp.backend_state;
             self.cur_loc = bp.loc;
             self.prev_bb_name = Some(bp.prev_bb);
             true
@@ -810,7 +799,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// returns a `String` describing a set of satisfying assignments for all variables
     pub fn current_assignments_as_pretty_string(&self) -> Result<String> {
         if self.sat()? {
-            let printed = self.btor.print_model();
+            let printed = self.solver.print_model();
             let sorted = itertools::sorted(printed.lines());
             Ok(sorted.fold(String::new(), |s, line| s + "\n" + line))
         } else {
@@ -828,7 +817,7 @@ mod tests {
     // we don't include tests here for Memory, Alloc, or VarMap; those are tested in their own modules.
     // Instead, here we just test the underlying solver, and the nontrivial functionality that State has itself.
 
-    /// utility to initialize a `State` out of a `Btor`, a `Project`, and a function name
+    /// utility to initialize a `State` out of a `Project` and a function name
     fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, BtorBackend> {
         let (func, module) = project.get_func_by_name(funcname).expect("Failed to find function");
         let start_loc = Location {
@@ -871,12 +860,12 @@ mod tests {
         assert_eq!(state.sat(), Ok(true));
 
         // adding True constraint should still be sat
-        BV::from_bool(state.btor.clone(), true).assert();
+        BV::from_bool(state.solver.clone().into(), true).assert();
         assert_eq!(state.sat(), Ok(true));
 
         // adding x > 0 constraint should still be sat
-        let x = BV::new(state.btor.clone(), 64, Some("x"));
-        x.sgt(&BV::zero(state.btor.clone(), 64)).assert();
+        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
+        x.sgt(&BV::zero(state.solver.clone().into(), 64)).assert();
         assert_eq!(state.sat(), Ok(true));
     }
 
@@ -887,7 +876,7 @@ mod tests {
         let state = blank_state(&project, "test_func");
 
         // adding False constraint should be unsat
-        BV::from_bool(state.btor.clone(), false).assert();
+        BV::from_bool(state.solver.clone().into(), false).assert();
         assert_eq!(state.sat(), Ok(false));
     }
 
@@ -898,12 +887,12 @@ mod tests {
         let state = blank_state(&project, "test_func");
 
         // adding x > 3 constraint should still be sat
-        let x = BV::new(state.btor.clone(), 64, Some("x"));
-        x.ugt(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
+        x.ugt(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
         assert_eq!(state.sat(), Ok(true));
 
         // adding x < 3 constraint should make us unsat
-        let bad_constraint = x.ult(&BV::from_u64(state.btor.clone(), 3, 64));
+        let bad_constraint = x.ult(&BV::from_u64(state.solver.clone().into(), 3, 64));
         assert_eq!(state.sat_with_extra_constraints(std::iter::once(&bad_constraint)), Ok(false));
 
         // the state itself should still be sat, extra constraints weren't permanently added
@@ -917,8 +906,8 @@ mod tests {
         let state = blank_state(&project, "test_func");
 
         // add x > 3 constraint
-        let x = BV::new(state.btor.clone(), 64, Some("x"));
-        x.ugt(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
+        x.ugt(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
 
         // check that the computed value of x is > 3
         let x_value = state.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x").as_u64().unwrap();
@@ -932,29 +921,29 @@ mod tests {
         let state = blank_state(&project, "test_func");
 
         // add x > 3 constraint
-        let x = BV::new(state.btor.clone(), 64, Some("x"));
-        x.ugt(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
+        x.ugt(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
 
         // check that there are more than 2 solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::MoreThanNPossibleSolutions(2)));
 
         // add x < 6 constraint
-        x.ult(&BV::from_u64(state.btor.clone(), 6, 64)).assert();
+        x.ult(&BV::from_u64(state.solver.clone().into(), 6, 64)).assert();
 
         // check that there are now exactly two solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::from_iter(vec![4,5].into_iter()))));
 
         // add x < 5 constraint
-        x.ult(&BV::from_u64(state.btor.clone(), 5, 64)).assert();
+        x.ult(&BV::from_u64(state.solver.clone().into(), 5, 64)).assert();
 
         // check that there is now exactly one solution
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(4)))));
 
         // add x < 3 constraint
-        x.ult(&BV::from_u64(state.btor.clone(), 3, 64)).assert();
+        x.ult(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
 
         // check that there are now no solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
@@ -1039,23 +1028,23 @@ mod tests {
         let mut state = blank_state(&project, "test_func");
 
         // assert x > 11
-        let x = BV::new(state.btor.clone(), 64, Some("x"));
-        x.sgt(&BV::from_i64(state.btor.clone(), 11, 64)).assert();
+        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
+        x.sgt(&BV::from_i64(state.solver.clone().into(), 11, 64)).assert();
 
         // create a backtrack point with constraint y > 5
-        let y = BV::new(state.btor.clone(), 64, Some("y"));
-        let constraint = y.sgt(&BV::from_i64(state.btor.clone(), 5, 64));
+        let y = BV::new(state.solver.clone().into(), 64, Some("y"));
+        let constraint = y.sgt(&BV::from_i64(state.solver.clone().into(), 5, 64));
         let bb = BasicBlock::new(Name::Name("bb_target".to_owned()));
         state.save_backtracking_point(bb.name.clone(), constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
         assert_eq!(
-            state.sat_with_extra_constraints(std::iter::once(&y.slt(&BV::from_i64(state.btor.clone(), 4, 64)))),
+            state.sat_with_extra_constraints(std::iter::once(&y.slt(&BV::from_i64(state.solver.clone().into(), 4, 64)))),
             Ok(true),
         );
 
         // assert x < 8 to make us unsat
-        x.slt(&BV::from_i64(state.btor.clone(), 8, 64)).assert();
+        x.slt(&BV::from_i64(state.solver.clone().into(), 8, 64)).assert();
         assert_eq!(state.sat(), Ok(false));
 
         // note the pre-rollback location

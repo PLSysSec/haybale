@@ -60,7 +60,7 @@ pub(crate) fn calloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &
     }
     let bits = bytes * 8;
     let addr = state.allocate(bits);
-    state.write(&addr, B::BV::zero(state.btor.clone(), bits as u32));  // calloc() requires zeroed memory
+    state.write(&addr, B::BV::zero(state.solver.clone(), bits as u32));  // calloc() requires zeroed memory
     Ok(ReturnValue::Return(addr))
 }
 

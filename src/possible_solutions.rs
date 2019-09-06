@@ -1,10 +1,9 @@
-use boolector::{Btor, BVSolution};
+use boolector::BVSolution;
 use crate::backend::BV;
 use crate::error::*;
 use crate::sat::sat;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum PossibleSolutions<V: Eq + Hash> {
@@ -39,18 +38,18 @@ impl PossibleSolutions<BVSolution> {
 /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
 ///
 /// Only returns `Err` if the solver query itself fails.
-pub fn get_possible_solutions_for_bv<V: BV>(btor: Rc<Btor>, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
+pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
     let mut solutions = HashSet::new();
-    btor.push(1);
-    while solutions.len() <= n && sat(&btor)? {
+    solver.push(1);
+    while solutions.len() <= n && sat(&solver)? {
         let val = bv.get_a_solution();
         solutions.insert(val.clone());
         let val = val.as_u64()
             .ok_or_else(|| Error::OtherError(format!("get_possible_solutions_for_bv called on a bv with width {}", bv.get_width())))?;
         // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-        bv._ne(&V::from_u64(btor.clone(), val, bv.get_width())).assert();
+        bv._ne(&V::from_u64(solver.clone(), val, bv.get_width())).assert();
     }
-    btor.pop(1);
+    solver.pop(1);
     if solutions.len() > n {
         Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
     } else {

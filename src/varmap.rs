@@ -2,18 +2,16 @@
 // but they still make sense to be part of `VarMap`
 #![allow(dead_code)]
 
-use boolector::Btor;
 use crate::backend::BV;
 use crate::double_keyed_map::DoubleKeyedMap;
 use crate::error::*;
-use std::rc::Rc;
 use log::debug;
 
 use llvm_ir::Name;
 
 #[derive(Clone)]
 pub struct VarMap<V: BV> {
-    btor: Rc<Btor>,
+    solver: V::SolverRef,
     /// Maps a `Name` to the `BV` corresponding to the active version of that `Name`.
     /// Different variables in different functions can have the same `Name` but
     /// different values, so we actually have `(String, Name)` as the key type
@@ -48,9 +46,9 @@ impl<V: BV> VarMap<V> {
     /// Variables with the same `Name` in different functions do not share
     /// counters for this purpose - they can each have up to
     /// `max_versions_of_name` distinct versions.
-    pub fn new(btor: Rc<Btor>, max_versions_of_name: usize) -> Self {
+    pub fn new(solver: V::SolverRef, max_versions_of_name: usize) -> Self {
         Self {
-            btor,
+            solver,
             active_version: DoubleKeyedMap::new(),
             version_num: DoubleKeyedMap::new(),
             max_version_num: max_versions_of_name - 1,  // because 0 is a version
@@ -70,7 +68,7 @@ impl<V: BV> VarMap<V> {
     /// [`VarMap::new()`](struct.VarMap.html#method.new).)
     pub fn new_bv_with_name(&mut self, funcname: String, name: Name, bits: u32) -> Result<V> {
         let new_version = self.new_version_of_name(&funcname, &name)?;
-        let bv = V::new(self.btor.clone(), bits, Some(&new_version));
+        let bv = V::new(self.solver.clone(), bits, Some(&new_version));
         debug!("Adding var {:?} = {:?}", name, bv);
         self.active_version.insert(funcname, name, bv.clone());
         Ok(bv)
@@ -191,13 +189,12 @@ pub struct RestoreInfo<V: BV> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use boolector::option::BtorOption;
+    use crate::backend::BtorRef;
     use crate::sat::sat;
 
     #[test]
     fn lookup_vars() {
-        let btor = Rc::new(Btor::new());
-        btor.set_opt(BtorOption::Incremental(true));
+        let btor = BtorRef::default();
         let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 20);
         let funcname = "foo".to_owned();
 
@@ -216,8 +213,7 @@ mod tests {
 
     #[test]
     fn vars_are_uniqued() {
-        let btor = Rc::new(Btor::new());
-        btor.set_opt(BtorOption::Incremental(true));
+        let btor = BtorRef::default();
         let mut varmap: VarMap<boolector::BV> = VarMap::new(btor.clone(), 20);
         let funcname = "foo".to_owned();
 
@@ -253,8 +249,7 @@ mod tests {
 
     #[test]
     fn enforces_max_version() {
-        let btor = Rc::new(Btor::new());
-        btor.set_opt(BtorOption::Incremental(true));
+        let btor = BtorRef::default();
 
         // Create a `VarMap` with `max_version_num = 10`
         let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
@@ -281,8 +276,7 @@ mod tests {
 
     #[test]
     fn restore_info() {
-        let btor = Rc::new(Btor::new());
-        btor.set_opt(BtorOption::Incremental(true));
+        let btor = BtorRef::default();
         let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"
@@ -305,8 +299,7 @@ mod tests {
 
     #[test]
     fn restore_different_function() {
-        let btor = Rc::new(Btor::new());
-        btor.set_opt(BtorOption::Incremental(true));
+        let btor = BtorRef::default();
         let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"

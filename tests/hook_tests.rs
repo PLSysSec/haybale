@@ -13,7 +13,7 @@ fn init_logging() {
 // Hook call.c's "simple_callee" to just return 5 instead of executing its actual body
 fn hook_for_simple_callee<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
-    Ok(ReturnValue::Return(B::BV::from_u32(state.btor.clone(), 5, layout::size(&call.get_type()) as u32)))
+    Ok(ReturnValue::Return(B::BV::from_u32(state.solver.clone(), 5, layout::size(&call.get_type()) as u32)))
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn hook_for_get_function_ptr<'p, B: Backend>(state: &mut State<'p, B>, call: &'p
 
 fn target_hook<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
-    Ok(ReturnValue::Return(B::BV::from_u32(state.btor.clone(), 5, layout::size(&call.get_type()) as u32)))
+    Ok(ReturnValue::Return(B::BV::from_u32(state.solver.clone(), 5, layout::size(&call.get_type()) as u32)))
 }
 
 #[test]

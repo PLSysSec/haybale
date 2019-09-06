@@ -1,42 +1,39 @@
 //! Traits which abstract over the backend (BV types, memory implementation,
 //! SMT solver) being used.
 
-use boolector::{Btor, BVSolution};
+use boolector::BVSolution;
+use boolector::option::{BtorOption, ModelGen};
 use std::fmt;
+use std::ops::Deref;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 /// A `Backend` is just a collection of types which together implement the necessary traits
 pub trait Backend {
-    type BV: BV;
-    type Memory: Memory<Index=Self::BV, Value=Self::BV, BackendState=Self::State>;
-    /// Any additional state that the `Backend` needs. This will be stored in the
-    /// `state::State` struct.
-    ///
-    /// Must be `Default`, and the `default()` method will be used to construct
-    /// the initial backend state when a blank `state::State` is constructed.
-    type State: Clone + Default;
+    type SolverRef: Default + Clone + Deref<Target=boolector::Btor>;  // `default()` will be used to initialize the `SolverRef`
+    type BV: BV<SolverRef=Self::SolverRef>;
+    type Memory: Memory<SolverRef=Self::SolverRef, Index=Self::BV, Value=Self::BV>;
 }
 
 /// Trait for things which can act like bitvectors
 pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
-    fn new(btor: Rc<Btor>, width: u32, name: Option<&str>) -> Self;
-    fn from_bool(btor: Rc<Btor>, b: bool) -> Self;
-    fn from_i32(btor: Rc<Btor>, i: i32, width: u32) -> Self;
-    fn from_u32(btor: Rc<Btor>, u: u32, width: u32) -> Self;
-    fn from_i64(btor: Rc<Btor>, i: i64, width: u32) -> Self;
-    fn from_u64(btor: Rc<Btor>, u: u64, width: u32) -> Self;
-    fn zero(btor: Rc<Btor>, width: u32) -> Self;
-    fn one(btor: Rc<Btor>, width: u32) -> Self;
-    fn ones(btor: Rc<Btor>, width: u32) -> Self;
-    fn from_binary_str(btor: Rc<Btor>, bits: &str) -> Self;
-    fn from_dec_str(btor: Rc<Btor>, num: &str, width: u32) -> Self;
-    fn from_hex_str(btor: Rc<Btor>, num: &str, width: u32) -> Self;
+    type SolverRef: Default + Clone + Deref<Target=boolector::Btor>;
+
+    fn new(solver: Self::SolverRef, width: u32, name: Option<&str>) -> Self;
+    fn from_bool(solver: Self::SolverRef, b: bool) -> Self;
+    fn from_i32(solver: Self::SolverRef, i: i32, width: u32) -> Self;
+    fn from_u32(solver: Self::SolverRef, u: u32, width: u32) -> Self;
+    fn from_i64(solver: Self::SolverRef, i: i64, width: u32) -> Self;
+    fn from_u64(solver: Self::SolverRef, u: u64, width: u32) -> Self;
+    fn zero(solver: Self::SolverRef, width: u32) -> Self;
+    fn one(solver: Self::SolverRef, width: u32) -> Self;
+    fn ones(solver: Self::SolverRef, width: u32) -> Self;
+    fn from_binary_str(solver: Self::SolverRef, bits: &str) -> Self;
+    fn from_dec_str(solver: Self::SolverRef, num: &str, width: u32) -> Self;
+    fn from_hex_str(solver: Self::SolverRef, num: &str, width: u32) -> Self;
     fn as_binary_str(&self) -> Option<String>;
     fn as_u64(&self) -> Option<u64>;
     fn as_bool(&self) -> Option<bool>;
     fn get_a_solution(&self) -> BVSolution;
-    fn get_btor(&self) -> Rc<Btor>;
     fn get_id(&self) -> i32;
     fn get_width(&self) -> u32;
     fn get_symbol(&self) -> Option<&str>;
@@ -100,15 +97,15 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
 
 /// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)
 pub trait Memory : Clone + PartialEq + Eq {
+    type SolverRef: Default + Clone + Deref<Target=boolector::Btor>;
     type Index: BV;
     type Value: BV;
-    type BackendState;
 
     /// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)
-    fn new_uninitialized(btor: Rc<Btor>, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+    fn new_uninitialized(solver: Self::SolverRef) -> Self;
 
     /// A new `Memory`, whose contents at all addresses are initialized to be `0`
-    fn new_zero_initialized(btor: Rc<Btor>, backend_state: Rc<RefCell<Self::BackendState>>) -> Self;
+    fn new_zero_initialized(solver: Self::SolverRef) -> Self;
 
     /// Read any number (>0) of bits of memory, at any alignment.
     /// Returned `BV` will have size `bits`.
@@ -118,45 +115,86 @@ pub trait Memory : Clone + PartialEq + Eq {
     fn write(&mut self, index: &Self::Index, value: Self::Value);
 }
 
+/// A wrapper around `boolector::Btor` so we can implement our own `Default`
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct BtorRef( pub(crate) Rc<boolector::Btor> );
+
+impl AsRef<boolector::Btor> for BtorRef {
+    fn as_ref(&self) -> &boolector::Btor {
+        &self.0
+    }
+}
+
+impl std::ops::Deref for BtorRef {
+    type Target = boolector::Btor;
+
+    fn deref(&self) -> &boolector::Btor {
+        &self.0
+    }
+}
+
+impl Default for BtorRef {
+    fn default() -> Self {
+        let btor = boolector::Btor::new();
+        btor.set_opt(BtorOption::ModelGen(ModelGen::All));
+        btor.set_opt(BtorOption::Incremental(true));
+        Self(Rc::new(btor))
+    }
+}
+
+impl From<Rc<boolector::Btor>> for BtorRef {
+    fn from(rc: Rc<boolector::Btor>) -> BtorRef {
+        BtorRef(rc)
+    }
+}
+
+impl From<BtorRef> for Rc<boolector::Btor> {
+    fn from(btor: BtorRef) -> Rc<boolector::Btor> {
+        btor.0
+    }
+}
+
 /// The prototypical `BV` and `Memory` implementations:
 ///   `boolector::BV` and `crate::memory::Memory`
 
 impl BV for boolector::BV {
-    fn new(btor: Rc<Btor>, width: u32, name: Option<&str>) -> Self {
-        boolector::BV::new(btor, width, name)
+    type SolverRef = BtorRef;
+
+    fn new(btor: BtorRef, width: u32, name: Option<&str>) -> Self {
+        boolector::BV::new(btor.into(), width, name)
     }
-    fn from_bool(btor: Rc<Btor>, b: bool) -> Self {
-        boolector::BV::from_bool(btor, b)
+    fn from_bool(btor: BtorRef, b: bool) -> Self {
+        boolector::BV::from_bool(btor.into(), b)
     }
-    fn from_i32(btor: Rc<Btor>, i: i32, width: u32) -> Self {
-        boolector::BV::from_i32(btor, i, width)
+    fn from_i32(btor: BtorRef, i: i32, width: u32) -> Self {
+        boolector::BV::from_i32(btor.into(), i, width)
     }
-    fn from_u32(btor: Rc<Btor>, u: u32, width: u32) -> Self {
-        boolector::BV::from_u32(btor, u, width)
+    fn from_u32(btor: BtorRef, u: u32, width: u32) -> Self {
+        boolector::BV::from_u32(btor.into(), u, width)
     }
-    fn from_i64(btor: Rc<Btor>, i: i64, width: u32) -> Self {
-        boolector::BV::from_i64(btor, i, width)
+    fn from_i64(btor: BtorRef, i: i64, width: u32) -> Self {
+        boolector::BV::from_i64(btor.into(), i, width)
     }
-    fn from_u64(btor: Rc<Btor>, u: u64, width: u32) -> Self {
-        boolector::BV::from_u64(btor, u, width)
+    fn from_u64(btor: BtorRef, u: u64, width: u32) -> Self {
+        boolector::BV::from_u64(btor.into(), u, width)
     }
-    fn zero(btor: Rc<Btor>, width: u32) -> Self {
-        boolector::BV::zero(btor, width)
+    fn zero(btor: BtorRef, width: u32) -> Self {
+        boolector::BV::zero(btor.into(), width)
     }
-    fn one(btor: Rc<Btor>, width: u32) -> Self {
-        boolector::BV::one(btor, width)
+    fn one(btor: BtorRef, width: u32) -> Self {
+        boolector::BV::one(btor.into(), width)
     }
-    fn ones(btor: Rc<Btor>, width: u32) -> Self {
-        boolector::BV::ones(btor, width)
+    fn ones(btor: BtorRef, width: u32) -> Self {
+        boolector::BV::ones(btor.into(), width)
     }
-    fn from_binary_str(btor: Rc<Btor>, bits: &str) -> Self {
-        boolector::BV::from_binary_str(btor, bits)
+    fn from_binary_str(btor: BtorRef, bits: &str) -> Self {
+        boolector::BV::from_binary_str(btor.into(), bits)
     }
-    fn from_dec_str(btor: Rc<Btor>, num: &str, width: u32) -> Self {
-        boolector::BV::from_dec_str(btor, num, width)
+    fn from_dec_str(btor: BtorRef, num: &str, width: u32) -> Self {
+        boolector::BV::from_dec_str(btor.into(), num, width)
     }
-    fn from_hex_str(btor: Rc<Btor>, num: &str, width: u32) -> Self {
-        boolector::BV::from_hex_str(btor, num, width)
+    fn from_hex_str(btor: BtorRef, num: &str, width: u32) -> Self {
+        boolector::BV::from_hex_str(btor.into(), num, width)
     }
     fn as_binary_str(&self) -> Option<String> {
         self.as_binary_str()
@@ -169,9 +207,6 @@ impl BV for boolector::BV {
     }
     fn get_a_solution(&self) -> BVSolution {
         self.get_a_solution()
-    }
-    fn get_btor(&self) -> Rc<Btor> {
-        self.get_btor()
     }
     fn get_id(&self) -> i32 {
         self.get_id()
@@ -353,14 +388,14 @@ impl BV for boolector::BV {
 }
 
 impl Memory for crate::memory::Memory {
+    type SolverRef = BtorRef;
     type Index = boolector::BV;
     type Value = boolector::BV;
-    type BackendState = ();
 
-    fn new_uninitialized(btor: Rc<Btor>, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
+    fn new_uninitialized(btor: BtorRef) -> Self {
         crate::memory::Memory::new_uninitialized(btor)
     }
-    fn new_zero_initialized(btor: Rc<Btor>, _backend_state: Rc<RefCell<Self::BackendState>>) -> Self {
+    fn new_zero_initialized(btor: BtorRef) -> Self {
         crate::memory::Memory::new_zero_initialized(btor)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Self::Value {
@@ -374,7 +409,7 @@ impl Memory for crate::memory::Memory {
 pub struct BtorBackend {}
 
 impl Backend for BtorBackend {
+    type SolverRef = BtorRef;
     type BV = boolector::BV;
     type Memory = crate::memory::Memory;
-    type State = ();
 }
