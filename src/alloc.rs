@@ -3,6 +3,7 @@ use log::debug;
 use std::collections::HashMap;
 
 /// An extremely simple bump-allocator which never frees
+#[derive(Clone)]
 pub struct Alloc {
     /// Pointer to available, unallocated memory
     cursor: u64,

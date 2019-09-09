@@ -13,6 +13,7 @@ use std::hash::{Hash, Hasher};
 ///
 /// It has to take into account both module-private and public definitions, of
 /// both the strong and weak varieties.
+#[derive(Clone)]
 pub(crate) struct GlobalAllocations<'p, B: Backend> {
     /// Map from `Name`s of global variables and `Function`s, to addresses at
     /// which they are allocated. These definitions can be either "strong" or

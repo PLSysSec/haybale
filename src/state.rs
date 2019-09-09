@@ -20,6 +20,7 @@ use crate::project::Project;
 use crate::sat::sat;
 use crate::varmap::{VarMap, RestoreInfo};
 
+#[derive(Clone)]
 pub struct State<'p, B: Backend> {
     /// Reference to the solver instance being used
     pub solver: B::SolverRef,
@@ -122,6 +123,7 @@ struct StackFrame<'p, V: BV> {
     restore_info: RestoreInfo<V>,
 }
 
+#[derive(Clone)]
 struct BacktrackPoint<'p, B: Backend> {
     /// Where to resume execution
     loc: Location<'p>,

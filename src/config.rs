@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct Config<'p, B> where B: Backend {
     /// Maximum number of times to execute any given line of LLVM IR.
     /// This bounds both the number of iterations of loops, and also the depth of recursion.
@@ -50,6 +51,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     }
 }
 
+#[derive(Clone)]
 pub struct FunctionHooks<'p, B: Backend + 'p> {
     /// Map from function names to the hook to use.
     /// If a function name isn't in this map, the function isn't hooked.
