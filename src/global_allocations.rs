@@ -126,7 +126,7 @@ impl Global for Function {
         self.linkage
     }
     fn get_name(&self) -> Name {
-        Name::Name(self.name.clone())
+        Name::from(&*self.name)
     }
 }
 

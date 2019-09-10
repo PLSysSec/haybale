@@ -213,8 +213,8 @@ mod tests {
         let funcname = "foo".to_owned();
 
         // create llvm-ir names
-        let name1 = Name::Name("val".to_owned());
-        let name2 = Name::Number(2);
+        let name1 = Name::from("val");
+        let name2 = Name::from(2);
 
         // create corresponding BV values
         let var1 = varmap.new_bv_with_name(funcname.clone(), name1.clone(), 64).unwrap();
@@ -232,7 +232,7 @@ mod tests {
         let funcname = "foo".to_owned();
 
         // create two vars with the same name
-        let name = Name::Name("x".to_owned());
+        let name = Name::from("x");
         let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
 
@@ -244,7 +244,7 @@ mod tests {
         assert_eq!(sat(&btor), Ok(true));
 
         // now repeat with integer names
-        let name = Name::Number(3);
+        let name = Name::from(3);
         let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
         x1.ugt(&BV::from_u64(btor.clone(), 2, 64)).assert();
@@ -252,7 +252,7 @@ mod tests {
         assert_eq!(sat(&btor), Ok(true));
 
         // now repeat with the same name but different functions
-        let name = Name::Number(10);
+        let name = Name::from(10);
         let otherfuncname = "bar".to_owned();
         let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
         let x2 = varmap.new_bv_with_name(otherfuncname.clone(), name.clone(), 64).unwrap();
@@ -270,7 +270,7 @@ mod tests {
 
         // Check that we can create 10 versions of the same `Name`
         let funcname = "foo".to_owned();
-        let name = Name::Number(7);
+        let name = Name::from(7);
         for _ in 0 .. 10 {
             let bv = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64);
             assert!(bv.is_ok());
@@ -294,7 +294,7 @@ mod tests {
         let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"
-        let fooname = Name::Name("foo".to_owned());
+        let fooname = Name::from("foo");
         let foo1 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
 
         // save restore info for "func"
@@ -317,7 +317,7 @@ mod tests {
         let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"
-        let fooname = Name::Name("foo".to_owned());
+        let fooname = Name::from("foo");
         let _foo1 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
 
         // save restore info for function "blah"

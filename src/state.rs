@@ -973,8 +973,8 @@ mod tests {
         let mut state = blank_state(&project, "test_func");
 
         // create llvm-ir names
-        let name1 = Name::Name("val".to_owned());
-        let name2 = Name::Number(2);
+        let name1 = Name::from("val");
+        let name2 = Name::from(2);
 
         // create corresponding BV values
         let var1 = state.new_bv_with_name(name1.clone(), 64).unwrap();
@@ -1050,7 +1050,7 @@ mod tests {
         // create a backtrack point with constraint y > 5
         let y = BV::new(state.solver.clone().into(), 64, Some("y"));
         let constraint = y.sgt(&BV::from_i64(state.solver.clone().into(), 5, 64));
-        let bb = BasicBlock::new(Name::Name("bb_target".to_owned()));
+        let bb = BasicBlock::new(Name::from("bb_target"));
         state.save_backtracking_point(bb.name.clone(), constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
@@ -1093,19 +1093,19 @@ mod tests {
         let mut state = blank_state(&project, "test_func");
 
         // assert x < 42
-        let x = state.new_bv_with_name(Name::Name("x".to_owned()), 64).unwrap();
+        let x = state.new_bv_with_name(Name::from("x"), 64).unwrap();
         x.ult(&BV::from_u32(state.solver.clone().into(), 42, 64)).assert();
 
         // `y` is equal to `x + 7`
         let y = x.add(&BV::from_u32(state.solver.clone().into(), 7, 64));
-        state.assign_bv_to_name(Name::Name("y".to_owned()), y).unwrap();
+        state.assign_bv_to_name(Name::from("y"), y).unwrap();
 
         // fork the state
         let mut state_2 = state.fork();
 
         // get the copies of `x` and `y` in each state, via operand lookups
-        let op_x = Operand::LocalOperand { name: Name::Name("x".to_owned()), ty: Type::i64() };
-        let op_y = Operand::LocalOperand { name: Name::Name("y".to_owned()), ty: Type::i64() };
+        let op_x = Operand::LocalOperand { name: Name::from("x"), ty: Type::i64() };
+        let op_y = Operand::LocalOperand { name: Name::from("y"), ty: Type::i64() };
         let x_1 = state.operand_to_bv(&op_x).unwrap();
         let x_2 = state_2.operand_to_bv(&op_x).unwrap();
         let y_1 = state.operand_to_bv(&op_y).unwrap();
@@ -1124,7 +1124,7 @@ mod tests {
             .unwrap();
         assert!(y_solution > 10);
         let y_solution = state
-            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::Name("y".to_owned()))
+            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::from("y"))
             .unwrap()
             .expect("Expected a solution for y")
             .as_u64()
@@ -1140,7 +1140,7 @@ mod tests {
             .unwrap();
         assert!(y_2_solution < 10);
         let y_2_solution = state_2
-            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::Name("y".to_owned()))
+            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::from("y"))
             .unwrap()
             .expect("Expected a solution for y_2")
             .as_u64()

@@ -1067,7 +1067,7 @@ mod tests {
     }
 
     fn path_from_bbnums(modname: &str, funcname: &str, bbnums: impl IntoIterator<Item = usize>) -> Path {
-        path_from_bbnames(modname, funcname, bbnums.into_iter().map(Name::Number))
+        path_from_bbnames(modname, funcname, bbnums.into_iter().map(Name::from))
     }
 
     fn path_from_func_and_bbname_pairs<'a>(modname: &str, pairs: impl IntoIterator<Item = (&'a str, Name)>) -> Path {
@@ -1079,14 +1079,14 @@ mod tests {
     }
 
     fn path_from_func_and_bbnum_pairs<'a>(modname: &str, pairs: impl IntoIterator<Item = (&'a str, usize)>) -> Path {
-        path_from_func_and_bbname_pairs(modname, pairs.into_iter().map(|(f, num)| (f, Name::Number(num))))
+        path_from_func_and_bbname_pairs(modname, pairs.into_iter().map(|(f, num)| (f, Name::from(num))))
     }
 
     /// Build a path from (modname, funcname, bbnum) triples
     fn path_from_triples<'a>(triples: impl IntoIterator<Item = (&'a str, &'a str, usize)>) -> Path {
         let mut vec = vec![];
         for (modname, funcname, bbnum) in triples {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::Number(bbnum) });
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::from(bbnum) });
         }
         vec
     }
