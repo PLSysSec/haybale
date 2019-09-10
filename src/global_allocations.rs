@@ -1,4 +1,4 @@
-use crate::backend::Backend;
+use crate::backend::{Backend, SolverRef};
 use crate::config::FunctionHook;
 use llvm_ir::*;
 use llvm_ir::module::{GlobalVariable, Linkage};
@@ -297,5 +297,30 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
                     .get(&module.name)
                     .and_then(|hm| hm.get(&addr).cloned())
             })
+    }
+
+    /// Adapt the `GlobalAllocations` to a new solver instance.
+    ///
+    /// The new solver instance should have been created (possibly transitively)
+    /// via `SolverRef::duplicate()` from the `SolverRef` which the vars in the
+    /// `GlobalAllocations` were originally created with (or most recently
+    /// changed to). Further, no new variables should have been allocated since
+    /// the call to `SolverRef::duplicate()`.
+    pub fn change_solver(&mut self, new_solver: B::SolverRef) {
+        for def in self.allocated_globals.values_mut() {
+            let new_bv = new_solver.match_bv(def.get()).unwrap();
+            *def = match def {
+                Definition::Strong(_) => Definition::Strong(new_bv),
+                Definition::Weak(_) => Definition::Weak(new_bv),
+            };
+        }
+        for bv in self.allocated_hooks.values_mut() {
+            *bv = new_solver.match_bv(bv).unwrap();
+        }
+        for hm in self.module_private_allocated_globals.values_mut() {
+            for bv in hm.values_mut() {
+                *bv = new_solver.match_bv(bv).unwrap();
+            }
+        }
     }
 }

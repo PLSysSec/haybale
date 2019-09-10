@@ -3,7 +3,7 @@
 //! sizes, and alignments.
 
 use boolector::{Array, BV};
-use crate::backend::BtorRef;
+use crate::backend::{BtorRef, SolverRef};
 use log::debug;
 use reduce::Reduce;
 use std::convert::TryInto;
@@ -48,6 +48,20 @@ impl Memory {
             log_bits_in_byte_as_wide_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
             btor,  // out of order so it can be used above but moved in here
         }
+    }
+
+    /// Adapt the `Memory` to a new `Btor` instance.
+    ///
+    /// The new `Btor` instance should have been created (possibly transitively)
+    /// via `Btor::duplicate()` from the `BtorRef` this `Memory` was originally
+    /// created with (or most recently changed to). Further, no new variables
+    /// should have been added since the call to `Btor::duplicate()`.
+    pub fn change_solver(&mut self, new_btor: BtorRef) {
+        self.mem = new_btor.match_array(&self.mem).unwrap();
+        self.cell_bytes_as_bv = new_btor.match_bv(&self.cell_bytes_as_bv).unwrap();
+        self.log_bits_in_byte_as_bv = new_btor.match_bv(&self.log_bits_in_byte_as_bv).unwrap();
+        self.log_bits_in_byte_as_wide_bv = new_btor.match_bv(&self.log_bits_in_byte_as_wide_bv).unwrap();
+        self.btor = new_btor;
     }
 
     /// Read an entire cell from the given address.

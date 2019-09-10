@@ -103,6 +103,10 @@ impl<A: Eq + Hash, B: Eq + Hash, V> DoubleKeyedMap<A, B, V> {
     pub fn values(&self) -> impl Iterator<Item = &V> {
         self.map.values()
     }
+
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+        self.map.values_mut()
+    }
 }
 
 impl<A: Eq + Hash + Clone, B: Eq + Hash + Clone, V: Clone> Clone for DoubleKeyedMap<A, B, V> {

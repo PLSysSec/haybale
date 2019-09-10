@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 /// A `Backend` is just a collection of types which together implement the necessary traits
 pub trait Backend: Clone {
-    type SolverRef: SolverRef;
+    type SolverRef: SolverRef<BV=Self::BV>;
     type BV: BV<SolverRef=Self::SolverRef>;
     type Memory: Memory<SolverRef=Self::SolverRef, Index=Self::BV, Value=Self::BV>;
 }
@@ -23,9 +23,32 @@ pub trait Backend: Clone {
 /// The [`BtorRef`](struct.BtorRef.html) in this module provides a simple
 /// implementation of `SolverRef` which is under-the-hood just an `Rc<Btor>`.
 pub trait SolverRef: Default + Clone + Deref<Target=Btor> {
+    type BV: BV<SolverRef=Self>;
+    type Array;
+
     /// As opposed to `clone()` which merely clones the reference, this function
     /// produces a deep copy of the underlying solver instance
     fn duplicate(&self) -> Self;
+
+    /// Given a `BV` originally created for any `SolverRef`, get the
+    /// corresponding `BV` in this `SolverRef`. This is only guaranteed to work
+    /// if the `BV` was created before the relevant `SolverRef::duplicate()` was
+    /// called; that is, it is intended to be used to find the copied version of
+    /// a given `BV` in the new `SolverRef`.
+    ///
+    /// It's also fine to call this with a `BV` created for this `SolverRef`
+    /// itself, in which case you'll just get back `Some(bv.clone())`.
+    fn match_bv(&self, bv: &Self::BV) -> Option<Self::BV>;
+
+    /// Given an `Array` originally created for any `SolverRef`, get the
+    /// corresponding `Array` in this `SolverRef`. This is only guaranteed to
+    /// work if the `Array` was created before the relevant
+    /// `SolverRef::duplicate()` was called; that is, it is intended to be used
+    /// to find the copied version of a given `Array` in the new `SolverRef`.
+    ///
+    /// It's also fine to call this with an `Array` created for this `SolverRef`
+    /// itself, in which case you'll just get back `Some(array.clone())`.
+    fn match_array(&self, array: &Self::Array) -> Option<Self::Array>;
 }
 
 /// A wrapper around `Rc<Btor>` which implements `SolverRef`
@@ -44,8 +67,19 @@ impl Default for BtorRef {
 }
 
 impl SolverRef for BtorRef {
+    type BV = boolector::BV;
+    type Array = boolector::Array;
+
     fn duplicate(&self) -> Self {
         Self(Rc::new(self.0.duplicate()))
+    }
+
+    fn match_bv(&self, bv: &boolector::BV) -> Option<boolector::BV> {
+        Btor::get_matching_bv(self.clone().into(), bv)
+    }
+
+    fn match_array(&self, array: &boolector::Array) -> Option<boolector::Array> {
+        Btor::get_matching_array(self.clone().into(), array)
     }
 }
 
@@ -71,7 +105,7 @@ impl From<BtorRef> for Rc<Btor> {
 
 /// Trait for things which can act like bitvectors
 pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
-    type SolverRef: SolverRef;
+    type SolverRef: SolverRef<BV=Self>;
 
     fn new(solver: Self::SolverRef, width: u32, name: Option<&str>) -> Self;
     fn from_bool(solver: Self::SolverRef, b: bool) -> Self;
@@ -168,6 +202,15 @@ pub trait Memory : Clone + PartialEq + Eq {
 
     /// Write any number (>0) of bits of memory, at any alignment.
     fn write(&mut self, index: &Self::Index, value: Self::Value);
+
+    /// Adapt the `Memory` to a new solver instance.
+    ///
+    /// The new solver instance should have been created (possibly transitively)
+    /// via `SolverRef::duplicate()` from the `SolverRef` this `Memory` was
+    /// originally created with (or most recently changed to). Further, no new
+    /// variables should have been added since the call to
+    /// `SolverRef::duplicate()`.
+    fn change_solver(&mut self, new_solver: Self::SolverRef);
 }
 
 /// The prototypical `BV` and `Memory` implementations:
@@ -419,6 +462,9 @@ impl Memory for crate::memory::Memory {
     }
     fn write(&mut self, index: &Self::Index, value: Self::Value) {
         self.write(index, value)
+    }
+    fn change_solver(&mut self, new_btor: BtorRef) {
+        self.change_solver(new_btor)
     }
 }
 

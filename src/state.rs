@@ -275,6 +275,20 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         state
     }
 
+    /// Fully duplicate the `State`. Unlike with `clone()`, the `State` this
+    /// function returns will have a fully separate (fully duplicated) solver
+    /// instance. (With `clone()`, the states will still share references to the
+    /// same solver instance.)
+    pub fn fork(&self) -> Self {
+        let mut cloned = self.clone();
+        let new_solver = cloned.solver.duplicate();
+        cloned.varmap.change_solver(new_solver.clone());
+        cloned.mem.change_solver(new_solver.clone());
+        cloned.global_allocations.change_solver(new_solver.clone());
+        cloned.solver = new_solver;
+        cloned
+    }
+
     /// Returns `true` if current constraints are satisfiable, `false` if not.
     ///
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
@@ -1070,5 +1084,67 @@ mod tests {
 
         // check that trying to backtrack again fails
         assert!(!state.revert_to_backtracking_point());
+    }
+
+    #[test]
+    fn fork() {
+        let func = blank_function("test_func");
+        let project = blank_project("test_mod", func);
+        let mut state = blank_state(&project, "test_func");
+
+        // assert x < 42
+        let x = state.new_bv_with_name(Name::Name("x".to_owned()), 64).unwrap();
+        x.ult(&BV::from_u32(state.solver.clone().into(), 42, 64)).assert();
+
+        // `y` is equal to `x + 7`
+        let y = x.add(&BV::from_u32(state.solver.clone().into(), 7, 64));
+        state.assign_bv_to_name(Name::Name("y".to_owned()), y).unwrap();
+
+        // fork the state
+        let mut state_2 = state.fork();
+
+        // get the copies of `x` and `y` in each state, via operand lookups
+        let op_x = Operand::LocalOperand { name: Name::Name("x".to_owned()), ty: Type::i64() };
+        let op_y = Operand::LocalOperand { name: Name::Name("y".to_owned()), ty: Type::i64() };
+        let x_1 = state.operand_to_bv(&op_x).unwrap();
+        let x_2 = state_2.operand_to_bv(&op_x).unwrap();
+        let y_1 = state.operand_to_bv(&op_y).unwrap();
+        let y_2 = state_2.operand_to_bv(&op_y).unwrap();
+
+        // in one state, we assert `x > 3`, while in the other, we assert `x < 3`
+        x_1.ugt(&BV::from_u32(state.solver.clone().into(), 3, 64)).assert();
+        x_2.ult(&BV::from_u32(state_2.solver.clone().into(), 3, 64)).assert();
+
+        // check that in the first state, `y > 10` (looking up two different ways)
+        let y_solution = state
+            .get_a_solution_for_bv(&y_1)
+            .unwrap()
+            .expect("Expected a solution for y")
+            .as_u64()
+            .unwrap();
+        assert!(y_solution > 10);
+        let y_solution = state
+            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::Name("y".to_owned()))
+            .unwrap()
+            .expect("Expected a solution for y")
+            .as_u64()
+            .unwrap();
+        assert!(y_solution > 10);
+
+        // check that in the second state, `y < 10` (looking up two different ways)
+        let y_2_solution = state_2
+            .get_a_solution_for_bv(&y_2)
+            .unwrap()
+            .expect("Expected a solution for y_2")
+            .as_u64()
+            .unwrap();
+        assert!(y_2_solution < 10);
+        let y_2_solution = state_2
+            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::Name("y".to_owned()))
+            .unwrap()
+            .expect("Expected a solution for y_2")
+            .as_u64()
+            .unwrap();
+        assert!(y_2_solution < 10);
     }
 }

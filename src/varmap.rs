@@ -2,7 +2,7 @@
 // but they still make sense to be part of `VarMap`
 #![allow(dead_code)]
 
-use crate::backend::BV;
+use crate::backend::{BV, SolverRef};
 use crate::double_keyed_map::DoubleKeyedMap;
 use crate::error::*;
 use log::debug;
@@ -177,6 +177,20 @@ impl<V: BV> VarMap<V> {
                 .unwrap_or_else(|| panic!("Malformed RestoreInfo: key {:?}", (&funcname, &pair.0)));
             *val = pair.1;
         }
+    }
+
+    /// Adapt the `VarMap` to a new solver instance.
+    ///
+    /// The new solver instance should have been created (possibly transitively)
+    /// via `SolverRef::duplicate()` from the `SolverRef` this `VarMap` was
+    /// originally created with (or most recently changed to). Further, no new
+    /// variables should have been added since the call to
+    /// `SolverRef::duplicate()`.
+    pub fn change_solver(&mut self, new_solver: V::SolverRef) {
+        for v in self.active_version.values_mut() {
+            *v = new_solver.match_bv(v).unwrap();
+        }
+        self.solver = new_solver;
     }
 }
 
