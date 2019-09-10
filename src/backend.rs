@@ -1,22 +1,77 @@
 //! Traits which abstract over the backend (BV types, memory implementation,
 //! SMT solver) being used.
 
-use boolector::BVSolution;
+use boolector::{Btor, BVSolution};
 use boolector::option::{BtorOption, ModelGen};
 use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
 
 /// A `Backend` is just a collection of types which together implement the necessary traits
-pub trait Backend {
-    type SolverRef: Default + Clone + Deref<Target=boolector::Btor>;  // `default()` will be used to initialize the `SolverRef`
+pub trait Backend: Clone {
+    type SolverRef: SolverRef;
     type BV: BV<SolverRef=Self::SolverRef>;
     type Memory: Memory<SolverRef=Self::SolverRef, Index=Self::BV, Value=Self::BV>;
 }
 
+/// Trait for something which acts as a reference to a `boolector::Btor` (and
+/// possibly may carry other information as well).
+///
+/// `default()` should initialize a fresh solver instance and return a
+/// `SolverRef` to it.
+///
+/// The [`BtorRef`](struct.BtorRef.html) in this module provides a simple
+/// implementation of `SolverRef` which is under-the-hood just an `Rc<Btor>`.
+pub trait SolverRef: Default + Clone + Deref<Target=Btor> {
+    /// As opposed to `clone()` which merely clones the reference, this function
+    /// produces a deep copy of the underlying solver instance
+    fn duplicate(&self) -> Self;
+}
+
+/// A wrapper around `Rc<Btor>` which implements `SolverRef`
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct BtorRef( Rc<Btor> );
+
+/// This `Default` implementation ensures that specific options we need are set
+/// on the `Btor` instance. No other initialization is required.
+impl Default for BtorRef {
+    fn default() -> Self {
+        let btor = Btor::new();
+        btor.set_opt(BtorOption::ModelGen(ModelGen::All));
+        btor.set_opt(BtorOption::Incremental(true));
+        Self(Rc::new(btor))
+    }
+}
+
+impl SolverRef for BtorRef {
+    fn duplicate(&self) -> Self {
+        Self(Rc::new(self.0.duplicate()))
+    }
+}
+
+impl Deref for BtorRef {
+    type Target = Btor;
+
+    fn deref(&self) -> &boolector::Btor {
+        &self.0
+    }
+}
+
+impl From<Rc<Btor>> for BtorRef {
+    fn from(rc: Rc<Btor>) -> BtorRef {
+        BtorRef(rc)
+    }
+}
+
+impl From<BtorRef> for Rc<Btor> {
+    fn from(btor: BtorRef) -> Rc<Btor> {
+        btor.0
+    }
+}
+
 /// Trait for things which can act like bitvectors
 pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
-    type SolverRef: Default + Clone + Deref<Target=boolector::Btor>;
+    type SolverRef: SolverRef;
 
     fn new(solver: Self::SolverRef, width: u32, name: Option<&str>) -> Self;
     fn from_bool(solver: Self::SolverRef, b: bool) -> Self;
@@ -97,7 +152,7 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
 
 /// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)
 pub trait Memory : Clone + PartialEq + Eq {
-    type SolverRef: Default + Clone + Deref<Target=boolector::Btor>;
+    type SolverRef: SolverRef;
     type Index: BV;
     type Value: BV;
 
@@ -113,45 +168,6 @@ pub trait Memory : Clone + PartialEq + Eq {
 
     /// Write any number (>0) of bits of memory, at any alignment.
     fn write(&mut self, index: &Self::Index, value: Self::Value);
-}
-
-/// A wrapper around `boolector::Btor` so we can implement our own `Default`
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct BtorRef( pub(crate) Rc<boolector::Btor> );
-
-impl AsRef<boolector::Btor> for BtorRef {
-    fn as_ref(&self) -> &boolector::Btor {
-        &self.0
-    }
-}
-
-impl std::ops::Deref for BtorRef {
-    type Target = boolector::Btor;
-
-    fn deref(&self) -> &boolector::Btor {
-        &self.0
-    }
-}
-
-impl Default for BtorRef {
-    fn default() -> Self {
-        let btor = boolector::Btor::new();
-        btor.set_opt(BtorOption::ModelGen(ModelGen::All));
-        btor.set_opt(BtorOption::Incremental(true));
-        Self(Rc::new(btor))
-    }
-}
-
-impl From<Rc<boolector::Btor>> for BtorRef {
-    fn from(rc: Rc<boolector::Btor>) -> BtorRef {
-        BtorRef(rc)
-    }
-}
-
-impl From<BtorRef> for Rc<boolector::Btor> {
-    fn from(btor: BtorRef) -> Rc<boolector::Btor> {
-        btor.0
-    }
 }
 
 /// The prototypical `BV` and `Memory` implementations:
@@ -406,6 +422,7 @@ impl Memory for crate::memory::Memory {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BtorBackend {}
 
 impl Backend for BtorBackend {
