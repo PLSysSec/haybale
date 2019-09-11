@@ -6,7 +6,7 @@ use crate::state::State;
 use llvm_ir::instruction;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Config<'p, B> where B: Backend {
@@ -15,18 +15,28 @@ pub struct Config<'p, B> where B: Backend {
     /// For inner loops, this bounds the number of total iterations across all invocations of the loop.
     pub loop_bound: usize,
 
+    /// If `true`, forks the state and spawns a new thread at each branch point.
+    /// If `false`, uses backtracking to process all paths on one thread.
+    ///
+    /// (Even with `multithreaded == false`, we'll still have one manager thread
+    /// and one worker thread, but the single worker thread will do essentially
+    /// all the work.)
+    pub multithreaded: bool,
+
     /// Active function hooks
     pub function_hooks: FunctionHooks<'p, B>,
 }
 
 impl<'p, B: Backend> Config<'p, B> {
-    /// Creates a new `Config` with the given `loop_bound` and no function hooks.
+    /// Creates a new `Config` with the given `loop_bound`, no multithreading,
+    /// and no function hooks.
     ///
     /// You may want to consider `Config::default()` which provides defaults for
     /// all parameters and comes with predefined hooks for common functions.
     pub fn new(loop_bound: usize) -> Self {
         Self {
             loop_bound,
+            multithreaded: false,
             function_hooks: FunctionHooks::new(),
         }
     }
@@ -46,6 +56,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     fn default() -> Self {
         Self {
             loop_bound: 10,
+            multithreaded: false,
             function_hooks: FunctionHooks::default(),
         }
     }
@@ -95,7 +106,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Note that this means that calls to external functions will always
     /// error unless a hook for them is provided here.
     pub fn add<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
-        where H: Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>
+        where H: Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + Send + Sync
     {
         self.hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
         self.cur_id += 1;
@@ -145,7 +156,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
 /// they cannot.
 pub(crate) struct FunctionHook<'p, B: Backend> {
     /// The actual hook to be executed
-    hook: Rc<Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + 'p>,
+    hook: Arc<Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + Send + Sync + 'p>,
 
     /// A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
@@ -175,8 +186,8 @@ impl<'p, B: Backend> Hash for FunctionHook<'p, B> {
 impl<'p, B: Backend> FunctionHook<'p, B> {
     /// `id`: A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
-    pub fn new(id: usize, f: &'p Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>) -> Self {
-        Self { hook: Rc::new(f), id }
+    pub fn new(id: usize, f: &'p (impl Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + Send + Sync)) -> Self {
+        Self { hook: Arc::new(f), id }
     }
 
     pub fn call_hook(&self, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {

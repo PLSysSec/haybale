@@ -2,10 +2,10 @@
 //! SMT solver) being used.
 
 use boolector::{Btor, BVSolution};
-use boolector::option::BtorOption;
+use boolector::option::{BtorOption, NumberFormat};
 use std::fmt;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// A `Backend` is just a collection of types which together implement the necessary traits
 pub trait Backend: Clone {
@@ -21,18 +21,18 @@ pub trait Backend: Clone {
 /// `SolverRef` to it.
 ///
 /// The [`BtorRef`](struct.BtorRef.html) in this module provides a simple
-/// implementation of `SolverRef` which is under-the-hood just an `Rc<Btor>`.
-pub trait SolverRef: Default + Clone + Deref<Target=Btor> {
+/// implementation of `SolverRef` which is under-the-hood just an `Arc<Btor>`.
+pub trait SolverRef: Default + Clone + Send + Deref<Target=Btor> {
     type BV: BV<SolverRef=Self>;
     type Array;
 
-    /// As opposed to `clone()` which merely clones the reference, this function
-    /// produces a deep copy of the underlying solver instance
-    fn duplicate(&self) -> Self;
+    /// To construct a completely fresh `SolverRef`, use `SolverRef::default()`.
+    /// However, if you want to start from an existing `Btor`, use this method.
+    fn from_btor(btor: Btor) -> Self;
 
     /// Given a `BV` originally created for any `SolverRef`, get the
     /// corresponding `BV` in this `SolverRef`. This is only guaranteed to work
-    /// if the `BV` was created before the relevant `SolverRef::duplicate()` was
+    /// if the `BV` was created before the relevant `Btor::duplicate()` was
     /// called; that is, it is intended to be used to find the copied version of
     /// a given `BV` in the new `SolverRef`.
     ///
@@ -43,7 +43,7 @@ pub trait SolverRef: Default + Clone + Deref<Target=Btor> {
     /// Given an `Array` originally created for any `SolverRef`, get the
     /// corresponding `Array` in this `SolverRef`. This is only guaranteed to
     /// work if the `Array` was created before the relevant
-    /// `SolverRef::duplicate()` was called; that is, it is intended to be used
+    /// `Btor::duplicate()` was called; that is, it is intended to be used
     /// to find the copied version of a given `Array` in the new `SolverRef`.
     ///
     /// It's also fine to call this with an `Array` created for this `SolverRef`
@@ -51,9 +51,9 @@ pub trait SolverRef: Default + Clone + Deref<Target=Btor> {
     fn match_array(&self, array: &Self::Array) -> Option<Self::Array>;
 }
 
-/// A wrapper around `Rc<Btor>` which implements `SolverRef`
+/// A wrapper around `Arc<Btor>` which implements `SolverRef`
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct BtorRef( Rc<Btor> );
+pub struct BtorRef( Arc<Btor> );
 
 /// This `Default` implementation ensures that specific options we need are set
 /// on the `Btor` instance. No other initialization is required.
@@ -66,23 +66,25 @@ impl Default for BtorRef {
     fn default() -> Self {
         let btor = Btor::new();
         btor.set_opt(BtorOption::Incremental(true));
-        Self(Rc::new(btor))
+        btor.set_opt(BtorOption::PrettyPrint(true));
+        btor.set_opt(BtorOption::OutputNumberFormat(NumberFormat::Hexadecimal));
+        Self(Arc::new(btor))
     }
 }
 
 impl SolverRef for BtorRef {
-    type BV = boolector::BV<Rc<Btor>>;
-    type Array = boolector::Array<Rc<Btor>>;
+    type BV = boolector::BV<Arc<Btor>>;
+    type Array = boolector::Array<Arc<Btor>>;
 
-    fn duplicate(&self) -> Self {
-        Self(Rc::new(self.0.duplicate()))
+    fn from_btor(btor: Btor) -> Self {
+        Self(Arc::new(btor))
     }
 
-    fn match_bv(&self, bv: &boolector::BV<Rc<Btor>>) -> Option<boolector::BV<Rc<Btor>>> {
+    fn match_bv(&self, bv: &boolector::BV<Arc<Btor>>) -> Option<boolector::BV<Arc<Btor>>> {
         Btor::get_matching_bv(self.clone().into(), bv)
     }
 
-    fn match_array(&self, array: &boolector::Array<Rc<Btor>>) -> Option<boolector::Array<Rc<Btor>>> {
+    fn match_array(&self, array: &boolector::Array<Arc<Btor>>) -> Option<boolector::Array<Arc<Btor>>> {
         Btor::get_matching_array(self.clone().into(), array)
     }
 }
@@ -95,20 +97,20 @@ impl Deref for BtorRef {
     }
 }
 
-impl From<Rc<Btor>> for BtorRef {
-    fn from(rc: Rc<Btor>) -> BtorRef {
-        BtorRef(rc)
+impl From<Arc<Btor>> for BtorRef {
+    fn from(arc: Arc<Btor>) -> BtorRef {
+        BtorRef(arc)
     }
 }
 
-impl From<BtorRef> for Rc<Btor> {
-    fn from(btor: BtorRef) -> Rc<Btor> {
+impl From<BtorRef> for Arc<Btor> {
+    fn from(btor: BtorRef) -> Arc<Btor> {
         btor.0
     }
 }
 
 /// Trait for things which can act like bitvectors
-pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
+pub trait BV: Clone + PartialEq + Eq + Send + fmt::Debug {
     type SolverRef: SolverRef<BV=Self>;
 
     fn new(solver: Self::SolverRef, width: u32, name: Option<&str>) -> Self;
@@ -189,7 +191,7 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
 }
 
 /// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)
-pub trait Memory : Clone + PartialEq + Eq {
+pub trait Memory : Clone + PartialEq + Eq + Send {
     type SolverRef: SolverRef;
     type Index: BV;
     type Value: BV;
@@ -210,17 +212,17 @@ pub trait Memory : Clone + PartialEq + Eq {
     /// Adapt the `Memory` to a new solver instance.
     ///
     /// The new solver instance should have been created (possibly transitively)
-    /// via `SolverRef::duplicate()` from the `SolverRef` this `Memory` was
+    /// via `Btor::duplicate()` from the `SolverRef` this `Memory` was
     /// originally created with (or most recently changed to). Further, no new
     /// variables should have been added since the call to
-    /// `SolverRef::duplicate()`.
+    /// `Btor::duplicate()`.
     fn change_solver(&mut self, new_solver: Self::SolverRef);
 }
 
 /// The prototypical `BV` and `Memory` implementations:
-///   `boolector::BV<Rc<Btor>>` and `crate::memory::Memory`
+///   `boolector::BV<Arc<Btor>>` and `crate::memory::Memory`
 
-impl BV for boolector::BV<Rc<Btor>> {
+impl BV for boolector::BV<Arc<Btor>> {
     type SolverRef = BtorRef;
 
     fn new(btor: BtorRef, width: u32, name: Option<&str>) -> Self {
@@ -452,8 +454,8 @@ impl BV for boolector::BV<Rc<Btor>> {
 
 impl Memory for crate::memory::Memory {
     type SolverRef = BtorRef;
-    type Index = boolector::BV<Rc<Btor>>;
-    type Value = boolector::BV<Rc<Btor>>;
+    type Index = boolector::BV<Arc<Btor>>;
+    type Value = boolector::BV<Arc<Btor>>;
 
     fn new_uninitialized(btor: BtorRef) -> Self {
         crate::memory::Memory::new_uninitialized(btor)
@@ -477,6 +479,6 @@ pub struct BtorBackend {}
 
 impl Backend for BtorBackend {
     type SolverRef = BtorRef;
-    type BV = boolector::BV<Rc<Btor>>;
+    type BV = boolector::BV<Arc<Btor>>;
     type Memory = crate::memory::Memory;
 }

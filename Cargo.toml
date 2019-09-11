@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 llvm-ir = { git = "https://github.com/cdisselkoen/llvm-ir" }
 boolector = { path = "../boolector-rs" }
+crossbeam-utils = "0.6.6"
 either = "1.5.2"
 itertools = "0.8.0"
 reduce = "0.1"

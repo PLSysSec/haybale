@@ -129,7 +129,6 @@ fn conditional_false() {
     assert_eq!(c.0, 0);
 }
 
-
 #[test]
 fn conditional_nozero() {
     let funcname = "conditional_nozero";

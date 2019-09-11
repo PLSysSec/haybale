@@ -8,7 +8,6 @@ mod symex;
 pub use symex::*;
 
 pub mod layout;
-use layout::*;
 
 mod config;
 pub use config::*;
@@ -90,32 +89,28 @@ impl SolutionValue {
 /// crate more as an example of how you can use the other public functions in the
 /// crate.
 pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Config<'p, BtorBackend>) -> Option<Vec<SolutionValue>> {
-    let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
-    let start_func = em.state().cur_loc.func;
-    let returnwidth = size(&start_func.return_type);
-    let zero = BV::zero(em.state().solver.clone(), returnwidth as u32);
-    let mut found = false;
-    while let Some(z3rval) = em.next() {
-        match z3rval {
+    let mut sat_path_result = None;
+    for path_result in symex_function(funcname, project, std::iter::repeat(None), config) {
+        match path_result.retval {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
-            ReturnValue::Return(z3rval) => {
-                let state = em.mut_state();
-                z3rval._eq(&zero).assert();
+            ReturnValue::Return(ref retval) => {
+                let state = &path_result.state;
+                let zero = BV::zero(state.solver.clone(), retval.get_width());
+                retval._eq(&zero).assert();
                 if state.sat().unwrap() {
-                    found = true;
+                    sat_path_result = Some(path_result);
                     break;
                 }
             },
         }
     }
 
-    let param_bvs: Vec<_> = em.param_bvs().clone();
-    let state = em.mut_state();
-    if found {
-        // in this case state.check() must have passed
-        Some(start_func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
-            let param_as_u64 = state.get_a_solution_for_bv(bv).unwrap()
-                .expect("since state.check() passed, expected a solution for each var")
+    if let Some(sat_path_result) = sat_path_result {
+        // in this case state.sat() must have passed
+        let start_func = sat_path_result.state.cur_loc.func;
+        Some(start_func.parameters.iter().zip(sat_path_result.params.iter()).map(|(p, bv)| {
+            let param_as_u64 = sat_path_result.state.get_a_solution_for_bv(bv).unwrap()
+                .expect("since state.sat() passed, expected a solution for each var")
                 .as_u64()
                 .expect("parameter more than 64 bits wide");
             match &p.ty {
@@ -147,28 +142,17 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
 /// For detailed descriptions of the other arguments, see [`symex_function`](fn.symex_function.html).
 pub fn get_possible_return_values_of_func<'p>(
     funcname: &str,
-    args: impl IntoIterator<Item = Option<u64>>,
+    args: impl IntoIterator<Item = Option<u64>> + Send,
     project: &'p Project,
     config: Config<'p, BtorBackend>,
     n: usize,
 ) -> PossibleSolutions<u64> {
-    let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
-
-    let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
-    for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
-        if let Some(val) = arg {
-            let val = BV::from_u64(em.state().solver.clone(), val, size(&param.ty) as u32);
-            em.mut_state().overwrite_latest_version_of_bv(&param.name, val);
-        }
-    }
-
     let mut candidate_values = HashSet::<u64>::new();
-    while let Some(z3rval) = em.next() {
-        match z3rval {
+    for path_result in symex_function(funcname, project, args, config) {
+        match path_result.retval {
             ReturnValue::ReturnVoid => panic!("This function shouldn't be called with functions that return void"),
-            ReturnValue::Return(z3rval) => {
-                let state = em.mut_state();
-                match state.get_possible_solutions_for_bv(&z3rval, n).unwrap() {
+            ReturnValue::Return(retval) => {
+                match path_result.state.get_possible_solutions_for_bv(&retval, n).unwrap() {
                     PossibleSolutions::MoreThanNPossibleSolutions(n) => return PossibleSolutions::MoreThanNPossibleSolutions(n),
                     PossibleSolutions::PossibleSolutions(v) => {
                         candidate_values.extend(v.iter().map(|bvsol| bvsol.as_u64().unwrap()));

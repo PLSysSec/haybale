@@ -7,10 +7,10 @@ use crate::backend::{BtorRef, SolverRef};
 use log::debug;
 use reduce::Reduce;
 use std::convert::TryInto;
-use std::rc::Rc;
+use std::sync::Arc;
 
-type BV = boolector::BV<Rc<Btor>>;
-type Array = boolector::Array<Rc<Btor>>;
+type BV = boolector::BV<Arc<Btor>>;
+type Array = boolector::Array<Arc<Btor>>;
 
 #[derive(Clone, Debug)]
 pub struct Memory {
@@ -330,12 +330,12 @@ mod tests {
     use crate::sat::sat;
     use std::collections::HashSet;
     use std::iter::FromIterator;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     // Basically the `get_a_solution_for_bv()` method from `State`,
     // without requiring that we construct a `State` or depend on the
     // `State` module
-    fn get_a_solution(bv: &BV<Rc<Btor>>) -> Result<Option<BVSolution>> {
+    fn get_a_solution(bv: &BV<Arc<Btor>>) -> Result<Option<BVSolution>> {
         let btor = bv.get_btor();
         btor.set_opt(BtorOption::ModelGen(ModelGen::All));
         let solution = if sat(&btor)? {

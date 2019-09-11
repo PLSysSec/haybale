@@ -200,15 +200,23 @@ pub struct RestoreInfo<V: BV> {
     pairs_to_restore: Vec<(Name, V)>,
 }
 
+impl<V: BV> RestoreInfo<V> {
+    pub fn change_solver(&mut self, new_solver: V::SolverRef) {
+        for (_, v) in self.pairs_to_restore.iter_mut() {
+            *v = new_solver.match_bv(v).unwrap();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use boolector::Btor;
     use crate::backend::BtorRef;
     use crate::sat::sat;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
-    type BV = boolector::BV<Rc<Btor>>;
+    type BV = boolector::BV<Arc<Btor>>;
 
     #[test]
     fn lookup_vars() {

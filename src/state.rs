@@ -119,6 +119,19 @@ struct StackFrame<'p, V: BV> {
     restore_info: RestoreInfo<V>,
 }
 
+impl<'p, V: BV> StackFrame<'p, V> {
+    /// Adapt the `StackFrame` to a new solver instance.
+    ///
+    /// The new solver instance should have been created (possibly transitively)
+    /// via `SolverRef::duplicate()` from the `SolverRef` this `StackFrame` was
+    /// originally created with (or most recently changed to). Further, no new
+    /// variables should have been added since the call to
+    /// `SolverRef::duplicate()`.
+    fn change_solver(&mut self, new_solver: V::SolverRef) {
+        self.restore_info.change_solver(new_solver);
+    }
+}
+
 #[derive(Clone)]
 struct BacktrackPoint<'p, B: Backend> {
     /// Where to resume execution
@@ -143,6 +156,17 @@ struct BacktrackPoint<'p, B: Backend> {
     /// If we ever revert to this `BacktrackPoint`, we will truncate the `path` to
     /// its first `path_len` entries.
     path_len: usize,
+}
+
+impl<'p, B: Backend> BacktrackPoint<'p, B> {
+    fn change_solver(&mut self, new_solver: B::SolverRef) {
+        for stack_frame in self.stack.iter_mut() {
+            stack_frame.change_solver(new_solver.clone());
+        }
+        self.constraint = new_solver.match_bv(&self.constraint).unwrap();
+        self.varmap.change_solver(new_solver.clone());
+        self.mem.change_solver(new_solver.clone());
+    }
 }
 
 impl<'p, B: Backend> fmt::Display for BacktrackPoint<'p, B> {
@@ -266,6 +290,26 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         state
     }
 
+    /// Adapt the `State` to a new solver instance.
+    ///
+    /// The new solver instance should have been created (possibly transitively)
+    /// via `SolverRef::duplicate()` from the `SolverRef` this `State` was
+    /// originally created with (or most recently changed to). Further, no new
+    /// variables should have been added since the call to
+    /// `SolverRef::duplicate()`.
+    pub fn change_solver(&mut self, new_solver: B::SolverRef) {
+        self.varmap.change_solver(new_solver.clone());
+        self.mem.change_solver(new_solver.clone());
+        self.global_allocations.change_solver(new_solver.clone());
+        for stack_frame in self.stack.iter_mut() {
+            stack_frame.change_solver(new_solver.clone());
+        }
+        for backtrack_point in self.backtrack_points.iter_mut() {
+            backtrack_point.change_solver(new_solver.clone());
+        }
+        self.solver = new_solver;
+    }
+
     /// Fully duplicate the `State`. Unlike with `clone()`, the `State` this
     /// function returns will have a fully separate (fully duplicated) solver
     /// instance. (With `clone()`, the states will still share references to the
@@ -273,10 +317,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn fork(&self) -> Self {
         let mut cloned = self.clone();
         let new_solver = cloned.solver.duplicate();
-        cloned.varmap.change_solver(new_solver.clone());
-        cloned.mem.change_solver(new_solver.clone());
-        cloned.global_allocations.change_solver(new_solver.clone());
-        cloned.solver = new_solver;
+        cloned.change_solver(B::SolverRef::from_btor(new_solver));
         cloned
     }
 
@@ -284,6 +325,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     pub fn sat(&self) -> Result<bool> {
+        debug!("Testing for sat with these constraints:\n{}", self.solver.print_constraints());
         sat(&self.solver)
     }
 
@@ -372,6 +414,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// of the `BV` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
     pub fn assign_bv_to_name(&mut self, name: Name, bv: B::BV) -> Result<()> {
+        debug!("Assigning {:?} = {:?}", name, bv);
         self.varmap.assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
     }
 
@@ -790,6 +833,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         self.backtrack_points.len()
     }
 
+    /// clears (removes) all saved backtracking points
+    pub fn clear_backtracking_points(&mut self) {
+        self.backtrack_points = vec![];
+    }
+
     /// returns a `String` containing a formatted view of the current LLVM backtrace
     pub fn pretty_llvm_backtrace(&self) -> String {
         std::iter::once(format!("  #1: {:?}\n", PathEntry::from(self.cur_loc.clone())))
@@ -816,9 +864,9 @@ mod tests {
     use super::*;
     use boolector::Btor;
     use std::collections::HashMap;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
-    type BV = boolector::BV<Rc<Btor>>;
+    type BV = boolector::BV<Arc<Btor>>;
 
     // we don't include tests here for Memory, Alloc, or VarMap; those are tested in their own modules.
     // Instead, here we just test the underlying solver, and the nontrivial functionality that State has itself.

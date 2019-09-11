@@ -1,3 +1,4 @@
+use crossbeam_utils::thread::{scope, Scope};
 use llvm_ir::*;
 use llvm_ir::instruction::BinaryOp;
 use log::{debug, info};
@@ -5,6 +6,7 @@ use either::Either;
 use reduce::Reduce;
 use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
+use std::sync::mpsc;
 
 pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::backend::*;
@@ -17,106 +19,114 @@ use crate::project::Project;
 use crate::return_value::*;
 
 /// Begin symbolic execution of the function named `funcname`, obtaining an
-/// `ExecutionManager`. The function's parameters will start completely
-/// unconstrained.
+/// iterator over [`SymexPathResult`](struct.SymexPathResult.html)s.
 ///
 /// `project`: The `Project` (set of LLVM modules) in which symbolic execution
 /// should take place. In the absence of function hooks (see
 /// [`Config`](struct.Config.html)), we will try to enter calls to any functions
 /// defined in the `Project`.
+///
+/// `args`: For each function parameter, either a concrete value for that
+/// parameter, or `None` to have the analysis consider all possible values of the
+/// parameter (that is, leave the parameter unconstrained). Only the first `n`
+/// items in the iterator will be consumed, where `n` is the number of parameters
+/// of the function, so feel free to pass an infinite iterator - e.g.,
+/// `std::iter::repeat(None)` to leave all parameters unconstrained.
 pub fn symex_function<'p, B: Backend>(
     funcname: &str,
     project: &'p Project,
+    args: impl IntoIterator<Item = Option<u64>> + Send,
     config: Config<'p, B>,
-) -> ExecutionManager<'p, B> {
+) -> Vec<SymexPathResult<'p, B>> {
     debug!("Symexing function {}", funcname);
     let (func, module) = project.get_func_by_name(funcname).unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
-    let bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
+    let start_bb = func.basic_blocks.get(0).expect("Failed to get entry basic block");
     let start_loc = Location {
         module,
         func,
-        bbname: bb.name.clone(),
+        bbname: start_bb.name.clone(),
     };
-    let mut state = State::new(project, start_loc, config);
-    let bvparams: Vec<_> = func.parameters.iter().map(|param| {
-        state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
-    }).collect();
-    ExecutionManager::new(state, project, bvparams, &bb)
+    let (tx, rx) = mpsc::channel();
+    scope(move |s| {
+        s.spawn(move |s| {
+            let mut state = State::new(project, start_loc, config);
+            let params: Vec<_> = func.parameters.iter().zip(args).map(|(param, arg)| {
+                match arg {
+                    None => state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap(),
+                    Some(val) => {
+                        let val = B::BV::from_u64(state.solver.clone(), val, size(&param.ty) as u32);
+                        state.assign_bv_to_name(param.name.clone(), val.clone()).unwrap();
+                        val
+                    },
+                }
+            }).collect();
+            let mut thread_state = ThreadState {
+                state,
+                project,
+                params,
+                tx,
+                s,
+            };
+            info!("Beginning symex in function {:?}", thread_state.state.cur_loc.func.name);
+            thread_state.symex_all_paths_and_send_results();
+        });
+        rx.into_iter().collect()
+    }).unwrap()
 }
 
-/// An `ExecutionManager` allows you to symbolically explore executions of a function.
-/// Conceptually, it is an `Iterator` over possible paths through the function.
-/// Calling `next()` on an `ExecutionManager` explores another possible path,
-/// returning a `BV` (AST) representing the function's symbolic return value at
-/// the end of that path, or `None` if the function returns void.
-/// Importantly, after any call to `next()`, you can access the `State` resulting
-/// from the end of that path using the `state()` or `mut_state()` methods.
-/// When `next()` returns `None`, there are no more possible paths through the
+/// A `SymexPathResult` represents the result of one possible path through the
 /// function.
-pub struct ExecutionManager<'p, B: Backend> {
+#[derive(Clone)]
+pub struct SymexPathResult<'p, B: Backend> {
+    /// The final `State` at the end of the path
+    pub state: State<'p, B>,
+    /// The `BV` representing the function's symbolic return value at the end of the path
+    pub retval: ReturnValue<B::BV>,
+    /// The function parameters which resulted in following this path
+    pub params: Vec<B::BV>,
+}
+
+struct ThreadState<'p, 'env, 'scope, B: Backend> where 'p: 'env, 'env: 'scope {
     state: State<'p, B>,
     project: &'p Project,
-    bvparams: Vec<B::BV>,
-    start_bb: &'p BasicBlock,
-    /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
-    /// has not yet produced its first path, i.e., `next()` has not been called
-    /// on it yet.
-    fresh: bool,
+    params: Vec<B::BV>,
+    tx: mpsc::Sender<SymexPathResult<'p, B>>,
+    s: &'scope Scope<'env>,
 }
 
-impl<'p, B: Backend> ExecutionManager<'p, B> {
-    fn new(state: State<'p, B>, project: &'p Project, bvparams: Vec<B::BV>, start_bb: &'p BasicBlock) -> Self {
-        Self {
-            state,
-            project,
-            bvparams,
-            start_bb,
-            fresh: true,
+impl<'p, 'env, 'scope, B: Backend> ThreadState<'p, 'env, 'scope, B> where B: 'p, 'p: 'env, 'env: 'scope {
+    /// Symex all possible paths starting from the current `Location`, and send
+    /// all of the corresponding `SymexPathResult`s via the channel
+    fn symex_all_paths_and_send_results(&mut self) {
+        if let Some(retval) = self.symex_from_cur_loc_through_end_of_function().unwrap_or_else(|e| {
+            panic!("Received the following error:\n  {}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
+        }) {
+            self.send_result(retval);
+            while let Some(retval) = self.backtrack_and_continue().unwrap_or_else(|e| {
+                panic!("Received the following error:\n  {}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
+            }) {
+                self.send_result(retval);
+            }
         }
     }
 
-    /// Provides access to the `State` resulting from the end of the most recently
-    /// explored path (or, if `next()` has never been called on this `ExecutionManager`,
-    /// then simply the initial `State` which was passed in).
-    pub fn state(&self) -> &State<'p, B> {
-        &self.state
+    fn send_result(&self, retval: ReturnValue<B::BV>) {
+        // TODO: for now we require a fully duplicated solver instance here
+        // so that the solver instance we send back won't get touched (e.g.,
+        // if we send this and then backtrack our state). Perhaps we could
+        // avoid this.
+        let new_btor = self.state.solver.duplicate();
+        let new_solver_ref = B::SolverRef::from_btor(new_btor);
+        let retval = match retval {
+            ReturnValue::ReturnVoid => ReturnValue::ReturnVoid,
+            ReturnValue::Return(retval) => ReturnValue::Return(new_solver_ref.match_bv(&retval).unwrap()),
+        };
+        let params = self.params.clone().into_iter().map(|p| new_solver_ref.match_bv(&p).unwrap()).collect();
+        let mut state = self.state.clone();
+        state.change_solver(new_solver_ref);
+        self.tx.send(SymexPathResult { state, retval, params }).unwrap();
     }
 
-    /// Provides mutable access to the underlying `State` (see notes on `state()`).
-    /// Changes made to the initial state (before the first call to `next()`) are
-    /// "sticky", and will persist through all executions of the function.
-    /// However, changes made to a final state (after a call to `next()`) will be
-    /// completely wiped away the next time that `next()` is called.
-    pub fn mut_state(&mut self) -> &mut State<'p, B> {
-        &mut self.state
-    }
-
-    /// Provides access to the `BV` objects representing each of the function's parameters
-    pub fn param_bvs(&self) -> &Vec<B::BV> {
-        &self.bvparams
-    }
-}
-
-impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
-    type Item = ReturnValue<B::BV>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.fresh {
-            self.fresh = false;
-            info!("Beginning symex in function {:?}", self.state.cur_loc.func.name);
-            self.symex_from_bb_through_end_of_function(self.start_bb).unwrap_or_else(|e| {
-                panic!("Received the following error:\n  {}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
-            })
-        } else {
-            debug!("ExecutionManager: requesting next path");
-            self.backtrack_and_continue().unwrap_or_else(|e| {
-                panic!("Received the following error:\n  {}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
-            })
-        }
-    }
-}
-
-impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Symex from the current `Location` through the rest of the function.
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
@@ -822,6 +832,43 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         self.symex_from_cur_loc_through_end_of_function()
     }
 
+    /// Call this when there are two possible paths forward.
+    /// `dest` should represent one possible path forward, and `constraint` will
+    /// be applied on that path.
+    /// In contrast, the caller should continue processing along the other path
+    /// forward.
+    ///
+    /// Under the hood, this will either spawn a new thread to symex the
+    /// alternate path, or save a backtracking point so that this thread will
+    /// eventually symex the alternate path.
+    fn process_alt_path(&mut self, dest: Name, constraint: B::BV) {
+        if self.state.config.multithreaded {
+            let new_btor = self.state.solver.duplicate();
+            let mut new_state = self.state.clone();
+            new_state.clear_backtracking_points();  // we don't want to process any current backtrack points on the new thread, this thread will handle them
+            let new_project = self.project;
+            let new_params = self.params.clone();
+            let new_tx = self.tx.clone();
+            self.s.spawn(move |s| {
+                let new_solver_ref = B::SolverRef::from_btor(new_btor);
+                new_state.change_solver(new_solver_ref.clone());
+                new_state.cur_loc.bbname = dest;
+                let constraint = new_solver_ref.match_bv(&constraint).unwrap();
+                constraint.assert();
+                let mut new_thread_state = ThreadState {
+                    state: new_state,
+                    project: new_project,
+                    params: new_params.into_iter().map(|p| new_solver_ref.match_bv(&p).unwrap()).collect(),
+                    tx: new_tx,
+                    s,
+                };
+                new_thread_state.symex_all_paths_and_send_results();
+            });
+        } else {
+            self.state.save_backtracking_point(dest, constraint);
+        }
+    }
+
     /// Continues to the target(s) of the `CondBr` (saving a backtracking point if
     /// necessary) and eventually returns the new `ReturnValue` representing the
     /// return value of the function (when it reaches the end of the function), or
@@ -833,7 +880,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
         if true_feasible && false_feasible {
             // for now we choose to explore true first, and backtrack to false if necessary
-            self.state.save_backtracking_point(condbr.false_dest.clone(), btorcond.not());
+            self.process_alt_path(condbr.false_dest.clone(), btorcond.not());
             btorcond.assert();
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
@@ -881,7 +928,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         } else {
             // make backtracking points for all but the first destination
             for (val, name) in feasible_dests.iter().skip(1) {
-                self.state.save_backtracking_point((*name).clone(), val._eq(&switchval));
+                self.process_alt_path((*name).clone(), val._eq(&switchval));
             }
             // if the default dest is feasible, make a backtracking point for it
             let default_dest_constraint = dests.iter()
@@ -889,7 +936,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 .reduce(|a,b| a.and(&b))
                 .unwrap_or_else(|| B::BV::from_bool(self.state.solver.clone(), true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
             if self.state.sat_with_extra_constraints(std::iter::once(&default_dest_constraint))? {
-                self.state.save_backtracking_point(switch.default_dest.clone(), default_dest_constraint);
+                self.process_alt_path(switch.default_dest.clone(), default_dest_constraint);
             }
             // follow the first destination
             let (val, name) = &feasible_dests[0];
@@ -1076,28 +1123,11 @@ mod tests {
         vec
     }
 
-    /// Iterator over the paths through a function
-    struct PathIterator<'p, B: Backend> {
-        em: ExecutionManager<'p, B>,
-    }
-
-    impl<'p, B: Backend> PathIterator<'p, B> {
-        /// For argument descriptions, see notes on `symex_function`
-        pub fn new(
-            funcname: &str,
-            project: &'p Project,
-            config: Config<'p, B>,
-        ) -> Self {
-            Self { em: symex_function(funcname, project, config) }
-        }
-    }
-
-    impl<'p, B: Backend> Iterator for PathIterator<'p, B> where B: 'p {
-        type Item = Path;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            self.em.next().map(|_| self.em.state().get_path().clone())
-        }
+    /// Iterate over the `Path`s through a function
+    fn iter_over_paths<'p, B: Backend>(funcname: &str, project: &'p Project, config: Config<'p, B>) -> impl Iterator<Item = Path> + 'p {
+        symex_function(funcname, project, std::iter::repeat(None), config)
+            .into_iter()
+            .map(|spr| spr.state.get_path().clone())
     }
 
     #[test]
@@ -1108,7 +1138,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect();
+        let paths: Vec<Path> = iter_over_paths::<BtorBackend>(funcname, &proj, config).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1121,7 +1151,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 12]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 8, 12]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
@@ -1135,7 +1165,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 6, 14]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14]));
@@ -1151,7 +1181,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 14]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 5, 14]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 7, 14]));
@@ -1171,7 +1201,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12]));
@@ -1188,7 +1218,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 9, 6]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 9, 9, 6]));
@@ -1206,7 +1236,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 8, 18]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18]));
@@ -1225,7 +1255,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
                                                                          6, 10, 16,
                                                                          6, 10, 16,
@@ -1252,7 +1282,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
                                                                          11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
@@ -1266,7 +1296,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                      10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                      10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
@@ -1288,7 +1318,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&modname, vec![
             ("simple_caller", 1),
             ("simple_callee", 2),
@@ -1306,7 +1336,7 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_simple_caller", 1),
             (callee_modname, "simple_callee", 2),
@@ -1323,7 +1353,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("conditional_caller", 2),
             ("conditional_caller", 4),
@@ -1343,7 +1373,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("twice_caller", 1),
             ("simple_callee", 2),
@@ -1363,7 +1393,7 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_twice_caller", 1),
             (callee_modname, "simple_callee", 2),
@@ -1382,7 +1412,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("nested_caller", 2),
             ("simple_caller", 1),
@@ -1402,7 +1432,7 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_nested_near_caller", 2),
             (caller_modname, "cross_module_simple_caller", 1),
@@ -1422,7 +1452,7 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_triples(vec![
             (caller_modname, "cross_module_nested_far_caller", 2),
             (callee_modname, "simple_caller", 1),
@@ -1441,7 +1471,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_of_loop", 1),
             ("callee_with_loop", 2),
@@ -1504,7 +1534,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("caller_with_loop", 1),
             ("caller_with_loop", 8),
@@ -1553,7 +1583,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
@@ -1575,7 +1605,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 4, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 20, 8]));
@@ -1597,7 +1627,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 3, 15]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 10, 15]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 12, 15]));
@@ -1616,7 +1646,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("recursive_and_normal_caller", 1),
             ("recursive_and_normal_caller", 3),
@@ -1681,7 +1711,7 @@ mod tests {
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let paths: Vec<Path> = itertools::sorted(iter_over_paths::<BtorBackend>(funcname, &proj, config)).collect();
         assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
             ("mutually_recursive_a", 1),
             ("mutually_recursive_a", 3),
