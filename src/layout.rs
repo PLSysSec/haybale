@@ -3,8 +3,7 @@
 use crate::backend::*;
 use crate::error::*;
 use llvm_ir::types::{Type, FPType};
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
 
 /// Get the size of the `Type`, in bits
 pub fn size(ty: &Type) -> usize {
@@ -18,7 +17,8 @@ pub fn size(ty: &Type) -> usize {
             .expect("Can't get size of an opaque struct type")
             .upgrade()
             .expect("Failed to upgrade weak reference")
-            .borrow()
+            .read()
+            .unwrap()
         ),
         Type::FPType(fpt) => fp_size(*fpt),
         ty => panic!("Not sure how to get the size of {:?}", ty),
@@ -68,11 +68,11 @@ pub fn get_offset_constant_index(base_type: &Type, index: usize) -> Result<(usiz
             }
         },
         Type::NamedStructType { ty, .. } => {
-            let rc: Rc<RefCell<Type>> = ty.as_ref()
+            let arc: Arc<RwLock<Type>> = ty.as_ref()
                 .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
                 .upgrade()
                 .expect("Failed to upgrade weak reference");
-            let actual_ty: &Type = &rc.borrow();
+            let actual_ty: &Type = &arc.read().unwrap();
             if let Type::StructType { ref element_types, .. } = actual_ty {
                 // this code copied from the StructType case, unfortunately
                 let mut offset_bits = 0;

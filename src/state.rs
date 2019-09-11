@@ -5,8 +5,7 @@ use reduce::Reduce;
 use std::collections::HashSet;
 use std::fmt;
 use std::iter::FromIterator;
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
 
 use crate::alloc::Alloc;
 use crate::backend::*;
@@ -601,11 +600,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                 },
                 Type::NamedStructType { ty, .. } => {
-                    let rc: Rc<RefCell<Type>> = ty.as_ref()
+                    let arc: Arc<RwLock<Type>> = ty.as_ref()
                         .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
                         .upgrade()
                         .expect("Failed to upgrade weak reference");
-                    let actual_ty: &Type = &rc.borrow();
+                    let actual_ty: &Type = &arc.read().unwrap();
                     if let Type::StructType { .. } = actual_ty {
                         // this code copied from the StructType case
                         match index {

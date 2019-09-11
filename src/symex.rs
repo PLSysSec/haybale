@@ -3,9 +3,8 @@ use llvm_ir::instruction::BinaryOp;
 use log::{debug, info};
 use either::Either;
 use reduce::Reduce;
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::convert::TryInto;
+use std::sync::{Arc, RwLock};
 
 pub use crate::state::{State, Callsite, Location, PathEntry};
 use crate::backend::*;
@@ -537,11 +536,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                 },
                 Type::NamedStructType { ty, .. } => {
-                    let rc: Rc<RefCell<Type>> = ty.as_ref()
+                    let arc: Arc<RwLock<Type>> = ty.as_ref()
                         .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
                         .upgrade()
                         .expect("Failed to upgrade weak reference");
-                    let actual_ty: &Type = &rc.borrow();
+                    let actual_ty: &Type = &arc.read().unwrap();
                     if let Type::StructType { .. } = actual_ty {
                         // this code copied from the StructType case
                         match index {
