@@ -22,7 +22,7 @@ mod double_keyed_map;
 mod global_allocations;
 
 mod possible_solutions;
-pub use possible_solutions::PossibleSolutions;
+pub use possible_solutions::*;
 mod return_value;
 pub use return_value::ReturnValue;
 mod error;
