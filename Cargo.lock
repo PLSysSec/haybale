@@ -21,13 +21,13 @@ dependencies = [
 name = "boolector"
 version = "0.1.0"
 dependencies = [
- "boolector-sys 0.2.0",
+ "boolector-sys 0.3.0",
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "boolector-sys"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

@@ -352,7 +352,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]  // requires zero-initialized memory, which requires Boolector #66
     fn zero_initialized() {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
@@ -683,7 +682,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]  // requires zero-initialized memory, which requires Boolector #66
     fn write_small_read_big() {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
