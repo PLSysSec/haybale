@@ -10,5 +10,5 @@ boolector = { path = "../boolector-rs" }
 either = "1.5.2"
 itertools = "0.8.0"
 reduce = "0.1"
-log = "0.4.0"
+log = { version = "0.4.0", features = ["max_level_debug", "release_max_level_info"] }
 env_logger = "0.6.1"
