@@ -826,8 +826,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use boolector::BV;
+    use boolector::Btor;
     use std::collections::HashMap;
+    use std::rc::Rc;
+
+    type BV = boolector::BV<Rc<Btor>>;
 
     // we don't include tests here for Memory, Alloc, or VarMap; those are tested in their own modules.
     // Instead, here we just test the underlying solver, and the nontrivial functionality that State has itself.

@@ -203,13 +203,17 @@ pub struct RestoreInfo<V: BV> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use boolector::Btor;
     use crate::backend::BtorRef;
     use crate::sat::sat;
+    use std::rc::Rc;
+
+    type BV = boolector::BV<Rc<Btor>>;
 
     #[test]
     fn lookup_vars() {
         let btor = BtorRef::default();
-        let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 20);
+        let mut varmap: VarMap<BV> = VarMap::new(btor, 20);
         let funcname = "foo".to_owned();
 
         // create llvm-ir names
@@ -228,7 +232,7 @@ mod tests {
     #[test]
     fn vars_are_uniqued() {
         let btor = BtorRef::default();
-        let mut varmap: VarMap<boolector::BV> = VarMap::new(btor.clone(), 20);
+        let mut varmap: VarMap<BV> = VarMap::new(btor.clone(), 20);
         let funcname = "foo".to_owned();
 
         // create two vars with the same name
@@ -237,8 +241,8 @@ mod tests {
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
 
         // constrain with incompatible constraints
-        x1.ugt(&BV::from_u64(btor.clone(), 2, 64)).assert();
-        x2.ult(&BV::from_u64(btor.clone(), 1, 64)).assert();
+        x1.ugt(&BV::from_u64(btor.clone().into(), 2, 64)).assert();
+        x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
 
         // check that we're still sat
         assert_eq!(sat(&btor), Ok(true));
@@ -247,8 +251,8 @@ mod tests {
         let name = Name::from(3);
         let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
-        x1.ugt(&BV::from_u64(btor.clone(), 2, 64)).assert();
-        x2.ult(&BV::from_u64(btor.clone(), 1, 64)).assert();
+        x1.ugt(&BV::from_u64(btor.clone().into(), 2, 64)).assert();
+        x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
         assert_eq!(sat(&btor), Ok(true));
 
         // now repeat with the same name but different functions
@@ -256,8 +260,8 @@ mod tests {
         let otherfuncname = "bar".to_owned();
         let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
         let x2 = varmap.new_bv_with_name(otherfuncname.clone(), name.clone(), 64).unwrap();
-        x1.ugt(&BV::from_u64(btor.clone(), 2, 64)).assert();
-        x2.ult(&BV::from_u64(btor.clone(), 1, 64)).assert();
+        x1.ugt(&BV::from_u64(btor.clone().into(), 2, 64)).assert();
+        x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
         assert_eq!(sat(&btor), Ok(true));
     }
 
@@ -266,7 +270,7 @@ mod tests {
         let btor = BtorRef::default();
 
         // Create a `VarMap` with `max_version_num = 10`
-        let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
+        let mut varmap: VarMap<BV> = VarMap::new(btor, 10);
 
         // Check that we can create 10 versions of the same `Name`
         let funcname = "foo".to_owned();
@@ -291,7 +295,7 @@ mod tests {
     #[test]
     fn restore_info() {
         let btor = BtorRef::default();
-        let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
+        let mut varmap: VarMap<BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"
         let fooname = Name::from("foo");
@@ -314,7 +318,7 @@ mod tests {
     #[test]
     fn restore_different_function() {
         let btor = BtorRef::default();
-        let mut varmap: VarMap<boolector::BV> = VarMap::new(btor, 10);
+        let mut varmap: VarMap<BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"
         let fooname = Name::from("foo");

@@ -2,11 +2,15 @@
 //! Handles fully general read and write operations: arbitrary addresses,
 //! sizes, and alignments.
 
-use boolector::{Array, BV};
+use boolector::Btor;
 use crate::backend::{BtorRef, SolverRef};
 use log::debug;
 use reduce::Reduce;
 use std::convert::TryInto;
+use std::rc::Rc;
+
+type BV = boolector::BV<Rc<Btor>>;
+type Array = boolector::Array<Rc<Btor>>;
 
 #[derive(Clone, Debug)]
 pub struct Memory {

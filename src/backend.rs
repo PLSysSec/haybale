@@ -67,18 +67,18 @@ impl Default for BtorRef {
 }
 
 impl SolverRef for BtorRef {
-    type BV = boolector::BV;
-    type Array = boolector::Array;
+    type BV = boolector::BV<Rc<Btor>>;
+    type Array = boolector::Array<Rc<Btor>>;
 
     fn duplicate(&self) -> Self {
         Self(Rc::new(self.0.duplicate()))
     }
 
-    fn match_bv(&self, bv: &boolector::BV) -> Option<boolector::BV> {
+    fn match_bv(&self, bv: &boolector::BV<Rc<Btor>>) -> Option<boolector::BV<Rc<Btor>>> {
         Btor::get_matching_bv(self.clone().into(), bv)
     }
 
-    fn match_array(&self, array: &boolector::Array) -> Option<boolector::Array> {
+    fn match_array(&self, array: &boolector::Array<Rc<Btor>>) -> Option<boolector::Array<Rc<Btor>>> {
         Btor::get_matching_array(self.clone().into(), array)
     }
 }
@@ -214,9 +214,9 @@ pub trait Memory : Clone + PartialEq + Eq {
 }
 
 /// The prototypical `BV` and `Memory` implementations:
-///   `boolector::BV` and `crate::memory::Memory`
+///   `boolector::BV<Rc<Btor>>` and `crate::memory::Memory`
 
-impl BV for boolector::BV {
+impl BV for boolector::BV<Rc<Btor>> {
     type SolverRef = BtorRef;
 
     fn new(btor: BtorRef, width: u32, name: Option<&str>) -> Self {
@@ -448,8 +448,8 @@ impl BV for boolector::BV {
 
 impl Memory for crate::memory::Memory {
     type SolverRef = BtorRef;
-    type Index = boolector::BV;
-    type Value = boolector::BV;
+    type Index = boolector::BV<Rc<Btor>>;
+    type Value = boolector::BV<Rc<Btor>>;
 
     fn new_uninitialized(btor: BtorRef) -> Self {
         crate::memory::Memory::new_uninitialized(btor)
@@ -473,6 +473,6 @@ pub struct BtorBackend {}
 
 impl Backend for BtorBackend {
     type SolverRef = BtorRef;
-    type BV = boolector::BV;
+    type BV = boolector::BV<Rc<Btor>>;
     type Memory = crate::memory::Memory;
 }
