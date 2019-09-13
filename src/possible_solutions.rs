@@ -37,17 +37,17 @@ impl PossibleSolutions<BVSolution> {
 /// If there are more than `n` possible solutions, this simply
 /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
 ///
+/// These solutions will be disambiguated - see docs on `boolector::BVSolution`.
+///
 /// Only returns `Err` if the solver query itself fails.
 pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
     let mut solutions = HashSet::new();
     solver.push(1);
-    while solutions.len() <= n && sat(&solver)? {
-        let val = bv.get_a_solution();
+    while solutions.len() <= n && sat(&solver.clone())? {
+        let val = bv.get_a_solution().disambiguate();
         solutions.insert(val.clone());
-        let val = val.as_u64()
-            .ok_or_else(|| Error::OtherError(format!("get_possible_solutions_for_bv called on a bv with width {}", bv.get_width())))?;
         // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-        bv._ne(&V::from_u64(solver.clone(), val, bv.get_width())).assert();
+        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert();
     }
     solver.pop(1);
     if solutions.len() > n {
