@@ -17,7 +17,7 @@ use crate::global_allocations::*;
 use crate::layout::*;
 use crate::possible_solutions::*;
 use crate::project::Project;
-use crate::sat::sat;
+use crate::sat::*;
 use crate::varmap::{VarMap, RestoreInfo};
 
 #[derive(Clone)]
@@ -302,14 +302,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
-    pub fn sat_with_extra_constraints<'b>(&'b self, constraints: impl Iterator<Item = &'b B::BV>) -> Result<bool> {
-        self.solver.push(1);
-        for constraint in constraints {
-            constraint.assert();
-        }
-        let retval = self.sat();
-        self.solver.pop(1);
-        retval
+    pub fn sat_with_extra_constraints<'b>(&'b self, constraints: impl IntoIterator<Item = &'b B::BV>) -> Result<bool> {
+        sat_with_extra_constraints(&self.solver, constraints)
     }
 
     /// Get one possible concrete value for the `BV`.

@@ -28,7 +28,7 @@ pub use return_value::ReturnValue;
 mod error;
 pub use error::*;
 mod extend;
-mod sat;
+pub mod sat;
 
 pub mod backend;
 use backend::*;
