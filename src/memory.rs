@@ -323,10 +323,29 @@ impl Eq for Memory {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use boolector::{BV, BVSolution};
+    use boolector::option::{BtorOption, ModelGen};
+    use crate::error::Result;
     use crate::possible_solutions::*;
     use crate::sat::sat;
     use std::collections::HashSet;
     use std::iter::FromIterator;
+    use std::rc::Rc;
+
+    // Basically the `get_a_solution_for_bv()` method from `State`,
+    // without requiring that we construct a `State` or depend on the
+    // `State` module
+    fn get_a_solution(bv: &BV<Rc<Btor>>) -> Result<Option<BVSolution>> {
+        let btor = bv.get_btor();
+        btor.set_opt(BtorOption::ModelGen(ModelGen::All));
+        let solution = if sat(&btor)? {
+            Some(bv.get_a_solution())
+        } else {
+            None
+        };
+        btor.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+        Ok(solution)
+    }
 
     #[test]
     fn uninitialized() {
@@ -344,14 +363,14 @@ mod tests {
         btor.push(1);
         read_bv.sgt(&zero).assert();
         assert_eq!(sat(&btor), Ok(true));
-        let read_val = read_bv.get_a_solution().as_u64().unwrap();
+        let read_val = get_a_solution(&read_bv).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert!(read_val > 0);
 
         // Alternately, constrain it to be < 0 and check that we're sat (and get a value < 0)
         btor.pop(1);
         read_bv.slt(&zero).assert();
         assert_eq!(sat(&btor), Ok(true));
-        let read_val = read_bv.get_a_solution().as_u64().unwrap() as i64;
+        let read_val = get_a_solution(&read_bv).unwrap().expect("Expected a solution").as_u64().unwrap() as i64;
         assert!(read_val < 0);
     }
 
@@ -501,9 +520,9 @@ mod tests {
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 128);
         assert_eq!(sat(&btor), Ok(true));
-        let read_val_0 = read_bv.slice(63, 0).get_a_solution().as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0, "\nGot value 0x{:x}, expected 0x{:x}", read_val_0, data_val_0);
-        let read_val_1 = read_bv.slice(127, 64).get_a_solution().as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
     }
 
@@ -529,13 +548,13 @@ mod tests {
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 200);
         assert_eq!(sat(&btor), Ok(true));
-        let read_val_0 = read_bv.slice(63, 0).get_a_solution().as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
-        let read_val_1 = read_bv.slice(127, 64).get_a_solution().as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
-        let read_val_2 = read_bv.slice(191, 128).get_a_solution().as_u64().unwrap();
+        let read_val_2 = get_a_solution(&read_bv.slice(191, 128)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_2, data_val_2);
-        let read_val_3 = read_bv.slice(199, 192).get_a_solution().as_u64().unwrap();
+        let read_val_3 = get_a_solution(&read_bv.slice(199, 192)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_3, data_val_3);
     }
 
@@ -561,13 +580,13 @@ mod tests {
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 200);
         assert_eq!(sat(&btor), Ok(true));
-        let read_val_0 = read_bv.slice(63, 0).get_a_solution().as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
-        let read_val_1 = read_bv.slice(127, 64).get_a_solution().as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
-        let read_val_2 = read_bv.slice(191, 128).get_a_solution().as_u64().unwrap();
+        let read_val_2 = get_a_solution(&read_bv.slice(191, 128)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_2, data_val_2);
-        let read_val_3 = read_bv.slice(199, 192).get_a_solution().as_u64().unwrap();
+        let read_val_3 = get_a_solution(&read_bv.slice(199, 192)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_3, data_val_3);
     }
 
@@ -593,13 +612,13 @@ mod tests {
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 200);
         assert_eq!(sat(&btor), Ok(true));
-        let read_val_0 = read_bv.slice(63, 0).get_a_solution().as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
-        let read_val_1 = read_bv.slice(127, 64).get_a_solution().as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
-        let read_val_2 = read_bv.slice(191, 128).get_a_solution().as_u64().unwrap();
+        let read_val_2 = get_a_solution(&read_bv.slice(191, 128)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_2, data_val_2);
-        let read_val_3 = read_bv.slice(199, 192).get_a_solution().as_u64().unwrap();
+        let read_val_3 = get_a_solution(&read_bv.slice(199, 192)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_3, data_val_3);
     }
 

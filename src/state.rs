@@ -1,4 +1,5 @@
 use boolector::BVSolution;
+use boolector::option::{BtorOption, ModelGen};
 use llvm_ir::*;
 use log::debug;
 use reduce::Reduce;
@@ -314,11 +315,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Get one possible concrete value for the `BV`.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
     pub fn get_a_solution_for_bv(&self, bv: &B::BV) -> Result<Option<BVSolution>> {
-        if self.sat()? {
-            Ok(Some(bv.get_a_solution()))
+        self.solver.set_opt(BtorOption::ModelGen(ModelGen::All));
+        let solution = if self.sat()? {
+            Some(bv.get_a_solution())
         } else {
-            Ok(None)
-        }
+            None
+        };
+        self.solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+        Ok(solution)
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.

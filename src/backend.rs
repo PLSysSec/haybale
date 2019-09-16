@@ -2,7 +2,7 @@
 //! SMT solver) being used.
 
 use boolector::{Btor, BVSolution};
-use boolector::option::{BtorOption, ModelGen};
+use boolector::option::BtorOption;
 use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -57,10 +57,14 @@ pub struct BtorRef( Rc<Btor> );
 
 /// This `Default` implementation ensures that specific options we need are set
 /// on the `Btor` instance. No other initialization is required.
+//
+// Note: We used to set model generation here, but now we toggle it so it's only
+// on when needed (profiling shows that a sat check with model gen enabled is
+// much, much more expensive than a sat check without model gen enabled, at
+// least for our frequent incremental sat checks)
 impl Default for BtorRef {
     fn default() -> Self {
         let btor = Btor::new();
-        btor.set_opt(BtorOption::ModelGen(ModelGen::All));
         btor.set_opt(BtorOption::Incremental(true));
         Self(Rc::new(btor))
     }

@@ -1,4 +1,5 @@
 use boolector::BVSolution;
+use boolector::option::{BtorOption, ModelGen};
 use crate::backend::BV;
 use crate::error::*;
 use crate::sat::sat;
@@ -55,12 +56,14 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
             None => {
                 let mut solutions = HashSet::new();
                 solver.push(1);
+                solver.set_opt(BtorOption::ModelGen(ModelGen::All));
                 while solutions.len() <= n && sat(&solver.clone())? {
                     let val = bv.get_a_solution().disambiguate();
                     solutions.insert(val.clone());
                     // Temporarily constrain that the solution can't be `val`, to see if there is another solution
                     bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert();
                 }
+                solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
                 solver.pop(1);
                 if solutions.len() > n {
                     Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
