@@ -41,18 +41,33 @@ impl PossibleSolutions<BVSolution> {
 ///
 /// Only returns `Err` if the solver query itself fails.
 pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
-    let mut solutions = HashSet::new();
-    solver.push(1);
-    while solutions.len() <= n && sat(&solver.clone())? {
-        let val = bv.get_a_solution().disambiguate();
-        solutions.insert(val.clone());
-        // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert();
-    }
-    solver.pop(1);
-    if solutions.len() > n {
-        Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
+    if n == 0 {
+        if sat(&solver.clone())? {
+            Ok(PossibleSolutions::MoreThanNPossibleSolutions(0))
+        } else {
+            Ok(PossibleSolutions::PossibleSolutions(HashSet::new()))
+        }
     } else {
-        Ok(PossibleSolutions::PossibleSolutions(solutions))
+        match bv.as_binary_str() {
+            Some(bstr) => Ok(PossibleSolutions::PossibleSolutions(
+                std::iter::once(BVSolution::from_01x_str(bstr)).collect()
+            )),
+            None => {
+                let mut solutions = HashSet::new();
+                solver.push(1);
+                while solutions.len() <= n && sat(&solver.clone())? {
+                    let val = bv.get_a_solution().disambiguate();
+                    solutions.insert(val.clone());
+                    // Temporarily constrain that the solution can't be `val`, to see if there is another solution
+                    bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert();
+                }
+                solver.pop(1);
+                if solutions.len() > n {
+                    Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
+                } else {
+                    Ok(PossibleSolutions::PossibleSolutions(solutions))
+                }
+            },
+        }
     }
 }
