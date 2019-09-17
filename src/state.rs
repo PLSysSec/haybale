@@ -317,7 +317,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn fork(&self) -> Self {
         let mut cloned = self.clone();
         let new_solver = cloned.solver.duplicate();
-        cloned.change_solver(B::SolverRef::from_btor(new_solver));
+        cloned.change_solver(new_solver);
         cloned
     }
 

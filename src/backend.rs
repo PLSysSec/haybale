@@ -26,13 +26,13 @@ pub trait SolverRef: Default + Clone + Send + Deref<Target=Btor> {
     type BV: BV<SolverRef=Self>;
     type Array;
 
-    /// To construct a completely fresh `SolverRef`, use `SolverRef::default()`.
-    /// However, if you want to start from an existing `Btor`, use this method.
-    fn from_btor(btor: Btor) -> Self;
+    /// As opposed to `clone()` which merely clones the reference, this function
+    /// produces a deep copy of the underlying solver instance
+    fn duplicate(&self) -> Self;
 
     /// Given a `BV` originally created for any `SolverRef`, get the
     /// corresponding `BV` in this `SolverRef`. This is only guaranteed to work
-    /// if the `BV` was created before the relevant `Btor::duplicate()` was
+    /// if the `BV` was created before the relevant `SolverRef::duplicate()` was
     /// called; that is, it is intended to be used to find the copied version of
     /// a given `BV` in the new `SolverRef`.
     ///
@@ -43,7 +43,7 @@ pub trait SolverRef: Default + Clone + Send + Deref<Target=Btor> {
     /// Given an `Array` originally created for any `SolverRef`, get the
     /// corresponding `Array` in this `SolverRef`. This is only guaranteed to
     /// work if the `Array` was created before the relevant
-    /// `Btor::duplicate()` was called; that is, it is intended to be used
+    /// `SolverRef::duplicate()` was called; that is, it is intended to be used
     /// to find the copied version of a given `Array` in the new `SolverRef`.
     ///
     /// It's also fine to call this with an `Array` created for this `SolverRef`
@@ -76,8 +76,8 @@ impl SolverRef for BtorRef {
     type BV = boolector::BV<Arc<Btor>>;
     type Array = boolector::Array<Arc<Btor>>;
 
-    fn from_btor(btor: Btor) -> Self {
-        Self(Arc::new(btor))
+    fn duplicate(&self) -> Self {
+        Self(Arc::new(self.0.duplicate()))
     }
 
     fn match_bv(&self, bv: &boolector::BV<Arc<Btor>>) -> Option<boolector::BV<Arc<Btor>>> {
@@ -212,10 +212,10 @@ pub trait Memory : Clone + PartialEq + Eq + Send {
     /// Adapt the `Memory` to a new solver instance.
     ///
     /// The new solver instance should have been created (possibly transitively)
-    /// via `Btor::duplicate()` from the `SolverRef` this `Memory` was
+    /// via `SolverRef::duplicate()` from the `SolverRef` this `Memory` was
     /// originally created with (or most recently changed to). Further, no new
     /// variables should have been added since the call to
-    /// `Btor::duplicate()`.
+    /// `SolverRef::duplicate()`.
     fn change_solver(&mut self, new_solver: Self::SolverRef);
 }
 

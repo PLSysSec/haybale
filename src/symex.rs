@@ -115,8 +115,7 @@ impl<'p, 'env, 'scope, B: Backend> ThreadState<'p, 'env, 'scope, B> where B: 'p,
         // so that the solver instance we send back won't get touched (e.g.,
         // if we send this and then backtrack our state). Perhaps we could
         // avoid this.
-        let new_btor = self.state.solver.duplicate();
-        let new_solver_ref = B::SolverRef::from_btor(new_btor);
+        let new_solver_ref = self.state.solver.duplicate();
         let retval = match retval {
             ReturnValue::ReturnVoid => ReturnValue::ReturnVoid,
             ReturnValue::Return(retval) => ReturnValue::Return(new_solver_ref.match_bv(&retval).unwrap()),
@@ -843,14 +842,13 @@ impl<'p, 'env, 'scope, B: Backend> ThreadState<'p, 'env, 'scope, B> where B: 'p,
     /// eventually symex the alternate path.
     fn process_alt_path(&mut self, dest: Name, constraint: B::BV) {
         if self.state.config.multithreaded {
-            let new_btor = self.state.solver.duplicate();
+            let new_solver_ref = self.state.solver.duplicate();
             let mut new_state = self.state.clone();
             new_state.clear_backtracking_points();  // we don't want to process any current backtrack points on the new thread, this thread will handle them
             let new_project = self.project;
             let new_params = self.params.clone();
             let new_tx = self.tx.clone();
             self.s.spawn(move |s| {
-                let new_solver_ref = B::SolverRef::from_btor(new_btor);
                 new_state.change_solver(new_solver_ref.clone());
                 new_state.cur_loc.bbname = dest;
                 let constraint = new_solver_ref.match_bv(&constraint).unwrap();

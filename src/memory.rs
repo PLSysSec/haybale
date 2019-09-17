@@ -57,9 +57,9 @@ impl Memory {
     /// Adapt the `Memory` to a new `Btor` instance.
     ///
     /// The new `Btor` instance should have been created (possibly transitively)
-    /// via `Btor::duplicate()` from the `BtorRef` this `Memory` was originally
+    /// via `SolverRef::duplicate()` from the `SolverRef` this `Memory` was originally
     /// created with (or most recently changed to). Further, no new variables
-    /// should have been added since the call to `Btor::duplicate()`.
+    /// should have been added since the call to `SolverRef::duplicate()`.
     pub fn change_solver(&mut self, new_btor: BtorRef) {
         self.mem = new_btor.match_array(&self.mem).unwrap();
         self.cell_bytes_as_bv = new_btor.match_bv(&self.cell_bytes_as_bv).unwrap();
