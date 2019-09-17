@@ -25,7 +25,7 @@ define i32 @conditional_caller(i32, i32) local_unnamed_addr #1 {
   br label %8
 
 ; <label>:6:                                      ; preds = %2
-  %7 = add nsw i32 %1, 10
+  %7 = add nsw i32 %1, -10
   br label %8
 
 ; <label>:8:                                      ; preds = %6, %4

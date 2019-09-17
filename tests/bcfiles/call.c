@@ -10,7 +10,7 @@ int conditional_caller(int x, int y) {
   if (y > 5) {
     return simple_callee(x, 3);
   } else {
-    return y + 10;
+    return y - 10;
   }
 }
 
