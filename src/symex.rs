@@ -98,7 +98,7 @@ impl<'p, 'env, 'scope, B: Backend> ThreadState<'p, 'env, 'scope, B> where B: 'p,
     /// Symex all possible paths starting from the current `Location`, and send
     /// all of the corresponding `SymexPathResult`s via the channel
     fn symex_all_paths_and_send_results(&mut self) {
-        if let Some(retval) = self.symex_from_cur_loc_through_end_of_function().unwrap_or_else(|e| {
+        if let Some(retval) = self.symex_from_inst_in_cur_loc(0).unwrap_or_else(|e| {
             panic!("Received the following error:\n  {}\nLLVM backtrace:\n{}", e, self.state.pretty_llvm_backtrace());
         }) {
             self.send_result(retval);
