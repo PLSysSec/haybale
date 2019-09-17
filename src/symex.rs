@@ -139,11 +139,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
         assert_eq!(bb.name, self.state.cur_loc.bbname);
         debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
-        self.state.record_in_path(PathEntry {
-            modname: self.state.cur_loc.module.name.clone(),
-            funcname: self.state.cur_loc.func.name.clone(),
-            bbname: bb.name.clone(),
-        });
+        self.state.record_path_entry();
         for (instnum, inst) in bb.instrs.iter().skip(inst).enumerate() {
             let result = if let Ok(binop) = inst.clone().try_into() {
                 self.symex_binop(&binop)
@@ -757,7 +753,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             let btorargs: Vec<B::BV> = call.arguments.iter()
                 .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                 .collect::<Result<Vec<B::BV>>>()?;
-            let saved_loc = self.state.cur_loc.clone();  // don't need to save prev_bb because there can't be any more Phi instructions in this block (they all have to come before any Call instructions)
+            let saved_loc = self.state.cur_loc.clone();
             self.state.push_callsite(instnum);
             let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
             self.state.cur_loc = Location {
@@ -774,11 +770,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
                 Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
                     self.state.cur_loc = saved_loc;
-                    self.state.record_in_path(PathEntry {
-                        modname: self.state.cur_loc.module.name.clone(),
-                        funcname: self.state.cur_loc.func.name.clone(),
-                        bbname: self.state.cur_loc.bbname.clone(),
-                    });
+                    self.state.record_path_entry();
                     match returned_bv {
                         ReturnValue::Return(bv) => {
                             // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
@@ -826,7 +818,6 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// function), or `Ok(None)` if no possible paths were found.
     fn symex_br(&mut self, br: &'p terminator::Br) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing br {:?}", br);
-        self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
         self.state.cur_loc.bbname = br.dest.clone();
         self.symex_from_cur_loc_through_end_of_function()
     }
@@ -844,17 +835,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             // for now we choose to explore true first, and backtrack to false if necessary
             self.state.save_backtracking_point(condbr.false_dest.clone(), btorcond.not());
             btorcond.assert();
-            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
             btorcond.assert();  // unnecessary, but may help Boolector more than it hurts?
-            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
             btorcond.not().assert();  // unnecessary, but may help Boolector more than it hurts?
-            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = condbr.false_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else {
@@ -888,7 +876,6 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             .collect::<Vec<(&B::BV, &Name)>>();
         if feasible_dests.is_empty() {
             // none of the dests are feasible, we will always end up in the default dest
-            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = switch.default_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else {
@@ -907,7 +894,6 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             // follow the first destination
             let (val, name) = &feasible_dests[0];
             val._eq(&switchval).assert();  // unnecessary, but may help Boolector more than it hurts?
-            self.state.prev_bb_name = Some(self.state.cur_loc.bbname.clone());
             self.state.cur_loc.bbname = (*name).clone();
             self.symex_from_cur_loc_through_end_of_function()
         }
@@ -915,15 +901,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
 
     fn symex_phi(&mut self, phi: &'p instruction::Phi) -> Result<()> {
         debug!("Symexing phi {:?}", phi);
-        let prev_bb = self.state.prev_bb_name.as_ref().expect("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block");
-        let mut chosen_value = None;
-        for (op, bbname) in phi.incoming_values.iter() {
-            if bbname == prev_bb {
-                chosen_value = Some(op);
-                break;
-            }
-        }
-        let chosen_value = chosen_value.ok_or_else(|| Error::OtherError(format!("Failed to find a Phi member matching previous BasicBlock. Phi incoming_values are {:?} but we were looking for {:?}", phi.incoming_values, prev_bb)))?;
+        let path = self.state.get_path();
+        let prev_bb = match path.len() {
+            0|1 => panic!("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block"),
+            len => &path[len - 2].bbname,  // the last entry is our current block, so we want the one before
+        };
+        let chosen_value = phi.incoming_values.iter()
+            .find(|&(_, bbname)| bbname == prev_bb)
+            .map(|(op, _)| op)
+            .ok_or_else(|| Error::OtherError(format!("Failed to find a Phi member matching previous BasicBlock. Phi incoming_values are {:?} but we were looking for {:?}", phi.incoming_values, prev_bb)))?;
         self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value)?)
     }
 

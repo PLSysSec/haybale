@@ -28,10 +28,6 @@ pub struct State<'p, B: Backend> {
     pub config: Config<'p, B>,
     /// Indicates the `BasicBlock` which is currently being executed
     pub cur_loc: Location<'p>,
-    /// `Name` of the `BasicBlock` which was executed before this one;
-    /// or `None` if this is the first `BasicBlock` being executed
-    /// or the first `BasicBlock` of a function
-    pub prev_bb_name: Option<Name>,
 
     // Private members
     varmap: VarMap<B::BV>,
@@ -127,10 +123,6 @@ struct StackFrame<'p, V: BV> {
 struct BacktrackPoint<'p, B: Backend> {
     /// Where to resume execution
     loc: Location<'p>,
-    /// `Name` of the `BasicBlock` executed just prior to the `BacktrackPoint`.
-    /// Assumed to be in the same `Module` and `Function` as `loc` (which is
-    /// always true for how we currently use `BacktrackPoint`s as of this writing)
-    prev_bb: Name,
     /// Call stack at the `BacktrackPoint`.
     /// This is a vector of `StackFrame`s where the first entry is the top-level
     /// caller, and the last entry is the caller of the `BacktrackPoint`'s function.
@@ -171,7 +163,6 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         let solver = B::SolverRef::default();
         let mut state = Self {
             cur_loc: start_loc.clone(),
-            prev_bb_name: None,
             varmap: VarMap::new(solver.clone(), config.loop_bound),
             mem: Memory::new_uninitialized(solver.clone()),
             alloc: Alloc::new(),
@@ -713,8 +704,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         }
     }
 
-    /// Record a `PathEntry` in the current path.
-    pub fn record_in_path(&mut self, entry: PathEntry) {
+    /// Record the current location as a `PathEntry` in the current path.
+    pub fn record_path_entry(&mut self) {
+        let entry = PathEntry::from(self.cur_loc.clone());
         debug!("Recording a path entry {:?}", entry);
         self.path.push(entry);
     }
@@ -767,7 +759,6 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         };
         self.backtrack_points.push(BacktrackPoint {
             loc: backtrack_loc,
-            prev_bb: self.cur_loc.bbname.clone(),
             stack: self.stack.clone(),
             constraint,
             varmap: self.varmap.clone(),
@@ -788,7 +779,6 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             self.stack = bp.stack;
             self.path.truncate(bp.path_len);
             self.cur_loc = bp.loc;
-            self.prev_bb_name = Some(bp.prev_bb);
             true
         } else {
             false
@@ -1042,6 +1032,7 @@ mod tests {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
+        state.record_path_entry();
 
         // assert x > 11
         let x = BV::new(state.solver.clone().into(), 64, Some("x"));
@@ -1067,11 +1058,15 @@ mod tests {
         let pre_rollback = state.cur_loc.clone();
 
         // roll back to backtrack point; check that we ended up at the right loc
-        // and with the right prev_bb
+        // and with the right path
         assert!(state.revert_to_backtracking_point());
         assert_eq!(state.cur_loc.func, pre_rollback.func);
         assert_eq!(state.cur_loc.bbname, bb.name);
-        assert_eq!(state.prev_bb_name, Some("test_bb".to_owned().into()));  // the `blank_state` comes with this as the current bb name
+        assert_eq!(state.get_path(), &vec![PathEntry {
+            modname: "test_mod".into(),
+            funcname: "test_func".into(),
+            bbname: "test_bb".into(),  // the `blank_state` comes with this as the current bb name
+        }]);
 
         // check that the constraint x < 8 was removed: we're sat again
         assert_eq!(state.sat(), Ok(true));
