@@ -414,7 +414,6 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// of the `BV` would exceed `max_versions_of_name` -- see
     /// [`State::new()`](struct.State.html#method.new).)
     pub fn assign_bv_to_name(&mut self, name: Name, bv: B::BV) -> Result<()> {
-        debug!("Assigning {:?} = {:?}", name, bv);
         self.varmap.assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
     }
 
