@@ -32,10 +32,16 @@ use crate::return_value::*;
 /// items in the iterator will be consumed, where `n` is the number of parameters
 /// of the function, so feel free to pass an infinite iterator - e.g.,
 /// `std::iter::repeat(None)` to leave all parameters unconstrained.
+///
+/// `initialization_hook`: This hook will be run on the initial
+/// state before any symbolic execution starts. This gives an opportunity to
+/// perform any additional initialization of the state which is desired.
+/// If unneeded, simply pass `|_,_| {}`.
 pub fn symex_function<'p, B: Backend>(
     funcname: &str,
     project: &'p Project,
     args: impl IntoIterator<Item = Option<u64>> + Send,
+    initialization_hook: impl FnOnce(&mut State<B>, &Vec<B::BV>) + Send,
     config: Config<'p, B>,
 ) -> Vec<SymexPathResult<'p, B>> {
     debug!("Symexing function {}", funcname);
@@ -60,6 +66,7 @@ pub fn symex_function<'p, B: Backend>(
                     },
                 }
             }).collect();
+            initialization_hook(&mut state, &params);
             let mut thread_state = ThreadState {
                 state,
                 project,
@@ -1123,7 +1130,7 @@ mod tests {
 
     /// Iterate over the `Path`s through a function
     fn iter_over_paths<'p, B: Backend>(funcname: &str, project: &'p Project, config: Config<'p, B>) -> impl Iterator<Item = Path> + 'p {
-        symex_function(funcname, project, std::iter::repeat(None), config)
+        symex_function(funcname, project, std::iter::repeat(None), |_,_| {}, config)
             .into_iter()
             .map(|spr| spr.state.get_path().clone())
     }

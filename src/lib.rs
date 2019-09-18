@@ -90,7 +90,7 @@ impl SolutionValue {
 /// crate.
 pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Config<'p, BtorBackend>) -> Option<Vec<SolutionValue>> {
     let mut sat_path_result = None;
-    for path_result in symex_function(funcname, project, std::iter::repeat(None), config) {
+    for path_result in symex_function(funcname, project, std::iter::repeat(None), |_,_| {}, config) {
         match path_result.retval {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
             ReturnValue::Return(ref retval) => {
@@ -148,7 +148,7 @@ pub fn get_possible_return_values_of_func<'p>(
     n: usize,
 ) -> PossibleSolutions<u64> {
     let mut candidate_values = HashSet::<u64>::new();
-    for path_result in symex_function(funcname, project, args, config) {
+    for path_result in symex_function(funcname, project, args, |_,_| {}, config) {
         match path_result.retval {
             ReturnValue::ReturnVoid => panic!("This function shouldn't be called with functions that return void"),
             ReturnValue::Return(retval) => {
