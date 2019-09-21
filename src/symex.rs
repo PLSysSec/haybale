@@ -838,15 +838,16 @@ impl<'p, 'env, 'scope, B: Backend> ThreadState<'p, 'env, 'scope, B> where B: 'p,
         self.symex_from_cur_loc_through_end_of_function()
     }
 
-    /// Call this when there are two possible paths forward.
-    /// `dest` should represent one possible path forward, and `constraint` will
-    /// be applied on that path.
-    /// In contrast, the caller should continue processing along the other path
-    /// forward.
+    /// Call this when there is a possible path forward which the caller does not
+    /// want to (immediately) continue down. This function will take care of
+    /// ensuring that someone will eventually handle the path. Under the hood, it
+    /// will either spawn a new thread to handle the path immediately, or save a
+    /// backtracking point so that the caller's thread will eventually handle the
+    /// path.
     ///
-    /// Under the hood, this will either spawn a new thread to symex the
-    /// alternate path, or save a backtracking point so that this thread will
-    /// eventually symex the alternate path.
+    /// `dest`: name of the basic block which is next on that path.
+    ///
+    /// `constraint`: a constraint to be applied on that path.
     fn process_alt_path(&mut self, dest: Name, constraint: B::BV) {
         if self.state.config.multithreaded {
             let new_solver_ref = self.state.solver.duplicate();
@@ -884,7 +885,7 @@ impl<'p, 'env, 'scope, B: Backend> ThreadState<'p, 'env, 'scope, B> where B: 'p,
         let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond))?;
         let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
         if true_feasible && false_feasible {
-            // for now we choose to explore true first, and backtrack to false if necessary
+            // for now we choose to explore true ourselves, and leave false as an alt path (for another thread or as a backtracking point)
             self.process_alt_path(condbr.false_dest.clone(), btorcond.not());
             btorcond.assert();
             self.state.cur_loc.bbname = condbr.true_dest.clone();
