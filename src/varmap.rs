@@ -205,7 +205,7 @@ mod tests {
     use super::*;
     use boolector::Btor;
     use crate::backend::BtorRef;
-    use crate::sat::sat;
+    use crate::solver_utils;
     use std::rc::Rc;
 
     type BV = boolector::BV<Rc<Btor>>;
@@ -245,7 +245,7 @@ mod tests {
         x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
 
         // check that we're still sat
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
 
         // now repeat with integer names
         let name = Name::from(3);
@@ -253,7 +253,7 @@ mod tests {
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
         x1.ugt(&BV::from_u64(btor.clone().into(), 2, 64)).assert();
         x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
 
         // now repeat with the same name but different functions
         let name = Name::from(10);
@@ -262,7 +262,7 @@ mod tests {
         let x2 = varmap.new_bv_with_name(otherfuncname.clone(), name.clone(), 64).unwrap();
         x1.ugt(&BV::from_u64(btor.clone().into(), 2, 64)).assert();
         x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
     }
 
     #[test]

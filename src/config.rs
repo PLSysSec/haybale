@@ -15,18 +15,62 @@ pub struct Config<'p, B> where B: Backend {
     /// For inner loops, this bounds the number of total iterations across all invocations of the loop.
     pub loop_bound: usize,
 
+    /// When encountering a `memcpy`, `memset`, or `memmove` with multiple
+    /// possible lengths, how (if at all) should we concretize?
+    pub concretize_memcpy_lengths: Concretize,
+
     /// Active function hooks
     pub function_hooks: FunctionHooks<'p, B>,
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum Concretize {
+    /// Handle everything fully symbolically - that is, have the solver fully
+    /// consider all possible values. This may lead to poor solver performance
+    /// for some workloads.
+    Symbolic,
+
+    /// Pick one possible value arbitrarily. Often this may choose `0` if `0` is
+    /// a possible solution, but this behavior is not guaranteed. (To guarantee
+    /// this behavior, use `Prefer(0)`.)
+    ///
+    /// The value will be permanently constrained to be the chosen value (on this
+    /// path), and other possibilities will not be considered.
+    Arbitrary,
+
+    /// Prefer the given `u64` value if it is a possible value. Otherwise, fall
+    /// back on the given `Concretize` strategy.
+    ///
+    /// If the given `u64` value is a possible value, then the value will be
+    /// permanently constrained to be that value (on this path), and other
+    /// possibilities will not be considered.
+    Prefer(u64, Box<Concretize>),
+
+    /// Choose the maximum possible value. `Maximum` will be interpreted in an
+    /// unsigned fashion.
+    ///
+    /// The value will be permanently constrained to be this value (on this
+    /// path), and other possibilities will not be considered.
+    Maximum,
+
+    /// Choose the minimum possible value. `Minimum` will be interpreted in an
+    /// unsigned fashion.
+    ///
+    /// The value will be permanently constrained to be this value (on this
+    /// path), and other possibilities will not be considered.
+    Minimum,
+}
+
 impl<'p, B: Backend> Config<'p, B> {
-    /// Creates a new `Config` with the given `loop_bound` and no function hooks.
+    /// Creates a new `Config` with the given `loop_bound` and
+    /// `concretize_memcpy_lengths()` options, and no function hooks.
     ///
     /// You may want to consider `Config::default()` which provides defaults for
     /// all parameters and comes with predefined hooks for common functions.
-    pub fn new(loop_bound: usize) -> Self {
+    pub fn new(loop_bound: usize, concretize_memcpy_lengths: Concretize) -> Self {
         Self {
             loop_bound,
+            concretize_memcpy_lengths,
             function_hooks: FunctionHooks::new(),
         }
     }
@@ -46,6 +90,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     fn default() -> Self {
         Self {
             loop_bound: 10,
+            concretize_memcpy_lengths: Concretize::Symbolic,
             function_hooks: FunctionHooks::default(),
         }
     }

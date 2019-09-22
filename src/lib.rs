@@ -21,14 +21,13 @@ mod varmap;
 mod double_keyed_map;
 mod global_allocations;
 
-mod possible_solutions;
-pub use possible_solutions::*;
+pub mod solver_utils;
+use solver_utils::PossibleSolutions;
 mod return_value;
 pub use return_value::ReturnValue;
 mod error;
 pub use error::*;
 mod extend;
-pub mod sat;
 
 pub mod backend;
 use backend::*;

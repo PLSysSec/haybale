@@ -15,9 +15,8 @@ use crate::error::*;
 use crate::extend::*;
 use crate::global_allocations::*;
 use crate::layout::*;
-use crate::possible_solutions::*;
 use crate::project::Project;
-use crate::sat::*;
+use crate::solver_utils::{self, PossibleSolutions};
 use crate::varmap::{VarMap, RestoreInfo};
 
 #[derive(Clone)]
@@ -284,7 +283,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     pub fn sat(&self) -> Result<bool> {
-        sat(&self.solver)
+        solver_utils::sat(&self.solver)
     }
 
     /// Returns `true` if the current constraints plus the additional constraints `conds`
@@ -294,7 +293,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Does not permanently add the constraints in `conds` to the solver.
     pub fn sat_with_extra_constraints<'b>(&'b self, constraints: impl IntoIterator<Item = &'b B::BV>) -> Result<bool> {
-        sat_with_extra_constraints(&self.solver, constraints)
+        solver_utils::sat_with_extra_constraints(&self.solver, constraints)
     }
 
     /// Get one possible concrete value for the `BV`.
@@ -326,7 +325,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Only returns `Err` if the solver query itself fails.
     pub fn get_possible_solutions_for_bv(&self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<BVSolution>> {
-        get_possible_solutions_for_bv(self.solver.clone(), bv, n)
+        solver_utils::get_possible_solutions_for_bv(self.solver.clone(), bv, n)
     }
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bitvector.
@@ -821,7 +820,9 @@ mod tests {
     type BV = boolector::BV<Rc<Btor>>;
 
     // we don't include tests here for Memory, Alloc, or VarMap; those are tested in their own modules.
-    // Instead, here we just test the underlying solver, and the nontrivial functionality that State has itself.
+    // Instead, here we just test the nontrivial functionality that `State` has itself.
+    // We do repeat many of the tests from the `solver_utils` module, making sure that they also pass when
+    // we use the `State` interfaces.
 
     /// utility to initialize a `State` out of a `Project` and a function name
     fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, BtorBackend> {

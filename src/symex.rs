@@ -12,7 +12,7 @@ use crate::config::*;
 use crate::error::*;
 use crate::extend::*;
 use crate::layout::*;
-use crate::possible_solutions::*;
+use crate::solver_utils::{self, PossibleSolutions};
 use crate::project::Project;
 use crate::return_value::*;
 
@@ -984,18 +984,50 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     assert_eq!(addr.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(val.get_type(), Type::i8());
     assert_eq!(call.get_type(), Type::VoidType);
+
+    let addr = state.operand_to_bv(&addr)?;
+    let val = state.operand_to_bv(&val)?;
+
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::UnsupportedInstruction(format!("LLVM memset with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => {
+            let num_bytes_concrete = match state.config.concretize_memcpy_lengths {
+                Concretize::Arbitrary => state.get_a_solution_for_bv(&num_bytes)?.unwrap().as_u64().unwrap(),
+                Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
+                Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
+                Concretize::Prefer(v, _) => {
+                    if state.sat_with_extra_constraints(&[num_bytes._eq(&B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width()))])? {
+                        v
+                    } else {
+                        return Err(Error::UnsupportedInstruction("not implemented yet: LLVM memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                    }
+                },
+                Concretize::Symbolic => {
+                    // In this case we just do the entire write here and return
+                    let max_num_bytes = solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap();
+                    let mut addr = addr;
+                    let mut bytes_written = B::BV::zero(state.solver.clone(), num_bytes.get_width());
+                    for _ in 0 ..= max_num_bytes {
+                        let old_val = state.read(&addr, 8);
+                        let should_write = num_bytes.ugt(&bytes_written);
+                        state.write(&addr, should_write.cond_bv(&val, &old_val));
+                        addr = addr.inc();
+                        bytes_written = bytes_written.inc();
+                    }
+                    return Ok(());
+                }
+            };
+            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert();
+            num_bytes_concrete
+        }
     };
+
+    // If we're still here, we picked a single concrete value for num_bytes
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memset of 0 num_bytes");
     } else {
-        let addr = state.operand_to_bv(&addr)?;
-        let val = state.operand_to_bv(&val)?;
-
-        // Do this as just one large write; let the memory choose the most efficient way to implement that.
+        // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
         state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap());
     }
     Ok(())
@@ -1009,17 +1041,52 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     assert_eq!(dest.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(src.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(call.get_type(), Type::VoidType);
+
+    let dest = state.operand_to_bv(&dest)?;
+    let src = state.operand_to_bv(&src)?;
+
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => return Err(Error::UnsupportedInstruction(format!("LLVM memcpy or memmove with non-constant num_bytes {:?}", num_bytes))),
         PossibleSolutions::PossibleSolutions(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
+        PossibleSolutions::MoreThanNPossibleSolutions(_) => {
+            let num_bytes_concrete = match state.config.concretize_memcpy_lengths {
+                Concretize::Arbitrary => state.get_a_solution_for_bv(&num_bytes)?.unwrap().as_u64().unwrap(),
+                Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
+                Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
+                Concretize::Prefer(v, _) => {
+                    if state.sat_with_extra_constraints(&[num_bytes._eq(&B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width()))])? {
+                        v
+                    } else {
+                        return Err(Error::UnsupportedInstruction("not implemented yet: LLVM memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                    }
+                },
+                Concretize::Symbolic => {
+                    // In this case we just do the entire write here and return
+                    let max_num_bytes = solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap();
+                    let mut src_addr = src;
+                    let mut dest_addr = dest;
+                    let mut bytes_written = B::BV::zero(state.solver.clone(), num_bytes.get_width());
+                    for _ in 0 ..= max_num_bytes {
+                        let src_val = state.read(&src_addr, 8);
+                        let dst_val = state.read(&dest_addr, 8);
+                        let should_write = num_bytes.ugt(&bytes_written);
+                        state.write(&dest_addr, should_write.cond_bv(&src_val, &dst_val));
+                        src_addr = src_addr.inc();
+                        dest_addr = dest_addr.inc();
+                        bytes_written = bytes_written.inc();
+                    }
+                    return Ok(());
+                }
+            };
+            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert();
+            num_bytes_concrete
+        },
     };
+
+    // If we're still here, we picked a single concrete value for num_bytes
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memcpy or memmove of 0 num_bytes");
     } else {
-        let dest = state.operand_to_bv(&dest)?;
-        let src = state.operand_to_bv(&src)?;
-
         // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
         let val = state.read(&src, num_bytes as u32 * 8);
         state.write(&dest, val);

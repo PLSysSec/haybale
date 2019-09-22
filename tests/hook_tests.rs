@@ -1,5 +1,6 @@
 use haybale::*;
 use haybale::backend::{Backend, BV};
+use haybale::solver_utils::PossibleSolutions;
 use llvm_ir::*;
 use std::collections::HashSet;
 use std::iter::FromIterator;

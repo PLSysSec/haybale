@@ -1,4 +1,5 @@
 use haybale::*;
+use haybale::solver_utils::PossibleSolutions;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::path::Path;

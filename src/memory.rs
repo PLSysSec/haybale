@@ -326,8 +326,7 @@ mod tests {
     use boolector::{BV, BVSolution};
     use boolector::option::{BtorOption, ModelGen};
     use crate::error::Result;
-    use crate::possible_solutions::*;
-    use crate::sat::sat;
+    use crate::solver_utils::{self, PossibleSolutions};
     use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::rc::Rc;
@@ -338,7 +337,7 @@ mod tests {
     fn get_a_solution(bv: &BV<Rc<Btor>>) -> Result<Option<BVSolution>> {
         let btor = bv.get_btor();
         btor.set_opt(BtorOption::ModelGen(ModelGen::All));
-        let solution = if sat(&btor)? {
+        let solution = if solver_utils::sat(&btor)? {
             Some(bv.get_a_solution())
         } else {
             None
@@ -362,14 +361,14 @@ mod tests {
         // Constrain it to be > 0 and check that we're sat (and get a value > 0)
         btor.push(1);
         read_bv.sgt(&zero).assert();
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
         let read_val = get_a_solution(&read_bv).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert!(read_val > 0);
 
         // Alternately, constrain it to be < 0 and check that we're sat (and get a value < 0)
         btor.pop(1);
         read_bv.slt(&zero).assert();
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
         let read_val = get_a_solution(&read_bv).unwrap().expect("Expected a solution").as_u64().unwrap() as i64;
         assert!(read_val < 0);
     }
@@ -384,8 +383,8 @@ mod tests {
 
         // Read a value from (zero-initialized) memory and check that the only possible value is 0
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0))));
     }
 
@@ -403,8 +402,8 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&zero, Memory::CELL_BITS);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
     }
 
@@ -422,8 +421,8 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&aligned, Memory::CELL_BITS);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
     }
 
@@ -441,8 +440,8 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 8);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
     }
 
@@ -460,8 +459,8 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&unaligned, 8);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
     }
 
@@ -479,8 +478,8 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
     }
 
@@ -498,8 +497,8 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
     }
 
@@ -519,7 +518,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 128);
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
         let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0, "\nGot value 0x{:x}, expected 0x{:x}", read_val_0, data_val_0);
         let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
@@ -547,7 +546,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 200);
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
         let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
         let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
@@ -579,7 +578,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 200);
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
         let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
         let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
@@ -611,7 +610,7 @@ mod tests {
 
         // Ensure that we can read it back again
         let read_bv = mem.read(&addr, 200);
-        assert_eq!(sat(&btor), Ok(true));
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
         let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
         let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
@@ -641,8 +640,8 @@ mod tests {
 
         // Ensure that we get back the most recent data
         let read_bv = mem.read(&addr, 8);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone().into(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
     }
 
@@ -666,12 +665,12 @@ mod tests {
 
         // Ensure that we can read them both individually
         let read_bv = mem.read(&addr, 32);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
         let read_bv = mem.read(&addr_2, 32);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val_2))));
     }
 
@@ -695,12 +694,12 @@ mod tests {
 
         // Ensure that we can read them both individually
         let read_bv = mem.read(&addr, 32);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val))));
         let read_bv = mem.read(&addr_2, 32);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(data_val_2))));
     }
 
@@ -720,14 +719,14 @@ mod tests {
         // (we are little-endian)
         let aligned = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
         let read_bv = mem.read(&aligned, 16);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x4F00))));
 
         // Ensure that reading extra bits adds zeroed high-order bits
         let read_bv = mem.read(&unaligned, 16);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x004F))));
 
         // Ensure that reading elsewhere gives all zeroes
@@ -735,9 +734,9 @@ mod tests {
         let garbage_addr_2 = BV::from_u64(btor.clone().into(), 0x10008, Memory::INDEX_BITS);
         let read_bv_1 = mem.read(&garbage_addr_1, 8);
         let read_bv_2 = mem.read(&garbage_addr_2, 8);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps_1 = get_possible_solutions_for_bv(btor.clone(), &read_bv_1, 1).unwrap().as_u64_solutions().unwrap();
-        let ps_2 = get_possible_solutions_for_bv(btor.clone(), &read_bv_2, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps_1 = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv_1, 1).unwrap().as_u64_solutions().unwrap();
+        let ps_2 = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv_2, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps_1, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0))));
         assert_eq!(ps_2, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0))));
     }
@@ -757,23 +756,23 @@ mod tests {
         // Ensure that reading 8 bits from offset 2 gives the low-order byte
         // (we are little-endian)
         let read_bv = mem.read(&offset_2, 8);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x78))));
 
         // Ensure that reading 8 bits from offset 5 gives the high-order byte
         // (we are little-endian)
         let offset_5 = BV::from_u64(btor.clone().into(), 0x10005, Memory::INDEX_BITS);
         let read_bv = mem.read(&offset_5, 8);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x12))));
 
         // Ensure that reading 16 bits from offset 3 gives the middle two bytes
         let offset_3 = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
         let read_bv = mem.read(&offset_3, 16);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x3456))));
     }
 
@@ -795,14 +794,14 @@ mod tests {
 
         // Ensure that we can read the smaller overwrite back
         let read_bv = mem.read(&addr, 16);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(overwrite_data_val))));
 
         // Ensure that reading the whole cell back reflects the partial overwrite
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x12345678_1234dcba))));
     }
 
@@ -825,21 +824,21 @@ mod tests {
 
         // Ensure that we can read the smaller overwrite back
         let read_bv = mem.read(&overwrite_addr, 16);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(overwrite_data_val))));
 
         // Ensure that reading the whole cell back reflects the partial overwrite
         let read_bv = mem.read(&addr, Memory::CELL_BITS);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x12345678_dcba5678))));
 
         // Now a different partial read with some original data and some overwritten
         let new_addr = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
         let read_bv = mem.read(&new_addr, 16);
-        assert_eq!(sat(&btor), Ok(true));
-        let ps = get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(0x78dc))));
     }
 }
