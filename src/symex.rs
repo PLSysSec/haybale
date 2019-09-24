@@ -795,6 +795,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             || funcname.starts_with("llvm.invariant")
             || funcname.starts_with("llvm.launder.invariant")
             || funcname.starts_with("llvm.strip.invariant")
+            || funcname.starts_with("llvm.dbg")
         {
             Ok(None) // these are all safe to ignore
         } else {
