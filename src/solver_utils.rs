@@ -134,7 +134,7 @@ pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
     let mut max: u64 = if width == 64 { std::u64::MAX } else { (1 << width) - 1 };
     let mut pushes = 0;
     while (max - min) > 1 {
-        let mid = (min + max) / 2;
+        let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
         solver.push(1);
         pushes += 1;
         bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert();
@@ -174,10 +174,10 @@ pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
     }
     // min is exclusive (we know `0` doesn't work), max is inclusive
     let mut min: u64 = 0;
-    let mut max: u64 = 1 << width - 1;
+    let mut max: u64 = if width == 64 { std::u64::MAX } else { (1 << width) - 1 };
     let mut pushes = 0;
     while (max - min) > 1 {
-        let mid = (min + max) / 2;
+        let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
         solver.push(1);
         pushes += 1;
         bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert();
@@ -315,16 +315,53 @@ mod tests {
         // max possible solution should be 6
         assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(6)));
 
+        // but min possible solution should be 0
+        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(0)));
+
         // add x > 3 constraint
         x.ugt(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
 
         // max possible solution should still be 6
         assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(6)));
 
+        // and min possible solution should now be 4
+        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(4)));
+
         // add x > 7 constraint
         x.ugt(&BV::from_u64(btor.clone().into(), 7, 64)).assert();
 
         // max_possible_solution_for_bv should now return None
         assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(None));
+    }
+
+    #[test]
+    fn min_possible_solution_overflow() {
+        let btor = BtorRef::default();
+
+        // Constrain x so that -2 and -1 are the only possible solutions. This
+        // means that the min possible _unsigned_ solution will be 0b1111...1110
+        // (that is, -2 if we interpreted it as signed).
+        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
+        let zero = BV::zero(btor.clone().into(), 64);
+        x.slt(&zero).assert();
+        let minustwo = zero.sub(&BV::from_u64(btor.clone().into(), 2, 64));
+        x.sgte(&minustwo).assert();
+
+        // The min possible (unsigned) solution should be -2
+        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some((-2_i64) as u64)));
+    }
+
+    #[test]
+    fn max_possible_solution_overflow() {
+        let btor = BtorRef::default();
+
+        // Constrain x so that -2 is a solution but -1 is not. This means that the max possible
+        // _unsigned_ solution will be 0b1111...1110 (that is, -2 if we interpreted it as signed).
+        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
+        let minustwo = BV::zero(btor.clone().into(), 64).sub(&BV::from_u64(btor.clone().into(), 2, 64));
+        x.slte(&minustwo).assert();
+
+        // The max possible (unsigned) solution should be -2
+        assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some((-2_i64) as u64)));
     }
 }
