@@ -787,9 +787,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         } else if funcname.starts_with("llvm.memset") {
             symex_memset(&mut self.state, call)?;
             Ok(None)
-        } else if funcname.starts_with("llvm.memcpy") || funcname.starts_with("llvm.memmove") {
+        } else if funcname.starts_with("llvm.memcpy")
+            || funcname.starts_with("llvm.memmove")
+            || funcname.starts_with("__memcpy")
+        {
             // Our memcpy implementation also works for memmove
             symex_memcpy(&mut self.state, call)?;
+            Ok(None)
+        } else if funcname.starts_with("llvm.objectsize") {
+            symex_objectsize(&mut self.state, call)?;
             Ok(None)
         } else if funcname.starts_with("llvm.lifetime")
             || funcname.starts_with("llvm.invariant")
@@ -1035,13 +1041,11 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
 }
 
 fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<()> {
-    assert_eq!(call.arguments.len(), 4);
     let dest = &call.arguments[0].0;
     let src = &call.arguments[1].0;
     let num_bytes = &call.arguments[2].0;
     assert_eq!(dest.get_type(), Type::pointer_to(Type::i8()));
     assert_eq!(src.get_type(), Type::pointer_to(Type::i8()));
-    assert_eq!(call.get_type(), Type::VoidType);
 
     let dest = state.operand_to_bv(&dest)?;
     let src = state.operand_to_bv(&src)?;
@@ -1092,7 +1096,28 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
         let val = state.read(&src, num_bytes as u32 * 8);
         state.write(&dest, val);
     }
-    Ok(())
+
+    // if the call should return a pointer, it returns `dest`. If it's void-typed, that's fine too.
+    match call.get_type() {
+       Type::VoidType => Ok(()),
+       Type::PointerType { .. } => {
+            // can't quite use `state.record_bv_result(call, dest)?` because Call is not HasResult
+            state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), dest)?;
+            Ok(())
+       },
+       ty => Err(Error::OtherError(format!("Unexpected return type for a memcpy or memmove: {:?}", ty))),
+    }
+}
+
+fn symex_objectsize<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<()> {
+    // We have no way of tracking in-memory types, so we can't provide the
+    // intended answers for this intrinsic. Instead, we just always return
+    // 'unknown', as this is valid behavior according to the LLVM spec.
+    let arg1 = state.operand_to_bv(&call.arguments[1].0)?;
+    let width = size(&call.get_type());
+    let zero = B::BV::zero(state.solver.clone(), width as u32);
+    let minusone = B::BV::ones(state.solver.clone(), width as u32);
+    state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), arg1.cond_bv(&zero, &minusone))
 }
 
 #[cfg(test)]
