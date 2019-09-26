@@ -89,10 +89,9 @@ impl Memory {
     /// Read any number of bits of memory, at any alignment, but not crossing cell boundaries.
     /// Returned `BV` will have size `bits`.
     fn read_within_cell(&self, addr: &BV, bits: u32) -> BV {
-        debug!("Reading within cell, {} bits at {:?}", bits, addr);
         let cell_contents = self.read_cell(addr);
         assert!(bits <= Self::CELL_BITS);
-        let rval = if bits == Self::CELL_BITS {
+        if bits == Self::CELL_BITS {
             cell_contents  // shortcut to avoid more BV operations
                             // This assumes that `addr` was cell-aligned, but that must be the case if we're reading CELL_BITS bits and not crossing cell boundaries
         } else {
@@ -103,15 +102,12 @@ impl Memory {
             // We can't `slice` at a non-const location, but we can shift by a non-const amount
             cell_contents.srl(&offset)  // shift off whatever low-end bits we don't want
                 .slice(bits - 1, 0)  // take just the bits we want, starting from 0
-        };
-        debug!("Value read is {:?}", rval);
-        rval
+        }
     }
 
     /// Write any number of bits of memory, at any alignment, but not crossing cell boundaries.
     // TODO: to enforce concretization, we could just take a `u64` address here
     fn write_within_cell(&mut self, addr: &BV, val: BV) {
-        debug!("Writing within cell, {:?} to address {:?}", val, addr);
         let write_size = val.get_width();
         assert!(write_size <= Self::CELL_BITS);
         let data_to_write = if write_size == Self::CELL_BITS {
@@ -136,7 +132,6 @@ impl Memory {
                 .and(&mask_clear)  // zero out the section we'll be writing
                 .or(&mask_write)  // write the data
         };
-        debug!("Final cell data being written is {:?}", data_to_write);
         self.write_cell(addr, data_to_write);
     }
 
@@ -233,7 +228,7 @@ impl Memory {
     /// Returned `BV` will have size `bits`.
     pub fn read(&self, addr: &BV, bits: u32) -> BV {
         debug!("Reading {} bits at {:?}", bits, addr);
-        if bits <= Self::CELL_BITS {
+        let rval = if bits <= Self::CELL_BITS {
             // special-case small reads because read_small() can handle them directly and efficiently
             self.read_small(addr, bits)
         } else {
@@ -268,7 +263,9 @@ impl Memory {
                     .reduce(|a,b| b.concat(&a))
                     .unwrap()  // because bytes > 0, there must have been at least 1 item in the iterator
             }
-        }
+        };
+        debug!("Value read is {:?}", rval);
+        rval
     }
 
     /// Write any number (>0) of bits of memory, at any alignment.
