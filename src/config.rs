@@ -190,7 +190,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
 /// they cannot.
 pub(crate) struct FunctionHook<'p, B: Backend> {
     /// The actual hook to be executed
-    hook: Rc<Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + 'p>,
+    hook: Rc<dyn Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + 'p>,
 
     /// A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
@@ -220,7 +220,7 @@ impl<'p, B: Backend> Hash for FunctionHook<'p, B> {
 impl<'p, B: Backend> FunctionHook<'p, B> {
     /// `id`: A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
-    pub fn new(id: usize, f: &'p Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>) -> Self {
+    pub fn new(id: usize, f: &'p dyn Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>) -> Self {
         Self { hook: Rc::new(f), id }
     }
 

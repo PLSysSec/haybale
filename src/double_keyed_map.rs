@@ -27,30 +27,30 @@ trait KeyPair<A, B> {
     fn b(&self) -> &B;
 }
 
-impl<'a, A, B> Borrow<KeyPair<A, B> + 'a> for Pair<A, B>
+impl<'a, A, B> Borrow<dyn KeyPair<A, B> + 'a> for Pair<A, B>
 where
     A: Eq + Hash + 'a,
     B: Eq + Hash + 'a,
 {
-    fn borrow(&self) -> &(KeyPair<A, B> + 'a) {
+    fn borrow(&self) -> &(dyn KeyPair<A, B> + 'a) {
         self
     }
 }
 
-impl<'a, A: Hash, B: Hash> Hash for (KeyPair<A, B> + 'a) {
+impl<'a, A: Hash, B: Hash> Hash for (dyn KeyPair<A, B> + 'a) {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.a().hash(state);
         self.b().hash(state);
     }
 }
 
-impl<'a, A: Eq, B: Eq> PartialEq for (KeyPair<A, B> + 'a) {
+impl<'a, A: Eq, B: Eq> PartialEq for (dyn KeyPair<A, B> + 'a) {
     fn eq(&self, other: &Self) -> bool {
         self.a() == other.a() && self.b() == other.b()
     }
 }
 
-impl<'a, A: Eq, B: Eq> Eq for (KeyPair<A, B> + 'a) {}
+impl<'a, A: Eq, B: Eq> Eq for (dyn KeyPair<A, B> + 'a) {}
 
 // The main event
 pub struct DoubleKeyedMap<A: Eq + Hash, B: Eq + Hash, V> {
@@ -64,11 +64,11 @@ impl<A: Eq + Hash, B: Eq + Hash, V> DoubleKeyedMap<A, B, V> {
     }
 
     pub fn get(&self, a: &A, b: &B) -> Option<&V> {
-        self.map.get(&BorrowedPair(a, b) as &KeyPair<A, B>)
+        self.map.get(&BorrowedPair(a, b) as &dyn KeyPair<A, B>)
     }
 
     pub fn get_mut(&mut self, a: &A, b: &B) -> Option<&mut V> {
-        self.map.get_mut(&BorrowedPair(a, b) as &KeyPair<A, B>)
+        self.map.get_mut(&BorrowedPair(a, b) as &dyn KeyPair<A, B>)
     }
 
     pub fn insert(&mut self, a: A, b: B, v: V) {
@@ -76,7 +76,7 @@ impl<A: Eq + Hash, B: Eq + Hash, V> DoubleKeyedMap<A, B, V> {
     }
 
     pub fn remove(&mut self, a: &A, b: &B) -> Option<V> {
-        self.map.remove(&BorrowedPair(a, b) as &KeyPair<A, B>)
+        self.map.remove(&BorrowedPair(a, b) as &dyn KeyPair<A, B>)
     }
 
     pub fn is_empty(&self) -> bool {

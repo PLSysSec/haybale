@@ -263,7 +263,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
-    fn binop_to_btorbinop<'a, V: BV + 'a>(bop: &instruction::groups::BinaryOp) -> Result<Box<for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
+    fn binop_to_btorbinop<'a, V: BV + 'a>(bop: &instruction::groups::BinaryOp) -> Result<Box<dyn for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
         match bop {
             // TODO: how to not clone the inner instruction here
             instruction::groups::BinaryOp::Add(_) => Ok(Box::new(V::add)),
@@ -283,7 +283,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
-    fn intpred_to_btorpred(pred: IntPredicate) -> Box<Fn(&B::BV, &B::BV) -> B::BV + 'p> {
+    fn intpred_to_btorpred(pred: IntPredicate) -> Box<dyn Fn(&B::BV, &B::BV) -> B::BV + 'p> {
         match pred {
             IntPredicate::EQ => Box::new(B::BV::_eq),
             IntPredicate::NE => Box::new(B::BV::_ne),
