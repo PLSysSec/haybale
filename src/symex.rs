@@ -1068,6 +1068,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                 Concretize::Symbolic => {
                     // In this case we just do the entire write here and return
                     let max_num_bytes = solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap();
+                    debug!("Processing a memcpy with symbolic num_bytes, up to {}", max_num_bytes);
                     let mut src_addr = src;
                     let mut dest_addr = dest;
                     let mut bytes_written = B::BV::zero(state.solver.clone(), num_bytes.get_width());
@@ -1092,6 +1093,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memcpy or memmove of 0 num_bytes");
     } else {
+        debug!("Processing memcpy of {} bytes", num_bytes);
         // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
         let val = state.read(&src, num_bytes as u32 * 8);
         state.write(&dest, val);
