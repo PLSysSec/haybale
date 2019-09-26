@@ -800,13 +800,16 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// returns a `String` describing a set of satisfying assignments for all variables
     pub fn current_assignments_as_pretty_string(&self) -> Result<String> {
-        if self.sat()? {
+        self.solver.set_opt(BtorOption::ModelGen(ModelGen::All));
+        let string = if self.sat()? {
             let printed = self.solver.print_model();
             let sorted = itertools::sorted(printed.lines());
-            Ok(sorted.fold(String::new(), |s, line| s + "\n" + line))
+            sorted.fold(String::new(), |s, line| s + "\n" + line)
         } else {
-            Ok("<state is unsatisfiable>".to_owned())
-        }
+            "<state is unsatisfiable>".to_owned()
+        };
+        self.solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+        Ok(string)
     }
 }
 
