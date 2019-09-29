@@ -44,13 +44,15 @@ pub fn symex_function<'p, B: Backend>(
     ExecutionManager::new(state, project, bvparams, &bb)
 }
 
-/// An `ExecutionManager` allows you to symbolically explore executions of a function.
-/// Conceptually, it is an `Iterator` over possible paths through the function.
-/// Calling `next()` on an `ExecutionManager` explores another possible path,
-/// returning a `BV` (AST) representing the function's symbolic return value at
-/// the end of that path, or `None` if the function returns void.
+/// An `ExecutionManager` allows you to symbolically explore executions of a
+/// function. Conceptually, it is an `Iterator` over possible paths through the
+/// function. Calling `next()` on an `ExecutionManager` explores another possible
+/// path, returning a [`ReturnValue`](enum.ReturnValue.html) representing the
+/// function's symbolic return value at the end of that path.
+///
 /// Importantly, after any call to `next()`, you can access the `State` resulting
 /// from the end of that path using the `state()` or `mut_state()` methods.
+///
 /// When `next()` returns `None`, there are no more possible paths through the
 /// function.
 pub struct ExecutionManager<'p, B: Backend> {
