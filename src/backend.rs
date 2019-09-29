@@ -3,6 +3,7 @@
 
 use boolector::{Btor, BVSolution};
 use boolector::option::BtorOption;
+use crate::error::Result;
 use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -133,7 +134,7 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     fn set_symbol(&mut self, symbol: Option<&str>);
     fn is_const(&self) -> bool;
     fn has_same_width(&self, other: &Self) -> bool;
-    fn assert(&self);
+    fn assert(&self) -> Result<()>;
     fn is_failed_assumption(&self) -> bool;
     fn _eq(&self, other: &Self) -> Self;
     fn _ne(&self, other: &Self) -> Self;
@@ -202,10 +203,10 @@ pub trait Memory : Clone + PartialEq + Eq {
 
     /// Read any number (>0) of bits of memory, at any alignment.
     /// Returned `BV` will have size `bits`.
-    fn read(&self, index: &Self::Index, bits: u32) -> Self::Value;
+    fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value>;
 
     /// Write any number (>0) of bits of memory, at any alignment.
-    fn write(&mut self, index: &Self::Index, value: Self::Value);
+    fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()>;
 
     /// Adapt the `Memory` to a new solver instance.
     ///
@@ -289,8 +290,9 @@ impl BV for boolector::BV<Rc<Btor>> {
     fn has_same_width(&self, other: &Self) -> bool {
         self.has_same_width(other)
     }
-    fn assert(&self) {
-        self.assert()
+    fn assert(&self) -> Result<()> {
+        self.assert();
+        Ok(())
     }
     fn is_failed_assumption(&self) -> bool {
         self.is_failed_assumption()
@@ -461,11 +463,12 @@ impl Memory for crate::memory::Memory {
     fn new_zero_initialized(btor: BtorRef) -> Self {
         crate::memory::Memory::new_zero_initialized(btor)
     }
-    fn read(&self, index: &Self::Index, bits: u32) -> Self::Value {
-        self.read(index, bits)
+    fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
+        Ok(self.read(index, bits))
     }
-    fn write(&mut self, index: &Self::Index, value: Self::Value) {
-        self.write(index, value)
+    fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
+        self.write(index, value);
+        Ok(())
     }
     fn change_solver(&mut self, new_btor: BtorRef) {
         self.change_solver(new_btor)

@@ -60,7 +60,7 @@ pub(crate) fn calloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &
     }
     let bits = bytes * 8;
     let addr = state.allocate(bits);
-    state.write(&addr, B::BV::zero(state.solver.clone(), bits as u32));  // calloc() requires zeroed memory
+    state.write(&addr, B::BV::zero(state.solver.clone(), bits as u32))?;  // calloc() requires zeroed memory
     Ok(ReturnValue::Return(addr))
 }
 
@@ -107,8 +107,8 @@ pub(crate) fn realloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: 
         // Make a new allocation
         let new_addr = state.allocate(new_size);
         // Copy the contents of the old allocation
-        let contents = state.read(&addr, old_size as u32);
-        state.write(&new_addr, contents);
+        let contents = state.read(&addr, old_size as u32)?;
+        state.write(&new_addr, contents)?;
         // We don't free() (see comments in `free_hook`), so just return
         Ok(ReturnValue::Return(new_addr))
     }

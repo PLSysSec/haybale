@@ -194,7 +194,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
     fn backtrack_and_continue(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        if self.state.revert_to_backtracking_point() {
+        if self.state.revert_to_backtracking_point()? {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
             self.symex_from_inst_in_cur_loc(0)
         } else {
@@ -488,15 +488,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         debug!("Symexing load {:?}", load);
         let btoraddr = self.state.operand_to_bv(&load.address)?;
         let dest_size = size(&load.get_type());
-        self.state.record_bv_result(load, self.state.read(&btoraddr, dest_size as u32))
+        self.state.record_bv_result(load, self.state.read(&btoraddr, dest_size as u32)?)
     }
 
     fn symex_store(&mut self, store: &'p instruction::Store) -> Result<()> {
         debug!("Symexing store {:?}", store);
         let btorval = self.state.operand_to_bv(&store.value)?;
         let btoraddr = self.state.operand_to_bv(&store.address)?;
-        self.state.write(&btoraddr, btorval);
-        Ok(())
+        self.state.write(&btoraddr, btorval)
     }
 
     fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<()> {
@@ -841,15 +840,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         if true_feasible && false_feasible {
             // for now we choose to explore true first, and backtrack to false if necessary
             self.state.save_backtracking_point(condbr.false_dest.clone(), btorcond.not());
-            btorcond.assert();
+            btorcond.assert()?;
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
-            btorcond.assert();  // unnecessary, but may help Boolector more than it hurts?
+            btorcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
-            btorcond.not().assert();  // unnecessary, but may help Boolector more than it hurts?
+            btorcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = condbr.false_dest.clone();
             self.symex_from_cur_loc_through_end_of_function()
         } else {
@@ -900,7 +899,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             }
             // follow the first destination
             let (val, name) = &feasible_dests[0];
-            val._eq(&switchval).assert();  // unnecessary, but may help Boolector more than it hurts?
+            val._eq(&switchval).assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = (*name).clone();
             self.symex_from_cur_loc_through_end_of_function()
         }
@@ -938,10 +937,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 if true_feasible && false_feasible {
                     self.state.record_bv_result(select, btorcond.cond_bv(&btortrueval, &btorfalseval))
                 } else if true_feasible {
-                    btorcond.assert();  // unnecessary, but may help Boolector more than it hurts?
+                    btorcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
                     self.state.record_bv_result(select, btortrueval)
                 } else if false_feasible {
-                    btorcond.not().assert();  // unnecessary, but may help Boolector more than it hurts?
+                    btorcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
                     self.state.record_bv_result(select, btorfalseval)
                 } else {
                     // this path is unsat
@@ -1016,16 +1015,16 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     let mut addr = addr;
                     let mut bytes_written = B::BV::zero(state.solver.clone(), num_bytes.get_width());
                     for _ in 0 ..= max_num_bytes {
-                        let old_val = state.read(&addr, 8);
+                        let old_val = state.read(&addr, 8)?;
                         let should_write = num_bytes.ugt(&bytes_written);
-                        state.write(&addr, should_write.cond_bv(&val, &old_val));
+                        state.write(&addr, should_write.cond_bv(&val, &old_val))?;
                         addr = addr.inc();
                         bytes_written = bytes_written.inc();
                     }
                     return Ok(());
                 }
             };
-            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert();
+            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert()?;
             num_bytes_concrete
         }
     };
@@ -1033,11 +1032,11 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     // If we're still here, we picked a single concrete value for num_bytes
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memset of 0 num_bytes");
+        Ok(())
     } else {
         // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
-        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap());
+        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap())
     }
-    Ok(())
 }
 
 fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<()> {
@@ -1073,10 +1072,10 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     let mut dest_addr = dest;
                     let mut bytes_written = B::BV::zero(state.solver.clone(), num_bytes.get_width());
                     for _ in 0 ..= max_num_bytes {
-                        let src_val = state.read(&src_addr, 8);
-                        let dst_val = state.read(&dest_addr, 8);
+                        let src_val = state.read(&src_addr, 8)?;
+                        let dst_val = state.read(&dest_addr, 8)?;
                         let should_write = num_bytes.ugt(&bytes_written);
-                        state.write(&dest_addr, should_write.cond_bv(&src_val, &dst_val));
+                        state.write(&dest_addr, should_write.cond_bv(&src_val, &dst_val))?;
                         src_addr = src_addr.inc();
                         dest_addr = dest_addr.inc();
                         bytes_written = bytes_written.inc();
@@ -1084,7 +1083,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     return Ok(());
                 }
             };
-            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert();
+            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert()?;
             num_bytes_concrete
         },
     };
@@ -1095,8 +1094,8 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     } else {
         debug!("Processing memcpy of {} bytes", num_bytes);
         // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
-        let val = state.read(&src, num_bytes as u32 * 8);
-        state.write(&dest, val);
+        let val = state.read(&src, num_bytes as u32 * 8)?;
+        state.write(&dest, val)?;
     }
 
     // if the call should return a pointer, it returns `dest`. If it's void-typed, that's fine too.

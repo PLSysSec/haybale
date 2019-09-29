@@ -30,7 +30,7 @@ pub fn sat_with_extra_constraints<I, B>(btor: &Btor, constraints: impl IntoItera
 {
     btor.push(1);
     for constraint in constraints {
-        constraint.assert();
+        constraint.assert()?;
     }
     let retval = sat(btor);
     btor.pop(1);
@@ -92,7 +92,7 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
                     let val = bv.get_a_solution().disambiguate();
                     solutions.insert(val.clone());
                     // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                    bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert();
+                    bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert()?;
                 }
                 solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
                 solver.pop(1);
@@ -137,7 +137,7 @@ pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
         let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
         solver.push(1);
         pushes += 1;
-        bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert();
+        bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert()?;
         if sat(&solver)? {
             min = mid;
         } else {
@@ -180,7 +180,7 @@ pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
         let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
         solver.push(1);
         pushes += 1;
-        bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert();
+        bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert()?;
         if sat(&solver)? {
             max = mid;
         } else {

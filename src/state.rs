@@ -257,7 +257,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 state.cur_loc.module = module;  // have to do this prior to call to state.const_to_bv(), to ensure the correct module is used for resolution of references to other globals
                 let write_val = state.const_to_bv(initial_val)
                     .unwrap_or_else(|e| panic!("While trying to initialize global variable {:?} in module {:?}, received the following error: {:?}", var.name, &module.name, e));
-                state.mem.write(&addr, write_val);
+                state.mem.write(&addr, write_val).unwrap();
             }
         }
         debug!("Done allocating and initializing global variables");
@@ -664,13 +664,13 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// Read a value `bits` bits long from memory at `addr`.
     /// Note that `bits` can be arbitrarily large.
-    pub fn read(&self, addr: &B::BV, bits: u32) -> B::BV {
+    pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
         self.mem.read(addr, bits)
     }
 
     /// Write a value into memory at `addr`.
     /// Note that `val` can be an arbitrarily large bitvector.
-    pub fn write(&mut self, addr: &B::BV, val: B::BV) {
+    pub fn write(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
         self.mem.write(addr, val)
     }
 
@@ -766,21 +766,21 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         });
     }
 
-    /// returns `true` if the operation was successful, or `false` if there are
-    /// no saved backtracking points
-    pub fn revert_to_backtracking_point(&mut self) -> bool {
+    /// returns `Ok(true)` if the operation was successful, `Ok(false)` if there are
+    /// no saved backtracking points, or `Err` for other errors
+    pub fn revert_to_backtracking_point(&mut self) -> Result<bool> {
         if let Some(bp) = self.backtrack_points.pop() {
             debug!("Reverting to backtracking point {}", bp);
             self.solver.pop(1);
-            bp.constraint.assert();
             self.varmap = bp.varmap;
             self.mem = bp.mem;
             self.stack = bp.stack;
             self.path.truncate(bp.path_len);
             self.cur_loc = bp.loc;
-            true
+            bp.constraint.assert()?;
+            Ok(true)
         } else {
-            false
+            Ok(false)
         }
     }
 
@@ -1063,7 +1063,7 @@ mod tests {
 
         // roll back to backtrack point; check that we ended up at the right loc
         // and with the right path
-        assert!(state.revert_to_backtracking_point());
+        assert!(state.revert_to_backtracking_point().unwrap());
         assert_eq!(state.cur_loc.func, pre_rollback.func);
         assert_eq!(state.cur_loc.bbname, bb.name);
         assert_eq!(state.get_path(), &vec![PathEntry {
@@ -1082,7 +1082,7 @@ mod tests {
         assert!(state.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x").as_u64().unwrap() > 11);
 
         // check that trying to backtrack again fails
-        assert!(!state.revert_to_backtracking_point());
+        assert!(!state.revert_to_backtracking_point().unwrap());
     }
 
     #[test]
