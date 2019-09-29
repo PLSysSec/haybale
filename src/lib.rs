@@ -95,7 +95,7 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
     let zero = BV::zero(em.state().solver.clone(), returnwidth as u32);
     let mut found = false;
     while let Some(z3rval) = em.next() {
-        match z3rval {
+        match z3rval.unwrap() {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
             ReturnValue::Return(z3rval) => {
                 let state = em.mut_state();
@@ -163,7 +163,7 @@ pub fn get_possible_return_values_of_func<'p>(
 
     let mut candidate_values = HashSet::<u64>::new();
     while let Some(z3rval) = em.next() {
-        match z3rval {
+        match z3rval.unwrap() {
             ReturnValue::ReturnVoid => panic!("This function shouldn't be called with functions that return void"),
             ReturnValue::Return(z3rval) => {
                 let state = em.mut_state();
