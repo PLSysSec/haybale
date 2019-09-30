@@ -35,7 +35,19 @@ impl Project {
     /// be parsed and added to the `Project`.
     pub fn from_bc_dir(path: impl AsRef<Path>, extn: &str) -> Result<Self, io::Error> {
         Ok(Self {
-            modules: Self::modules_from_bc_dir(path, extn)?,
+            modules: Self::modules_from_bc_dir(path, extn, |_| false)?,
+        })
+    }
+
+    /// Construct a new `Project` from a path to a directory containing LLVM
+    /// bitcode files.
+    ///
+    /// All files in the directory which have the extension `extn`, except those
+    /// for which the provided `exclude` closure returns `true`, will be parsed
+    /// and added to the `Project`.
+    pub fn from_bc_dir_with_blacklist(path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<Self, io::Error> {
+        Ok(Self {
+            modules: Self::modules_from_bc_dir(path, extn, exclude)?,
         })
     }
 
@@ -49,7 +61,15 @@ impl Project {
     /// Add the code in the given directory to the `Project`.
     /// See [`Project::from_bc_dir()`](struct.Project.html#method.from_bc_dir).
     pub fn add_bc_dir(&mut self, path: impl AsRef<Path>, extn: &str) -> Result<(), io::Error> {
-        let modules = Self::modules_from_bc_dir(path, extn)?;
+        let modules = Self::modules_from_bc_dir(path, extn, |_| false)?;
+        self.modules.extend(modules);
+        Ok(())
+    }
+
+    /// Add the code in the given directory, except for blacklisted files, to the `Project`.
+    /// See [`Project::from_bc_dir_with_blacklist()`](struct.Project.html#method.from_bc_dir_with_blacklist).
+    pub fn add_bc_dir_with_blacklist(&mut self, path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<(), io::Error> {
+        let modules = Self::modules_from_bc_dir(path, extn, exclude)?;
         self.modules.extend(modules);
         Ok(())
     }
@@ -94,7 +114,7 @@ impl Project {
         retval
     }
 
-    fn modules_from_bc_dir(path: impl AsRef<Path>, extn: &str) -> Result<Vec<Module>, io::Error> {
+    fn modules_from_bc_dir(path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<Vec<Module>, io::Error> {
         // warning, we use both `Iterator::map` and `Result::map` in here, and it's easy to get them confused
         path
             .as_ref()
@@ -107,7 +127,7 @@ impl Project {
             .map(|entry| entry.map(|entry| entry.path()))
             .filter(|path| match path {
                 Ok(path) => match path.extension() {
-                    Some(e) => e == extn,
+                    Some(e) => e == extn && !exclude(path),
                     None => false,  // filter out if it has no extension
                 },
                 Err(_) => true,  // leave in errors, because we want to know about those
@@ -172,5 +192,16 @@ mod tests {
         let (func, module) = proj.get_func_by_name("while_loop").expect("Failed to find function");
         assert_eq!(&func.name, "while_loop");
         assert_eq!(&module.name, "tests/bcfiles/loop.bc");
+    }
+
+    #[test]
+    fn whole_directory_project_with_blacklist() {
+        let proj = Project::from_bc_dir_with_blacklist(
+            "tests/bcfiles",
+            "bc",
+            |path| path.file_stem().unwrap() == "basic",
+        ).unwrap_or_else(|e| panic!("Failed to create project: {}", e));
+        proj.get_func_by_name("while_loop").expect("Failed to find function while_loop, which should be present");
+        assert!(proj.get_func_by_name("no_args_zero").is_none(), "Found function no_args_zero, which is from a file that should have been blacklisted out");
     }
 }
