@@ -30,10 +30,13 @@ impl Alloc {
         let bits: u64 = bits.into();
         let bits_in_byte: u64 = Memory::BITS_IN_BYTE.into();
         let cell_bytes: u64 = Memory::CELL_BYTES.into();
-        if bits % bits_in_byte != 0 {
-            unimplemented!("Alloc for {} bits, which is not a multiple of {}", bits, Memory::BITS_IN_BYTE);
-        }
-        let bytes = bits / bits_in_byte;
+        let bytes = {
+            let mut bytes = bits / bits_in_byte;
+            if bits % bits_in_byte != 0 {
+                bytes += 1;  // round up to nearest byte
+            }
+            bytes
+        };
         let current_offset_bytes = self.cursor % cell_bytes;
         let bytes_remaining_in_cell = cell_bytes - current_offset_bytes;
         if bytes > bytes_remaining_in_cell {
