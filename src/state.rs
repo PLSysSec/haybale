@@ -1,7 +1,7 @@
 use boolector::BVSolution;
 use boolector::option::{BtorOption, ModelGen};
 use llvm_ir::*;
-use log::debug;
+use log::{debug, warn};
 use reduce::Reduce;
 use std::collections::HashSet;
 use std::fmt;
@@ -255,9 +255,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                     .get_global_address(&var.name, module)
                     .unwrap_or_else(|| panic!("Trying to initialize global variable {:?} in module {:?} but failed to find its allocated address", var.name, &module.name));
                 state.cur_loc.module = module;  // have to do this prior to call to state.const_to_bv(), to ensure the correct module is used for resolution of references to other globals
-                let write_val = state.const_to_bv(initial_val)
-                    .unwrap_or_else(|e| panic!("While trying to initialize global variable {:?} in module {:?}, received the following error: {:?}", var.name, &module.name, e));
-                state.mem.write(&addr, write_val).unwrap();
+                match state.const_to_bv(initial_val) {
+                    Ok(write_val) => state.mem.write(&addr, write_val).unwrap(),
+                    Err(e) => warn!("While trying to initialize global variable {:?} in module {:?}, received the following error: {:?}\nContinuing, but leaving this variable uninitialized.", var.name, &module.name, e),
+                };
             }
         }
         debug!("Done allocating and initializing global variables");
