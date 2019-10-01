@@ -1015,7 +1015,7 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     if state.sat_with_extra_constraints(&[num_bytes._eq(&B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width()))])? {
                         v
                     } else {
-                        return Err(Error::UnsupportedInstruction("not implemented yet: LLVM memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }
                 },
                 Concretize::Symbolic => {
@@ -1040,8 +1040,9 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
 
     // If we're still here, we picked a single concrete value for num_bytes
     if num_bytes == 0 {
-        debug!("Ignoring an LLVM memset of 0 num_bytes");
+        debug!("Ignoring a memset of 0 num_bytes");
     } else {
+        debug!("Processing a memset of {} bytes", num_bytes);
         // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
         state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap())?;
     }
@@ -1080,7 +1081,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     if state.sat_with_extra_constraints(&[num_bytes._eq(&B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width()))])? {
                         v
                     } else {
-                        return Err(Error::UnsupportedInstruction("not implemented yet: LLVM memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }
                 },
                 Concretize::Symbolic => {
@@ -1109,7 +1110,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
 
     // If we're still here, we picked a single concrete value for num_bytes
     if num_bytes == 0 {
-        debug!("Ignoring an LLVM memcpy or memmove of 0 num_bytes");
+        debug!("Ignoring a memcpy or memmove of 0 num_bytes");
     } else {
         debug!("Processing memcpy of {} bytes", num_bytes);
         // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
