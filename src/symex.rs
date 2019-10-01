@@ -3,7 +3,7 @@ use llvm_ir::instruction::BinaryOp;
 use log::{debug, info};
 use either::Either;
 use reduce::Reduce;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::sync::{Arc, RwLock};
 
 pub use crate::state::{State, Callsite, Location, PathEntry};
@@ -1048,7 +1048,17 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     } else {
         debug!("Processing a memset of {} bytes", num_bytes);
         // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
-        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap())?;
+        assert_eq!(val.get_width(), 8);
+        let big_val = if state.bvs_must_be_equal(&val, &B::BV::zero(state.solver.clone(), 8))?.ok_or(Error::Unsat)? {
+            // optimize this special case
+            B::BV::zero(state.solver.clone(), 8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
+        } else if state.bvs_must_be_equal(&val, &B::BV::ones(state.solver.clone(), 8))?.ok_or(Error::Unsat)? {
+            // optimize this special case
+            B::BV::ones(state.solver.clone(), 8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
+        } else {
+            std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap()
+        };
+        state.write(&addr, big_val)?;
     }
 
     // if the call should return a pointer, it returns `addr`. If it's void-typed, that's fine too.
