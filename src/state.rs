@@ -435,7 +435,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
                     self.const_to_bv(&alias.aliasee)
                 } else {
-                    panic!("const_to_bv: GlobalReference to {:?} which was not found (current module is {:?})", name, &self.cur_loc.module.name)
+                    Err(Error::OtherError(format!("const_to_bv: GlobalReference to {:?} which was not found (current module is {:?})", name, &self.cur_loc.module.name)))
                 }
             },
             Constant::Add(a) => Ok(self.const_to_bv(&a.operand0)?.add(&self.const_to_bv(&a.operand1)?)),
