@@ -785,7 +785,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 },
                 Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
             }
-        } else if funcname.starts_with("llvm.memset") {
+        } else if funcname.starts_with("llvm.memset")
+            || funcname.starts_with("__memset")
+        {
             symex_memset(&mut self.state, call)?;
             Ok(None)
         } else if funcname.starts_with("llvm.memcpy")
@@ -990,11 +992,16 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     let val = &call.arguments[1].0;
     let num_bytes = &call.arguments[2].0;
     assert_eq!(addr.get_type(), Type::pointer_to(Type::i8()));
-    assert_eq!(val.get_type(), Type::i8());
-    assert_eq!(call.get_type(), Type::VoidType);
 
     let addr = state.operand_to_bv(&addr)?;
-    let val = state.operand_to_bv(&val)?;
+    let val = {
+        let mut val = state.operand_to_bv(&val)?;
+        if val.get_width() > 8 {
+            // some memset declarations have a larger type here, but it's still intended to be a byte value; we ignore any upper bits
+            val = val.slice(7, 0);
+        }
+        val
+    };
 
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
@@ -1034,10 +1041,20 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
     // If we're still here, we picked a single concrete value for num_bytes
     if num_bytes == 0 {
         debug!("Ignoring an LLVM memset of 0 num_bytes");
-        Ok(())
     } else {
         // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
-        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap())
+        state.write(&addr, std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap())?;
+    }
+
+    // if the call should return a pointer, it returns `addr`. If it's void-typed, that's fine too.
+    match call.get_type() {
+       Type::VoidType => Ok(()),
+       Type::PointerType { .. } => {
+            // can't quite use `state.record_bv_result(call, addr)?` because Call is not HasResult
+            state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), addr)?;
+            Ok(())
+       },
+       ty => Err(Error::OtherError(format!("Unexpected return type for a memset: {:?}", ty))),
     }
 }
 
