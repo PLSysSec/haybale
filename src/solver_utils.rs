@@ -37,6 +37,56 @@ pub fn sat_with_extra_constraints<I, B>(btor: &Btor, constraints: impl IntoItera
     retval
 }
 
+/// Returns `Some(true)` if under the current constraints, `a` and `b` must have
+/// the same value. Returns `Some(false)` if `a` and `b` may have different
+/// values. Returns `None` if the current constraints are themselves
+/// unsatisfiable.
+///
+/// A common use case for this function is to test whether some `BV` must be
+/// equal to a given concrete value. You can do this with something like
+/// `bvs_must_be_equal(btor, bv, BV::from_u64(...))`.
+///
+/// This function and `bvs_can_be_equal()` are both more efficient than
+/// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
+/// not require full model generation. You should prefer this function or
+/// `bvs_can_be_equal()` if they are sufficient for your needs.
+pub fn bvs_must_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<Option<bool>> {
+    if sat(btor)? {
+        if sat_with_extra_constraints(btor, &[a._ne(&b)])? {
+            Ok(Some(false))
+        } else {
+            Ok(Some(true))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+/// Returns `Some(true)` if under the current constraints, `a` and `b` can have
+/// the same value. Returns `Some(false)` if `a` and `b` cannot have the same
+/// value. Returns `None` if the current constraints are themselves
+/// unsatisfiable.
+///
+/// A common use case for this function is to test whether some `BV` can be
+/// equal to a given concrete value. You can do this with something like
+/// `bvs_can_be_equal(btor, bv, BV::from_u64(...))`.
+///
+/// This function and `bvs_must_be_equal()` are both more efficient than
+/// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
+/// not require full model generation. You should prefer this function or
+/// `bvs_must_be_equal()` if they are sufficient for your needs.
+pub fn bvs_can_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<Option<bool>> {
+    if sat(btor)? {
+        if sat_with_extra_constraints(btor, &[a._eq(&b)])? {
+            Ok(Some(true))
+        } else {
+            Ok(Some(false))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum PossibleSolutions<V: Eq + Hash> {
     /// This is exactly the set of possible solutions; there are no others.
@@ -74,7 +124,7 @@ impl PossibleSolutions<BVSolution> {
 /// Only returns `Err` if a solver query itself fails.
 pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
     if n == 0 {
-        if sat(&solver.clone())? {
+        if sat(&solver)? {
             Ok(PossibleSolutions::MoreThanNPossibleSolutions(0))
         } else {
             Ok(PossibleSolutions::PossibleSolutions(HashSet::new()))
@@ -244,6 +294,37 @@ mod tests {
 
         // the solver itself should still be sat, extra constraints weren't permanently added
         assert_eq!(sat(&btor), Ok(true));
+    }
+
+    #[test]
+    fn can_or_must_be_equal() {
+        let btor = BtorRef::default();
+
+        // create constants 2, 3, 4, 5, and 7, which we'll need
+        let two = BV::from_u64(btor.clone().into(), 2, 64);
+        let three = BV::from_u64(btor.clone().into(), 3, 64);
+        let four = BV::from_u64(btor.clone().into(), 4, 64);
+        let five = BV::from_u64(btor.clone().into(), 5, 64);
+        let seven = BV::from_u64(btor.clone().into(), 7, 64);
+
+        // add an x > 3 constraint
+        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
+        x.ugt(&three).assert();
+
+        // we should have that x _can be_ 7 but not _must be_ 7
+        assert_eq!(bvs_can_be_equal(&btor, &x, &seven), Ok(Some(true)));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &seven), Ok(Some(false)));
+
+        // we should have that x neither _can be_ nor _must be_ 2
+        assert_eq!(bvs_can_be_equal(&btor, &x, &two), Ok(Some(false)));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &two), Ok(Some(false)));
+
+        // add an x < 5 constraint
+        x.ult(&five).assert();
+
+        // we should now have that x both _can be_ and _must be_ 4
+        assert_eq!(bvs_can_be_equal(&btor, &x, &four), Ok(Some(true)));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &four), Ok(Some(true)));
     }
 
     #[test]

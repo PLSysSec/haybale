@@ -297,6 +297,40 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         solver_utils::sat_with_extra_constraints(&self.solver, constraints)
     }
 
+    /// Returns `Some(true)` if under the current constraints, `a` and `b` must have
+    /// the same value. Returns `Some(false)` if `a` and `b` may have different
+    /// values. Returns `None` if the current constraints are themselves
+    /// unsatisfiable.
+    ///
+    /// A common use case for this function is to test whether some `BV` must be
+    /// equal to a given concrete value. You can do this with something like
+    /// `state.bvs_must_be_equal(bv, BV::from_u64(...))`.
+    ///
+    /// This function and `bvs_can_be_equal()` are both more efficient than
+    /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
+    /// not require full model generation. You should prefer this function or
+    /// `bvs_can_be_equal()` if they are sufficient for your needs.
+    pub fn bvs_must_be_equal(&self, a: &B::BV, b: &B::BV) -> Result<Option<bool>> {
+        solver_utils::bvs_must_be_equal(&self.solver, a, b)
+    }
+
+    /// Returns `Some(true)` if under the current constraints, `a` and `b` can have
+    /// the same value. Returns `Some(false)` if `a` and `b` cannot have the same
+    /// value. Returns `None` if the current constraints are themselves
+    /// unsatisfiable.
+    ///
+    /// A common use case for this function is to test whether some `BV` can be
+    /// equal to a given concrete value. You can do this with something like
+    /// `state.bvs_can_be_equal(bv, BV::from_u64(...))`.
+    ///
+    /// This function and `bvs_must_be_equal()` are both more efficient than
+    /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
+    /// not require full model generation. You should prefer this function or
+    /// `bvs_must_be_equal()` if they are sufficient for your needs.
+    pub fn bvs_can_be_equal(&self, a: &B::BV, b: &B::BV) -> Result<Option<bool>> {
+        solver_utils::bvs_can_be_equal(&self.solver, a, b)
+    }
+
     /// Get one possible concrete value for the `BV`.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
     pub fn get_a_solution_for_bv(&self, bv: &B::BV) -> Result<Option<BVSolution>> {

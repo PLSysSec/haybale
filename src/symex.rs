@@ -876,8 +876,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             .collect::<Result<Vec<(B::BV, &Name)>>>()?;
         let feasible_dests: Vec<_> = dests.iter()
             .map(|(c,n)| {
-                self.state.sat_with_extra_constraints(std::iter::once(&c._eq(&switchval)))
-                    .map(|b| (c,*n,b))
+                self.state.bvs_can_be_equal(&c, &switchval)
+                    .and_then(|b| match b {
+                        Some(b) => Ok((c,*n,b)),
+                        None => Err(Error::Unsat),
+                    })
             })
             .collect::<Result<Vec<(&B::BV, &Name, bool)>>>()?
             .into_iter()
@@ -1012,7 +1015,8 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                 Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Prefer(v, _) => {
-                    if state.sat_with_extra_constraints(&[num_bytes._eq(&B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width()))])? {
+                    let v_as_bv = B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width());
+                    if state.bvs_can_be_equal(&num_bytes, &v_as_bv)?.ok_or(Error::Unsat)? {
                         v
                     } else {
                         return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
@@ -1078,7 +1082,8 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                 Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Prefer(v, _) => {
-                    if state.sat_with_extra_constraints(&[num_bytes._eq(&B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width()))])? {
+                    let v_as_bv = B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width());
+                    if state.bvs_can_be_equal(&num_bytes, &v_as_bv)?.ok_or(Error::Unsat)? {
                         v
                     } else {
                         return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
