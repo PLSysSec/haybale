@@ -127,7 +127,7 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     fn as_binary_str(&self) -> Option<String>;
     fn as_u64(&self) -> Option<u64>;
     fn as_bool(&self) -> Option<bool>;
-    fn get_a_solution(&self) -> BVSolution;
+    fn get_a_solution(&self) -> Result<BVSolution>;
     fn get_id(&self) -> i32;
     fn get_width(&self) -> u32;
     fn get_symbol(&self) -> Option<&str>;
@@ -269,8 +269,8 @@ impl BV for boolector::BV<Rc<Btor>> {
     fn as_bool(&self) -> Option<bool> {
         self.as_bool()
     }
-    fn get_a_solution(&self) -> BVSolution {
-        self.get_a_solution()
+    fn get_a_solution(&self) -> Result<BVSolution> {
+        Ok(self.get_a_solution())
     }
     fn get_id(&self) -> i32 {
         self.get_id()

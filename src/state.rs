@@ -302,12 +302,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn get_a_solution_for_bv(&self, bv: &B::BV) -> Result<Option<BVSolution>> {
         self.solver.set_opt(BtorOption::ModelGen(ModelGen::All));
         let solution = if self.sat()? {
-            Some(bv.get_a_solution())
+            Some(bv.get_a_solution()).transpose()
         } else {
-            None
+            Ok(None)
         };
         self.solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
-        Ok(solution)
+        solution
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.

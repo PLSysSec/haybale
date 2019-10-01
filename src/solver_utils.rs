@@ -89,7 +89,7 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
                 solver.push(1);
                 solver.set_opt(BtorOption::ModelGen(ModelGen::All));
                 while solutions.len() <= n && sat(&solver.clone())? {
-                    let val = bv.get_a_solution().disambiguate();
+                    let val = bv.get_a_solution()?.disambiguate();
                     solutions.insert(val.clone());
                     // Temporarily constrain that the solution can't be `val`, to see if there is another solution
                     bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert()?;
