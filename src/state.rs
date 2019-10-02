@@ -55,13 +55,16 @@ pub struct PathEntry {
     pub bbname: Name,
 }
 
+pub fn pretty_bb_name(name: &Name) -> String {
+    match name {
+        Name::Name(ref s) => format!("{:?}", s),
+        Name::Number(n) => format!("%{}", n),
+    }
+}
+
 impl fmt::Debug for PathEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let pretty_name = match self.bbname {
-            Name::Name(ref s) => format!("{:?}", s),
-            Name::Number(n) => format!("%{}", n),
-        };
-        write!(f, "{{{}: {} {}}}", self.modname, self.funcname, pretty_name)
+        write!(f, "{{{}: {} {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname))
     }
 }
 
@@ -86,7 +89,7 @@ impl<'p> Eq for Location<'p> {}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Location: module {:?}, func {:?}, bb {:?}>", self.module.name, self.func.name, self.bbname)
+        write!(f, "<Location: module {:?}, func {:?}, bb {}>", self.module.name, self.func.name, pretty_bb_name(&self.bbname))
     }
 }
 

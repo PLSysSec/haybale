@@ -6,7 +6,7 @@ use reduce::Reduce;
 use std::convert::{TryFrom, TryInto};
 use std::sync::{Arc, RwLock};
 
-pub use crate::state::{State, Callsite, Location, PathEntry};
+pub use crate::state::{State, Callsite, Location, PathEntry, pretty_bb_name};
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
@@ -198,7 +198,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn backtrack_and_continue(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         if self.state.revert_to_backtracking_point()? {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
-            info!("Continuing in function {:?} in module {:?}", self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+            info!("Continuing in bb {} in function {:?}, module {:?}", pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
             self.symex_from_inst_in_cur_loc(0)
         } else {
             // No backtrack points (and therefore no paths) remain
@@ -229,9 +229,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => {
                     // Return to callsite
-                    info!("Leaving function {:?}, continuing in caller {:?} in module {:?}",
+                    info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
                         self.state.cur_loc.func.name,
                         callsite.loc.func.name,
+                        pretty_bb_name(&callsite.loc.bbname),
                         callsite.loc.module.name,
                     );
                     self.state.cur_loc = callsite.loc.clone();
@@ -785,7 +786,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         ReturnValue::ReturnVoid => assert_eq!(call.dest, None),
                     };
                     debug!("Completed ordinary return to caller");
-                    info!("Leaving function {:?}, continuing in caller {:?} in module {:?}", funcname, &self.state.cur_loc.func.name, &self.state.cur_loc.module.name);
+                    info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}", funcname, &self.state.cur_loc.func.name, pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
                     Ok(None)
                 },
                 Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
