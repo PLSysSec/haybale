@@ -198,6 +198,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn backtrack_and_continue(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         if self.state.revert_to_backtracking_point()? {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
+            info!("Continuing in function {:?} in module {:?}", self.state.cur_loc.func.name, self.state.cur_loc.module.name);
             self.symex_from_inst_in_cur_loc(0)
         } else {
             // No backtrack points (and therefore no paths) remain
@@ -228,7 +229,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => {
                     // Return to callsite
-                    info!("Leaving function {:?}", self.state.cur_loc.func.name);
+                    info!("Leaving function {:?}, continuing in caller {:?} in module {:?}",
+                        self.state.cur_loc.func.name,
+                        callsite.loc.func.name,
+                        callsite.loc.module.name,
+                    );
                     self.state.cur_loc = callsite.loc.clone();
                     // Assign the returned value as the result of the caller's call instruction
                     match symexresult {
