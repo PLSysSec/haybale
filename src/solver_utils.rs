@@ -171,8 +171,12 @@ pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
     if !sat(&solver)? {
         return Ok(None);
     }
+    // Shortcut: if the BV is constant, just return its constant value
+    if let Some(u) = bv.as_u64() {
+        return Ok(Some(u));
+    }
     // Shortcut: check all-ones first, and if it's a valid solution, just return that
-    if sat_with_extra_constraints(&solver, &[bv._eq(&V::ones(solver.clone(), width))])? {
+    if bvs_can_be_equal(&solver, bv, &V::ones(solver.clone(), width))?.unwrap() {
         if width == 64 {
             return Ok(Some(std::u64::MAX));
         } else {
@@ -218,8 +222,12 @@ pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
     if !sat(&solver)? {
         return Ok(None);
     }
+    // Shortcut: if the BV is constant, just return its constant value
+    if let Some(u) = bv.as_u64() {
+        return Ok(Some(u));
+    }
     // Shortcut: check `0` first, and if it's a valid solution, just return that
-    if sat_with_extra_constraints(&solver, &[bv._eq(&V::zero(solver.clone(), width))])? {
+    if bvs_can_be_equal(&solver, bv, &V::zero(solver.clone(), width))?.unwrap() {
         return Ok(Some(0));
     }
     // min is exclusive (we know `0` doesn't work), max is inclusive
