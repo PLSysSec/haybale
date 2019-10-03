@@ -13,6 +13,7 @@ use layout::*;
 mod config;
 pub use config::*;
 mod default_hooks;
+pub mod alloc_utils;
 
 mod state;
 pub mod memory;
