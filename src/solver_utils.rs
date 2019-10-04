@@ -213,6 +213,7 @@ pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
     let mut pushes = 0;
     while (max - min) > 1 {
         let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
+        let mid = if mid / 2 > min { mid / 2 } else { mid };  // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
         bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert()?;
@@ -260,6 +261,7 @@ pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
     let mut pushes = 0;
     while (max - min) > 1 {
         let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
+        let mid = if mid / 2 > min { mid / 2 } else { mid };  // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
         bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert()?;
