@@ -91,10 +91,10 @@ pub fn bvs_can_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<Option<bool>
 pub enum PossibleSolutions<V: Eq + Hash> {
     /// This is exactly the set of possible solutions; there are no others.
     /// Note that an empty set here indicates there are no possible solutions.
-    PossibleSolutions(HashSet<V>),
-    /// There are more than `n` possible solutions, where `n` is the value
-    /// contained here.
-    MoreThanNPossibleSolutions(usize),
+    Exactly(HashSet<V>),
+    /// All of the solutions in this set are possible solutions, but there
+    /// may be others.  That is, there are at least this many solutions.
+    AtLeast(HashSet<V>),
 }
 
 impl PossibleSolutions<BVSolution> {
@@ -104,56 +104,80 @@ impl PossibleSolutions<BVSolution> {
     /// If `as_u64()` fails for any individual solution, this returns `None`.
     pub fn as_u64_solutions(&self) -> Option<PossibleSolutions<u64>> {
         match self {
-            PossibleSolutions::PossibleSolutions(v) => {
+            PossibleSolutions::Exactly(v) => {
                 let opt = v.iter().map(|bvs| bvs.as_u64()).collect::<Option<HashSet<u64>>>();
-                opt.map(PossibleSolutions::PossibleSolutions)
+                opt.map(PossibleSolutions::Exactly)
             },
-            PossibleSolutions::MoreThanNPossibleSolutions(n) => Some(PossibleSolutions::MoreThanNPossibleSolutions(*n)),
+            PossibleSolutions::AtLeast(v) => {
+                let opt = v.iter().map(|bvs| bvs.as_u64()).collect::<Option<HashSet<u64>>>();
+                opt.map(PossibleSolutions::AtLeast)
+            },
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum SolutionCount {
+    /// There are exactly this many solutions
+    Exactly(usize),
+    /// There are at least this many solutions
+    AtLeast(usize),
+}
+
+impl<V: Eq + Hash> PossibleSolutions<V> {
+    /// Get a count of how many possible solutions there are.
+    pub fn count(&self) -> SolutionCount {
+        match self {
+            PossibleSolutions::Exactly(v) => SolutionCount::Exactly(v.len()),
+            PossibleSolutions::AtLeast(v) => SolutionCount::AtLeast(v.len()),
         }
     }
 }
 
 /// Get a description of the possible solutions for the `BV`.
 ///
-/// `n`: Maximum number of distinct solutions to return.
-/// If there are more than `n` possible solutions, this simply
-/// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+/// `n`: Maximum number of distinct solutions to check for.
+/// If there are more than `n` possible solutions, this returns a
+/// `PossibleSolutions::AtLeast` containing `n+1` solutions.
 ///
 /// These solutions will be disambiguated - see docs on `boolector::BVSolution`.
 ///
 /// Only returns `Err` if a solver query itself fails.
 pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
-    if n == 0 {
+    solver.set_opt(BtorOption::ModelGen(ModelGen::All));
+    let ps = if n == 0 {
         if sat(&solver)? {
-            Ok(PossibleSolutions::MoreThanNPossibleSolutions(0))
+            PossibleSolutions::AtLeast(std::iter::once(
+                bv.get_a_solution()?.disambiguate()  // a possible solution
+            ).collect())
         } else {
-            Ok(PossibleSolutions::PossibleSolutions(HashSet::new()))
+            PossibleSolutions::Exactly(HashSet::new())  // no solutions
         }
     } else {
         match bv.as_binary_str() {
-            Some(bstr) => Ok(PossibleSolutions::PossibleSolutions(
+            Some(bstr) => PossibleSolutions::Exactly(
                 std::iter::once(BVSolution::from_01x_str(bstr)).collect()
-            )),
+            ),
             None => {
                 let mut solutions = HashSet::new();
                 solver.push(1);
-                solver.set_opt(BtorOption::ModelGen(ModelGen::All));
                 while solutions.len() <= n && sat(&solver.clone())? {
                     let val = bv.get_a_solution()?.disambiguate();
                     solutions.insert(val.clone());
                     // Temporarily constrain that the solution can't be `val`, to see if there is another solution
                     bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert()?;
                 }
-                solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
                 solver.pop(1);
                 if solutions.len() > n {
-                    Ok(PossibleSolutions::MoreThanNPossibleSolutions(n))
+                    PossibleSolutions::AtLeast(solutions)
                 } else {
-                    Ok(PossibleSolutions::PossibleSolutions(solutions))
+                    PossibleSolutions::Exactly(solutions)
                 }
             },
         }
-    }
+    };
+    solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+    Ok(ps)
 }
 
 /// Get the maximum possible solution for the `BV`: that is, the highest value
@@ -344,29 +368,29 @@ mod tests {
         x.ugt(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
 
         // check that there are more than 2 solutions
-        let solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::MoreThanNPossibleSolutions(2)));
+        let num_solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().count();
+        assert_eq!(num_solutions, SolutionCount::AtLeast(3));
 
         // add x < 6 constraint
         x.ult(&BV::from_u64(btor.clone().into(), 6, 64)).assert();
 
         // check that there are now exactly two solutions
         let solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions([4,5].into_iter().copied().collect())));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly([4,5].into_iter().copied().collect())));
 
         // add x < 5 constraint
         x.ult(&BV::from_u64(btor.clone().into(), 5, 64)).assert();
 
         // check that there is now exactly one solution
         let solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(std::iter::once(4).collect())));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly(std::iter::once(4).collect())));
 
         // add x < 3 constraint
         x.ult(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
 
         // check that there are now no solutions
         let solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::new())));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::new())));
     }
 
     #[test]

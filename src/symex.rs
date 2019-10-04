@@ -714,9 +714,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
             Either::Right(operand) => {
                 match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
-                    PossibleSolutions::MoreThanNPossibleSolutions(1) => return Err(Error::OtherError("calling a function pointer which has multiple possible targets".to_owned())),
-                    PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n=={:?}", n),
-                    PossibleSolutions::PossibleSolutions(v) => match v.iter().next() {
+                    PossibleSolutions::AtLeast(_) => return Err(Error::OtherError("calling a function pointer which has multiple possible targets".to_owned())),  // there must be at least 2 targets since we passed n==1 to `interpret_as_function_ptr`
+                    PossibleSolutions::Exactly(v) => match v.iter().next() {
                         None => return Err(Error::Unsat),  // no valid solutions for the function pointer
                         Some(Callable::LLVMFunction(f)) => Either::Left(&f.name),
                         Some(Callable::FunctionHook(h)) => Either::Right(h.clone()),
@@ -1014,16 +1013,16 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
 
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
-        PossibleSolutions::PossibleSolutions(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => {
+        PossibleSolutions::Exactly(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
+        PossibleSolutions::AtLeast(v) => {
             let num_bytes_concrete = match state.config.concretize_memcpy_lengths {
-                Concretize::Arbitrary => state.get_a_solution_for_bv(&num_bytes)?.unwrap().as_u64().unwrap(),
+                Concretize::Arbitrary => v.iter().next().unwrap().as_u64().unwrap(),
                 Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
-                Concretize::Prefer(v, _) => {
-                    let v_as_bv = B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width());
-                    if state.bvs_can_be_equal(&num_bytes, &v_as_bv)?.ok_or(Error::Unsat)? {
-                        v
+                Concretize::Prefer(val, _) => {
+                    let val_as_bv = B::BV::from_u64(state.solver.clone(), val, num_bytes.get_width());
+                    if state.bvs_can_be_equal(&num_bytes, &val_as_bv)?.ok_or(Error::Unsat)? {
+                        val
                     } else {
                         return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }
@@ -1091,16 +1090,16 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
 
     let num_bytes = state.operand_to_bv(num_bytes)?;
     let num_bytes = match state.get_possible_solutions_for_bv(&num_bytes, 1)? {
-        PossibleSolutions::PossibleSolutions(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
-        PossibleSolutions::MoreThanNPossibleSolutions(_) => {
+        PossibleSolutions::Exactly(v) => v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap(),
+        PossibleSolutions::AtLeast(v) => {
             let num_bytes_concrete = match state.config.concretize_memcpy_lengths {
-                Concretize::Arbitrary => state.get_a_solution_for_bv(&num_bytes)?.unwrap().as_u64().unwrap(),
+                Concretize::Arbitrary => v.iter().next().unwrap().as_u64().unwrap(),
                 Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
-                Concretize::Prefer(v, _) => {
-                    let v_as_bv = B::BV::from_u64(state.solver.clone(), v, num_bytes.get_width());
-                    if state.bvs_can_be_equal(&num_bytes, &v_as_bv)?.ok_or(Error::Unsat)? {
-                        v
+                Concretize::Prefer(val, _) => {
+                    let val_as_bv = B::BV::from_u64(state.solver.clone(), val, num_bytes.get_width());
+                    if state.bvs_can_be_equal(&num_bytes, &val_as_bv)?.ok_or(Error::Unsat)? {
+                        val
                     } else {
                         return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }

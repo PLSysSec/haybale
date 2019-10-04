@@ -357,9 +357,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// Get a description of the possible solutions for the `BV`.
     ///
-    /// `n`: Maximum number of distinct solutions to return.
-    /// If there are more than `n` possible solutions, this simply
-    /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    /// `n`: Maximum number of distinct solutions to check for.
+    /// If there are more than `n` possible solutions, this returns a
+    /// `PossibleSolutions::AtLeast` containing `n+1` solutions.
+    ///
+    /// These solutions will be disambiguated - see docs on `boolector::BVSolution`.
     ///
     /// Only returns `Err` if the solver query itself fails.
     pub fn get_possible_solutions_for_bv(&self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<BVSolution>> {
@@ -368,9 +370,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bitvector.
     ///
-    /// `n`: Maximum number of distinct solutions to return.
-    /// If there are more than `n` possible solutions, this simply
-    /// returns `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    /// `n`: Maximum number of distinct solutions to check for.
+    /// If there are more than `n` possible solutions, this returns a
+    /// `PossibleSolutions::AtLeast` containing `n+1` solutions.
+    ///
+    /// These solutions will be disambiguated - see docs on `boolector::BVSolution`.
     ///
     /// Only returns `Err` if the solver query itself fails.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
@@ -652,9 +656,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Given a `BV`, interpret it as a function pointer, and return a
     /// description of the possible `Function`s which it would point to.
     ///
-    /// `n`: Maximum number of distinct `Function`s to return.
-    /// If there are more than `n` possible `Function`s, this simply returns
-    /// `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+    /// `n`: Maximum number of distinct `Function`s to check for.
+    /// If there are more than `n` possible `Function`s, this returns a
+    /// `PossibleSolutions::AtLeast` with `n+1` `Function`s.
     ///
     /// Possible errors:
     ///   - `Error::SolverError` if the solver query fails
@@ -666,11 +670,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         }
         // First try to interpret without a full solve (i.e., with `as_u64()`)
         match bv.as_u64().and_then(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)) {
-            Some(f) => Ok(PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(f)))),  // there is only one possible solution, and it's this `f`
+            Some(f) => Ok(PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(f)))),  // there is only one possible solution, and it's this `f`
             None => {
                 match self.get_possible_solutions_for_bv(&bv, n)? {
-                    PossibleSolutions::MoreThanNPossibleSolutions(n) => Ok(PossibleSolutions::MoreThanNPossibleSolutions(n)),
-                    PossibleSolutions::PossibleSolutions(v) => {
+                    PossibleSolutions::Exactly(v) => {
                         v.into_iter()
                             .map(|addr| {
                                 let addr = addr.as_u64().unwrap();
@@ -678,7 +681,17 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                                     .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
                             })
                             .collect::<Result<HashSet<_>>>()
-                            .map(PossibleSolutions::PossibleSolutions)
+                            .map(PossibleSolutions::Exactly)
+                    },
+                    PossibleSolutions::AtLeast(v) => {
+                        v.into_iter()
+                            .map(|addr| {
+                                let addr = addr.as_u64().unwrap();
+                                self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
+                                    .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:?} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
+                            })
+                            .collect::<Result<HashSet<_>>>()
+                            .map(PossibleSolutions::AtLeast)
                     }
                 }
             }
@@ -726,9 +739,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             Some(addr) => Ok(self.alloc.get_allocation_size(addr)),
             None => {
                 match self.get_possible_solutions_for_bv(addr, 1)? {
-                    PossibleSolutions::MoreThanNPossibleSolutions(1) => Err(Error::OtherError(format!("get_allocation_size: address is not a constant: {:?}", addr))),
-                    PossibleSolutions::MoreThanNPossibleSolutions(n) => panic!("Expected n==1 since we passed in n==1, but got n == {:?}", n),
-                    PossibleSolutions::PossibleSolutions(v) => {
+                    PossibleSolutions::AtLeast(_) => Err(Error::OtherError(format!("get_allocation_size: address is not a constant: {:?}", addr))),  // must be at least 2 solutions, since we passed in n==1
+                    PossibleSolutions::Exactly(v) => {
                         let addr = v.iter()
                             .next()
                             .ok_or(Error::Unsat)?
@@ -855,6 +867,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 mod tests {
     use super::*;
     use boolector::Btor;
+    use crate::solver_utils::SolutionCount;
     use std::collections::HashMap;
     use std::rc::Rc;
 
@@ -973,29 +986,29 @@ mod tests {
         x.ugt(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
 
         // check that there are more than 2 solutions
-        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::MoreThanNPossibleSolutions(2)));
+        let num_solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().count();
+        assert_eq!(num_solutions, SolutionCount::AtLeast(3));
 
         // add x < 6 constraint
         x.ult(&BV::from_u64(state.solver.clone().into(), 6, 64)).assert();
 
         // check that there are now exactly two solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::from_iter(vec![4,5].into_iter()))));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::from_iter(vec![4,5].into_iter()))));
 
         // add x < 5 constraint
         x.ult(&BV::from_u64(state.solver.clone().into(), 5, 64)).assert();
 
         // check that there is now exactly one solution
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(4)))));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(4)))));
 
         // add x < 3 constraint
         x.ult(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
 
         // check that there are now no solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::PossibleSolutions(HashSet::new())));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::new())));
     }
 
     #[test]

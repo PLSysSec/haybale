@@ -140,9 +140,9 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
 /// parameter, or `None` to have the analysis consider all possible values of the
 /// parameter.
 ///
-/// `n`: Maximum number of distinct solutions to return.
-/// If there are more than `n` possible solutions, this simply returns
-/// `PossibleSolutions::MoreThanNPossibleSolutions(n)`.
+/// `n`: Maximum number of distinct solutions to check for.
+/// If there are more than `n` possible solutions, this returns a
+/// `PossibleSolutions::AtLeast` containing at least `n+1` solutions.
 ///
 /// For detailed descriptions of the other arguments, see [`symex_function`](fn.symex_function.html).
 pub fn get_possible_return_values_of_func<'p>(
@@ -169,20 +169,23 @@ pub fn get_possible_return_values_of_func<'p>(
             ReturnValue::Return(z3rval) => {
                 let state = em.mut_state();
                 match state.get_possible_solutions_for_bv(&z3rval, n).unwrap() {
-                    PossibleSolutions::MoreThanNPossibleSolutions(n) => return PossibleSolutions::MoreThanNPossibleSolutions(n),
-                    PossibleSolutions::PossibleSolutions(v) => {
+                    PossibleSolutions::Exactly(v) => {
                         candidate_values.extend(v.iter().map(|bvsol| bvsol.as_u64().unwrap()));
                         if candidate_values.len() > n {
                             break;
                         }
-                    }
+                    },
+                    PossibleSolutions::AtLeast(v) => {
+                        candidate_values.extend(v.iter().map(|bvsol| bvsol.as_u64().unwrap()));
+                        break;  // the total must be over n at this point
+                    },
                 };
             }
         }
     }
     if candidate_values.len() > n {
-        PossibleSolutions::MoreThanNPossibleSolutions(n)
+        PossibleSolutions::AtLeast(candidate_values)
     } else {
-        PossibleSolutions::PossibleSolutions(candidate_values.into_iter().collect())
+        PossibleSolutions::Exactly(candidate_values)
     }
 }

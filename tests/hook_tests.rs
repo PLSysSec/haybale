@@ -27,7 +27,7 @@ fn hook_a_function() {
     // with that hook, simple_caller should always return 5 regardless of the value of its argument
     assert_eq!(
         get_possible_return_values_of_func("simple_caller", std::iter::once(None), &proj, config, 3),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(5))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(5))),
     );
 }
 
@@ -60,6 +60,6 @@ fn hook_a_function_ptr() {
     // and therefore fptr_driver() should return 15 instead of 22
     assert_eq!(
         get_possible_return_values_of_func("fptr_driver", std::iter::empty(), &proj, config, 3),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(15))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(15))),
     );
 }

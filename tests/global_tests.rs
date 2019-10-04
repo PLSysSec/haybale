@@ -30,7 +30,7 @@ fn read_global() {
     let proj = get_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -41,7 +41,7 @@ fn modify_global() {
     let proj = get_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     )
 }
 
@@ -52,7 +52,7 @@ fn modify_global_with_call() {
     let proj = get_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     )
 }
 
@@ -63,7 +63,7 @@ fn dont_confuse_globals() {
     let proj = get_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     )
 }
 
@@ -76,7 +76,7 @@ fn cross_module_read_global() {
     let proj = get_cross_module_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -87,7 +87,7 @@ fn cross_module_read_global_via_call() {
     let proj = get_cross_module_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -98,7 +98,7 @@ fn cross_module_modify_global() {
     let proj = get_cross_module_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -109,7 +109,7 @@ fn cross_module_modify_global_via_call() {
     let proj = get_cross_module_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(3))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
     );
 }
 
@@ -122,6 +122,6 @@ fn globals_initialization() {
         .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(1052))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(1052))),
     )
 }

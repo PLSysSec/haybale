@@ -22,7 +22,7 @@ fn call_through_function_ptr() {
     let proj = get_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(22))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(22))),
     );
 }
 
@@ -32,6 +32,6 @@ fn call_through_function_ptr_struct() {
     let proj = get_project();
     assert_eq!(
         get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::PossibleSolutions(HashSet::from_iter(std::iter::once(15))),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(15))),
     );
 }
