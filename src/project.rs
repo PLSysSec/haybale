@@ -107,7 +107,7 @@ impl Project {
             if let Some(f) = module.get_func_by_name(name) {
                 match retval {
                     None => retval = Some((f, module)),
-                    Some(_) => panic!("Multiple functions found with name {:?}", name),
+                    Some((_, retmod)) => panic!("Multiple functions found with name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
                 };
             }
         }
