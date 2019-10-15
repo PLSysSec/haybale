@@ -175,6 +175,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 Ok(_) => {},  // no error, we can continue
                 Err(Error::Unsat) | Err(Error::LoopBoundExceeded) => {
                     // we can't continue down this path anymore
+                    info!("Path is either unsat or exceeds the loop bound");
                     return self.backtrack_and_continue();
                 }
                 Err(e) => return Err(e),  // propagate any other errors
