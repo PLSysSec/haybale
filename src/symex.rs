@@ -734,18 +734,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         };
         // If a hook is active, process the hook
         if let Some(hook) = hook {
-            info!("Invoking hook for function {:?}", funcname);
+            let pretty_funcname = funcname.unwrap_or("a function pointer");
+            info!("Invoking hook for function {:?}", pretty_funcname);
             match hook.call_hook(&mut self.state, call)? {
                 ReturnValue::ReturnVoid => {
                     if call.get_type() != Type::VoidType {
-                        let funcname = funcname.unwrap_or("a function pointer");
-                        return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", funcname)));
+                        return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", pretty_funcname)));
                     }
                 },
                 ReturnValue::Return(retval) => {
                     if call.get_type() == Type::VoidType {
-                        let funcname = funcname.unwrap_or("a function pointer");
-                        return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", funcname)));
+                        return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", pretty_funcname)));
                     } else {
                         // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
                         self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
