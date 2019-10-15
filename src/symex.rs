@@ -733,6 +733,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         };
         // If a hook is active, process the hook
         if let Some(hook) = hook {
+            info!("Invoking hook for function {:?}", funcname);
             match hook.call_hook(&mut self.state, call)? {
                 ReturnValue::ReturnVoid => {
                     if call.get_type() != Type::VoidType {
