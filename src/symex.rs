@@ -734,8 +734,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         };
         // If a hook is active, process the hook
         if let Some(hook) = hook {
-            let pretty_funcname = funcname.unwrap_or("a function pointer");
-            info!("Invoking hook for function {:?}", pretty_funcname);
+            let pretty_funcname = match funcname {
+                Some(funcname) => format!("function {:?}", funcname),
+                None => "a function pointer".to_owned(),
+            };
+            info!("Invoking hook for {}", pretty_funcname);
             match hook.call_hook(&mut self.state, call)? {
                 ReturnValue::ReturnVoid => {
                     if call.get_type() != Type::VoidType {
