@@ -162,6 +162,11 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     pub(crate) fn get_hook_for(&self, funcname: &str) -> Option<&FunctionHook<'p, B>> {
         self.hooks.get(funcname)
     }
+
+    /// Determine whether there is an active hook for the given `funcname`
+    pub fn is_hooked(&self, funcname: &str) -> bool {
+        self.get_hook_for(funcname).is_some()
+    }
 }
 
 impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
