@@ -944,7 +944,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
         let optype = truetype;
         match select.condition.get_type() {
-            Type::IntegerType { bits } if bits == 1 => {
+            Type::IntegerType { bits: 1 } => {
                 let btorcond = self.state.operand_to_bv(&select.condition)?;
                 let btortrueval = self.state.operand_to_bv(&select.true_value)?;
                 let btorfalseval = self.state.operand_to_bv(&select.false_value)?;
