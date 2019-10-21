@@ -937,12 +937,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
 
     fn symex_select(&mut self, select: &'p instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
-        let truetype = select.true_value.get_type();
-        let falsetype = select.false_value.get_type();
-        if truetype != falsetype {
-            return Err(Error::MalformedInstruction(format!("Expected Select operands to have identical type, but they have types {:?} and {:?}", truetype, falsetype)));
-        }
-        let optype = truetype;
+        let optype = {
+            let truetype = select.true_value.get_type();
+            let falsetype = select.false_value.get_type();
+            if truetype != falsetype {
+                return Err(Error::MalformedInstruction(format!("Expected Select operands to have identical type, but they have types {:?} and {:?}", truetype, falsetype)));
+            }
+            truetype
+        };
         match select.condition.get_type() {
             Type::IntegerType { bits: 1 } => {
                 let btorcond = self.state.operand_to_bv(&select.condition)?;
