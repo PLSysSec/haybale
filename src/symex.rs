@@ -950,19 +950,24 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let btorcond = self.state.operand_to_bv(&select.condition)?;
                 let btortrueval = self.state.operand_to_bv(&select.true_value)?;
                 let btorfalseval = self.state.operand_to_bv(&select.false_value)?;
-                let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond))?;
-                let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
-                if true_feasible && false_feasible {
-                    self.state.record_bv_result(select, btorcond.cond_bv(&btortrueval, &btorfalseval))
-                } else if true_feasible {
-                    btorcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
-                    self.state.record_bv_result(select, btortrueval)
-                } else if false_feasible {
-                    btorcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
-                    self.state.record_bv_result(select, btorfalseval)
+                let do_feasibility_checks = false;
+                if do_feasibility_checks {
+                    let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond))?;
+                    let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
+                    if true_feasible && false_feasible {
+                        self.state.record_bv_result(select, btorcond.cond_bv(&btortrueval, &btorfalseval))
+                    } else if true_feasible {
+                        btorcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
+                        self.state.record_bv_result(select, btortrueval)
+                    } else if false_feasible {
+                        btorcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
+                        self.state.record_bv_result(select, btorfalseval)
+                    } else {
+                        // this path is unsat
+                        Err(Error::Unsat)
+                    }
                 } else {
-                    // this path is unsat
-                    Err(Error::Unsat)
+                    self.state.record_bv_result(select, btorcond.cond_bv(&btortrueval, &btorfalseval))
                 }
             },
             Type::VectorType { element_type, num_elements } => {
