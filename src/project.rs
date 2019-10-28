@@ -1,8 +1,9 @@
-use llvm_ir::{Function, Module};
+use llvm_ir::{Function, Module, Type};
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
 use std::fs::DirEntry;
 use std::io;
 use std::path::Path;
+use std::sync::{Arc, RwLock};
 
 /// A `Project` is a collection of LLVM code to be explored,
 /// consisting of one or more LLVM modules
@@ -92,6 +93,23 @@ impl Project {
         self.modules.iter().map(|m| m.global_aliases.iter().zip(std::iter::repeat(m))).flatten()
     }
 
+    /// Iterate over all named struct types in the `Project`.
+    /// Gives triplets `(name, Type, Module)` which indicate the struct's name,
+    /// type, and which module it comes from.
+    ///
+    /// If the `Type` in the triplet is `None`, that means the struct type is
+    /// opaque; see
+    /// [LLVM 8 docs on Opaque Structure Types](https://releases.llvm.org/8.0.0/docs/LangRef.html#t-opaque).
+    pub fn all_named_struct_types(&self) -> impl Iterator<Item = (&String, Option<Type>, &Module)> {
+        self.modules.iter()
+            .map(|m| m.named_struct_types.iter()
+                .map(|(name, opt)| (name, opt.as_ref().map(|arc| arc.read().unwrap().clone())))
+                .zip(std::iter::repeat(m))
+                .map(|((name, opt), m)| (name, opt, m))
+            )
+            .flatten()
+    }
+
     /// Get the names of the LLVM modules which have been parsed and loaded into
     /// the `Project`
     pub fn active_module_names(&self) -> impl Iterator<Item = &String> {
@@ -108,6 +126,29 @@ impl Project {
                 match retval {
                     None => retval = Some((f, module)),
                     Some((_, retmod)) => panic!("Multiple functions found with name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
+                };
+            }
+        }
+        retval
+    }
+
+    /// Search the project for a named struct type with the given name.
+    /// If a matching named struct type is found, return both it and the module
+    /// it was found in.
+    ///
+    /// If `None` is returned, then no named struct type with the given name was
+    /// found in the project.
+    ///
+    /// If `Some(None, <module>)` is returned, that means the struct type is
+    /// opaque; see
+    /// [LLVM 8 docs on Opaque Structure Types](https://releases.llvm.org/8.0.0/docs/LangRef.html#t-opaque).
+    pub fn get_named_struct_type_by_name<'p>(&'p self, name: &str) -> Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> {
+        let mut retval = None;
+        for module in &self.modules {
+            if let Some(t) = module.named_struct_types.iter().find(|&(n, _)| n == name).map(|(_, t)| t) {
+                match retval {
+                    None => retval = Some((t, module)),
+                    Some((_, retmod)) => panic!("Multiple named struct types found with name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
                 };
             }
         }
