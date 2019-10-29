@@ -754,6 +754,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     }
                 }
             }
+            info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
             return Ok(None);
         }
         // If we're still here, there's no hook active

@@ -4,6 +4,7 @@ use boolector::{Btor, BVSolution, SolverResult};
 use boolector::option::{BtorOption, ModelGen};
 use crate::backend::BV;
 use crate::error::*;
+use log::warn;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::ops::Deref;
@@ -146,6 +147,7 @@ impl<V: Eq + Hash> PossibleSolutions<V> {
 pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
     solver.set_opt(BtorOption::ModelGen(ModelGen::All));
     let ps = if n == 0 {
+        warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow.");
         if sat(&solver)? {
             PossibleSolutions::AtLeast(std::iter::once(
                 bv.get_a_solution()?.disambiguate()  // a possible solution
@@ -161,6 +163,7 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
             None => {
                 let mut solutions = HashSet::new();
                 solver.push(1);
+                warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow.");
                 while solutions.len() <= n && sat(&solver.clone())? {
                     let val = bv.get_a_solution()?.disambiguate();
                     solutions.insert(val.clone());
