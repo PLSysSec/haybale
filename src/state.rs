@@ -166,7 +166,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         let mut state = Self {
             cur_loc: start_loc.clone(),
             varmap: VarMap::new(solver.clone(), config.loop_bound),
-            mem: Memory::new_uninitialized(solver.clone()),
+            mem: Memory::new_uninitialized(solver.clone(), None),
             alloc: Alloc::new(),
             global_allocations: GlobalAllocations::new(),
             stack: Vec::new(),

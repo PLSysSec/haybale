@@ -196,10 +196,10 @@ pub trait Memory : Clone + PartialEq + Eq {
     type Value: BV;
 
     /// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)
-    fn new_uninitialized(solver: Self::SolverRef) -> Self;
+    fn new_uninitialized(solver: Self::SolverRef, name: Option<&str>) -> Self;
 
     /// A new `Memory`, whose contents at all addresses are initialized to be `0`
-    fn new_zero_initialized(solver: Self::SolverRef) -> Self;
+    fn new_zero_initialized(solver: Self::SolverRef, name: Option<&str>) -> Self;
 
     /// Read any number (>0) of bits of memory, at any alignment.
     /// Returned `BV` will have size `bits`.
@@ -457,11 +457,11 @@ impl Memory for crate::memory::Memory {
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
 
-    fn new_uninitialized(btor: BtorRef) -> Self {
-        crate::memory::Memory::new_uninitialized(btor)
+    fn new_uninitialized(btor: BtorRef, name: Option<&str>) -> Self {
+        crate::memory::Memory::new_uninitialized(btor, name)
     }
-    fn new_zero_initialized(btor: BtorRef) -> Self {
-        crate::memory::Memory::new_zero_initialized(btor)
+    fn new_zero_initialized(btor: BtorRef, name: Option<&str>) -> Self {
+        crate::memory::Memory::new_zero_initialized(btor, name)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
         Ok(self.read(index, bits))
