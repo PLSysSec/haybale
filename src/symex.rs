@@ -886,11 +886,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             .collect::<Result<Vec<(B::BV, &Name)>>>()?;
         let feasible_dests: Vec<_> = dests.iter()
             .map(|(c,n)| {
-                self.state.bvs_can_be_equal(&c, &switchval)
-                    .and_then(|b| match b {
-                        Some(b) => Ok((c,*n,b)),
-                        None => Err(Error::Unsat),
-                    })
+                self.state.bvs_can_be_equal(&c, &switchval).map(|b| (c,*n,b))
             })
             .collect::<Result<Vec<(&B::BV, &Name, bool)>>>()?
             .into_iter()
@@ -1033,10 +1029,14 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Prefer(val, _) => {
                     let val_as_bv = B::BV::from_u64(state.solver.clone(), val, num_bytes.get_width());
-                    if state.bvs_can_be_equal(&num_bytes, &val_as_bv)?.ok_or(Error::Unsat)? {
+                    if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
                         val
                     } else {
-                        return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        if state.sat()? {
+                            return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        } else {
+                            return Err(Error::Unsat);
+                        }
                     }
                 },
                 Concretize::Symbolic => {
@@ -1066,10 +1066,10 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
         debug!("Processing a memset of {} bytes", num_bytes);
         // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
         assert_eq!(val.get_width(), 8);
-        let big_val = if state.bvs_must_be_equal(&val, &B::BV::zero(state.solver.clone(), 8))?.ok_or(Error::Unsat)? {
+        let big_val = if state.bvs_must_be_equal(&val, &B::BV::zero(state.solver.clone(), 8))? {
             // optimize this special case
             B::BV::zero(state.solver.clone(), 8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
-        } else if state.bvs_must_be_equal(&val, &B::BV::ones(state.solver.clone(), 8))?.ok_or(Error::Unsat)? {
+        } else if state.bvs_must_be_equal(&val, &B::BV::ones(state.solver.clone(), 8))? {
             // optimize this special case
             B::BV::ones(state.solver.clone(), 8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
         } else {
@@ -1110,10 +1110,14 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Prefer(val, _) => {
                     let val_as_bv = B::BV::from_u64(state.solver.clone(), val, num_bytes.get_width());
-                    if state.bvs_can_be_equal(&num_bytes, &val_as_bv)?.ok_or(Error::Unsat)? {
+                    if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
                         val
                     } else {
-                        return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        if state.sat()? {
+                            return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        } else {
+                            return Err(Error::Unsat);
+                        }
                     }
                 },
                 Concretize::Symbolic => {

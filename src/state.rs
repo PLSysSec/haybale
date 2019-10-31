@@ -300,10 +300,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         solver_utils::sat_with_extra_constraints(&self.solver, constraints)
     }
 
-    /// Returns `Some(true)` if under the current constraints, `a` and `b` must have
-    /// the same value. Returns `Some(false)` if `a` and `b` may have different
-    /// values. Returns `None` if the current constraints are themselves
-    /// unsatisfiable.
+    /// Returns `true` if under the current constraints, `a` and `b` must have the
+    /// same value. Returns `false` if `a` and `b` may have different values. (If the
+    /// current constraints are themselves unsatisfiable, that will result in
+    /// `true`.)
     ///
     /// A common use case for this function is to test whether some `BV` must be
     /// equal to a given concrete value. You can do this with something like
@@ -313,14 +313,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
     /// not require full model generation. You should prefer this function or
     /// `bvs_can_be_equal()` if they are sufficient for your needs.
-    pub fn bvs_must_be_equal(&self, a: &B::BV, b: &B::BV) -> Result<Option<bool>> {
+    pub fn bvs_must_be_equal(&self, a: &B::BV, b: &B::BV) -> Result<bool> {
         solver_utils::bvs_must_be_equal(&self.solver, a, b)
     }
 
-    /// Returns `Some(true)` if under the current constraints, `a` and `b` can have
-    /// the same value. Returns `Some(false)` if `a` and `b` cannot have the same
-    /// value. Returns `None` if the current constraints are themselves
-    /// unsatisfiable.
+    /// Returns `true` if under the current constraints, `a` and `b` can have the
+    /// same value. Returns `false` if `a` and `b` cannot have the same value. (If
+    /// the current constraints are themselves unsatisfiable, that will also result
+    /// in `false`.)
     ///
     /// A common use case for this function is to test whether some `BV` can be
     /// equal to a given concrete value. You can do this with something like
@@ -330,7 +330,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
     /// not require full model generation. You should prefer this function or
     /// `bvs_must_be_equal()` if they are sufficient for your needs.
-    pub fn bvs_can_be_equal(&self, a: &B::BV, b: &B::BV) -> Result<Option<bool>> {
+    pub fn bvs_can_be_equal(&self, a: &B::BV, b: &B::BV) -> Result<bool> {
         solver_utils::bvs_can_be_equal(&self.solver, a, b)
     }
 
@@ -363,7 +363,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// These solutions will be disambiguated - see docs on `boolector::BVSolution`.
     ///
-    /// Only returns `Err` if the solver query itself fails.
+    /// If there are no possible solutions, this returns `Ok` with an empty
+    /// `PossibleSolutions`, rather than returning an `Err` with `Error::Unsat`.
     pub fn get_possible_solutions_for_bv(&self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<BVSolution>> {
         solver_utils::get_possible_solutions_for_bv(self.solver.clone(), bv, n)
     }

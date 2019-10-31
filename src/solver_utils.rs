@@ -38,10 +38,10 @@ pub fn sat_with_extra_constraints<I, B>(btor: &Btor, constraints: impl IntoItera
     retval
 }
 
-/// Returns `Some(true)` if under the current constraints, `a` and `b` must have
-/// the same value. Returns `Some(false)` if `a` and `b` may have different
-/// values. Returns `None` if the current constraints are themselves
-/// unsatisfiable.
+/// Returns `true` if under the current constraints, `a` and `b` must have the
+/// same value. Returns `false` if `a` and `b` may have different values. (If the
+/// current constraints are themselves unsatisfiable, that will result in
+/// `true`.)
 ///
 /// A common use case for this function is to test whether some `BV` must be
 /// equal to a given concrete value. You can do this with something like
@@ -51,22 +51,18 @@ pub fn sat_with_extra_constraints<I, B>(btor: &Btor, constraints: impl IntoItera
 /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
 /// not require full model generation. You should prefer this function or
 /// `bvs_can_be_equal()` if they are sufficient for your needs.
-pub fn bvs_must_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<Option<bool>> {
-    if sat(btor)? {
-        if sat_with_extra_constraints(btor, &[a._ne(&b)])? {
-            Ok(Some(false))
-        } else {
-            Ok(Some(true))
-        }
+pub fn bvs_must_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<bool> {
+    if sat_with_extra_constraints(btor, &[a._ne(&b)])? {
+        Ok(false)
     } else {
-        Ok(None)
+        Ok(true)
     }
 }
 
-/// Returns `Some(true)` if under the current constraints, `a` and `b` can have
-/// the same value. Returns `Some(false)` if `a` and `b` cannot have the same
-/// value. Returns `None` if the current constraints are themselves
-/// unsatisfiable.
+/// Returns `true` if under the current constraints, `a` and `b` can have the
+/// same value. Returns `false` if `a` and `b` cannot have the same value. (If
+/// the current constraints are themselves unsatisfiable, that will also result
+/// in `false`.)
 ///
 /// A common use case for this function is to test whether some `BV` can be
 /// equal to a given concrete value. You can do this with something like
@@ -76,15 +72,11 @@ pub fn bvs_must_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<Option<bool
 /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
 /// not require full model generation. You should prefer this function or
 /// `bvs_must_be_equal()` if they are sufficient for your needs.
-pub fn bvs_can_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<Option<bool>> {
-    if sat(btor)? {
-        if sat_with_extra_constraints(btor, &[a._eq(&b)])? {
-            Ok(Some(true))
-        } else {
-            Ok(Some(false))
-        }
+pub fn bvs_can_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<bool> {
+    if sat_with_extra_constraints(btor, &[a._eq(&b)])? {
+        Ok(true)
     } else {
-        Ok(None)
+        Ok(false)
     }
 }
 
@@ -143,11 +135,14 @@ impl<V: Eq + Hash> PossibleSolutions<V> {
 ///
 /// These solutions will be disambiguated - see docs on `boolector::BVSolution`.
 ///
-/// Only returns `Err` if a solver query itself fails.
+/// If there are no possible solutions, this returns `Ok` with an empty
+/// `PossibleSolutions`, rather than returning an `Err` with `Error::Unsat`.
+//
+// Also, this function assumes that initially ModelGen is disabled; and it will always disable ModelGen before returning.
 pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
-    solver.set_opt(BtorOption::ModelGen(ModelGen::All));
     let ps = if n == 0 {
         warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow.");
+        solver.set_opt(BtorOption::ModelGen(ModelGen::All));
         if sat(&solver)? {
             PossibleSolutions::AtLeast(std::iter::once(
                 bv.get_a_solution()?.disambiguate()  // a possible solution
@@ -162,25 +157,89 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
             ),
             None => {
                 let mut solutions = HashSet::new();
-                solver.push(1);
-                warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow.");
-                while solutions.len() <= n && sat(&solver.clone())? {
-                    let val = bv.get_a_solution()?.disambiguate();
-                    solutions.insert(val.clone());
-                    // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                    bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert()?;
-                }
-                solver.pop(1);
+                check_for_common_solutions(solver.clone(), bv, n, &mut solutions)?;
                 if solutions.len() > n {
                     PossibleSolutions::AtLeast(solutions)
                 } else {
-                    PossibleSolutions::Exactly(solutions)
+                    solver.push(1);
+                    for solution in solutions.iter() {
+                        // Temporarily constrain that the solution can't be `solution` - we want to see if other solutions exist
+                        bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str())).assert()?;
+                    }
+                    warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow.");
+                    solver.set_opt(BtorOption::ModelGen(ModelGen::All));
+                    while solutions.len() <= n && sat(&solver)? {
+                        let val = bv.get_a_solution()?.disambiguate();
+                        solutions.insert(val.clone());
+                        // Temporarily constrain that the solution can't be `val`, to see if there is another solution
+                        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert()?;
+                    }
+                    solver.pop(1);
+                    if solutions.len() > n {
+                        PossibleSolutions::AtLeast(solutions)
+                    } else {
+                        PossibleSolutions::Exactly(solutions)
+                    }
                 }
             },
         }
     };
     solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
     Ok(ps)
+}
+
+/// Check whether some common values are solutions, and if so, add them.
+///
+/// Experimental data shows that calls to `sat()` with ModelGen enabled are _so slow_
+/// that it's worth doing this first to try to avoid them.
+fn check_for_common_solutions<V: BV>(solver: V::SolverRef, bv: &V, n: usize, solutions: &mut HashSet<BVSolution>) -> Result<()> {
+    let width = bv.get_width();
+    if solutions.len() <= n && bvs_can_be_equal(&solver, bv, &BV::zero(solver.clone(), width))? {
+        solutions.insert(BVSolution::from_01x_str("0".repeat(width as usize)));
+    }
+    if solutions.len() <= n && bvs_can_be_equal(&solver, bv, &BV::one(solver.clone(), width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 1, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 1 && bvs_can_be_equal(&solver, bv, &BV::ones(solver.clone(), width))? {
+        solutions.insert(BVSolution::from_01x_str("1".repeat(width as usize)));
+    }
+    if solutions.len() <= n && width > 1 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 2, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 2 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 4, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 3 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 8, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 8, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 4 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 16, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 16, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 5 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 32, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 32, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 6 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 64, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 64, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 7 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 128, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 128, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 8 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 256, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 256, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 9 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 512, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 512, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 10 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 1024, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 1024, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 11 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2048, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 2048, width=width as usize)));
+    }
+    if solutions.len() <= n && width > 12 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4096, width))? {
+        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 4096, width=width as usize)));
+    }
+    Ok(())
 }
 
 /// Get the maximum possible solution for the `BV`: that is, the highest value
@@ -203,7 +262,7 @@ pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
         return Ok(Some(u));
     }
     // Shortcut: check all-ones first, and if it's a valid solution, just return that
-    if bvs_can_be_equal(&solver, bv, &V::ones(solver.clone(), width))?.unwrap() {
+    if bvs_can_be_equal(&solver, bv, &V::ones(solver.clone(), width))? {
         if width == 64 {
             return Ok(Some(std::u64::MAX));
         } else {
@@ -255,7 +314,7 @@ pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
         return Ok(Some(u));
     }
     // Shortcut: check `0` first, and if it's a valid solution, just return that
-    if bvs_can_be_equal(&solver, bv, &V::zero(solver.clone(), width))?.unwrap() {
+    if bvs_can_be_equal(&solver, bv, &V::zero(solver.clone(), width))? {
         return Ok(Some(0));
     }
     // min is exclusive (we know `0` doesn't work), max is inclusive
@@ -349,19 +408,19 @@ mod tests {
         x.ugt(&three).assert();
 
         // we should have that x _can be_ 7 but not _must be_ 7
-        assert_eq!(bvs_can_be_equal(&btor, &x, &seven), Ok(Some(true)));
-        assert_eq!(bvs_must_be_equal(&btor, &x, &seven), Ok(Some(false)));
+        assert_eq!(bvs_can_be_equal(&btor, &x, &seven), Ok(true));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &seven), Ok(false));
 
         // we should have that x neither _can be_ nor _must be_ 2
-        assert_eq!(bvs_can_be_equal(&btor, &x, &two), Ok(Some(false)));
-        assert_eq!(bvs_must_be_equal(&btor, &x, &two), Ok(Some(false)));
+        assert_eq!(bvs_can_be_equal(&btor, &x, &two), Ok(false));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &two), Ok(false));
 
         // add an x < 5 constraint
         x.ult(&five).assert();
 
         // we should now have that x both _can be_ and _must be_ 4
-        assert_eq!(bvs_can_be_equal(&btor, &x, &four), Ok(Some(true)));
-        assert_eq!(bvs_must_be_equal(&btor, &x, &four), Ok(Some(true)));
+        assert_eq!(bvs_can_be_equal(&btor, &x, &four), Ok(true));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &four), Ok(true));
     }
 
     #[test]
