@@ -14,7 +14,7 @@ fn main() {
         .join(Path::new(&modname))
         .with_extension("bc");
     let proj = Project::from_bc_path(&filepath).unwrap_or_else(|e| panic!("Failed to parse module at path {}: {}", filepath.display(), e));
-    let functions: Box<Iterator<Item = String>>;
+    let functions: Box<dyn Iterator<Item = String>>;
     if let Some(funcname) = secondarg {
         functions = Box::new(std::iter::once(funcname.clone()));
     } else {
