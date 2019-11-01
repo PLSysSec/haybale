@@ -218,8 +218,8 @@ pub trait Memory : Clone + PartialEq + Eq {
     fn change_solver(&mut self, new_solver: Self::SolverRef);
 }
 
-/// The prototypical `BV` and `Memory` implementations:
-///   `boolector::BV<Rc<Btor>>` and `crate::memory::Memory`
+/// Some prototypical `BV` and `Memory` implementations:
+///   `boolector::BV<Rc<Btor>>`, `crate::memory::Memory`, and `crate::simple_memory::Memory`
 
 impl BV for boolector::BV<Rc<Btor>> {
     type SolverRef = BtorRef;
@@ -475,6 +475,29 @@ impl Memory for crate::memory::Memory {
     }
 }
 
+impl Memory for crate::simple_memory::Memory {
+    type SolverRef = BtorRef;
+    type Index = boolector::BV<Rc<Btor>>;
+    type Value = boolector::BV<Rc<Btor>>;
+
+    fn new_uninitialized(btor: BtorRef, name: Option<&str>) -> Self {
+        crate::simple_memory::Memory::new_uninitialized(btor, name)
+    }
+    fn new_zero_initialized(btor: BtorRef, name: Option<&str>) -> Self {
+        crate::simple_memory::Memory::new_zero_initialized(btor, name)
+    }
+    fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
+        Ok(self.read(index, bits))
+    }
+    fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
+        self.write(index, &value);
+        Ok(())
+    }
+    fn change_solver(&mut self, new_btor: BtorRef) {
+        self.change_solver(new_btor)
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BtorBackend {}
 
@@ -482,4 +505,13 @@ impl Backend for BtorBackend {
     type SolverRef = BtorRef;
     type BV = boolector::BV<Rc<Btor>>;
     type Memory = crate::memory::Memory;
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct SimpleMemoryBackend {}
+
+impl Backend for SimpleMemoryBackend {
+    type SolverRef = BtorRef;
+    type BV = boolector::BV<Rc<Btor>>;
+    type Memory = crate::simple_memory::Memory;
 }

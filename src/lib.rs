@@ -17,6 +17,7 @@ pub mod alloc_utils;
 
 mod state;
 pub mod memory;
+pub mod simple_memory;
 mod alloc;
 mod varmap;
 mod double_keyed_map;
