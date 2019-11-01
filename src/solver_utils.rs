@@ -141,7 +141,7 @@ impl<V: Eq + Hash> PossibleSolutions<V> {
 // Also, this function assumes that initially ModelGen is disabled; and it will always disable ModelGen before returning.
 pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
     let ps = if n == 0 {
-        warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow.");
+        warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}", bv);
         solver.set_opt(BtorOption::ModelGen(ModelGen::All));
         if sat(&solver)? {
             PossibleSolutions::AtLeast(std::iter::once(
@@ -166,7 +166,7 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
                         // Temporarily constrain that the solution can't be `solution` - we want to see if other solutions exist
                         bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str())).assert()?;
                     }
-                    warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow.");
+                    warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}", bv);
                     solver.set_opt(BtorOption::ModelGen(ModelGen::All));
                     while solutions.len() <= n && sat(&solver)? {
                         let val = bv.get_a_solution()?.disambiguate();
