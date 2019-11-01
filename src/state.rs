@@ -25,7 +25,7 @@ pub struct State<'p, B: Backend> {
     pub solver: B::SolverRef,
     /// The configuration being used
     pub config: Config<'p, B>,
-    /// Indicates the `BasicBlock` which is currently being executed
+    /// Indicates the instruction which is currently being executed
     pub cur_loc: Location<'p>,
 
     // Private members
@@ -53,6 +53,8 @@ pub struct PathEntry {
     pub modname: String,
     pub funcname: String,
     pub bbname: Name,
+    /// Index of the instruction within the basic block at which execution started. E.g., 0 means we started at the beginning of the basic block.
+    pub instr: usize,
 }
 
 pub fn pretty_bb_name(name: &Name) -> String {
@@ -64,7 +66,7 @@ pub fn pretty_bb_name(name: &Name) -> String {
 
 impl fmt::Debug for PathEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{}: {} {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname))
+        write!(f, "{{{}: {} {}, instr {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname), self.instr)
     }
 }
 
@@ -73,6 +75,8 @@ pub struct Location<'p> {
     pub module: &'p Module,
     pub func: &'p Function,
     pub bbname: Name,
+    /// Index of the instruction within the basic block. E.g., 0 means the first instruction of the basic block.
+    pub instr: usize,
 }
 
 /// Implementation of `PartialEq` assumes that module and function names are unique
@@ -81,6 +85,7 @@ impl<'p> PartialEq for Location<'p> {
         self.module.name == other.module.name
             && self.func.name == other.func.name
             && self.bbname == other.bbname
+            && self.instr == other.instr
     }
 }
 
@@ -89,7 +94,7 @@ impl<'p> Eq for Location<'p> {}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Location: module {:?}, func {:?}, bb {}>", self.module.name, self.func.name, pretty_bb_name(&self.bbname))
+        write!(f, "<Location: module {:?}, func {:?}, bb {}, instr {}>", self.module.name, self.func.name, pretty_bb_name(&self.bbname), self.instr)
     }
 }
 
@@ -99,22 +104,15 @@ impl<'p> From<Location<'p>> for PathEntry {
             modname: loc.module.name.clone(),
             funcname: loc.func.name.clone(),
             bbname: loc.bbname,
+            instr: loc.instr,
         }
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Callsite<'p> {
-    /// `Module`, `Function`, and `BasicBlock` of the callsite
-    pub loc: Location<'p>,
-    /// Index of the `Call` instruction within the `BasicBlock`
-    pub inst: usize,
-}
-
-#[derive(PartialEq, Eq, Clone, Debug)]
 struct StackFrame<'p, V: BV> {
     /// Indicates the call instruction which was responsible for the call
-    callsite: Callsite<'p>,
+    callsite: Location<'p>,
     /// Caller's local variables, so they can be restored when we return to the caller.
     /// This is necessary in the case of (direct or indirect) recursion.
     /// See notes on `VarMap.get_restore_info_for_fn()`.
@@ -766,13 +764,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         &self.path
     }
 
-    /// Record entering a call at the given `inst` in the current location's `BasicBlock`
-    pub fn push_callsite(&mut self, inst: usize) {
+    /// Record entering a call at the current location
+    pub fn push_callsite(&mut self) {
         self.stack.push(StackFrame {
-            callsite: Callsite {
-                loc: self.cur_loc.clone(),
-                inst,
-            },
+            callsite: self.cur_loc.clone(),
             // TODO: taking this `restore_info` every time a callsite is pushed
             // may be expensive, and is only necessary if the call we're going
             // to make will eventually (directly or indirectly) recurse. In the
@@ -782,12 +777,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         })
     }
 
-    /// Record leaving the current function. Returns the `Callsite` at which the
+    /// Record leaving the current function. Returns the `Location` at which the
     /// current function was called, or `None` if the current function was the
     /// top-level function.
     ///
     /// Also restores the caller's local variables.
-    pub fn pop_callsite(&mut self) -> Option<Callsite<'p>> {
+    pub fn pop_callsite(&mut self) -> Option<Location<'p>> {
         if let Some(StackFrame { callsite, restore_info }) = self.stack.pop() {
             self.varmap.restore_fn_vars(restore_info);
             Some(callsite)
@@ -806,6 +801,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             module: self.cur_loc.module,
             func: self.cur_loc.func,
             bbname: bb_to_enter,
+            instr: 0,
         };
         self.backtrack_points.push(BacktrackPoint {
             loc: backtrack_loc,
@@ -844,7 +840,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn pretty_llvm_backtrace(&self) -> String {
         std::iter::once(format!("  #1: {:?}\n", PathEntry::from(self.cur_loc.clone())))
             .chain(self.stack.iter().rev().zip(2..).map(|(frame, num)| {
-                format!("  #{}: {:?}\n", num, PathEntry::from(frame.callsite.loc.clone()))
+                format!("  #{}: {:?}\n", num, PathEntry::from(frame.callsite.clone()))
             }))
             .collect()
     }
@@ -886,6 +882,7 @@ mod tests {
             module,
             func,
             bbname: "test_bb".to_owned().into(),
+            instr: 0,
         };
         State::new(project, start_loc, Config::default())
     }
@@ -1122,6 +1119,7 @@ mod tests {
             modname: "test_mod".into(),
             funcname: "test_func".into(),
             bbname: "test_bb".into(),  // the `blank_state` comes with this as the current bb name
+            instr: 0,
         }]);
 
         // check that the constraint x < 8 was removed: we're sat again

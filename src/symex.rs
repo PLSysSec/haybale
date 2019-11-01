@@ -6,7 +6,7 @@ use reduce::Reduce;
 use std::convert::{TryFrom, TryInto};
 use std::sync::{Arc, RwLock};
 
-pub use crate::state::{State, Callsite, Location, PathEntry, pretty_bb_name};
+pub use crate::state::{State, Location, PathEntry, pretty_bb_name};
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
@@ -36,6 +36,7 @@ pub fn symex_function<'p, B: Backend>(
         module,
         func,
         bbname: bb.name.clone(),
+        instr: 0,
     };
     let mut state = State::new(project, start_loc, config);
     let bvparams: Vec<_> = func.parameters.iter().map(|param| {
@@ -125,7 +126,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
-        self.symex_from_bb_through_end_of_function(bb)
+        self.symex_from_inst_in_bb_through_end_of_function(bb, self.state.cur_loc.instr)
     }
 
     /// Symex the given bb, through the rest of the function.
@@ -141,8 +142,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
         assert_eq!(bb.name, self.state.cur_loc.bbname);
         debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
+        self.state.cur_loc.instr = inst;
         self.state.record_path_entry();
-        for (instnum, inst) in bb.instrs.iter().skip(inst).enumerate() {
+        for (instnum, inst) in bb.instrs.iter().enumerate().skip(inst) {
+            self.state.cur_loc.instr = instnum;
             let result = if let Ok(binop) = inst.clone().try_into() {
                 self.symex_binop(&binop)
             } else {
@@ -163,7 +166,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Instruction::BitCast(bitcast) => self.symex_cast_op(bitcast),
                     Instruction::Phi(phi) => self.symex_phi(phi),
                     Instruction::Select(select) => self.symex_select(select),
-                    Instruction::Call(call) => match self.symex_call(call, instnum) {
+                    Instruction::Call(call) => match self.symex_call(call) {
                         Err(e) => Err(e),
                         Ok(None) => Ok(()),
                         Ok(Some(symexresult)) => return Ok(Some(symexresult)),
@@ -200,23 +203,22 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         if self.state.revert_to_backtracking_point()? {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
             info!("Continuing in bb {} in function {:?}, module {:?}", pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
-            self.symex_from_inst_in_cur_loc(0)
+            self.symex_from_cur_loc()
         } else {
             // No backtrack points (and therefore no paths) remain
             Ok(None)
         }
     }
 
-    /// Symex starting from the given `inst` index in the current bb, returning
-    /// (using the saved callstack) all the way back to the end of the top-level
-    /// function.
+    /// Symex starting from the current location, returning (using the saved
+    /// callstack) all the way back to the end of the top-level function.
     ///
     /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_from_inst_in_cur_loc(&mut self, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
+    fn symex_from_cur_loc(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
-        self.symex_from_inst_in_bb(&bb, inst)
+        self.symex_from_inst_in_bb(&bb, self.state.cur_loc.instr)
     }
 
     /// Symex starting from the given `inst` index in the given bb, returning
@@ -232,20 +234,20 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     // Return to callsite
                     info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
                         self.state.cur_loc.func.name,
-                        callsite.loc.func.name,
-                        pretty_bb_name(&callsite.loc.bbname),
-                        callsite.loc.module.name,
+                        callsite.func.name,
+                        pretty_bb_name(&callsite.bbname),
+                        callsite.module.name,
                     );
-                    self.state.cur_loc = callsite.loc.clone();
+                    self.state.cur_loc = callsite.clone();
                     // Assign the returned value as the result of the caller's call instruction
                     match symexresult {
                         ReturnValue::Return(bv) => {
-                            let call: &Instruction = callsite.loc.func
-                                .get_bb_by_name(&callsite.loc.bbname)
+                            let call: &Instruction = callsite.func
+                                .get_bb_by_name(&callsite.bbname)
                                 .expect("Malformed callsite (bb not found)")
                                 .instrs
-                                .get(callsite.inst)
-                                .expect("Malformed callsite (inst out of range)");
+                                .get(callsite.instr)
+                                .expect("Malformed callsite (instr out of range)");
                             let call: &instruction::Call = match call {
                                 Instruction::Call(call) => call,
                                 _ => panic!("Malformed callsite: expected a Call, got {:?}", call),
@@ -258,7 +260,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         ReturnValue::ReturnVoid => { },
                     };
                     // Continue execution in caller, with the instruction after the call instruction
-                    self.symex_from_inst_in_cur_loc(callsite.inst + 1)
+                    self.state.cur_loc.instr += 1;  // advance past the call instruction, to the next instruction
+                    self.symex_from_cur_loc()
                 },
                 None => {
                     // No callsite to return to, so we're done
@@ -703,10 +706,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
-    /// `instnum`: the index in the current `BasicBlock` of the given `Call` instruction.
     /// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
-    fn symex_call(&mut self, call: &'p instruction::Call, instnum: usize) -> Result<Option<ReturnValue<B::BV>>> {
+    fn symex_call(&mut self, call: &'p instruction::Call) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing call {:?}", call);
         use crate::global_allocations::Callable;
         let funcname_or_hook: Either<&str, FunctionHook<B>> = match &call.function {
@@ -765,12 +767,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                 .collect::<Result<Vec<B::BV>>>()?;
             let saved_loc = self.state.cur_loc.clone();
-            self.state.push_callsite(instnum);
+            self.state.push_callsite();
             let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
             self.state.cur_loc = Location {
                 module: callee_mod,
                 func: callee,
                 bbname: bb.name.clone(),
+                instr: 0,
             };
             for (btorarg, param) in btorargs.into_iter().zip(callee.parameters.iter()) {
                 self.state.assign_bv_to_name(param.name.clone(), btorarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
@@ -779,8 +782,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
             match self.state.pop_callsite() {
                 None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                Some(Callsite { ref loc, inst }) if loc == &saved_loc && inst == instnum => {
+                Some(ref loc) if loc == &saved_loc => {
                     self.state.cur_loc = saved_loc;
+                    self.state.cur_loc.instr += 1;  // advance past the call instruction itself before recording the path entry
                     self.state.record_path_entry();
                     match returned_bv {
                         ReturnValue::Return(bv) => {
@@ -793,7 +797,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}", funcname, &self.state.cur_loc.func.name, pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
                     Ok(None)
                 },
-                Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
+                Some(loc) => panic!("Received unexpected callsite {:?}", loc),
             }
         } else if funcname.starts_with("llvm.memset")
             || funcname.starts_with("__memset")
@@ -839,6 +843,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_br(&mut self, br: &'p terminator::Br) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing br {:?}", br);
         self.state.cur_loc.bbname = br.dest.clone();
+        self.state.cur_loc.instr = 0;
         self.symex_from_cur_loc_through_end_of_function()
     }
 
@@ -856,14 +861,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             self.state.save_backtracking_point(condbr.false_dest.clone(), btorcond.not());
             btorcond.assert()?;
             self.state.cur_loc.bbname = condbr.true_dest.clone();
+            self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
             btorcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = condbr.true_dest.clone();
+            self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
             btorcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = condbr.false_dest.clone();
+            self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             self.backtrack_and_continue()
@@ -896,6 +904,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         if feasible_dests.is_empty() {
             // none of the dests are feasible, we will always end up in the default dest
             self.state.cur_loc.bbname = switch.default_dest.clone();
+            self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             // make backtracking points for all but the first destination
@@ -914,6 +923,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             let (val, name) = &feasible_dests[0];
             val._eq(&switchval).assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = (*name).clone();
+            self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         }
     }
@@ -1185,45 +1195,77 @@ mod tests {
 
     use llvm_ir::*;
     use super::*;
+    use std::fmt;
 
     fn init_logging() {
         // capture log messages with test harness
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    type Path = Vec<PathEntry>;
+    #[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
+    struct Path(Vec<PathEntry>);
 
+    impl fmt::Debug for Path {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            if self.0.is_empty() {
+                write!(f, "<empty path>")?;
+            } else {
+                writeln!(f, "[")?;
+                for pathentry in &self.0 {
+                    write!(f, "  ")?;
+                    pathentry.fmt(f)?;
+                    writeln!(f)?;
+                }
+                write!(f, "]")?;
+            }
+            Ok(())
+        }
+    }
+
+    /// Build a path from bbnames, that stays in a single function in the given module
     fn path_from_bbnames(modname: &str, funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path {
         let mut vec = vec![];
         for bbname in bbnames {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname });
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname, instr: 0 });
         }
-        vec
+        Path(vec)
     }
 
+    /// Like `path_from_bbnames`, but allows you to specify bbs by number rather than `Name`
     fn path_from_bbnums(modname: &str, funcname: &str, bbnums: impl IntoIterator<Item = usize>) -> Path {
         path_from_bbnames(modname, funcname, bbnums.into_iter().map(Name::from))
     }
 
-    fn path_from_func_and_bbname_pairs<'a>(modname: &str, pairs: impl IntoIterator<Item = (&'a str, Name)>) -> Path {
+    /// Build a path from (bbnum, instr) pairs, that stays in a single function in the given module
+    fn path_from_bbnum_instr_pairs(modname: &str, funcname: &str, pairs: impl IntoIterator<Item = (usize, usize)>) -> Path {
         let mut vec = vec![];
-        for (funcname, bbname) in pairs {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname });
+        for (bbnum, instr) in pairs {
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::from(bbnum), instr });
         }
-        vec
+        Path(vec)
     }
 
-    fn path_from_func_and_bbnum_pairs<'a>(modname: &str, pairs: impl IntoIterator<Item = (&'a str, usize)>) -> Path {
-        path_from_func_and_bbname_pairs(modname, pairs.into_iter().map(|(f, num)| (f, Name::from(num))))
+    /// Build a path from (funcname, bbname, instr) tuples, that stays in the module with the given modname
+    fn path_from_tuples_with_bbnames<'a>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, Name, usize)>) -> Path {
+        let mut vec = vec![];
+        for (funcname, bbname, instr) in tuples {
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname, instr });
+        }
+        Path(vec)
     }
 
-    /// Build a path from (modname, funcname, bbnum) triples
-    fn path_from_triples<'a>(triples: impl IntoIterator<Item = (&'a str, &'a str, usize)>) -> Path {
+    /// Build a path from (funcname, bbnum, instr) tuples, that stays in the module with the given modname
+    fn path_from_tuples_with_bbnums<'a>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, usize, usize)>) -> Path {
+        path_from_tuples_with_bbnames(modname, tuples.into_iter().map(|(f, bbnum, instr)| (f, Name::from(bbnum), instr)))
+    }
+
+    /// Build a path from (modname, funcname, bbnum, instr) tuples
+    fn path_from_tuples_varying_modules<'a>(tuples: impl IntoIterator<Item = (&'a str, &'a str, usize, usize)>) -> Path {
         let mut vec = vec![];
-        for (modname, funcname, bbnum) in triples {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::from(bbnum) });
+        for (modname, funcname, bbnum, instr) in tuples {
+            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::from(bbnum), instr });
         }
-        vec
+        Path(vec)
     }
 
     /// Iterator over the paths through a function
@@ -1246,7 +1288,7 @@ mod tests {
         type Item = Path;
 
         fn next(&mut self) -> Option<Self::Item> {
-            self.em.next().map(|_| self.em.state().get_path().clone())
+            self.em.next().map(|_| Path(self.em.state().get_path().clone()))
         }
     }
 
@@ -1439,10 +1481,10 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(&modname, vec![
-            ("simple_caller", 1),
-            ("simple_callee", 2),
-            ("simple_caller", 1),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
+            ("simple_caller", 1, 0),
+            ("simple_callee", 2, 0),
+            ("simple_caller", 1, 1),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1457,10 +1499,10 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_triples(vec![
-            (caller_modname, "cross_module_simple_caller", 1),
-            (callee_modname, "simple_callee", 2),
-            (caller_modname, "cross_module_simple_caller", 1),
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_simple_caller", 1, 0),
+            (callee_modname, "simple_callee", 2, 0),
+            (caller_modname, "cross_module_simple_caller", 1, 1),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1474,12 +1516,12 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
-            ("conditional_caller", 2),
-            ("conditional_caller", 4),
-            ("simple_callee", 2),
-            ("conditional_caller", 4),
-            ("conditional_caller", 8),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("conditional_caller", 2, 0),
+            ("conditional_caller", 4, 0),
+            ("simple_callee", 2, 0),
+            ("conditional_caller", 4, 1),
+            ("conditional_caller", 8, 0),
         ]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 6, 8]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
@@ -1494,12 +1536,12 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
-            ("twice_caller", 1),
-            ("simple_callee", 2),
-            ("twice_caller", 1),
-            ("simple_callee", 2),
-            ("twice_caller", 1),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("twice_caller", 1, 0),
+            ("simple_callee", 2, 0),
+            ("twice_caller", 1, 1),
+            ("simple_callee", 2, 0),
+            ("twice_caller", 1, 2),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1514,12 +1556,12 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_triples(vec![
-            (caller_modname, "cross_module_twice_caller", 1),
-            (callee_modname, "simple_callee", 2),
-            (caller_modname, "cross_module_twice_caller", 1),
-            (callee_modname, "simple_callee", 2),
-            (caller_modname, "cross_module_twice_caller", 1),
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_twice_caller", 1, 0),
+            (callee_modname, "simple_callee", 2, 0),
+            (caller_modname, "cross_module_twice_caller", 1, 1),
+            (callee_modname, "simple_callee", 2, 0),
+            (caller_modname, "cross_module_twice_caller", 1, 2),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
@@ -1533,12 +1575,12 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
-            ("nested_caller", 2),
-            ("simple_caller", 1),
-            ("simple_callee", 2),
-            ("simple_caller", 1),
-            ("nested_caller", 2),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("nested_caller", 2, 0),
+            ("simple_caller", 1, 0),
+            ("simple_callee", 2, 0),
+            ("simple_caller", 1, 1),
+            ("nested_caller", 2, 2),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1553,12 +1595,12 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_triples(vec![
-            (caller_modname, "cross_module_nested_near_caller", 2),
-            (caller_modname, "cross_module_simple_caller", 1),
-            (callee_modname, "simple_callee", 2),
-            (caller_modname, "cross_module_simple_caller", 1),
-            (caller_modname, "cross_module_nested_near_caller", 2),
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_nested_near_caller", 2, 0),
+            (caller_modname, "cross_module_simple_caller", 1, 0),
+            (callee_modname, "simple_callee", 2, 0),
+            (caller_modname, "cross_module_simple_caller", 1, 1),
+            (caller_modname, "cross_module_nested_near_caller", 2, 2),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
@@ -1573,12 +1615,12 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_triples(vec![
-            (caller_modname, "cross_module_nested_far_caller", 2),
-            (callee_modname, "simple_caller", 1),
-            (callee_modname, "simple_callee", 2),
-            (callee_modname, "simple_caller", 1),
-            (caller_modname, "cross_module_nested_far_caller", 2),
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_nested_far_caller", 2, 0),
+            (callee_modname, "simple_caller", 1, 0),
+            (callee_modname, "simple_callee", 2, 0),
+            (callee_modname, "simple_caller", 1, 1),
+            (caller_modname, "cross_module_nested_far_caller", 2, 2),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
@@ -1592,56 +1634,56 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_of_loop", 1),
-            ("callee_with_loop", 2),
-            ("callee_with_loop", 9),
-            ("caller_of_loop", 1),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, 0),
+            ("callee_with_loop", 2, 0),
+            ("callee_with_loop", 9, 0),
+            ("caller_of_loop", 1, 1),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_of_loop", 1),
-            ("callee_with_loop", 2),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 9),
-            ("caller_of_loop", 1),
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, 0),
+            ("callee_with_loop", 2, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 9, 0),
+            ("caller_of_loop", 1, 1),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_of_loop", 1),
-            ("callee_with_loop", 2),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 9),
-            ("caller_of_loop", 1),
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, 0),
+            ("callee_with_loop", 2, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 9, 0),
+            ("caller_of_loop", 1, 1),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_of_loop", 1),
-            ("callee_with_loop", 2),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 9),
-            ("caller_of_loop", 1),
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, 0),
+            ("callee_with_loop", 2, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 9, 0),
+            ("caller_of_loop", 1, 1),
         ]));
-        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_of_loop", 1),
-            ("callee_with_loop", 2),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 9),
-            ("caller_of_loop", 1),
+        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, 0),
+            ("callee_with_loop", 2, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 9, 0),
+            ("caller_of_loop", 1, 1),
         ]));
-        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_of_loop", 1),
-            ("callee_with_loop", 2),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 13),
-            ("callee_with_loop", 9),
-            ("caller_of_loop", 1),
+        assert_eq!(paths[5], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, 0),
+            ("callee_with_loop", 2, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 13, 0),
+            ("callee_with_loop", 9, 0),
+            ("caller_of_loop", 1, 1),
         ]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
@@ -1655,42 +1697,42 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_with_loop", 1),
-            ("caller_with_loop", 8),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, 0),
+            ("caller_with_loop", 8, 0),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_with_loop", 1),
-            ("caller_with_loop", 10),
-            ("simple_callee", 2),
-            ("caller_with_loop", 10),
-            ("caller_with_loop", 6),
-            ("caller_with_loop", 8),
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, 0),
+            ("caller_with_loop", 10, 0),
+            ("simple_callee", 2, 0),
+            ("caller_with_loop", 10, 3),
+            ("caller_with_loop", 6, 0),
+            ("caller_with_loop", 8, 0),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_with_loop", 1),
-            ("caller_with_loop", 10),
-            ("simple_callee", 2),
-            ("caller_with_loop", 10),
-            ("caller_with_loop", 10),
-            ("simple_callee", 2),
-            ("caller_with_loop", 10),
-            ("caller_with_loop", 6),
-            ("caller_with_loop", 8),
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, 0),
+            ("caller_with_loop", 10, 0),
+            ("simple_callee", 2, 0),
+            ("caller_with_loop", 10, 3),
+            ("caller_with_loop", 10, 0),
+            ("simple_callee", 2, 0),
+            ("caller_with_loop", 10, 3),
+            ("caller_with_loop", 6, 0),
+            ("caller_with_loop", 8, 0),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
-            ("caller_with_loop", 1),
-            ("caller_with_loop", 10),
-            ("simple_callee", 2),
-            ("caller_with_loop", 10),
-            ("caller_with_loop", 10),
-            ("simple_callee", 2),
-            ("caller_with_loop", 10),
-            ("caller_with_loop", 10),
-            ("simple_callee", 2),
-            ("caller_with_loop", 10),
-            ("caller_with_loop", 6),
-            ("caller_with_loop", 8),
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, 0),
+            ("caller_with_loop", 10, 0),
+            ("simple_callee", 2, 0),
+            ("caller_with_loop", 10, 3),
+            ("caller_with_loop", 10, 0),
+            ("simple_callee", 2, 0),
+            ("caller_with_loop", 10, 3),
+            ("caller_with_loop", 10, 0),
+            ("simple_callee", 2, 0),
+            ("caller_with_loop", 10, 3),
+            ("caller_with_loop", 6, 0),
+            ("caller_with_loop", 8, 0),
         ]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
     }
@@ -1704,16 +1746,131 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6, 6]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6, 6]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6, 6]));
-        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 6, 1, 9, 6, 6, 6]));
-        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 4, 9, 6, 6]));
-        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 6, 1, 9, 6, 6]));
-        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 4, 9, 6]));
-        assert_eq!(paths[7], path_from_bbnums(modname, funcname, vec![1, 4, 6, 1, 9, 6]));
-        assert_eq!(paths[8], path_from_bbnums(modname, funcname, vec![1, 4, 9]));
-        assert_eq!(paths[9], path_from_bbnums(modname, funcname, vec![1, 9]));
+        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (9, 0),
+            (6, 1),
+            (6, 1),
+            (6, 1),
+            (6, 1),
+        ]));
+        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (9, 0),
+            (6, 1),
+            (6, 1),
+            (6, 1),
+            (6, 1),
+        ]));
+        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (9, 0),
+            (6, 1),
+            (6, 1),
+            (6, 1),
+        ]));
+        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (9, 0),
+            (6, 1),
+            (6, 1),
+            (6, 1),
+        ]));
+        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (9, 0),
+            (6, 1),
+            (6, 1),
+        ]));
+        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (9, 0),
+            (6, 1),
+            (6, 1),
+        ]));
+        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (4, 0),
+            (9, 0),
+            (6, 1),
+        ]));
+        assert_eq!(paths[7], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (1, 0),
+            (9, 0),
+            (6, 1),
+        ]));
+        assert_eq!(paths[8], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (9, 0),
+        ]));
+        assert_eq!(paths[9], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (9, 0),
+        ]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
@@ -1726,16 +1883,130 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 4, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 8]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 4, 6, 8, 1, 4, 20, 8]));
-        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 6, 8, 1, 4, 20, 8, 8, 14]));
-        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 6, 8, 1, 4, 20, 8, 14]));
-        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 6, 12, 18, 20, 14]));
-        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 14, 1, 4, 20, 14]));
-        assert_eq!(paths[7], path_from_bbnums(modname, funcname, vec![1, 4, 6, 12, 18, 20]));
-        assert_eq!(paths[8], path_from_bbnums(modname, funcname, vec![1, 4, 20]));
-        assert_eq!(paths[9], path_from_bbnums(modname, funcname, vec![1, 20]));
+        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (20, 0),
+            (8, 2),
+            (8, 2),
+            (8, 2),
+        ]));
+        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (20, 0),
+            (8, 2),
+            (8, 2),
+        ]));
+        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (20, 0),
+            (8, 2),
+        ]));
+        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (12, 0),
+            (14, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (20, 0),
+            (8, 2),
+            (8, 2),
+            (14, 2),
+        ]));
+        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (12, 0),
+            (14, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (8, 0),
+            (1, 0),
+            (4, 0),
+            (20, 0),
+            (8, 2),
+            (14, 2),
+        ]));
+        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (12, 0),
+            (14, 0),
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (12, 0),
+            (18, 0),
+            (20, 0),
+            (14, 2),
+        ]));
+        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (12, 0),
+            (14, 0),
+            (1, 0),
+            (4, 0),
+            (20, 0),
+            (14, 2),
+        ]));
+        assert_eq!(paths[7], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (6, 0),
+            (12, 0),
+            (18, 0),
+            (20, 0),
+        ]));
+        assert_eq!(paths[8], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (4, 0),
+            (20, 0),
+        ]));
+        assert_eq!(paths[9], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (20, 0),
+        ]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
     }
 
@@ -1748,13 +2019,91 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 3, 15]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 10, 15]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 1, 3, 15, 5, 12, 15]));
-        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 10, 15]));
-        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 10, 15, 5, 12, 15]));
-        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 10, 15]));
-        assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 5, 1, 5, 1, 3, 15, 5, 12, 15, 5, 12, 15]));
+        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (3, 0),
+            (15, 0),
+        ]));
+        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (3, 0),
+            (15, 0),
+            (5, 2),
+            (10, 0),
+            (15, 0),
+        ]));
+        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (3, 0),
+            (15, 0),
+            (5, 2),
+            (12, 0),
+            (15, 0),
+        ]));
+        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (3, 0),
+            (15, 0),
+            (5, 2),
+            (10, 0),
+            (15, 0),
+            (5, 2),
+            (10, 0),
+            (15, 0),
+        ]));
+        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (3, 0),
+            (15, 0),
+            (5, 2),
+            (10, 0),
+            (15, 0),
+            (5, 2),
+            (12, 0),
+            (15, 0),
+        ]));
+        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (3, 0),
+            (15, 0),
+            (5, 2),
+            (12, 0),
+            (15, 0),
+            (5, 2),
+            (10, 0),
+            (15, 0),
+        ]));
+        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (5, 0),
+            (1, 0),
+            (3, 0),
+            (15, 0),
+            (5, 2),
+            (12, 0),
+            (15, 0),
+            (5, 2),
+            (12, 0),
+            (15, 0),
+        ]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
     }
 
@@ -1767,58 +2116,58 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 3),
-            ("simple_callee", 2),
-            ("recursive_and_normal_caller", 3),
-            ("recursive_and_normal_caller", 7),
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 3),
-            ("simple_callee", 2),
-            ("recursive_and_normal_caller", 3),
-            ("recursive_and_normal_caller", 7),
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 3),
-            ("simple_callee", 2),
-            ("recursive_and_normal_caller", 3),
-            ("recursive_and_normal_caller", 10),
-            ("recursive_and_normal_caller", 7),
-            ("recursive_and_normal_caller", 7),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 3, 0),
+            ("simple_callee", 2, 0),
+            ("recursive_and_normal_caller", 3, 2),
+            ("recursive_and_normal_caller", 7, 0),
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 3, 0),
+            ("simple_callee", 2, 0),
+            ("recursive_and_normal_caller", 3, 2),
+            ("recursive_and_normal_caller", 7, 0),
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 3, 0),
+            ("simple_callee", 2, 0),
+            ("recursive_and_normal_caller", 3, 2),
+            ("recursive_and_normal_caller", 10, 0),
+            ("recursive_and_normal_caller", 7, 1),
+            ("recursive_and_normal_caller", 7, 1),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 3),
-            ("simple_callee", 2),
-            ("recursive_and_normal_caller", 3),
-            ("recursive_and_normal_caller", 7),
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 3),
-            ("simple_callee", 2),
-            ("recursive_and_normal_caller", 3),
-            ("recursive_and_normal_caller", 10),
-            ("recursive_and_normal_caller", 7),
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 3, 0),
+            ("simple_callee", 2, 0),
+            ("recursive_and_normal_caller", 3, 2),
+            ("recursive_and_normal_caller", 7, 0),
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 3, 0),
+            ("simple_callee", 2, 0),
+            ("recursive_and_normal_caller", 3, 2),
+            ("recursive_and_normal_caller", 10, 0),
+            ("recursive_and_normal_caller", 7, 1),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 3),
-            ("simple_callee", 2),
-            ("recursive_and_normal_caller", 3),
-            ("recursive_and_normal_caller", 7),
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 10),
-            ("recursive_and_normal_caller", 7),
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 3, 0),
+            ("simple_callee", 2, 0),
+            ("recursive_and_normal_caller", 3, 2),
+            ("recursive_and_normal_caller", 7, 0),
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 10, 0),
+            ("recursive_and_normal_caller", 7, 1),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 3),
-            ("simple_callee", 2),
-            ("recursive_and_normal_caller", 3),
-            ("recursive_and_normal_caller", 10),
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 3, 0),
+            ("simple_callee", 2, 0),
+            ("recursive_and_normal_caller", 3, 2),
+            ("recursive_and_normal_caller", 10, 0),
         ]));
-        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(modname, vec![
-            ("recursive_and_normal_caller", 1),
-            ("recursive_and_normal_caller", 10),
+        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, 0),
+            ("recursive_and_normal_caller", 10, 0),
         ]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
     }
@@ -1832,89 +2181,89 @@ mod tests {
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
         let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
-        assert_eq!(paths[0], path_from_func_and_bbnum_pairs(modname, vec![
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 3, 0),
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 3, 0),
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
+            ("mutually_recursive_b", 3, 2),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
+            ("mutually_recursive_b", 3, 2),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
         ]));
-        assert_eq!(paths[1], path_from_func_and_bbnum_pairs(modname, vec![
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 7),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 3, 0),
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 3, 0),
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 7, 0),
+            ("mutually_recursive_b", 3, 2),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
+            ("mutually_recursive_b", 3, 2),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
         ]));
-        assert_eq!(paths[2], path_from_func_and_bbnum_pairs(modname, vec![
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 3, 0),
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
+            ("mutually_recursive_b", 3, 2),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
         ]));
-        assert_eq!(paths[3], path_from_func_and_bbnum_pairs(modname, vec![
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 7),
-            ("mutually_recursive_b", 3),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 3, 0),
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 7, 0),
+            ("mutually_recursive_b", 3, 2),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
         ]));
-        assert_eq!(paths[4], path_from_func_and_bbnum_pairs(modname, vec![
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_b", 1),
-            ("mutually_recursive_b", 7),
-            ("mutually_recursive_a", 3),
-            ("mutually_recursive_a", 7),
+        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 3, 0),
+            ("mutually_recursive_b", 1, 0),
+            ("mutually_recursive_b", 7, 0),
+            ("mutually_recursive_a", 3, 2),
+            ("mutually_recursive_a", 7, 0),
         ]));
-        assert_eq!(paths[5], path_from_func_and_bbnum_pairs(modname, vec![
-            ("mutually_recursive_a", 1),
-            ("mutually_recursive_a", 7),
+        assert_eq!(paths[5], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, 0),
+            ("mutually_recursive_a", 7, 0),
         ]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
     }
