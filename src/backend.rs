@@ -490,7 +490,7 @@ impl Memory for crate::simple_memory::Memory {
         Ok(self.read(index, bits))
     }
     fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
-        self.write(index, &value);
+        self.write(index, value);
         Ok(())
     }
     fn change_solver(&mut self, new_btor: BtorRef) {
