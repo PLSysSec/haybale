@@ -142,13 +142,43 @@ impl Project {
     /// If `Some(None, <module>)` is returned, that means the struct type is
     /// opaque; see
     /// [LLVM 8 docs on Opaque Structure Types](https://releases.llvm.org/8.0.0/docs/LangRef.html#t-opaque).
+    ///
+    /// If the named struct type is defined in multiple modules in the `Project`,
+    /// this returns one of them arbitrarily. However, it will only return
+    /// `Some(None, <module>)` if _all_ definitions are opaque; that is, it will
+    /// attempt to return some non-opaque definition if one exists, before
+    /// returning an opaque definition.
     pub fn get_named_struct_type_by_name<'p>(&'p self, name: &str) -> Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> {
-        let mut retval = None;
+        let mut retval: Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> = None;
         for module in &self.modules {
             if let Some(t) = module.named_struct_types.iter().find(|&(n, _)| n == name).map(|(_, t)| t) {
-                match retval {
-                    None => retval = Some((t, module)),
-                    Some((_, retmod)) => panic!("Multiple named struct types found with name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
+                match (retval, t) {
+                    (None, t) => retval = Some((t, module)),  // first definition we've found: this is the new candidate to return
+                    (Some(_), None) => {},  // this is an opaque definition, and we previously found some other definition (opaque or not); do nothing
+                    (Some((None, _)), t@Some(_)) => retval = Some((t, module)),  // found an actual definition, replace the previous opaque definition
+                    (Some((Some(arc1), retmod)), Some(arc2)) => {
+                        // duplicate non-opaque definitions: ensure they completely agree
+                        let def1: &Type = &arc1.read().unwrap();
+                        let def2: &Type = &arc2.read().unwrap();
+                        if def1 == def2 {
+                            // they're true duplicates: do nothing
+                        } else {
+                            // this is a hack, not completely sure why it is necessary.
+                            // Before immediately signalling the error, check if
+                            // one of the definitions is an empty struct, and
+                            // prefer the other
+                            match (def1, def2) {
+                                (Type::StructType { element_types, .. }, _) if element_types.is_empty() => {
+                                    // prefer the new definition
+                                    retval = Some((t, module));
+                                },
+                                (_, Type::StructType { element_types, .. }) if element_types.is_empty() => {
+                                    // prefer the current definition, do nothing
+                                },
+                                _ => panic!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n", name, retmod.name, module.name, def1, def2),
+                            }
+                        }
+                    },
                 };
             }
         }
