@@ -1,6 +1,7 @@
 use crate::backend::Backend;
 use crate::default_hooks;
 use crate::error::*;
+use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
 use llvm_ir::instruction;
@@ -140,7 +141,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Note that this means that calls to external functions will always
     /// error unless a hook for them is provided here.
     pub fn add<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
-        where H: Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>
+        where H: Fn(&'p Project, &mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>
     {
         self.hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
         self.cur_id += 1;
@@ -195,7 +196,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
 /// they cannot.
 pub(crate) struct FunctionHook<'p, B: Backend> {
     /// The actual hook to be executed
-    hook: Rc<dyn Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + 'p>,
+    hook: Rc<dyn Fn(&'p Project, &mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>> + 'p>,
 
     /// A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
@@ -225,11 +226,11 @@ impl<'p, B: Backend> Hash for FunctionHook<'p, B> {
 impl<'p, B: Backend> FunctionHook<'p, B> {
     /// `id`: A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
-    pub fn new(id: usize, f: &'p dyn Fn(&mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>) -> Self {
+    pub fn new(id: usize, f: &'p dyn Fn(&'p Project, &mut State<'p, B>, &'p instruction::Call) -> Result<ReturnValue<B::BV>>) -> Self {
         Self { hook: Rc::new(f), id }
     }
 
-    pub fn call_hook(&self, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
-        (self.hook)(state, call)
+    pub fn call_hook(&self, proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+        (self.hook)(proj, state, call)
     }
 }

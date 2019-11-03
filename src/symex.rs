@@ -741,7 +741,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 None => "a function pointer".to_owned(),
             };
             info!("Invoking hook for {}", pretty_funcname);
-            match hook.call_hook(&mut self.state, call)? {
+            match hook.call_hook(&self.project, &mut self.state, call)? {
                 ReturnValue::ReturnVoid => {
                     if call.get_type() != Type::VoidType {
                         return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", pretty_funcname)));

@@ -1,11 +1,12 @@
 use crate::backend::Backend;
 use crate::error::*;
 use crate::alloc_utils;
+use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
 use llvm_ir::*;
 
-pub(crate) fn malloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn malloc_hook<'p, B: Backend + 'p>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 1);
     let bytes = &call.arguments[0].0;
     match bytes.get_type() {
@@ -21,7 +22,7 @@ pub(crate) fn malloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &
     Ok(ReturnValue::Return(addr))
 }
 
-pub(crate) fn calloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn calloc_hook<'p, B: Backend + 'p>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
     let num = &call.arguments[0].0;
     let size = &call.arguments[1].0;
@@ -42,13 +43,13 @@ pub(crate) fn calloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &
     Ok(ReturnValue::Return(addr))
 }
 
-pub(crate) fn free_hook<'p, B: Backend + 'p>(_state: &mut State<'p, B>, _call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn free_hook<'p, B: Backend + 'p>(_proj: &'p Project, _state: &mut State<'p, B>, _call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     // The simplest implementation of free() is a no-op.
     // Our allocator won't ever reuse allocated addresses anyway.
     Ok(ReturnValue::ReturnVoid)
 }
 
-pub(crate) fn realloc_hook<'p, B: Backend + 'p>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+pub(crate) fn realloc_hook<'p, B: Backend + 'p>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
     let addr = &call.arguments[0].0;
     let new_size = &call.arguments[1].0;

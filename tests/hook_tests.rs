@@ -12,7 +12,7 @@ fn init_logging() {
 }
 
 // Hook call.c's "simple_callee" to just return 5 instead of executing its actual body
-fn hook_for_simple_callee<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+fn hook_for_simple_callee<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
     Ok(ReturnValue::Return(B::BV::from_u32(state.solver.clone(), 5, layout::size(&call.get_type()) as u32)))
 }
@@ -32,7 +32,7 @@ fn hook_a_function() {
 }
 
 // Hook functionptr.c's "get_function_ptr" to return a pointer to our hook "target_hook" instead of "foo" or "bar" like it normally does
-fn hook_for_get_function_ptr<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+fn hook_for_get_function_ptr<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 1);
     state.get_pointer_to_function_hook("asdfjkl")
         .cloned()
@@ -40,7 +40,7 @@ fn hook_for_get_function_ptr<'p, B: Backend>(state: &mut State<'p, B>, call: &'p
         .map(ReturnValue::Return)
 }
 
-fn target_hook<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
+fn target_hook<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.arguments.len(), 2);
     Ok(ReturnValue::Return(B::BV::from_u32(state.solver.clone(), 5, layout::size(&call.get_type()) as u32)))
 }
