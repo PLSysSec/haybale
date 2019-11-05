@@ -191,15 +191,27 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
 
 /// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)
 pub trait Memory : Clone + PartialEq + Eq {
-    type SolverRef: SolverRef;
-    type Index: BV;
+    type SolverRef: SolverRef<BV=Self::Index>;
+    type Index: BV<SolverRef=Self::SolverRef>;
     type Value: BV;
 
     /// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)
-    fn new_uninitialized(solver: Self::SolverRef, name: Option<&str>) -> Self;
+    ///
+    /// `null_detection`: if `true`, all memory accesses will be checked to ensure
+    /// their addresses cannot be NULL, throwing `Error::NullPointerDereference`
+    /// if NULL is a possible solution for the address
+    ///
+    /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
+    fn new_uninitialized(solver: Self::SolverRef, null_detection: bool, name: Option<&str>) -> Self;
 
     /// A new `Memory`, whose contents at all addresses are initialized to be `0`
-    fn new_zero_initialized(solver: Self::SolverRef, name: Option<&str>) -> Self;
+    ///
+    /// `null_detection`: if `true`, all memory accesses will be checked to ensure
+    /// their addresses cannot be NULL, throwing `Error::NullPointerDereference`
+    /// if NULL is a possible solution for the address
+    ///
+    /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
+    fn new_zero_initialized(solver: Self::SolverRef, null_detection: bool, name: Option<&str>) -> Self;
 
     /// Read any number (>0) of bits of memory, at any alignment.
     /// Returned `BV` will have size `bits`.
@@ -207,6 +219,9 @@ pub trait Memory : Clone + PartialEq + Eq {
 
     /// Write any number (>0) of bits of memory, at any alignment.
     fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()>;
+
+    /// Get a reference to the solver instance this `Memory` belongs to
+    fn get_solver(&self) -> Self::SolverRef;
 
     /// Adapt the `Memory` to a new solver instance.
     ///
@@ -457,18 +472,20 @@ impl Memory for crate::memory::Memory {
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
 
-    fn new_uninitialized(btor: BtorRef, name: Option<&str>) -> Self {
-        crate::memory::Memory::new_uninitialized(btor, name)
+    fn new_uninitialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+        crate::memory::Memory::new_uninitialized(btor, null_detection, name)
     }
-    fn new_zero_initialized(btor: BtorRef, name: Option<&str>) -> Self {
-        crate::memory::Memory::new_zero_initialized(btor, name)
+    fn new_zero_initialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+        crate::memory::Memory::new_zero_initialized(btor, null_detection, name)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
-        Ok(self.read(index, bits))
+        self.read(index, bits)
     }
     fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
-        self.write(index, value);
-        Ok(())
+        self.write(index, value)
+    }
+    fn get_solver(&self) -> BtorRef {
+        self.get_solver()
     }
     fn change_solver(&mut self, new_btor: BtorRef) {
         self.change_solver(new_btor)
@@ -480,18 +497,20 @@ impl Memory for crate::simple_memory::Memory {
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
 
-    fn new_uninitialized(btor: BtorRef, name: Option<&str>) -> Self {
-        crate::simple_memory::Memory::new_uninitialized(btor, name)
+    fn new_uninitialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+        crate::simple_memory::Memory::new_uninitialized(btor, null_detection, name)
     }
-    fn new_zero_initialized(btor: BtorRef, name: Option<&str>) -> Self {
-        crate::simple_memory::Memory::new_zero_initialized(btor, name)
+    fn new_zero_initialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+        crate::simple_memory::Memory::new_zero_initialized(btor, null_detection, name)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
-        Ok(self.read(index, bits))
+        self.read(index, bits)
     }
     fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
-        self.write(index, value);
-        Ok(())
+        self.write(index, value)
+    }
+    fn get_solver(&self) -> BtorRef {
+        self.get_solver()
     }
     fn change_solver(&mut self, new_btor: BtorRef) {
         self.change_solver(new_btor)

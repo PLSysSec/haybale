@@ -6,6 +6,9 @@ pub enum Error {
     Unsat,
     /// The current path has exceeded the configured `loop_bound` (see [`Config`](struct.Config.html))
     LoopBoundExceeded,
+    /// The current path has attempted to dereference a null pointer (or
+    /// more precisely, a pointer for which `NULL` is a possible value)
+    NullPointerDereference,
     /// Processing a call of a function with the given name, but failed to find an LLVM definition, a function hook, or a built-in handler for it
     FunctionNotFound(String),
     /// An operation attempted to coerce a `BV` more than one bit long into a `Bool`. The `String` is a text description of the `BV`, and the `u32` is its size
@@ -27,6 +30,8 @@ impl fmt::Display for Error {
                 write!(f, "`Unsat`: the current state or path is unsat"),
             Error::LoopBoundExceeded =>
                 write!(f, "`LoopBoundExceeded`: the current path has exceeded the configured `loop_bound`"),
+            Error::NullPointerDereference =>
+                write!(f, "`NullPointerDereference`: the current path has attempted to dereference a null pointer"),
             Error::FunctionNotFound(funcname) =>
                 write!(f, "`FunctionNotFound`: encountered a call of a function named {:?}, but failed to find an LLVM definition, a function hook, or a built-in handler for it", funcname),
             Error::BoolCoercionError(bv, size) =>

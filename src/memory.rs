@@ -4,6 +4,8 @@
 
 use boolector::Btor;
 use crate::backend::{BtorRef, SolverRef};
+use crate::error::*;
+use crate::solver_utils::bvs_can_be_equal;
 use log::debug;
 use reduce::Reduce;
 use std::convert::TryInto;
@@ -17,6 +19,7 @@ pub struct Memory {
     btor: BtorRef,
     mem: Array,
     name: String,
+    null_detection: bool,
     cell_bytes_as_bv: BV,
     log_bits_in_byte_as_bv: BV,
     log_bits_in_byte_as_wide_bv: BV,
@@ -33,13 +36,18 @@ impl Memory {
 
     /// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)
     ///
+    /// `null_detection`: if `true`, all memory accesses will be checked to ensure
+    /// their addresses cannot be NULL, throwing `Error::NullPointerDereference`
+    /// if NULL is a possible solution for the address
+    ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
-    pub fn new_uninitialized(btor: BtorRef, name: Option<&str>) -> Self {
+    pub fn new_uninitialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
         let default_name = "mem";
         Self {
             mem: Array::new(btor.clone().into(), log_num_cells, Self::CELL_BITS, name.or(Some(default_name))),
             name: name.unwrap_or(default_name).into(),
+            null_detection,
             cell_bytes_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
             log_bits_in_byte_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
             log_bits_in_byte_as_wide_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
@@ -49,18 +57,28 @@ impl Memory {
 
     /// A new `Memory`, whose contents at all addresses are initialized to be `0`
     ///
+    /// `null_detection`: if `true`, all memory accesses will be checked to ensure
+    /// their addresses cannot be NULL, throwing `Error::NullPointerDereference`
+    /// if NULL is a possible solution for the address
+    ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem_initialized')
-    pub fn new_zero_initialized(btor: BtorRef, name: Option<&str>) -> Self {
+    pub fn new_zero_initialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
         let default_name = "mem_initialized";
         Self {
             mem: Array::new_initialized(btor.clone().into(), log_num_cells, Self::CELL_BITS, name.or(Some(default_name)), &BV::zero(btor.clone().into(), Self::CELL_BITS)),
             name: name.unwrap_or(default_name).into(),
+            null_detection,
             cell_bytes_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
             log_bits_in_byte_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
             log_bits_in_byte_as_wide_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
             btor,  // out of order so it can be used above but moved in here
         }
+    }
+
+    /// Get a reference to the `Btor` instance this `Memory` belongs to
+    pub fn get_solver(&self) -> BtorRef {
+        self.btor.clone()
     }
 
     /// Adapt the `Memory` to a new `Btor` instance.
@@ -235,8 +253,15 @@ impl Memory {
 
     /// Read any number (>0) of bits of memory, at any alignment.
     /// Returned `BV` will have size `bits`.
-    pub fn read(&self, addr: &BV, bits: u32) -> BV {
+    pub fn read(&self, addr: &BV, bits: u32) -> Result<BV> {
         debug!("Reading {} bits from {} at {:?}", bits, &self.name, addr);
+        let addr_width = addr.get_width();
+        assert_eq!(addr_width, Self::INDEX_BITS, "Read address has wrong width");
+
+        if self.null_detection && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone().into(), addr_width))? {
+            return Err(Error::NullPointerDereference);
+        }
+
         let rval = if bits <= Self::CELL_BITS {
             // special-case small reads because read_small() can handle them directly and efficiently
             self.read_small(addr, bits)
@@ -253,20 +278,19 @@ impl Memory {
                     // first read the remainder of the cell to bring us to a cell boundary; this read must be <= Self::CELL_BITS
                     let first = self.read_small(addr, bytes_till_cell_boundary as u32 * Self::BITS_IN_BYTE);
                     // now read the rest, which will be a cell-aligned read
-                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone().into(), bytes_till_cell_boundary, addr.get_width()));
+                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone().into(), bytes_till_cell_boundary, addr_width));
                     let rest = self.read_large_aligned(&next_cell_addr, bits - bytes_till_cell_boundary as u32 * Self::BITS_IN_BYTE);
                     // put them together and return
                     rest.concat(&first)
                 }
             } else {
                 // Not sure what the alignment of `addr` is, we'll just use the safe fallback
-                let addr_size = addr.get_width();
                 assert_eq!(bits % Self::BITS_IN_BYTE, 0);
                 let bytes = bits / Self::BITS_IN_BYTE;
                 assert!(bytes > 0);
                 (0 .. bytes)
                     .map(|byte_num| {
-                        let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), addr_size));
+                        let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), addr_width));
                         self.read_within_cell(&offset_addr, Self::BITS_IN_BYTE)
                     })
                     .reduce(|a,b| b.concat(&a))
@@ -274,12 +298,19 @@ impl Memory {
             }
         };
         debug!("Value read is {:?}", rval);
-        rval
+        Ok(rval)
     }
 
     /// Write any number (>0) of bits of memory, at any alignment.
-    pub fn write(&mut self, addr: &BV, val: BV) {
+    pub fn write(&mut self, addr: &BV, val: BV) -> Result<()> {
         debug!("Writing {:?} to {} address {:?}", val, &self.name, addr);
+        let addr_width = addr.get_width();
+        assert_eq!(addr_width, Self::INDEX_BITS, "Write address has wrong width");
+
+        if self.null_detection && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone().into(), addr_width))? {
+            return Err(Error::NullPointerDereference);
+        }
+
         let write_size = val.get_width();
         if write_size <= Self::CELL_BITS {
             // special-case small writes because write_small() can handle them directly and efficiently
@@ -299,21 +330,21 @@ impl Memory {
                     self.write_small(addr, first);
                     // now write the rest, which will be a cell-aligned write
                     let rest = val.slice(val.get_width() - 1, bytes_till_cell_boundary as u32 * Self::BITS_IN_BYTE);
-                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone().into(), bytes_till_cell_boundary, addr.get_width()));
+                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone().into(), bytes_till_cell_boundary, addr_width));
                     self.write_large_aligned(&next_cell_addr, rest);
                 }
             } else {
                 // Not sure what the alignment of `addr` is, we'll just use the safe fallback
-                let addr_size = addr.get_width();
                 assert_eq!(write_size % Self::BITS_IN_BYTE, 0);
                 let write_size_bytes = write_size / Self::BITS_IN_BYTE;
                 for byte_num in 0 .. write_size_bytes {
                     let val_byte = val.slice((byte_num+1) * Self::BITS_IN_BYTE - 1, byte_num * Self::BITS_IN_BYTE);
-                    let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), addr_size));
+                    let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), addr_width));
                     self.write_within_cell(&offset_addr, val_byte);
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -352,166 +383,182 @@ mod tests {
     }
 
     #[test]
-    fn uninitialized() {
+    fn uninitialized() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mem = Memory::new_uninitialized(btor.clone(), None);
+        let mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
         let zero = BV::zero(btor.clone().into(), Memory::CELL_BITS);
 
         // Read a value from (uninitialized) memory
-        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
 
         // Constrain it to be > 0 and check that we're sat (and get a value > 0)
         btor.push(1);
         read_bv.sgt(&zero).assert();
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let read_val = get_a_solution(&read_bv).unwrap().expect("Expected a solution").as_u64().unwrap() as i64;
+        let read_val = get_a_solution(&read_bv)?.expect("Expected a solution").as_u64().unwrap() as i64;
         assert!(read_val > 0);
 
         // Alternately, constrain it to be < 0 and check that we're sat (and get a value < 0)
         btor.pop(1);
         read_bv.slt(&zero).assert();
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let read_val = get_a_solution(&read_bv).unwrap().expect("Expected a solution").as_u64().unwrap() as i64;
+        let read_val = get_a_solution(&read_bv)?.expect("Expected a solution").as_u64().unwrap() as i64;
         assert!(read_val < 0);
+
+        Ok(())
     }
 
     #[test]
-    fn zero_initialized() {
+    fn zero_initialized() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mem = Memory::new_zero_initialized(btor.clone(), None);
+        let mem = Memory::new_zero_initialized(btor.clone(), true, None);
 
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
 
         // Read a value from (zero-initialized) memory and check that the only possible value is 0
-        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0))));
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_to_cell_zero() {
+    fn read_and_write_to_cell_zero() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), false, None);
 
         // Store a cell's worth of data to address 0
         let data_val = 0x1234_5678;
         let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
         let zero = BV::zero(btor.clone().into(), Memory::INDEX_BITS);
-        mem.write(&zero, data);
+        mem.write(&zero, data)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&zero, Memory::CELL_BITS);
+        let read_bv = mem.read(&zero, Memory::CELL_BITS)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_cell_aligned() {
+    fn read_and_write_cell_aligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store a cell's worth of data to a nonzero, but aligned, address
         let data_val = 0x1234_5678;
         let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
         let aligned = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&aligned, data);
+        mem.write(&aligned, data)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&aligned, Memory::CELL_BITS);
+        let read_bv = mem.read(&aligned, Memory::CELL_BITS)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_small() {
+    fn read_and_write_small() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 8 bits of data to an aligned address
         let data_val = 0x4F;
         let data = BV::from_u64(btor.clone().into(), data_val, 8);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, 8);
+        let read_bv = mem.read(&addr, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_unaligned() {
+    fn read_and_write_unaligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
         let data = BV::from_u64(btor.clone().into(), data_val, 8);
         let unaligned = BV::from_u64(btor.clone().into(), 0x10001, Memory::INDEX_BITS);
-        mem.write(&unaligned, data);
+        mem.write(&unaligned, data)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&unaligned, 8);
+        let read_bv = mem.read(&unaligned, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_across_cell_boundaries() {
+    fn read_and_write_across_cell_boundaries() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 64 bits of data such that half is in one cell and half in the next
         let data_val: u64 = 0x12345678_9abcdef0;
         let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
         let addr = BV::from_u64(btor.clone().into(), 0x10004, Memory::INDEX_BITS);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_symbolic_addr() {
+    fn read_and_write_symbolic_addr() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), false, None);
 
         // Store 64 bits of data to a symbolic address
         let data_val: u64 = 0x12345678_9abcdef0;
         let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
         let addr = BV::new(btor.clone().into(), Memory::INDEX_BITS, Some("symbolic_addr"));
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_twocells() {
+    fn read_and_write_twocells() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store two cells' worth of data to an aligned address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -519,22 +566,24 @@ mod tests {
         let write_val = BV::from_u64(btor.clone().into(), data_val_1, 64).concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 2*Memory::CELL_BITS);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, write_val);
+        mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, 128);
+        let read_bv = mem.read(&addr, 128)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0, "\nGot value 0x{:x}, expected 0x{:x}", read_val_0, data_val_0);
-        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_200bits() {
+    fn read_and_write_200bits() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 200 bits of data to an aligned address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -547,26 +596,28 @@ mod tests {
             .concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 200);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, write_val);
+        mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, 200);
+        let read_bv = mem.read(&addr, 200)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
-        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
-        let read_val_2 = get_a_solution(&read_bv.slice(191, 128)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_2 = get_a_solution(&read_bv.slice(191, 128))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_2, data_val_2);
-        let read_val_3 = get_a_solution(&read_bv.slice(199, 192)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_3 = get_a_solution(&read_bv.slice(199, 192))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_3, data_val_3);
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_200bits_unaligned() {
+    fn read_and_write_200bits_unaligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 200 bits of data to an unaligned address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -579,26 +630,28 @@ mod tests {
             .concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 200);
         let addr = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
-        mem.write(&addr, write_val);
+        mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, 200);
+        let read_bv = mem.read(&addr, 200)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
-        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
-        let read_val_2 = get_a_solution(&read_bv.slice(191, 128)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_2 = get_a_solution(&read_bv.slice(191, 128))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_2, data_val_2);
-        let read_val_3 = get_a_solution(&read_bv.slice(199, 192)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_3 = get_a_solution(&read_bv.slice(199, 192))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_3, data_val_3);
+
+        Ok(())
     }
 
     #[test]
-    fn read_and_write_200bits_symbolic_addr() {
+    fn read_and_write_200bits_symbolic_addr() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), false, None);
 
         // Store 200 bits of data to a symbolic address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -611,239 +664,255 @@ mod tests {
             .concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 200);
         let addr = BV::new(btor.clone().into(), Memory::INDEX_BITS, Some("symbolic_addr"));
-        mem.write(&addr, write_val);
+        mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
-        let read_bv = mem.read(&addr, 200);
+        let read_bv = mem.read(&addr, 200)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let read_val_0 = get_a_solution(&read_bv.slice(63, 0)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_0 = get_a_solution(&read_bv.slice(63, 0))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_0, data_val_0);
-        let read_val_1 = get_a_solution(&read_bv.slice(127, 64)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_1 = get_a_solution(&read_bv.slice(127, 64))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_1, data_val_1);
-        let read_val_2 = get_a_solution(&read_bv.slice(191, 128)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_2 = get_a_solution(&read_bv.slice(191, 128))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_2, data_val_2);
-        let read_val_3 = get_a_solution(&read_bv.slice(199, 192)).unwrap().expect("Expected a solution").as_u64().unwrap();
+        let read_val_3 = get_a_solution(&read_bv.slice(199, 192))?.expect("Expected a solution").as_u64().unwrap();
         assert_eq!(read_val_3, data_val_3);
+
+        Ok(())
     }
 
     #[test]
-    fn write_twice_read_once() {
+    fn write_twice_read_once() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 8 bits of data
         let data_val = 0x4F;
         let data = BV::from_u64(btor.clone().into(), data_val, 8);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Store a different 8 bits of data to the same address
         let data_val = 0x3A;
         let data = BV::from_u64(btor.clone().into(), data_val, 8);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Ensure that we get back the most recent data
-        let read_bv = mem.read(&addr, 8);
+        let read_bv = mem.read(&addr, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
     }
 
     #[test]
-    fn write_different_cells() {
+    fn write_different_cells() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
         let data = BV::from_u64(btor.clone().into(), data_val, 32);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Store a different 32 bits of data to a different cell
         let data_val_2 = 0xfedc_ba98;
         let data_2 = BV::from_u64(btor.clone().into(), data_val_2, 32);
         let addr_2 = BV::from_u64(btor.clone().into(), 0x10008, Memory::INDEX_BITS);
-        mem.write(&addr_2, data_2);
+        mem.write(&addr_2, data_2)?;
 
         // Ensure that we can read them both individually
-        let read_bv = mem.read(&addr, 32);
+        let read_bv = mem.read(&addr, 32)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
-        let read_bv = mem.read(&addr_2, 32);
+        let read_bv = mem.read(&addr_2, 32)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val_2))));
+
+        Ok(())
     }
 
     #[test]
-    fn write_different_places_within_cell() {
+    fn write_different_places_within_cell() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
         let data = BV::from_u64(btor.clone().into(), data_val, 32);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Store a different 32 bits of data to the other half of the cell
         let data_val_2 = 0xfedc_ba98;
         let data_2 = BV::from_u64(btor.clone().into(), data_val_2, 32);
         let addr_2 = BV::from_u64(btor.clone().into(), 0x10004, Memory::INDEX_BITS);
-        mem.write(&addr_2, data_2);
+        mem.write(&addr_2, data_2)?;
 
         // Ensure that we can read them both individually
-        let read_bv = mem.read(&addr, 32);
+        let read_bv = mem.read(&addr, 32)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
-        let read_bv = mem.read(&addr_2, 32);
+        let read_bv = mem.read(&addr_2, 32)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val_2))));
+
+        Ok(())
     }
 
     #[test]
-    fn write_small_read_big() {
+    fn write_small_read_big() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_zero_initialized(btor.clone(), None);
+        let mut mem = Memory::new_zero_initialized(btor.clone(), true, None);
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
         let data = BV::from_u64(btor.clone().into(), data_val, 8);
         let unaligned = BV::from_u64(btor.clone().into(), 0x10001, Memory::INDEX_BITS);
-        mem.write(&unaligned, data.clone());
+        mem.write(&unaligned, data.clone())?;
 
         // Ensure that reading from beginning of the cell adds zeroed low-order bits
         // (we are little-endian)
         let aligned = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        let read_bv = mem.read(&aligned, 16);
+        let read_bv = mem.read(&aligned, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x4F00))));
 
         // Ensure that reading extra bits adds zeroed high-order bits
-        let read_bv = mem.read(&unaligned, 16);
+        let read_bv = mem.read(&unaligned, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x004F))));
 
         // Ensure that reading elsewhere gives all zeroes
         let garbage_addr_1 = BV::from_u64(btor.clone().into(), 0x10004, Memory::INDEX_BITS);
         let garbage_addr_2 = BV::from_u64(btor.clone().into(), 0x10008, Memory::INDEX_BITS);
-        let read_bv_1 = mem.read(&garbage_addr_1, 8);
-        let read_bv_2 = mem.read(&garbage_addr_2, 8);
+        let read_bv_1 = mem.read(&garbage_addr_1, 8)?;
+        let read_bv_2 = mem.read(&garbage_addr_2, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps_1 = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv_1, 1).unwrap().as_u64_solutions().unwrap();
-        let ps_2 = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv_2, 1).unwrap().as_u64_solutions().unwrap();
+        let ps_1 = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv_1, 1)?.as_u64_solutions().unwrap();
+        let ps_2 = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv_2, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps_1, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0))));
         assert_eq!(ps_2, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0))));
+
+        Ok(())
     }
 
     #[test]
-    fn write_big_read_small() {
+    fn write_big_read_small() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Store 32 bits of data to offset 2 in a cell
         let data_val = 0x1234_5678;
         let data = BV::from_u64(btor.clone().into(), data_val, 32);
         let offset_2 = BV::from_u64(btor.clone().into(), 0x10002, Memory::INDEX_BITS);
-        mem.write(&offset_2, data.clone());
+        mem.write(&offset_2, data.clone())?;
 
         // Ensure that reading 8 bits from offset 2 gives the low-order byte
         // (we are little-endian)
-        let read_bv = mem.read(&offset_2, 8);
+        let read_bv = mem.read(&offset_2, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x78))));
 
         // Ensure that reading 8 bits from offset 5 gives the high-order byte
         // (we are little-endian)
         let offset_5 = BV::from_u64(btor.clone().into(), 0x10005, Memory::INDEX_BITS);
-        let read_bv = mem.read(&offset_5, 8);
+        let read_bv = mem.read(&offset_5, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12))));
 
         // Ensure that reading 16 bits from offset 3 gives the middle two bytes
         let offset_3 = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
-        let read_bv = mem.read(&offset_3, 16);
+        let read_bv = mem.read(&offset_3, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x3456))));
+
+        Ok(())
     }
 
     #[test]
-    fn partial_overwrite_aligned() {
+    fn partial_overwrite_aligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Write an entire cell
         let data = BV::from_u64(btor.clone().into(), 0x12345678_12345678, Memory::CELL_BITS);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Write over just the first part
         let overwrite_data_val = 0xdcba;
         let overwrite_data = BV::from_u64(btor.clone().into(), overwrite_data_val, 16);
-        mem.write(&addr, overwrite_data);
+        mem.write(&addr, overwrite_data)?;
 
         // Ensure that we can read the smaller overwrite back
-        let read_bv = mem.read(&addr, 16);
+        let read_bv = mem.read(&addr, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(overwrite_data_val))));
 
         // Ensure that reading the whole cell back reflects the partial overwrite
-        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12345678_1234dcba))));
+
+        Ok(())
     }
 
     #[test]
-    fn partial_overwrite_unaligned() {
+    fn partial_overwrite_unaligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = BtorRef::default();
-        let mut mem = Memory::new_uninitialized(btor.clone(), None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Write an entire cell
         let data = BV::from_u64(btor.clone().into(), 0x12345678_12345678, Memory::CELL_BITS);
         let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        mem.write(&addr, data);
+        mem.write(&addr, data)?;
 
         // Write over just part of the middle
         let overwrite_addr = BV::from_u64(btor.clone().into(), 0x10002, Memory::INDEX_BITS);
         let overwrite_data_val = 0xdcba;
         let overwrite_data = BV::from_u64(btor.clone().into(), overwrite_data_val, 16);
-        mem.write(&overwrite_addr, overwrite_data);
+        mem.write(&overwrite_addr, overwrite_data)?;
 
         // Ensure that we can read the smaller overwrite back
-        let read_bv = mem.read(&overwrite_addr, 16);
+        let read_bv = mem.read(&overwrite_addr, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(overwrite_data_val))));
 
         // Ensure that reading the whole cell back reflects the partial overwrite
-        let read_bv = mem.read(&addr, Memory::CELL_BITS);
+        let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12345678_dcba5678))));
 
         // Now a different partial read with some original data and some overwritten
         let new_addr = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
-        let read_bv = mem.read(&new_addr, 16);
+        let read_bv = mem.read(&new_addr, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
-        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1).unwrap().as_u64_solutions().unwrap();
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x78dc))));
+
+        Ok(())
     }
 }

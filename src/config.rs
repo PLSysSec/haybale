@@ -16,6 +16,11 @@ pub struct Config<'p, B> where B: Backend {
     /// For inner loops, this bounds the number of total iterations across all invocations of the loop.
     pub loop_bound: usize,
 
+    /// If `true`, all memory accesses will be checked to ensure their addresses
+    /// cannot be NULL, throwing `Error::NullPointerDereference` if NULL is a
+    /// possible solution for the address
+    pub null_detection: bool,
+
     /// When encountering a `memcpy`, `memset`, or `memmove` with multiple
     /// possible lengths, how (if at all) should we concretize?
     pub concretize_memcpy_lengths: Concretize,
@@ -68,9 +73,10 @@ impl<'p, B: Backend> Config<'p, B> {
     ///
     /// You may want to consider `Config::default()` which provides defaults for
     /// all parameters and comes with predefined hooks for common functions.
-    pub fn new(loop_bound: usize, concretize_memcpy_lengths: Concretize) -> Self {
+    pub fn new(loop_bound: usize, null_detection: bool, concretize_memcpy_lengths: Concretize) -> Self {
         Self {
             loop_bound,
+            null_detection,
             concretize_memcpy_lengths,
             function_hooks: FunctionHooks::new(),
         }
@@ -91,6 +97,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     fn default() -> Self {
         Self {
             loop_bound: 10,
+            null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,
             function_hooks: FunctionHooks::default(),
         }

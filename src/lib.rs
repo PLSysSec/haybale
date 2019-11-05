@@ -1,4 +1,4 @@
-use llvm_ir::Type;
+use llvm_ir::{Type, Typed};
 use std::collections::HashSet;
 
 mod project;
@@ -82,6 +82,7 @@ impl SolutionValue {
 
 /// Given a function, find values of its inputs such that it returns zero.
 /// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer.
+/// Pointer arguments will be assumed to be never NULL.
 ///
 /// For detailed descriptions of the arguments, see [`symex_function`](fn.symex_function.html).
 ///
@@ -92,6 +93,15 @@ impl SolutionValue {
 /// crate.
 pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Config<'p, BtorBackend>) -> Option<Vec<SolutionValue>> {
     let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
+
+    // constrain pointer arguments to be not-null
+    let (func, _) = project.get_func_by_name(funcname).unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
+    for (param, bv) in func.parameters.iter().zip(em.param_bvs()) {
+        if let Type::PointerType { .. } = param.get_type() {
+            bv._ne(&BV::zero(em.state().solver.clone(), bv.get_width())).assert();
+        }
+    }
+
     let start_func = em.state().cur_loc.func;
     let returnwidth = size(&start_func.return_type);
     let zero = BV::zero(em.state().solver.clone(), returnwidth as u32);
