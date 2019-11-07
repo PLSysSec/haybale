@@ -1,7 +1,7 @@
 use boolector::BVSolution;
 use boolector::option::{BtorOption, ModelGen};
 use llvm_ir::*;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use reduce::Reduce;
 use std::collections::HashSet;
 use std::fmt;
@@ -186,6 +186,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         // declarations don't." This implies that even globals without an
         // initializer in C have one in LLVM, which seems weird to me, but it's
         // what the docs say, and also matches what I've seen empirically.
+        info!("Allocating and initializing global variables");
         debug!("Allocating global variables");
         for (var, module) in project.all_global_vars().filter(|(var,_)| var.initializer.is_some()) {
             // Allocate the global variable.
