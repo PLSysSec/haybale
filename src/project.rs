@@ -1,5 +1,6 @@
 use llvm_ir::{Function, Module, Type};
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
+use log::info;
 use std::fs::DirEntry;
 use std::io;
 use std::path::Path;
@@ -14,6 +15,7 @@ pub struct Project {
 impl Project {
     /// Construct a new `Project` from a path to an LLVM bitcode file
     pub fn from_bc_path(path: impl AsRef<Path>) -> Result<Self, String> {
+        info!("Parsing bitcode in file {}", path.as_ref().display());
         Ok(Self {
             modules: vec![Module::from_bc_path(path)?],
         })
@@ -21,6 +23,7 @@ impl Project {
 
     /// Construct a new `Project` from multiple LLVM bitcode files
     pub fn from_bc_paths<P>(paths: impl IntoIterator<Item = P>) -> Result<Self, String> where P: AsRef<Path> {
+        info!("Parsing bitcode from specified files");
         Ok(Self {
             modules: paths
                 .into_iter()
@@ -35,6 +38,7 @@ impl Project {
     /// All files in the directory which have the extension `extn` will
     /// be parsed and added to the `Project`.
     pub fn from_bc_dir(path: impl AsRef<Path>, extn: &str) -> Result<Self, io::Error> {
+        info!("Parsing bitcode from directory {}", path.as_ref().display());
         Ok(Self {
             modules: Self::modules_from_bc_dir(path, extn, |_| false)?,
         })
@@ -47,6 +51,7 @@ impl Project {
     /// for which the provided `exclude` closure returns `true`, will be parsed
     /// and added to the `Project`.
     pub fn from_bc_dir_with_blacklist(path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<Self, io::Error> {
+        info!("Parsing bitcode from directory {} with blacklist", path.as_ref().display());
         Ok(Self {
             modules: Self::modules_from_bc_dir(path, extn, exclude)?,
         })
@@ -54,6 +59,7 @@ impl Project {
 
     /// Add the code in the given LLVM bitcode file to the `Project`
     pub fn add_bc_path(&mut self, path: impl AsRef<Path>) -> Result<(), String> {
+        info!("Parsing bitcode in file {}", path.as_ref().display());
         let module = Module::from_bc_path(path)?;
         self.modules.push(module);
         Ok(())
@@ -62,6 +68,7 @@ impl Project {
     /// Add the code in the given directory to the `Project`.
     /// See [`Project::from_bc_dir()`](struct.Project.html#method.from_bc_dir).
     pub fn add_bc_dir(&mut self, path: impl AsRef<Path>, extn: &str) -> Result<(), io::Error> {
+        info!("Parsing bitcode from directory {}", path.as_ref().display());
         let modules = Self::modules_from_bc_dir(path, extn, |_| false)?;
         self.modules.extend(modules);
         Ok(())
@@ -70,6 +77,7 @@ impl Project {
     /// Add the code in the given directory, except for blacklisted files, to the `Project`.
     /// See [`Project::from_bc_dir_with_blacklist()`](struct.Project.html#method.from_bc_dir_with_blacklist).
     pub fn add_bc_dir_with_blacklist(&mut self, path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<(), io::Error> {
+        info!("Parsing bitcode from directory {} with blacklist", path.as_ref().display());
         let modules = Self::modules_from_bc_dir(path, extn, exclude)?;
         self.modules.extend(modules);
         Ok(())
