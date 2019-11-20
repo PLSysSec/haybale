@@ -1,5 +1,5 @@
 use crate::memory::Memory;
-use log::debug;
+use log::{debug, warn};
 use std::collections::HashMap;
 
 /// An extremely simple bump-allocator which never frees
@@ -28,6 +28,9 @@ impl Alloc {
     //   - for sizes > cell size, allocation always starts at a cell boundary
     pub fn alloc(&mut self, bits: impl Into<u64>) -> u64 {
         let bits: u64 = bits.into();
+        if bits == 0 {
+            warn!("An allocation of 0 bits was requested");
+        }
         let bits_in_byte: u64 = Memory::BITS_IN_BYTE.into();
         let cell_bytes: u64 = Memory::CELL_BYTES.into();
         let bytes = {
