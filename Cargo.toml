@@ -5,7 +5,7 @@ authors = ["Craig Disselkoen <craigdissel@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-llvm-ir = "0.3.0"
+llvm-ir = "0.3.1"
 boolector = { path = "../boolector-rs" }
 either = "1.5.2"
 itertools = "0.8.0"

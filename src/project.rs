@@ -168,23 +168,8 @@ impl Project {
                         // duplicate non-opaque definitions: ensure they completely agree
                         let def1: &Type = &arc1.read().unwrap();
                         let def2: &Type = &arc2.read().unwrap();
-                        if def1 == def2 {
-                            // they're true duplicates: do nothing
-                        } else {
-                            // this is a hack, not completely sure why it is necessary.
-                            // Before immediately signalling the error, check if
-                            // one of the definitions is an empty struct, and
-                            // prefer the other
-                            match (def1, def2) {
-                                (Type::StructType { element_types, .. }, _) if element_types.is_empty() => {
-                                    // prefer the new definition
-                                    retval = Some((t, module));
-                                },
-                                (_, Type::StructType { element_types, .. }) if element_types.is_empty() => {
-                                    // prefer the current definition, do nothing
-                                },
-                                _ => panic!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n", name, retmod.name, module.name, def1, def2),
-                            }
+                        if def1 != def2 {
+                            panic!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n", name, retmod.name, module.name, def1, def2);
                         }
                     },
                 };
