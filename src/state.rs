@@ -160,7 +160,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         start_loc: Location<'p>,
         config: Config<'p, B>,
     ) -> Self {
-        let solver = B::SolverRef::default();
+        let solver = B::SolverRef::new();
         let mut state = Self {
             cur_loc: start_loc.clone(),
             varmap: VarMap::new(solver.clone(), config.loop_bound),

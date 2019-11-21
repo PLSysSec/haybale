@@ -18,14 +18,14 @@ pub trait Backend: Clone {
 /// Trait for something which acts as a reference to a `boolector::Btor` (and
 /// possibly may carry other information as well).
 ///
-/// `default()` should initialize a fresh solver instance and return a
-/// `SolverRef` to it.
-///
-/// The [`BtorRef`](struct.BtorRef.html) in this module provides a simple
-/// implementation of `SolverRef` which is under-the-hood just an `Rc<Btor>`.
-pub trait SolverRef: Default + Clone + Deref<Target=Btor> {
+/// This module provides an implementation of `SolverRef` for `Rc<Btor>`.
+pub trait SolverRef: Clone + Deref<Target=Btor> {
     type BV: BV<SolverRef=Self>;
     type Array;
+
+    /// Create a new `Btor` instance, initialize it as necessary, and return a
+    /// `SolverRef` to it
+    fn new() -> Self;
 
     /// As opposed to `clone()` which merely clones the reference, this function
     /// produces a deep copy of the underlying solver instance
@@ -52,59 +52,30 @@ pub trait SolverRef: Default + Clone + Deref<Target=Btor> {
     fn match_array(&self, array: &Self::Array) -> Option<Self::Array>;
 }
 
-/// A wrapper around `Rc<Btor>` which implements `SolverRef`
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct BtorRef( Rc<Btor> );
-
-/// This `Default` implementation ensures that specific options we need are set
-/// on the `Btor` instance. No other initialization is required.
-//
-// Note: We used to set model generation here, but now we toggle it so it's only
-// on when needed (profiling shows that a sat check with model gen enabled is
-// much, much more expensive than a sat check without model gen enabled, at
-// least for our frequent incremental sat checks)
-impl Default for BtorRef {
-    fn default() -> Self {
-        let btor = Btor::new();
-        btor.set_opt(BtorOption::Incremental(true));
-        Self(Rc::new(btor))
-    }
-}
-
-impl SolverRef for BtorRef {
+impl SolverRef for Rc<Btor> {
     type BV = boolector::BV<Rc<Btor>>;
     type Array = boolector::Array<Rc<Btor>>;
 
+    fn new() -> Self {
+        // Note: We used to set model generation here, but now we toggle it so it's only
+        // on when needed (profiling shows that a sat check with model gen enabled is
+        // much, much more expensive than a sat check without model gen enabled, at
+        // least for our frequent incremental sat checks)
+        let btor = Btor::new();
+        btor.set_opt(BtorOption::Incremental(true));
+        Rc::new(btor)
+    }
+
     fn duplicate(&self) -> Self {
-        Self(Rc::new(self.0.duplicate()))
+        Rc::new(self.as_ref().duplicate())
     }
 
     fn match_bv(&self, bv: &boolector::BV<Rc<Btor>>) -> Option<boolector::BV<Rc<Btor>>> {
-        Btor::get_matching_bv(self.clone().into(), bv)
+        Btor::get_matching_bv(self.clone(), bv)
     }
 
     fn match_array(&self, array: &boolector::Array<Rc<Btor>>) -> Option<boolector::Array<Rc<Btor>>> {
-        Btor::get_matching_array(self.clone().into(), array)
-    }
-}
-
-impl Deref for BtorRef {
-    type Target = Btor;
-
-    fn deref(&self) -> &boolector::Btor {
-        &self.0
-    }
-}
-
-impl From<Rc<Btor>> for BtorRef {
-    fn from(rc: Rc<Btor>) -> BtorRef {
-        BtorRef(rc)
-    }
-}
-
-impl From<BtorRef> for Rc<Btor> {
-    fn from(btor: BtorRef) -> Rc<Btor> {
-        btor.0
+        Btor::get_matching_array(self.clone(), array)
     }
 }
 
@@ -237,42 +208,42 @@ pub trait Memory : Clone + PartialEq + Eq {
 ///   `boolector::BV<Rc<Btor>>`, `crate::memory::Memory`, and `crate::simple_memory::Memory`
 
 impl BV for boolector::BV<Rc<Btor>> {
-    type SolverRef = BtorRef;
+    type SolverRef = Rc<Btor>;
 
-    fn new(btor: BtorRef, width: u32, name: Option<&str>) -> Self {
+    fn new(btor: Rc<Btor>, width: u32, name: Option<&str>) -> Self {
         boolector::BV::new(btor.into(), width, name)
     }
-    fn from_bool(btor: BtorRef, b: bool) -> Self {
+    fn from_bool(btor: Rc<Btor>, b: bool) -> Self {
         boolector::BV::from_bool(btor.into(), b)
     }
-    fn from_i32(btor: BtorRef, i: i32, width: u32) -> Self {
+    fn from_i32(btor: Rc<Btor>, i: i32, width: u32) -> Self {
         boolector::BV::from_i32(btor.into(), i, width)
     }
-    fn from_u32(btor: BtorRef, u: u32, width: u32) -> Self {
+    fn from_u32(btor: Rc<Btor>, u: u32, width: u32) -> Self {
         boolector::BV::from_u32(btor.into(), u, width)
     }
-    fn from_i64(btor: BtorRef, i: i64, width: u32) -> Self {
+    fn from_i64(btor: Rc<Btor>, i: i64, width: u32) -> Self {
         boolector::BV::from_i64(btor.into(), i, width)
     }
-    fn from_u64(btor: BtorRef, u: u64, width: u32) -> Self {
+    fn from_u64(btor: Rc<Btor>, u: u64, width: u32) -> Self {
         boolector::BV::from_u64(btor.into(), u, width)
     }
-    fn zero(btor: BtorRef, width: u32) -> Self {
+    fn zero(btor: Rc<Btor>, width: u32) -> Self {
         boolector::BV::zero(btor.into(), width)
     }
-    fn one(btor: BtorRef, width: u32) -> Self {
+    fn one(btor: Rc<Btor>, width: u32) -> Self {
         boolector::BV::one(btor.into(), width)
     }
-    fn ones(btor: BtorRef, width: u32) -> Self {
+    fn ones(btor: Rc<Btor>, width: u32) -> Self {
         boolector::BV::ones(btor.into(), width)
     }
-    fn from_binary_str(btor: BtorRef, bits: &str) -> Self {
+    fn from_binary_str(btor: Rc<Btor>, bits: &str) -> Self {
         boolector::BV::from_binary_str(btor.into(), bits)
     }
-    fn from_dec_str(btor: BtorRef, num: &str, width: u32) -> Self {
+    fn from_dec_str(btor: Rc<Btor>, num: &str, width: u32) -> Self {
         boolector::BV::from_dec_str(btor.into(), num, width)
     }
-    fn from_hex_str(btor: BtorRef, num: &str, width: u32) -> Self {
+    fn from_hex_str(btor: Rc<Btor>, num: &str, width: u32) -> Self {
         boolector::BV::from_hex_str(btor.into(), num, width)
     }
     fn as_binary_str(&self) -> Option<String> {
@@ -468,14 +439,14 @@ impl BV for boolector::BV<Rc<Btor>> {
 }
 
 impl Memory for crate::memory::Memory {
-    type SolverRef = BtorRef;
+    type SolverRef = Rc<Btor>;
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
 
-    fn new_uninitialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+    fn new_uninitialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
         crate::memory::Memory::new_uninitialized(btor, null_detection, name)
     }
-    fn new_zero_initialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+    fn new_zero_initialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
         crate::memory::Memory::new_zero_initialized(btor, null_detection, name)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
@@ -484,23 +455,23 @@ impl Memory for crate::memory::Memory {
     fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
         self.write(index, value)
     }
-    fn get_solver(&self) -> BtorRef {
+    fn get_solver(&self) -> Rc<Btor> {
         self.get_solver()
     }
-    fn change_solver(&mut self, new_btor: BtorRef) {
+    fn change_solver(&mut self, new_btor: Rc<Btor>) {
         self.change_solver(new_btor)
     }
 }
 
 impl Memory for crate::simple_memory::Memory {
-    type SolverRef = BtorRef;
+    type SolverRef = Rc<Btor>;
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
 
-    fn new_uninitialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+    fn new_uninitialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
         crate::simple_memory::Memory::new_uninitialized(btor, null_detection, name)
     }
-    fn new_zero_initialized(btor: BtorRef, null_detection: bool, name: Option<&str>) -> Self {
+    fn new_zero_initialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
         crate::simple_memory::Memory::new_zero_initialized(btor, null_detection, name)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
@@ -509,10 +480,10 @@ impl Memory for crate::simple_memory::Memory {
     fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
         self.write(index, value)
     }
-    fn get_solver(&self) -> BtorRef {
+    fn get_solver(&self) -> Rc<Btor> {
         self.get_solver()
     }
-    fn change_solver(&mut self, new_btor: BtorRef) {
+    fn change_solver(&mut self, new_btor: Rc<Btor>) {
         self.change_solver(new_btor)
     }
 }
@@ -521,7 +492,7 @@ impl Memory for crate::simple_memory::Memory {
 pub struct BtorBackend {}
 
 impl Backend for BtorBackend {
-    type SolverRef = BtorRef;
+    type SolverRef = Rc<Btor>;
     type BV = boolector::BV<Rc<Btor>>;
     type Memory = crate::memory::Memory;
 }
@@ -530,7 +501,7 @@ impl Backend for BtorBackend {
 pub struct SimpleMemoryBackend {}
 
 impl Backend for SimpleMemoryBackend {
-    type SolverRef = BtorRef;
+    type SolverRef = Rc<Btor>;
     type BV = boolector::BV<Rc<Btor>>;
     type Memory = crate::simple_memory::Memory;
 }

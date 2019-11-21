@@ -204,7 +204,6 @@ pub struct RestoreInfo<V: BV> {
 mod tests {
     use super::*;
     use boolector::Btor;
-    use crate::backend::BtorRef;
     use crate::solver_utils;
     use std::rc::Rc;
 
@@ -212,7 +211,7 @@ mod tests {
 
     #[test]
     fn lookup_vars() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
         let mut varmap: VarMap<BV> = VarMap::new(btor, 20);
         let funcname = "foo".to_owned();
 
@@ -231,7 +230,7 @@ mod tests {
 
     #[test]
     fn vars_are_uniqued() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
         let mut varmap: VarMap<BV> = VarMap::new(btor.clone(), 20);
         let funcname = "foo".to_owned();
 
@@ -267,7 +266,7 @@ mod tests {
 
     #[test]
     fn enforces_max_version() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // Create a `VarMap` with `max_version_num = 10`
         let mut varmap: VarMap<BV> = VarMap::new(btor, 10);
@@ -294,7 +293,7 @@ mod tests {
 
     #[test]
     fn restore_info() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
         let mut varmap: VarMap<BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"
@@ -317,7 +316,7 @@ mod tests {
 
     #[test]
     fn restore_different_function() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
         let mut varmap: VarMap<BV> = VarMap::new(btor, 10);
 
         // create a var named "foo" in function "func"

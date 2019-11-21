@@ -344,48 +344,49 @@ pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use crate::backend::BtorRef;
     use super::*;
+    use crate::backend::SolverRef;
+    use std::rc::Rc;
 
-    type BV = <BtorRef as crate::backend::SolverRef>::BV;
+    type BV = <Rc<Btor> as SolverRef>::BV;
 
     #[test]
     fn basic_sat() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // fresh btor should be sat
         assert_eq!(sat(&btor), Ok(true));
 
         // adding True constraint should still be sat
-        BV::from_bool(btor.clone().into(), true).assert();
+        BV::from_bool(btor.clone(), true).assert();
         assert_eq!(sat(&btor), Ok(true));
 
         // adding x > 0 constraint should still be sat
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
-        x.sgt(&BV::zero(btor.clone().into(), 64)).assert();
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
+        x.sgt(&BV::zero(btor.clone(), 64)).assert();
         assert_eq!(sat(&btor), Ok(true));
     }
 
     #[test]
     fn basic_unsat() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // adding False constraint should be unsat
-        BV::from_bool(btor.clone().into(), false).assert();
+        BV::from_bool(btor.clone(), false).assert();
         assert_eq!(sat(&btor), Ok(false));
     }
 
     #[test]
     fn extra_constraints() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // adding x > 3 constraint should still be sat
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
-        x.ugt(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
+        x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
         assert_eq!(sat(&btor), Ok(true));
 
         // adding x < 3 constraint should make us unsat
-        let bad_constraint = x.ult(&BV::from_u64(btor.clone().into(), 3, 64));
+        let bad_constraint = x.ult(&BV::from_u64(btor.clone(), 3, 64));
         assert_eq!(sat_with_extra_constraints(&btor, std::iter::once(&bad_constraint)), Ok(false));
 
         // the solver itself should still be sat, extra constraints weren't permanently added
@@ -394,17 +395,17 @@ mod tests {
 
     #[test]
     fn can_or_must_be_equal() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // create constants 2, 3, 4, 5, and 7, which we'll need
-        let two = BV::from_u64(btor.clone().into(), 2, 64);
-        let three = BV::from_u64(btor.clone().into(), 3, 64);
-        let four = BV::from_u64(btor.clone().into(), 4, 64);
-        let five = BV::from_u64(btor.clone().into(), 5, 64);
-        let seven = BV::from_u64(btor.clone().into(), 7, 64);
+        let two = BV::from_u64(btor.clone(), 2, 64);
+        let three = BV::from_u64(btor.clone(), 3, 64);
+        let four = BV::from_u64(btor.clone(), 4, 64);
+        let five = BV::from_u64(btor.clone(), 5, 64);
+        let seven = BV::from_u64(btor.clone(), 7, 64);
 
         // add an x > 3 constraint
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
         x.ugt(&three).assert();
 
         // we should have that x _can be_ 7 but not _must be_ 7
@@ -425,120 +426,120 @@ mod tests {
 
     #[test]
     fn possible_solutions() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // add x > 3 constraint
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
-        x.ugt(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
+        x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // check that there are more than 2 solutions
-        let num_solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().count();
+        let num_solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().count();
         assert_eq!(num_solutions, SolutionCount::AtLeast(3));
 
         // add x < 6 constraint
-        x.ult(&BV::from_u64(btor.clone().into(), 6, 64)).assert();
+        x.ult(&BV::from_u64(btor.clone(), 6, 64)).assert();
 
         // check that there are now exactly two solutions
-        let solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().as_u64_solutions();
+        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly([4,5].into_iter().copied().collect())));
 
         // add x < 5 constraint
-        x.ult(&BV::from_u64(btor.clone().into(), 5, 64)).assert();
+        x.ult(&BV::from_u64(btor.clone(), 5, 64)).assert();
 
         // check that there is now exactly one solution
-        let solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().as_u64_solutions();
+        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly(std::iter::once(4).collect())));
 
         // add x < 3 constraint
-        x.ult(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
+        x.ult(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // check that there are now no solutions
-        let solutions = get_possible_solutions_for_bv(btor.clone().into(), &x, 2).unwrap().as_u64_solutions();
+        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::new())));
     }
 
     #[test]
     fn min_possible_solution() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // add x > 3 constraint
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
-        x.ugt(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
+        x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // min possible solution should be 4
-        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(4)));
+        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(4)));
 
         // add x < 6 constraint
-        x.ult(&BV::from_u64(btor.clone().into(), 6, 64)).assert();
+        x.ult(&BV::from_u64(btor.clone(), 6, 64)).assert();
 
         // min possible solution should still be 4
-        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(4)));
+        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(4)));
 
         // add x < 3 constraint
-        x.ult(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
+        x.ult(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // min_possible_solution_for_bv should now return None
-        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(None));
+        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(None));
     }
 
     #[test]
     fn max_possible_solution() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // add x < 7 constraint
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
-        x.ult(&BV::from_u64(btor.clone().into(), 7, 64)).assert();
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
+        x.ult(&BV::from_u64(btor.clone(), 7, 64)).assert();
 
         // max possible solution should be 6
-        assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(6)));
+        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(Some(6)));
 
         // but min possible solution should be 0
-        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(0)));
+        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(0)));
 
         // add x > 3 constraint
-        x.ugt(&BV::from_u64(btor.clone().into(), 3, 64)).assert();
+        x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // max possible solution should still be 6
-        assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(6)));
+        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(Some(6)));
 
         // and min possible solution should now be 4
-        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some(4)));
+        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(4)));
 
         // add x > 7 constraint
-        x.ugt(&BV::from_u64(btor.clone().into(), 7, 64)).assert();
+        x.ugt(&BV::from_u64(btor.clone(), 7, 64)).assert();
 
         // max_possible_solution_for_bv should now return None
-        assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(None));
+        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(None));
     }
 
     #[test]
     fn min_possible_solution_overflow() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // Constrain x so that -2 and -1 are the only possible solutions. This
         // means that the min possible _unsigned_ solution will be 0b1111...1110
         // (that is, -2 if we interpreted it as signed).
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
-        let zero = BV::zero(btor.clone().into(), 64);
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
+        let zero = BV::zero(btor.clone(), 64);
         x.slt(&zero).assert();
-        let minustwo = zero.sub(&BV::from_u64(btor.clone().into(), 2, 64));
+        let minustwo = zero.sub(&BV::from_u64(btor.clone(), 2, 64));
         x.sgte(&minustwo).assert();
 
         // The min possible (unsigned) solution should be -2
-        assert_eq!(min_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some((-2_i64) as u64)));
+        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
     }
 
     #[test]
     fn max_possible_solution_overflow() {
-        let btor = BtorRef::default();
+        let btor = <Rc<Btor> as SolverRef>::new();
 
         // Constrain x so that -2 is a solution but -1 is not. This means that the max possible
         // _unsigned_ solution will be 0b1111...1110 (that is, -2 if we interpreted it as signed).
-        let x: BV = BV::new(btor.clone().into(), 64, Some("x"));
-        let minustwo = BV::zero(btor.clone().into(), 64).sub(&BV::from_u64(btor.clone().into(), 2, 64));
+        let x: BV = BV::new(btor.clone(), 64, Some("x"));
+        let minustwo = BV::zero(btor.clone(), 64).sub(&BV::from_u64(btor.clone(), 2, 64));
         x.slte(&minustwo).assert();
 
         // The max possible (unsigned) solution should be -2
-        assert_eq!(max_possible_solution_for_bv(btor.clone().into(), &x), Ok(Some((-2_i64) as u64)));
+        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
     }
 }
