@@ -106,12 +106,12 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
     let returnwidth = size(&start_func.return_type);
     let zero = BV::zero(em.state().solver.clone(), returnwidth as u32);
     let mut found = false;
-    while let Some(z3rval) = em.next() {
-        match z3rval.unwrap() {
+    while let Some(bvretval) = em.next() {
+        match bvretval.unwrap() {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
-            ReturnValue::Return(z3rval) => {
+            ReturnValue::Return(bvretval) => {
                 let state = em.mut_state();
-                z3rval._eq(&zero).assert();
+                bvretval._eq(&zero).assert();
                 if state.sat().unwrap() {
                     found = true;
                     break;
@@ -174,12 +174,12 @@ pub fn get_possible_return_values_of_func<'p>(
     }
 
     let mut candidate_values = HashSet::<u64>::new();
-    while let Some(z3rval) = em.next() {
-        match z3rval.unwrap() {
+    while let Some(bvretval) = em.next() {
+        match bvretval.unwrap() {
             ReturnValue::ReturnVoid => panic!("This function shouldn't be called with functions that return void"),
-            ReturnValue::Return(z3rval) => {
+            ReturnValue::Return(bvretval) => {
                 let state = em.mut_state();
-                match state.get_possible_solutions_for_bv(&z3rval, n).unwrap() {
+                match state.get_possible_solutions_for_bv(&bvretval, n).unwrap() {
                     PossibleSolutions::Exactly(v) => {
                         candidate_values.extend(v.iter().map(|bvsol| bvsol.as_u64().unwrap()));
                         if candidate_values.len() > n {
