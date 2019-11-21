@@ -3,6 +3,12 @@ name = "haybale"
 version = "0.1.0"
 authors = ["Craig Disselkoen <craigdissel@gmail.com>"]
 edition = "2018"
+description = "Symbolic execution of LLVM IR, written in Rust"
+documentation = "https://PLSysSec.github.io/haybale"
+repository = "https://github.com/PLSysSec/haybale"
+readme = "README.md"
+keywords = ["symbolic execution", "llvm", "SMT"]
+license = "MIT"
 
 [dependencies]
 llvm-ir = "0.3.1"
