@@ -200,7 +200,14 @@
 <span id="200">200</span>
 <span id="201">201</span>
 <span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
 </pre><div class="example-wrap"><pre class="rust ">
+<span class="doccomment">//! For an introduction to the crate and how to get started,</span>
+<span class="doccomment">//! see the [crate&#39;s README](https://github.com/PLSysSec/haybale/blob/master/README.md).</span>
+
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">Type</span>, <span class="ident">Typed</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashSet</span>;
 
@@ -237,6 +244,7 @@
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">backend</span>;
 <span class="kw">use</span> <span class="ident">backend</span>::<span class="kw-2">*</span>;
 
+<span class="doccomment">/// A simple enum describing either an integer value or a pointer</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Copy</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">SolutionValue</span> {
     <span class="ident">I8</span>(<span class="ident">i8</span>),

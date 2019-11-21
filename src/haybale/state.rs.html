@@ -1198,6 +1198,15 @@
 <span id="1198">1198</span>
 <span id="1199">1199</span>
 <span id="1200">1200</span>
+<span id="1201">1201</span>
+<span id="1202">1202</span>
+<span id="1203">1203</span>
+<span id="1204">1204</span>
+<span id="1205">1205</span>
+<span id="1206">1206</span>
+<span id="1207">1207</span>
+<span id="1208">1208</span>
+<span id="1209">1209</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">BVSolution</span>;
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">option</span>::{<span class="ident">BtorOption</span>, <span class="ident">ModelGen</span>};
@@ -1220,6 +1229,8 @@
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">solver_utils</span>::{<span class="self">self</span>, <span class="ident">PossibleSolutions</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">varmap</span>::{<span class="ident">VarMap</span>, <span class="ident">RestoreInfo</span>};
 
+<span class="doccomment">/// A `State` describes the full program state at a given moment during symbolic</span>
+<span class="doccomment">/// execution.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Reference to the solver instance being used</span>
@@ -1249,6 +1260,11 @@
     <span class="ident">path</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PathEntry</span><span class="op">&gt;</span>,
 }
 
+<span class="doccomment">/// Describes one segment of a path through the LLVM IR.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Uses a format suitable for recording - for instance, uses function names</span>
+<span class="doccomment">/// rather than references to `Function` objects. For a richer representation of</span>
+<span class="doccomment">/// a code location, see [`Location`](struct.Location.html).</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">PartialOrd</span>, <span class="ident">Ord</span>, <span class="ident">Clone</span>, <span class="ident">Hash</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PathEntry</span> {
     <span class="kw">pub</span> <span class="ident">modname</span>: <span class="ident">String</span>,
@@ -1258,6 +1274,7 @@
     <span class="kw">pub</span> <span class="ident">instr</span>: <span class="ident">usize</span>,
 }
 
+<span class="doccomment">/// Format a basic block `Name` into a concise representation for printing</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">pretty_bb_name</span>(<span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">Name</span>) <span class="op">-&gt;</span> <span class="ident">String</span> {
     <span class="kw">match</span> <span class="ident">name</span> {
         <span class="ident">Name</span>::<span class="ident">Name</span>(<span class="kw-2">ref</span> <span class="ident">s</span>) <span class="op">=&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">s</span>),
@@ -1271,6 +1288,7 @@
     }
 }
 
+<span class="doccomment">/// Fully describes a code location within the LLVM IR.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
     <span class="kw">pub</span> <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>,

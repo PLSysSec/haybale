@@ -241,6 +241,10 @@
 <span id="241">241</span>
 <span id="242">242</span>
 <span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="ident">Backend</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">default_hooks</span>;
@@ -253,6 +257,7 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">hash</span>::{<span class="ident">Hash</span>, <span class="ident">Hasher</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">rc</span>::<span class="ident">Rc</span>;
 
+<span class="doccomment">/// Various settings which affect how the symbolic execution is performed.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> <span class="kw">where</span> <span class="ident">B</span>: <span class="ident">Backend</span> {
     <span class="doccomment">/// Maximum number of times to execute any given line of LLVM IR.</span>
@@ -269,7 +274,7 @@
     <span class="doccomment">/// possible lengths, how (if at all) should we concretize?</span>
     <span class="kw">pub</span> <span class="ident">concretize_memcpy_lengths</span>: <span class="ident">Concretize</span>,
 
-    <span class="doccomment">/// Active function hooks</span>
+    <span class="doccomment">/// The set of currently active function hooks</span>
     <span class="kw">pub</span> <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
 }
 
@@ -348,6 +353,9 @@
     }
 }
 
+<span class="doccomment">/// A set of function hooks, which will be executed instead of their respective</span>
+<span class="doccomment">/// hooked functions if/when the symbolic execution engine encounters a call to</span>
+<span class="doccomment">/// one of those hooked functions.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">FunctionHooks</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span> <span class="op">+</span> <span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Map from function names to the hook to use.</span>
