@@ -1,5 +1,6 @@
 use std::fmt;
 
+/// Error types used throughout this crate
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Error {
     /// While performing an operation, we discovered the current path is unsat

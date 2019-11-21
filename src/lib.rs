@@ -1,3 +1,6 @@
+//! For an introduction to the crate and how to get started,
+//! see the [crate's README](https://github.com/PLSysSec/haybale/blob/master/README.md).
+
 use llvm_ir::{Type, Typed};
 use std::collections::HashSet;
 
@@ -34,6 +37,7 @@ mod extend;
 pub mod backend;
 use backend::*;
 
+/// A simple enum describing either an integer value or a pointer
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum SolutionValue {
     I8(i8),

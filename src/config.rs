@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
+/// Various settings which affect how the symbolic execution is performed.
 #[derive(Clone)]
 pub struct Config<'p, B> where B: Backend {
     /// Maximum number of times to execute any given line of LLVM IR.
@@ -25,7 +26,7 @@ pub struct Config<'p, B> where B: Backend {
     /// possible lengths, how (if at all) should we concretize?
     pub concretize_memcpy_lengths: Concretize,
 
-    /// Active function hooks
+    /// The set of currently active function hooks
     pub function_hooks: FunctionHooks<'p, B>,
 }
 
@@ -104,6 +105,9 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     }
 }
 
+/// A set of function hooks, which will be executed instead of their respective
+/// hooked functions if/when the symbolic execution engine encounters a call to
+/// one of those hooked functions.
 #[derive(Clone)]
 pub struct FunctionHooks<'p, B: Backend + 'p> {
     /// Map from function names to the hook to use.

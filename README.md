@@ -120,7 +120,7 @@ let retval = match retval {
     ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
     ReturnValue::Return(r) => r,
 };
-let state = em.mut_state();
+let state = em.mut_state();  // the final program state along this path
 let zero = BV::zero(state.solver.clone(), 32);  // The 32-bit constant 0
 if state.bvs_can_be_equal(&retval, &zero)? {
     println!("retval can be 0!");

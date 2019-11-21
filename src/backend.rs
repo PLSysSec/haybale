@@ -1,5 +1,5 @@
 //! Traits which abstract over the backend (BV types, memory implementation,
-//! SMT solver) being used.
+//! etc) being used.
 
 use boolector::{Btor, BVSolution};
 use boolector::option::BtorOption;

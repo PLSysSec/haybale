@@ -19,6 +19,8 @@ use crate::project::Project;
 use crate::solver_utils::{self, PossibleSolutions};
 use crate::varmap::{VarMap, RestoreInfo};
 
+/// A `State` describes the full program state at a given moment during symbolic
+/// execution.
 #[derive(Clone)]
 pub struct State<'p, B: Backend> {
     /// Reference to the solver instance being used
@@ -48,6 +50,11 @@ pub struct State<'p, B: Backend> {
     path: Vec<PathEntry>,
 }
 
+/// Describes one segment of a path through the LLVM IR.
+///
+/// Uses a format suitable for recording - for instance, uses function names
+/// rather than references to `Function` objects. For a richer representation of
+/// a code location, see [`Location`](struct.Location.html).
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct PathEntry {
     pub modname: String,
@@ -57,6 +64,7 @@ pub struct PathEntry {
     pub instr: usize,
 }
 
+/// Format a basic block `Name` into a concise representation for printing
 pub fn pretty_bb_name(name: &Name) -> String {
     match name {
         Name::Name(ref s) => format!("{:?}", s),
@@ -70,6 +78,7 @@ impl fmt::Debug for PathEntry {
     }
 }
 
+/// Fully describes a code location within the LLVM IR.
 #[derive(Clone)]
 pub struct Location<'p> {
     pub module: &'p Module,
