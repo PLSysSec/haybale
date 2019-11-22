@@ -74,22 +74,14 @@ let project = Project::from_bc_path(&Path::new("/path/to/file.bc"))?;
 For more ways to create `Project`s, including analyzing entire libraries, see
 the [`Project` documentation].
 
-### 4. Create an ExecutionManager
+### 4. Use built-in analyses
 
-An [`ExecutionManager`] controls the progress of the symbolic execution.
-We call `symex_function` to create an `ExecutionManager` which will analyze
-the given function - it will start at the top of the function, and end when
-the function returns.
-
-```rust
-let mut em = symex_function("foo", &project, Config::<BtorBackend>::default());
-```
-
-Here we create an `ExecutionManager` to execute the function named `foo` in
-the `project` created above, and we use the default `haybale` configuration
-and backend.
-
-### 5. Analyze paths
+`haybale` currently includes two built-in analyses:
+[`get_possible_return_values_of_func`], which describes all the possible
+values a function could return for any input, and [`find_zero_of_func`],
+which finds a set of inputs to a function such that it returns `0`.
+These analyses are provided both because they may be of some use themselves,
+but also because they illustrate how to use `haybale`.
 
 For an introductory example, let's suppose `foo` is the following C function:
 
@@ -103,7 +95,41 @@ int foo(int a, int b) {
 }
 ```
 
-and we want to know if the function ever returns `0`, and if so, for what inputs.
+We can use `find_zero_of_func` to find inputs such that `foo` will return `0`:
+
+```rust
+match find_zero_of_func("foo", &project, Config::default()) {
+    None => println!("foo can never return 0"),
+    Some(inputs) => println!("Inputs for which foo returns 0: {:?}", inputs),
+}
+```
+
+## Writing custom analyses
+
+`haybale` can do much more than just describe possible function return values
+and find function zeroes.
+In this section, we'll walk through how we could find a zero of the function
+`foo` above without using the built-in `find_zero_of_func`.
+This will illustrate how to write a custom analysis using `haybale`.
+
+### ExecutionManager
+
+All analyses will use an [`ExecutionManager`] to control the progress of the
+symbolic execution.
+In the code snippet below, we call `symex_function` to create an
+`ExecutionManager` which will analyze the function `foo` - it will start at
+the top of the function, and end when the function returns.
+
+```rust
+let mut em = symex_function("foo", &project, Config::<BtorBackend>::default());
+```
+
+Here it was necessary to not only specify the default `haybale`
+configuration, as we did when calling `find_zero_of_func`, but also what
+"backend" we want to use.
+The default `BtorBackend` should be fine for most purposes.
+
+### 5. Paths
 
 The `ExecutionManager` acts like an `Iterator` over _paths_ through the function `foo`.
 Each path is one possible sequence of control-flow decisions (e.g., which direction
@@ -117,7 +143,11 @@ Let's examine the first path through the function:
 let retval = em.next().expect("Expected at least one path")?;
 ```
 
-We're given the function return value, `retval`, as a Boolector `BV` (bitvector).
+We're given the function return value, `retval`, as a Boolector `BV` (bitvector)
+wrapped in the `ReturnValue` enum.
+Since we know that `foo` isn't a void-typed function, we can simply unwrap the
+`ReturnValue` to get the `BV`:
+
 We're interested in whether that `retval` can ever equal `0`:
 
 ```rust
@@ -125,7 +155,21 @@ let retval = match retval {
     ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
     ReturnValue::Return(r) => r,
 };
+```
+
+Importantly, the `ExecutionManager` provides not only the final return value of
+the path as a `BV`, but also the final program `State` at the end of that path,
+either immutably with `state()` or mutably with `mut_state()`. (See the
+[`ExecutionManager` documentation] for more.)
+
+```rust
 let state = em.mut_state();  // the final program state along this path
+```
+
+To test whether `retval` can be equal to `0` in this `State`, we can use
+`state.bvs_can_be_equal()`:
+
+```rust
 let zero = BV::zero(state.solver.clone(), 32);  // The 32-bit constant 0
 if state.bvs_can_be_equal(&retval, &zero)? {
     println!("retval can be 0!");
@@ -133,7 +177,8 @@ if state.bvs_can_be_equal(&retval, &zero)? {
 ```
 
 If it can be `0`, let's find what values of the function parameters would cause that.
-First, we'll constrain that the return value must be `0`:
+First, we'll add a constraint to the `State` requiring that the return value
+must be `0`:
 
 ```rust
 retval._eq(&zero).assert();
@@ -181,7 +226,7 @@ println!("Parameter values for which foo returns 0: a = {}, b = {}", a, b);
 
 ## Documentation
 
-Documentation for `haybale` can be found [here](https://PLSysSec.github.io/haybale),
+Full documentation for `haybale` can be found [here](https://PLSysSec.github.io/haybale),
 or of course you can generate local documentation with `cargo doc --open`.
 
 ## Compatibility
@@ -201,4 +246,7 @@ solver (via the Rust [`boolector`] crate).
 [KLEE]: https://klee.github.io/
 [`Project`]: https://PLSysSec.github.io/haybale/haybale/project/struct.Project.html
 [`Project` documentation]: https://PLSysSec.github.io/haybale/haybale/project/struct.Project.html
+[`get_possible_return_values_of_func`]: https://PLSysSec.github.io/haybale/haybale/fn.get_possible_return_values_of_func.html
+[`find_zero_of_func`]: https://PLSysSec.github.io/haybale/haybale/fn.find_zero_of_func.html
 [`ExecutionManager`]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
+[`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
