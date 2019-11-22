@@ -298,12 +298,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         solver_utils::sat(&self.solver)
     }
 
-    /// Returns `true` if the current constraints plus the additional constraints `conds`
+    /// Returns `true` if the current constraints plus the given additional constraints
     /// are together satisfiable, or `false` if not.
     ///
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
-    /// Does not permanently add the constraints in `conds` to the solver.
+    /// Does not permanently add the given constraints to the solver.
     pub fn sat_with_extra_constraints<'b>(&'b self, constraints: impl IntoIterator<Item = &'b B::BV>) -> Result<bool> {
         solver_utils::sat_with_extra_constraints(&self.solver, constraints)
     }
