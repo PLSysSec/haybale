@@ -74,9 +74,24 @@ let project = Project::from_bc_path(&Path::new("/path/to/file.bc"))?;
 For more ways to create `Project`s, including analyzing entire libraries, see
 the [`Project` documentation].
 
-### 4. Analyze!
+### 4. Create an ExecutionManager
 
-For an introductory example, let's suppose we're analyzing the following C function:
+An [`ExecutionManager`] controls the progress of the symbolic execution.
+We call `symex_function` to create an `ExecutionManager` which will analyze
+the given function - it will start at the top of the function, and end when
+the function returns.
+
+```rust
+let mut em = symex_function("foo", &project, Config::<BtorBackend>::default());
+```
+
+Here we create an `ExecutionManager` to execute the function named `foo` in
+the `project` created above, and we use the default `haybale` configuration
+and backend.
+
+### 5. Analyze paths
+
+For an introductory example, let's suppose `foo` is the following C function:
 
 ```c
 int foo(int a, int b) {
@@ -89,16 +104,6 @@ int foo(int a, int b) {
 ```
 
 and we want to know if the function ever returns `0`, and if so, for what inputs.
-
-First, we create an [`ExecutionManager`] which controls the progress of the symbolic
-execution:
-
-```rust
-let mut em = symex_function("foo", &project, Config::<BtorBackend>::default());
-```
-
-Here we used the `project` created above, and we use the default `haybale`
-configuration and backend.
 
 The `ExecutionManager` acts like an `Iterator` over _paths_ through the function `foo`.
 Each path is one possible sequence of control-flow decisions (e.g., which direction
@@ -127,15 +132,19 @@ if state.bvs_can_be_equal(&retval, &zero)? {
 }
 ```
 
-If it can be `0`, let's find what values of the function parameters would cause that:
+If it can be `0`, let's find what values of the function parameters would cause that.
+First, we'll constrain that the return value must be `0`:
 
 ```rust
-// Constrain that the return value must be 0
 retval._eq(&zero).assert();
+```
 
-// Get a possible solution for the first parameter. In this case, from looking at the
-// text-format LLVM IR, we know the variable we're looking for is variable #0 in the
-// function "foo".
+and then we'll ask for solutions for each of the parameters, given this constraint:
+
+```rust
+// Get a possible solution for the first parameter.
+// In this case, from looking at the text-format LLVM IR, we know the variable
+// we're looking for is variable #0 in the function "foo".
 let a = state.get_a_solution_for_bv_by_irname(&String::from("foo"), Name::from(0))?
     .expect("Expected there to be a solution")
     .as_u64()
