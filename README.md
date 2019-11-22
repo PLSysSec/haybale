@@ -118,7 +118,9 @@ All analyses will use an [`ExecutionManager`] to control the progress of the
 symbolic execution.
 In the code snippet below, we call `symex_function` to create an
 `ExecutionManager` which will analyze the function `foo` - it will start at
-the top of the function, and end when the function returns.
+the top of the function, and end when the function returns. In between, it
+will also analyze any functions called by `foo`, as necessary and depending
+on the [`Config`] settings.
 
 ```rust
 let mut em = symex_function("foo", &project, Config::<BtorBackend>::default());
@@ -253,3 +255,4 @@ solver (via the Rust [`boolector`] crate).
 [`find_zero_of_func`]: https://PLSysSec.github.io/haybale/haybale/fn.find_zero_of_func.html
 [`ExecutionManager`]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
 [`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
+[`Config`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html
