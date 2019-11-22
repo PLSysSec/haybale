@@ -116,7 +116,7 @@ This will illustrate how to write a custom analysis using `haybale`.
 
 All analyses will use an [`ExecutionManager`] to control the progress of the
 symbolic execution.
-In the code snippet below, we call `symex_function` to create an
+In the code snippet below, we call [`symex_function`] to create an
 `ExecutionManager` which will analyze the function `foo` - it will start at
 the top of the function, and end when the function returns. In between, it
 will also analyze any functions called by `foo`, as necessary and depending
@@ -145,8 +145,8 @@ Let's examine the first path through the function:
 let retval = em.next().expect("Expected at least one path")?;
 ```
 
-We're given the function return value, `retval`, as a Boolector `BV` (bitvector)
-wrapped in the `ReturnValue` enum.
+We're given the function return value, `retval`, as a Boolector [`BV`] (bitvector)
+wrapped in the [`ReturnValue`] enum.
 Since we know that `foo` isn't a void-typed function, we can simply unwrap the
 `ReturnValue` to get the `BV`:
 
@@ -160,7 +160,7 @@ let retval = match retval {
 ### States
 
 Importantly, the `ExecutionManager` provides not only the final return value of
-the path as a `BV`, but also the final program `State` at the end of that path,
+the path as a `BV`, but also the final program [`State`] at the end of that path,
 either immutably with `state()` or mutably with `mut_state()`. (See the
 [`ExecutionManager` documentation] for more.)
 
@@ -255,4 +255,8 @@ solver (via the Rust [`boolector`] crate).
 [`find_zero_of_func`]: https://PLSysSec.github.io/haybale/haybale/fn.find_zero_of_func.html
 [`ExecutionManager`]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
 [`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
+[`symex_function`]: https://PLSysSec.github.io/haybale/haybale/fn.symex_function.html
 [`Config`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html
+[`BV`]: https://docs.rs/boolector/0.1.1/boolector/struct.BV.html
+[`ReturnValue`]: https://PLSysSec.github.io/haybale/haybale/enum.ReturnValue.html
+[`State`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html
