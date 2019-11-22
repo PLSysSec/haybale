@@ -26,7 +26,8 @@ pub struct Config<'p, B> where B: Backend {
     /// possible lengths, how (if at all) should we concretize?
     pub concretize_memcpy_lengths: Concretize,
 
-    /// The set of currently active function hooks
+    /// The set of currently active function hooks; see
+    /// [`FunctionHooks`](struct.FunctionHooks.html) for more details
     pub function_hooks: FunctionHooks<'p, B>,
 }
 
