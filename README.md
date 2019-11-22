@@ -7,7 +7,7 @@
 It operates on LLVM IR, which allows it to analyze programs written in any
 language which compiles to LLVM IR - C/C++, Rust, Swift, and more.
 In this way, it may be compared to [KLEE], as it has similar goals, except
-that `haybale` is written in Rust.
+that `haybale` is written in Rust and makes some different design decisions.
 That said, `haybale` makes no claim of being at feature parity with KLEE.
 
 ### Okay, but what is a symbolic execution engine?
@@ -129,7 +129,7 @@ configuration, as we did when calling `find_zero_of_func`, but also what
 "backend" we want to use.
 The default `BtorBackend` should be fine for most purposes.
 
-### 5. Paths
+### Paths
 
 The `ExecutionManager` acts like an `Iterator` over _paths_ through the function `foo`.
 Each path is one possible sequence of control-flow decisions (e.g., which direction
@@ -148,14 +148,14 @@ wrapped in the `ReturnValue` enum.
 Since we know that `foo` isn't a void-typed function, we can simply unwrap the
 `ReturnValue` to get the `BV`:
 
-We're interested in whether that `retval` can ever equal `0`:
-
 ```rust
 let retval = match retval {
     ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
     ReturnValue::Return(r) => r,
 };
 ```
+
+### States
 
 Importantly, the `ExecutionManager` provides not only the final return value of
 the path as a `BV`, but also the final program `State` at the end of that path,
@@ -176,7 +176,10 @@ if state.bvs_can_be_equal(&retval, &zero)? {
 }
 ```
 
-If it can be `0`, let's find what values of the function parameters would cause that.
+### Getting solutions for variables
+
+If `retval` can be `0`, let's find what values of the function parameters
+would cause that.
 First, we'll add a constraint to the `State` requiring that the return value
 must be `0`:
 
