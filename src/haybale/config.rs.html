@@ -245,6 +245,7 @@
 <span id="245">245</span>
 <span id="246">246</span>
 <span id="247">247</span>
+<span id="248">248</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="ident">Backend</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">default_hooks</span>;
@@ -274,7 +275,8 @@
     <span class="doccomment">/// possible lengths, how (if at all) should we concretize?</span>
     <span class="kw">pub</span> <span class="ident">concretize_memcpy_lengths</span>: <span class="ident">Concretize</span>,
 
-    <span class="doccomment">/// The set of currently active function hooks</span>
+    <span class="doccomment">/// The set of currently active function hooks; see</span>
+    <span class="doccomment">/// [`FunctionHooks`](struct.FunctionHooks.html) for more details</span>
     <span class="kw">pub</span> <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
 }
 
