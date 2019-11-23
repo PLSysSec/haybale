@@ -106,8 +106,7 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
         }
     }
 
-    let start_func = em.state().cur_loc.func;
-    let returnwidth = size(&start_func.return_type);
+    let returnwidth = size(&func.return_type);
     let zero = BV::zero(em.state().solver.clone(), returnwidth as u32);
     let mut found = false;
     while let Some(bvretval) = em.next() {
@@ -127,10 +126,10 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
     let param_bvs: Vec<_> = em.param_bvs().clone();
     let state = em.mut_state();
     if found {
-        // in this case state.check() must have passed
-        Some(start_func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
+        // in this case state.sat() must have passed
+        Some(func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
             let param_as_u64 = state.get_a_solution_for_bv(bv).unwrap()
-                .expect("since state.check() passed, expected a solution for each var")
+                .expect("since state.sat() passed, expected a solution for each var")
                 .as_u64()
                 .expect("parameter more than 64 bits wide");
             match &p.ty {
@@ -177,12 +176,17 @@ pub fn get_possible_return_values_of_func<'p>(
         }
     }
 
+    let return_width = size(&func.return_type);
     let mut candidate_values = HashSet::<u64>::new();
     while let Some(bvretval) = em.next() {
         match bvretval.unwrap() {
             ReturnValue::ReturnVoid => panic!("This function shouldn't be called with functions that return void"),
             ReturnValue::Return(bvretval) => {
                 let state = em.mut_state();
+                // rule out all the values we already have - we're interested in new values
+                for candidate in candidate_values.iter() {
+                    bvretval._ne(&BV::from_u64(state.solver.clone(), *candidate, return_width as u32)).assert();
+                }
                 match state.get_possible_solutions_for_bv(&bvretval, n).unwrap() {
                     PossibleSolutions::Exactly(v) => {
                         candidate_values.extend(v.iter().map(|bvsol| bvsol.as_u64().unwrap()));
