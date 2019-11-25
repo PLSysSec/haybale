@@ -296,7 +296,7 @@ pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
 
 /// Get the minimum possible solution for the `BV`: that is, the lowest value
 /// for which the current set of constraints is still satisfiable.
-/// "Maximum" will be interpreted in an unsigned fashion.
+/// "Minimum" will be interpreted in an unsigned fashion.
 ///
 /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
 /// current set of constraints is unsatisfiable. Only returns `Err` if a solver

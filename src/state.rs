@@ -355,7 +355,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         solution
     }
 
-    /// Get one possible concrete value for the given IR `Name` (from the given `Function` name), which represents a bitvector.
+    /// Get one possible concrete value for the given IR `Name` (from the given `Function` name).
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<BVSolution>> {
@@ -377,7 +377,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         solver_utils::get_possible_solutions_for_bv(self.solver.clone(), bv, n)
     }
 
-    /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name), which represents a bitvector.
+    /// Get a description of the possible solutions for the given IR `Name` (from the given `Function` name).
     ///
     /// `n`: Maximum number of distinct solutions to check for.
     /// If there are more than `n` possible solutions, this returns a
@@ -385,11 +385,60 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// These solutions will be disambiguated - see docs on `boolector::BVSolution`.
     ///
-    /// Only returns `Err` if the solver query itself fails.
+    /// If there are no possible solutions, this returns `Ok` with an empty
+    /// `PossibleSolutions`, rather than returning an `Err` with `Error::Unsat`.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<BVSolution>> {
         let bv = self.varmap.lookup_var(funcname, name);
         self.get_possible_solutions_for_bv(bv, n)
+    }
+
+    /// Get the maximum possible solution for the `BV`: that is, the highest value
+    /// for which the current set of constraints is still satisfiable.
+    /// "Maximum" will be interpreted in an unsigned fashion.
+    ///
+    /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
+    /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
+    /// query itself fails.
+    pub fn max_possible_solution_for_bv(&self, bv: &B::BV) -> Result<Option<u64>> {
+        solver_utils::max_possible_solution_for_bv(self.solver.clone(), bv)
+    }
+
+    /// Get the maximum possible solution for the given IR `Name` (from the given
+    /// `Function` name): that is, the highest value for which the current set of
+    /// constraints is still satisfiable.
+    /// "Maximum" will be interpreted in an unsigned fashion.
+    ///
+    /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
+    /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
+    /// query itself fails.
+    pub fn max_possible_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+        let bv = self.varmap.lookup_var(funcname, name);
+        solver_utils::max_possible_solution_for_bv(self.solver.clone(), bv)
+    }
+
+    /// Get the minimum possible solution for the `BV`: that is, the lowest value
+    /// for which the current set of constraints is still satisfiable.
+    /// "Minimum" will be interpreted in an unsigned fashion.
+    ///
+    /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
+    /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
+    /// query itself fails.
+    pub fn min_possible_solution_for_bv(&self, bv: &B::BV) -> Result<Option<u64>> {
+        solver_utils::min_possible_solution_for_bv(self.solver.clone(), bv)
+    }
+
+    /// Get the minimum possible solution for the given IR `Name` (from the given
+    /// `Function` name): that is, the lowest value for which the current set of
+    /// constraints is still satisfiable.
+    /// "Minimum" will be interpreted in an unsigned fashion.
+    ///
+    /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
+    /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
+    /// query itself fails.
+    pub fn min_possible_solution_for_bv_by_irname(&self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+        let bv = self.varmap.lookup_var(funcname, name);
+        solver_utils::min_possible_solution_for_bv(self.solver.clone(), bv)
     }
 
     /// Create a new (unconstrained) `BV` for the given `Name` (in the current function).
@@ -402,7 +451,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// (As of this writing, the only `Err` that might be returned is
     /// `Error::LoopBoundExceeded`, which is returned if creating the new `BV`
     /// would exceed `max_versions_of_name` -- see
-    /// [`State::new()`](struct.State.html#method.new).)
+    /// [`Config`](struct.Config.html).)
     ///
     /// Also, we assume that no two `Function`s share the same name.
     pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<B::BV> {
@@ -420,7 +469,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// (As of this writing, the only `Err` that might be returned is
     /// `Error::LoopBoundExceeded`, which is returned if creating the new version
     /// of the `BV` would exceed `max_versions_of_name` -- see
-    /// [`State::new()`](struct.State.html#method.new).)
+    /// [`Config`](struct.Config.html).)
     pub fn assign_bv_to_name(&mut self, name: Name, bv: B::BV) -> Result<()> {
         self.varmap.assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
     }
@@ -428,7 +477,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Record the result of `thing` to be `resultval`.
     /// Assumes `thing` is in the current function.
     /// Will fail with `Error::LoopBoundExceeded` if that would exceed
-    /// `max_versions_of_name` (see [`State::new`](struct.State.html#method.new)).
+    /// `max_versions_of_name` (see [`Config`](struct.Config.html)).
     #[cfg(debug_assertions)]
     pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<()> {
         if size(&thing.get_type()) as u32 != resultval.get_width() {
