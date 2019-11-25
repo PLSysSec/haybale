@@ -4,29 +4,29 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/cdisselkoen/haybale/master/LICENSE)
 
 `haybale` is a general-purpose symbolic execution engine written in Rust.
-It operates on LLVM IR, which allows it to analyze programs written in any
-language which compiles to LLVM IR - C/C++, Rust, Swift, and more.
+It operates on LLVM IR, which allows it to analyze programs written in C/C++,
+Rust, Swift, or any other language which compiles to LLVM IR.
 In this way, it may be compared to [KLEE], as it has similar goals, except
 that `haybale` is written in Rust and makes some different design decisions.
 That said, `haybale` makes no claim of being at feature parity with KLEE.
 
 ### Okay, but what is a symbolic execution engine?
 
-A symbolic execution engine is essentially a way of mathematically reasoning
-about the behavior of a function or program.
+A symbolic execution engine is a way of reasoning - rigorously and
+mathematically - about the behavior of a function or program.
 It can reason about _all possible inputs_ to a function without literally
 brute-forcing every single one.
 For instance, a symbolic execution engine like `haybale` can answer questions
 like:
 
-- Are there any inputs to <some function> that cause it to return 0? What are they?
+- Are there any inputs to (some function) that cause it to return 0? What are they?
 - Is it possible for this loop to execute exactly 17 times?
 - Can this pointer ever be NULL?
 
 Symbolic execution engines answer these questions by converting each variable in
 the program or function into a mathematical expression which depends on the
 function or program inputs.
-It then uses an SMT solver to answer questions about these expressions, such
+Then they use an SMT solver to answer questions about these expressions, such
 as the questions listed above.
 
 ## Getting started
@@ -76,7 +76,7 @@ the [`Project` documentation].
 
 ### 4. Use built-in analyses
 
-`haybale` currently includes two built-in analyses:
+`haybale` currently includes two simple built-in analyses:
 [`get_possible_return_values_of_func`], which describes all the possible
 values a function could return for any input, and [`find_zero_of_func`],
 which finds a set of inputs to a function such that it returns `0`.
@@ -257,6 +257,6 @@ solver (via the Rust [`boolector`] crate).
 [`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
 [`symex_function`]: https://PLSysSec.github.io/haybale/haybale/fn.symex_function.html
 [`Config`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html
-[`BV`]: https://docs.rs/boolector/0.1.1/boolector/struct.BV.html
+[`BV`]: https://docs.rs/boolector/0.1.2/boolector/struct.BV.html
 [`ReturnValue`]: https://PLSysSec.github.io/haybale/haybale/enum.ReturnValue.html
 [`State`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html
