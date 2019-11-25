@@ -204,6 +204,20 @@
 <span id="204">204</span>
 <span id="205">205</span>
 <span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! For an introduction to the crate and how to get started,</span>
 <span class="doccomment">//! see the [crate&#39;s README](https://github.com/PLSysSec/haybale/blob/master/README.md).</span>
@@ -292,16 +306,19 @@
 }
 
 <span class="doccomment">/// Given a function, find values of its inputs such that it returns zero.</span>
-<span class="doccomment">/// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer.</span>
+<span class="doccomment">/// Assumes that the function takes (some number of) integer and/or pointer</span>
+<span class="doccomment">/// arguments, and returns an integer.</span>
 <span class="doccomment">/// Pointer arguments will be assumed to be never NULL.</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// For detailed descriptions of the arguments, see [`symex_function`](fn.symex_function.html).</span>
+<span class="doccomment">/// `project`: The `Project` (set of LLVM modules) in which symbolic execution</span>
+<span class="doccomment">/// should take place. In the absence of function hooks (see</span>
+<span class="doccomment">/// [`Config`](struct.Config.html)), we will try to enter calls to any functions</span>
+<span class="doccomment">/// defined in the `Project`.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Returns `None` if there are no values of the inputs such that the function returns zero.</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// Note: `find_zero_of_func()` may be of some use itself, but is included in the</span>
-<span class="doccomment">/// crate more as an example of how you can use the other public functions in the</span>
-<span class="doccomment">/// crate.</span>
+<span class="doccomment">/// Note: `find_zero_of_func()` may be of some use itself, but also serves as an</span>
+<span class="doccomment">/// example of how you can use the other public functions in the crate.</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">find_zero_of_func</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(<span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>, <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">config</span>: <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">BtorBackend</span><span class="op">&gt;</span>) <span class="op">-&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">SolutionValue</span><span class="op">&gt;&gt;</span> {
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">em</span>: <span class="ident">ExecutionManager</span><span class="op">&lt;</span><span class="ident">BtorBackend</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">symex_function</span>(<span class="ident">funcname</span>, <span class="ident">project</span>, <span class="ident">config</span>);
 
@@ -313,8 +330,7 @@
         }
     }
 
-    <span class="kw">let</span> <span class="ident">start_func</span> <span class="op">=</span> <span class="ident">em</span>.<span class="ident">state</span>().<span class="ident">cur_loc</span>.<span class="ident">func</span>;
-    <span class="kw">let</span> <span class="ident">returnwidth</span> <span class="op">=</span> <span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">start_func</span>.<span class="ident">return_type</span>);
+    <span class="kw">let</span> <span class="ident">returnwidth</span> <span class="op">=</span> <span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">func</span>.<span class="ident">return_type</span>);
     <span class="kw">let</span> <span class="ident">zero</span> <span class="op">=</span> <span class="ident">BV</span>::<span class="ident">zero</span>(<span class="ident">em</span>.<span class="ident">state</span>().<span class="ident">solver</span>.<span class="ident">clone</span>(), <span class="ident">returnwidth</span> <span class="kw">as</span> <span class="ident">u32</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">found</span> <span class="op">=</span> <span class="bool-val">false</span>;
     <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">bvretval</span>) <span class="op">=</span> <span class="ident">em</span>.<span class="ident">next</span>() {
@@ -334,10 +350,10 @@
     <span class="kw">let</span> <span class="ident">param_bvs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">em</span>.<span class="ident">param_bvs</span>().<span class="ident">clone</span>();
     <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">em</span>.<span class="ident">mut_state</span>();
     <span class="kw">if</span> <span class="ident">found</span> {
-        <span class="comment">// in this case state.check() must have passed</span>
-        <span class="prelude-val">Some</span>(<span class="ident">start_func</span>.<span class="ident">parameters</span>.<span class="ident">iter</span>().<span class="ident">zip</span>(<span class="ident">param_bvs</span>.<span class="ident">iter</span>()).<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">p</span>, <span class="ident">bv</span>)<span class="op">|</span> {
+        <span class="comment">// in this case state.sat() must have passed</span>
+        <span class="prelude-val">Some</span>(<span class="ident">func</span>.<span class="ident">parameters</span>.<span class="ident">iter</span>().<span class="ident">zip</span>(<span class="ident">param_bvs</span>.<span class="ident">iter</span>()).<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">p</span>, <span class="ident">bv</span>)<span class="op">|</span> {
             <span class="kw">let</span> <span class="ident">param_as_u64</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">get_a_solution_for_bv</span>(<span class="ident">bv</span>).<span class="ident">unwrap</span>()
-                .<span class="ident">expect</span>(<span class="string">&quot;since state.check() passed, expected a solution for each var&quot;</span>)
+                .<span class="ident">expect</span>(<span class="string">&quot;since state.sat() passed, expected a solution for each var&quot;</span>)
                 .<span class="ident">as_u64</span>()
                 .<span class="ident">expect</span>(<span class="string">&quot;parameter more than 64 bits wide&quot;</span>);
             <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">p</span>.<span class="ident">ty</span> {
@@ -362,11 +378,18 @@
 <span class="doccomment">/// parameter, or `None` to have the analysis consider all possible values of the</span>
 <span class="doccomment">/// parameter.</span>
 <span class="doccomment">///</span>
+<span class="doccomment">/// `project`: The `Project` (set of LLVM modules) in which symbolic execution</span>
+<span class="doccomment">/// should take place. In the absence of function hooks (see</span>
+<span class="doccomment">/// [`Config`](struct.Config.html)), we will try to enter calls to any functions</span>
+<span class="doccomment">/// defined in the `Project`.</span>
+<span class="doccomment">///</span>
 <span class="doccomment">/// `n`: Maximum number of distinct solutions to check for.</span>
 <span class="doccomment">/// If there are more than `n` possible solutions, this returns a</span>
 <span class="doccomment">/// `PossibleSolutions::AtLeast` containing at least `n+1` solutions.</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// For detailed descriptions of the other arguments, see [`symex_function`](fn.symex_function.html).</span>
+<span class="doccomment">/// Note: `get_possible_return_values_of_func()` may be of some use itself, but</span>
+<span class="doccomment">/// also serves as an example of how you can use the other public functions in</span>
+<span class="doccomment">/// the crate.</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_possible_return_values_of_func</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(
     <span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
     <span class="ident">args</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;&gt;</span>,
@@ -384,12 +407,17 @@
         }
     }
 
+    <span class="kw">let</span> <span class="ident">return_width</span> <span class="op">=</span> <span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">func</span>.<span class="ident">return_type</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">candidate_values</span> <span class="op">=</span> <span class="ident">HashSet</span>::<span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>::<span class="ident">new</span>();
     <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">bvretval</span>) <span class="op">=</span> <span class="ident">em</span>.<span class="ident">next</span>() {
         <span class="kw">match</span> <span class="ident">bvretval</span>.<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;This function shouldn&#39;t be called with functions that return void&quot;</span>),
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bvretval</span>) <span class="op">=&gt;</span> {
                 <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">em</span>.<span class="ident">mut_state</span>();
+                <span class="comment">// rule out all the values we already have - we&#39;re interested in new values</span>
+                <span class="kw">for</span> <span class="ident">candidate</span> <span class="kw">in</span> <span class="ident">candidate_values</span>.<span class="ident">iter</span>() {
+                    <span class="ident">bvretval</span>.<span class="ident">_ne</span>(<span class="kw-2">&amp;</span><span class="ident">BV</span>::<span class="ident">from_u64</span>(<span class="ident">state</span>.<span class="ident">solver</span>.<span class="ident">clone</span>(), <span class="kw-2">*</span><span class="ident">candidate</span>, <span class="ident">return_width</span> <span class="kw">as</span> <span class="ident">u32</span>)).<span class="ident">assert</span>();
+                }
                 <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">get_possible_solutions_for_bv</span>(<span class="kw-2">&amp;</span><span class="ident">bvretval</span>, <span class="ident">n</span>).<span class="ident">unwrap</span>() {
                     <span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">v</span>) <span class="op">=&gt;</span> {
                         <span class="ident">candidate_values</span>.<span class="ident">extend</span>(<span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">bvsol</span><span class="op">|</span> <span class="ident">bvsol</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>()));
