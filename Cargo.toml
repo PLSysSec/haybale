@@ -7,7 +7,7 @@ description = "Symbolic execution of LLVM IR, written in Rust"
 documentation = "https://PLSysSec.github.io/haybale"
 repository = "https://github.com/PLSysSec/haybale"
 readme = "README.md"
-keywords = ["symbolic execution", "llvm", "SMT"]
+keywords = ["symbolic", "llvm", "IR", "SMT"]
 license = "MIT"
 
 [dependencies]
