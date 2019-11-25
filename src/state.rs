@@ -358,7 +358,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name).
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_a_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<BVSolution>> {
+    pub fn get_a_solution_for_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<BVSolution>> {
         let bv = self.varmap.lookup_var(funcname, name);
         self.get_a_solution_for_bv(bv)
     }
@@ -388,7 +388,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// If there are no possible solutions, this returns `Ok` with an empty
     /// `PossibleSolutions`, rather than returning an `Err` with `Error::Unsat`.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_possible_solutions_for_bv_by_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<BVSolution>> {
+    pub fn get_possible_solutions_for_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<BVSolution>> {
         let bv = self.varmap.lookup_var(funcname, name);
         self.get_possible_solutions_for_bv(bv, n)
     }
@@ -412,7 +412,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
     /// query itself fails.
-    pub fn max_possible_solution_for_bv_by_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+    pub fn max_possible_solution_for_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
         solver_utils::max_possible_solution_for_bv(self.solver.clone(), bv)
     }
@@ -436,7 +436,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
     /// query itself fails.
-    pub fn min_possible_solution_for_bv_by_irname(&self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+    pub fn min_possible_solution_for_irname(&self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
         solver_utils::min_possible_solution_for_bv(self.solver.clone(), bv)
     }
@@ -1232,7 +1232,7 @@ mod tests {
             .unwrap();
         assert!(y_solution > 10);
         let y_solution = state
-            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::from("y"))
+            .get_a_solution_for_irname(&"test_func".to_owned(), &Name::from("y"))
             .unwrap()
             .expect("Expected a solution for y")
             .as_u64()
@@ -1248,7 +1248,7 @@ mod tests {
             .unwrap();
         assert!(y_2_solution < 10);
         let y_2_solution = state_2
-            .get_a_solution_for_bv_by_irname(&"test_func".to_owned(), &Name::from("y"))
+            .get_a_solution_for_irname(&"test_func".to_owned(), &Name::from("y"))
             .unwrap()
             .expect("Expected a solution for y_2")
             .as_u64()

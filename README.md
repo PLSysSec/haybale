@@ -195,13 +195,13 @@ and then we'll ask for solutions for each of the parameters, given this constrai
 // Get a possible solution for the first parameter.
 // In this case, from looking at the text-format LLVM IR, we know the variable
 // we're looking for is variable #0 in the function "foo".
-let a = state.get_a_solution_for_bv_by_irname(&String::from("foo"), Name::from(0))?
+let a = state.get_a_solution_for_irname(&String::from("foo"), Name::from(0))?
     .expect("Expected there to be a solution")
     .as_u64()
     .expect("Expected solution to fit in 64 bits");
 
 // Likewise the second parameter, which is variable #1 in "foo"
-let b = state.get_a_solution_for_bv_by_irname(&String::from("foo"), Name::from(1))?
+let b = state.get_a_solution_for_irname(&String::from("foo"), Name::from(1))?
     .expect("Expected there to be a solution")
     .as_u64()
     .expect("Expected solution to fit in 64 bits");
