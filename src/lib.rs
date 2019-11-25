@@ -85,16 +85,19 @@ impl SolutionValue {
 }
 
 /// Given a function, find values of its inputs such that it returns zero.
-/// Assumes function takes (some number of) integer and/or pointer arguments, and returns an integer.
+/// Assumes that the function takes (some number of) integer and/or pointer
+/// arguments, and returns an integer.
 /// Pointer arguments will be assumed to be never NULL.
 ///
-/// For detailed descriptions of the arguments, see [`symex_function`](fn.symex_function.html).
+/// `project`: The `Project` (set of LLVM modules) in which symbolic execution
+/// should take place. In the absence of function hooks (see
+/// [`Config`](struct.Config.html)), we will try to enter calls to any functions
+/// defined in the `Project`.
 ///
 /// Returns `None` if there are no values of the inputs such that the function returns zero.
 ///
-/// Note: `find_zero_of_func()` may be of some use itself, but is included in the
-/// crate more as an example of how you can use the other public functions in the
-/// crate.
+/// Note: `find_zero_of_func()` may be of some use itself, but also serves as an
+/// example of how you can use the other public functions in the crate.
 pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Config<'p, BtorBackend>) -> Option<Vec<SolutionValue>> {
     let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
 
@@ -154,11 +157,18 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
 /// parameter, or `None` to have the analysis consider all possible values of the
 /// parameter.
 ///
+/// `project`: The `Project` (set of LLVM modules) in which symbolic execution
+/// should take place. In the absence of function hooks (see
+/// [`Config`](struct.Config.html)), we will try to enter calls to any functions
+/// defined in the `Project`.
+///
 /// `n`: Maximum number of distinct solutions to check for.
 /// If there are more than `n` possible solutions, this returns a
 /// `PossibleSolutions::AtLeast` containing at least `n+1` solutions.
 ///
-/// For detailed descriptions of the other arguments, see [`symex_function`](fn.symex_function.html).
+/// Note: `get_possible_return_values_of_func()` may be of some use itself, but
+/// also serves as an example of how you can use the other public functions in
+/// the crate.
 pub fn get_possible_return_values_of_func<'p>(
     funcname: &str,
     args: impl IntoIterator<Item = Option<u64>>,
