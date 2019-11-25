@@ -41,6 +41,10 @@ add it as a dependency in your `Cargo.toml`:
 haybale = "0.1.0"
 ```
 
+`haybale` also depends (indirectly) on the LLVM 8 and Boolector libraries, which
+must both be available on your system.
+See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
+
 ### 2. Acquire bitcode to analyze
 
 Since `haybale` operates on LLVM bitcode, you'll need some bitcode to get started.
@@ -248,6 +252,8 @@ solver (via the Rust [`boolector`] crate).
 [`llvm-ir`]: https://crates.io/crates/llvm-ir
 [Boolector]: https://boolector.github.io/
 [`boolector`]: https://crates.io/crates/boolector
+[`llvm-sys`]: https://crates.io/crates/llvm-sys
+[`boolector-sys`]: https://crates.io/crates/boolector-sys/
 [KLEE]: https://klee.github.io/
 [`Project`]: https://PLSysSec.github.io/haybale/haybale/project/struct.Project.html
 [`Project` documentation]: https://PLSysSec.github.io/haybale/haybale/project/struct.Project.html
