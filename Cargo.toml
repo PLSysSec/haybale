@@ -12,7 +12,7 @@ license = "MIT"
 
 [dependencies]
 llvm-ir = "0.3.1"
-boolector = { path = "../boolector-rs" }
+boolector = "0.1.2"
 either = "1.5.2"
 itertools = "0.8.0"
 reduce = "0.1"
