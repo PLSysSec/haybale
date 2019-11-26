@@ -104,18 +104,17 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
     type Item = std::result::Result<ReturnValue<B::BV>, String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.fresh {
+        let retval = if self.fresh {
             self.fresh = false;
             info!("Beginning symex in function {:?}", self.state.cur_loc.func.name);
-            self.symex_from_bb_through_end_of_function(self.start_bb).transpose().map(|r| r.map_err(|e|
-                format!("Received the following error:\n  {}\nLLVM backtrace:\n{}\n", e, self.state.pretty_llvm_backtrace())
-            ))
+            self.symex_from_bb_through_end_of_function(self.start_bb)
         } else {
             debug!("ExecutionManager: requesting next path");
-            self.backtrack_and_continue().transpose().map(|r| r.map_err(|e|
-                format!("Received the following error:\n  {}\nLLVM backtrace:\n{}\n", e, self.state.pretty_llvm_backtrace())
-            ))
-        }
+            self.backtrack_and_continue()
+        };
+        retval.transpose().map(|r| r.map_err(|e|
+            format!("Received the following error:\n  {}\nLLVM backtrace:\n{}\n", e, self.state.pretty_llvm_backtrace())
+        ))
     }
 }
 
