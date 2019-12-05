@@ -747,9 +747,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     }
                 },
                 ReturnValue::Return(retval) => {
-                    if call.get_type() == Type::VoidType {
+                    let ret_type = call.get_type();
+                    if ret_type == Type::VoidType {
                         return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", pretty_funcname)));
                     } else {
+                        let retwidth = size(&ret_type);
+                        if retval.get_width() != retwidth as u32 {
+                            return Err(Error::OtherError(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", pretty_funcname, retval.get_width(), retwidth)));
+                        }
                         // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
                         self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
                     }
