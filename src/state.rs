@@ -1,8 +1,9 @@
 use boolector::BVSolution;
 use boolector::option::{BtorOption, ModelGen};
 use llvm_ir::*;
-use log::{debug, info, warn};
+use log::{debug, info};
 use reduce::Reduce;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt;
 use std::iter::FromIterator;
@@ -32,7 +33,7 @@ pub struct State<'p, B: Backend> {
 
     // Private members
     varmap: VarMap<B::BV>,
-    mem: B::Memory,
+    mem: RefCell<B::Memory>,
     alloc: Alloc,
     global_allocations: GlobalAllocations<'p, B>,
     /// This tracks the call stack of the symbolic execution.
@@ -173,7 +174,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         let mut state = Self {
             cur_loc: start_loc.clone(),
             varmap: VarMap::new(solver.clone(), config.loop_bound),
-            mem: Memory::new_uninitialized(solver.clone(), config.null_detection, None),
+            mem: RefCell::new(Memory::new_uninitialized(solver.clone(), config.null_detection, None)),
             alloc: Alloc::new(),
             global_allocations: GlobalAllocations::new(),
             stack: Vec::new(),
@@ -184,10 +185,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             solver,
             config,
         };
-        // Here we do allocation and initialization of the global variables in the Project.
-        // We need to do these in two separate passes - first allocating them
-        // all, then initializing them all - because initializers can refer to
-        // the addresses of other global variables, potentially even circularly.
+        // Here we do allocation of the global variables in the Project.
+        // We can do _initialization_ lazily (on first reference to the global
+        // variable), but we need to do all the _allocation_ up front,
+        // because initializers can refer to the addresses of other global
+        // variables, potentially even circularly.
         //
         // Note that `project.all_global_vars()` gives us both global variable
         // *definitions* and *declarations*; we can distinguish these because
@@ -195,7 +197,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         // declarations don't." This implies that even globals without an
         // initializer in C have one in LLVM, which seems weird to me, but it's
         // what the docs say, and also matches what I've seen empirically.
-        info!("Allocating and initializing global variables");
+        //
+        // We'll save each initializer as we allocate the global variable, but
+        // only actually process each initializer as the global variable is
+        // referenced for the first time.  This saves us from doing all the
+        // memory reads/writes right away, which improves performance, especially
+        // if the `Project` includes a lot of globals we'll never use (e.g., if
+        // we parsed in way more modules than we actually need).
+        info!("Allocating global variables and functions");
         debug!("Allocating global variables");
         for (var, module) in project.all_global_vars().filter(|(var,_)| var.initializer.is_some()) {
             // Allocate the global variable.
@@ -232,48 +241,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
             state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
         }
-        // Now we do initialization of global variables.
-        debug!("Initializing global variables");
-        for (var, module) in project.all_global_vars() {
-            // Like with the allocation pass, in the initialization pass we
-            // again only need to process definitions. Conveniently, definitions
-            // are where we find the initializer anyway; so we initialize the
-            // variable if and only if there is an initializer. (See notes on
-            // definitions vs. declarations above.) Also, processing only
-            // definitions ensures that we only initialize each variable once.
-            //
-            // We assume that global-variable initializers can only refer to the
-            // *addresses* of other globals, and not the *values* of other
-            // global constants, so that it's fine that any referred-to globals
-            // may have been allocated but not initialized at this point (since
-            // their definition may not have been processed yet).
-            // This assumption seems to hold empirically: in my tests,
-            // (1) clang performs constant-folding, even at -O0, on global
-            //     variable initializers so that these initializers do not refer to
-            //     the values of other global constants at the LLVM level. For
-            //     instance, the C code
-            //       `const int a = 1; const int b = a + 3;`
-            //     is translated into the LLVM equivalent of
-            //       `const int a = 1; const int b = 4;`
-            // (2) clang rejects programs where global variable initializers refer
-            //     to the value of externally-defined global constants, in which
-            //     case the constant-folding described above would be impossible.
-            //     Note, however, that clang does allow referring to the *addresses*
-            //     of externally-defined global variables.
-            if let Some(ref initial_val) = var.initializer {
-                debug!("Initializing {:?} with initializer {:?}", var.name, initial_val);
-                let addr = state.global_allocations
-                    .get_global_address(&var.name, module)
-                    .unwrap_or_else(|| panic!("Trying to initialize global variable {:?} in module {:?} but failed to find its allocated address", var.name, &module.name));
-                state.cur_loc.module = module;  // have to do this prior to call to state.const_to_bv(), to ensure the correct module is used for resolution of references to other globals
-                match state.const_to_bv(initial_val) {
-                    Ok(write_val) => state.mem.write(&addr, write_val).unwrap(),
-                    Err(e) => warn!("While trying to initialize global variable {:?} in module {:?}, received the following error: {:?}\nContinuing, but leaving this variable uninitialized.", var.name, &module.name, e),
-                };
-            }
-        }
-        debug!("Done allocating and initializing global variables");
-        state.cur_loc = start_loc;  // reset any changes we made above
+        debug!("Done allocating global variables and functions");
         state
     }
 
@@ -285,7 +253,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         let mut cloned = self.clone();
         let new_solver = cloned.solver.duplicate();
         cloned.varmap.change_solver(new_solver.clone());
-        cloned.mem.change_solver(new_solver.clone());
+        cloned.mem.borrow_mut().change_solver(new_solver.clone());
         cloned.global_allocations.change_solver(new_solver.clone());
         cloned.solver = new_solver;
         cloned
@@ -530,8 +498,44 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                     .reduce(|a,b| Ok(b?.concat(&a?)))  // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
                     .unwrap(),  // unwrap the Option<> produced by reduce(), leaving the final return type Result<B::BV>
             Constant::GlobalReference { name, .. } => {
-                if let Some(addr) = self.global_allocations.get_global_address(name, self.cur_loc.module) {
-                    Ok(addr.clone())
+                if let Some(ga) = self.global_allocations.get_global_address(name, self.cur_loc.module) {
+                    // First, initialize the global if it hasn't been already.
+                    // As mentioned in comments in `State::new()`, we lazily
+                    // initialize globals upon first reference to them.
+                    //
+                    // We assume that global-variable initializers can only refer to the
+                    // *addresses* of other globals, and not the *values* of other
+                    // global constants, so that it's fine that any referred-to globals
+                    // may have been allocated but not initialized at this point.
+                    // This assumption seems to hold empirically: in my tests,
+                    // (1) clang performs constant-folding, even at -O0, on global
+                    //     variable initializers so that these initializers do not refer to
+                    //     the values of other global constants at the LLVM level. For
+                    //     instance, the C code
+                    //       `const int a = 1; const int b = a + 3;`
+                    //     is translated into the LLVM equivalent of
+                    //       `const int a = 1; const int b = 4;`
+                    // (2) clang rejects programs where global variable initializers refer
+                    //     to the value of externally-defined global constants, in which
+                    //     case the constant-folding described above would be impossible.
+                    //     Note, however, that clang does allow referring to the *addresses*
+                    //     of externally-defined global variables.
+                    // Therefore, we can go ahead and set our `.initialized` flag early,
+                    // because even if `const_to_bv` on our initializer references other
+                    // globals (possibly causing their lazy initialization as well),
+                    // those globals can't refer to our contents, so won't know that we
+                    // are lying about being initialized.
+                    // Setting the flag early prevents an infinite loop where I try to
+                    // initialize, but my initializer refers to your address so you try
+                    // to initialize, but your initializer refers to my address so I try
+                    // to initialize, etc.
+                    if !ga.initialized.get() {
+                        debug!("Initializing {:?} with initializer {:?}", name, &ga.initializer);
+                        ga.initialized.set(true);
+                        let write_val = self.const_to_bv(&ga.initializer)?;
+                        self.mem.borrow_mut().write(&ga.addr, write_val)?;
+                    }
+                    Ok(ga.addr.clone())
                 } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
                     self.const_to_bv(&alias.aliasee)
                 } else {
@@ -760,7 +764,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `None` if no function was found with that name.
     pub fn get_pointer_to_function(&self, funcname: impl Into<String>) -> Option<&B::BV> {
-        self.global_allocations.get_global_address(&Name::Name(funcname.into()), self.cur_loc.module)
+        self.global_allocations.get_global_address(&Name::Name(funcname.into()), self.cur_loc.module).map(|ga| &ga.addr)
     }
 
     /// Get a pointer to the currently active _hook_ for the given function name.
@@ -774,13 +778,13 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Read a value `bits` bits long from memory at `addr`.
     /// Note that `bits` can be arbitrarily large.
     pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
-        self.mem.read(addr, bits)
+        self.mem.borrow().read(addr, bits)
     }
 
     /// Write a value into memory at `addr`.
     /// Note that `val` can be an arbitrarily large bitvector.
     pub fn write(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
-        self.mem.write(addr, val)
+        self.mem.borrow_mut().write(addr, val)
     }
 
     /// Allocate a value of size `bits`; return a pointer to the newly allocated object
@@ -867,7 +871,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             stack: self.stack.clone(),
             constraint,
             varmap: self.varmap.clone(),
-            mem: self.mem.clone(),
+            mem: self.mem.borrow().clone(),
             path_len: self.path.len(),
         });
     }
@@ -879,7 +883,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             debug!("Reverting to backtracking point {}", bp);
             self.solver.pop(1);
             self.varmap = bp.varmap;
-            self.mem = bp.mem;
+            self.mem.replace(bp.mem);
             self.stack = bp.stack;
             self.path.truncate(bp.path_len);
             self.cur_loc = bp.loc;

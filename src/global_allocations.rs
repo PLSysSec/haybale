@@ -3,6 +3,7 @@ use crate::config::FunctionHook;
 use llvm_ir::*;
 use llvm_ir::module::{GlobalVariable, Linkage};
 use log::debug;
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt;
@@ -15,10 +16,10 @@ use std::hash::{Hash, Hasher};
 /// both the strong and weak varieties.
 #[derive(Clone)]
 pub(crate) struct GlobalAllocations<'p, B: Backend> {
-    /// Map from `Name`s of global variables and `Function`s, to addresses at
-    /// which they are allocated. These definitions can be either "strong" or
-    /// "weak"; see notes on [`Definition`](enum.Definition.html).
-    allocated_globals: HashMap<Name, Definition<B::BV>>,
+    /// Map from `Name`s of global variables and `Function`s, to either
+    /// "strong" or "weak" `GlobalAllocation`s.
+    /// See notes on [`Definition`](enum.Definition.html).
+    allocated_globals: HashMap<Name, Definition<GlobalAllocation<B::BV>>>,
     /// Map from `FunctionHook`s to addresses at which they are allocated.
     /// Currently, `FunctionHook` definitions are always "strong".
     allocated_hooks: HashMap<FunctionHook<'p, B>, B::BV>,
@@ -27,12 +28,23 @@ pub(crate) struct GlobalAllocations<'p, B: Backend> {
     addr_to_function: HashMap<u64, Callable<'p, B>>,
     /// While `allocated_globals` is for "public" (non-module-private) globals,
     /// this is a similar map for module-private globals.
-    /// It maps module names to maps of global names to allocated addresses.
+    /// It maps module names to maps of global names to `GlobalAllocation`s.
     /// Module-private definitions are always strong; they can never be weak.
-    module_private_allocated_globals: HashMap<String, HashMap<Name, B::BV>>,
+    module_private_allocated_globals: HashMap<String, HashMap<Name, GlobalAllocation<B::BV>>>,
     /// This is to `module_private_allocated_globals` as `addr_to_function` is
     /// to `allocated_globals`
     module_private_addr_to_function: HashMap<String, HashMap<u64, Callable<'p, B>>>,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub(crate) struct GlobalAllocation<V> {
+    /// The address at which the global variable or `Function` is allocated.
+    pub(crate) addr: V,
+    /// The initializer associated with the global variable (this is unused for functions)
+    pub(crate) initializer: Constant,
+    /// Whether the global variable has been initialized yet.  Functions are
+    /// always considered initialized.
+    pub(crate) initialized: Cell<bool>,
 }
 
 /// Strong and weak definitions.
@@ -53,6 +65,13 @@ impl<V> Definition<V> {
         match self {
             Definition::Strong(v) => &v,
             Definition::Weak(v) => &v,
+        }
+    }
+
+    fn get_mut(&mut self) -> &mut V {
+        match self {
+            Definition::Strong(ref mut v) => v,
+            Definition::Weak(ref mut v) => v,
         }
     }
 }
@@ -110,6 +129,7 @@ impl<'p, B: Backend> Hash for Callable<'p, B> {
 trait Global {
     fn get_linkage(&self) -> Linkage;
     fn get_name(&self) -> Name;
+    fn get_initializer(&self) -> Constant;
 }
 
 impl Global for GlobalVariable {
@@ -119,6 +139,9 @@ impl Global for GlobalVariable {
     fn get_name(&self) -> Name {
         self.name.clone()
     }
+    fn get_initializer(&self) -> Constant {
+        self.initializer.clone().expect("Expected a global variable definition, not merely a declaration")
+    }
 }
 
 impl Global for Function {
@@ -127,6 +150,10 @@ impl Global for Function {
     }
     fn get_name(&self) -> Name {
         Name::from(&*self.name)
+    }
+    fn get_initializer(&self) -> Constant {
+        // Unused for functions, so we don't care what goes here
+        Constant::TokenNone
     }
 }
 
@@ -156,11 +183,14 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     /// `module`: `Module` in which the definition appears
     ///
     /// `addr`: Address at which the global variable should be allocated
+    ///
+    /// The global variable will be assumed not-yet-initialized;
+    /// see notes on `get_global_address`.
     pub fn allocate_global_var(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: B::BV) {
         if var.initializer.is_none() {
             panic!("Can't call allocate_global() with a global declaration, only a definition");
         }
-        self.allocate_global(var, module, addr);
+        self.allocate_global(var, module, addr, false);
     }
 
     /// `func`: a function definition
@@ -173,7 +203,7 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     /// pointers to them. (As of this writing, we actually only allocate 64 bits
     /// for every `Function`)
     pub fn allocate_function(&mut self, func: &'p Function, module: &'p Module, addr: u64, addr_bv: B::BV) {
-        match self.allocate_global(func, module, addr_bv) {
+        match self.allocate_global(func, module, addr_bv, true) {
             AllocationResult::Public => {
                 self.addr_to_function.insert(addr, Callable::LLVMFunction(func));
             },
@@ -201,7 +231,9 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
         self.addr_to_function.insert(addr, Callable::FunctionHook(hook));
     }
 
-    fn allocate_global(&mut self, global: &'p impl Global, module: &'p Module, addr: B::BV) -> AllocationResult {
+    /// `initialized`: whether the `Global` has been initialized.
+    /// Currently, this is always `false` for global variables, and always `true` for functions.
+    fn allocate_global(&mut self, global: &'p impl Global, module: &'p Module, addr: B::BV, initialized: bool) -> AllocationResult {
         match global.get_linkage() {
             Linkage::Private | Linkage::Internal => {
                 // Module-private global, strong definition
@@ -211,7 +243,7 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
                     .or_default()
                     .entry(global.get_name())
                 {
-                    Entry::Vacant(entry) => entry.insert(addr),
+                    Entry::Vacant(entry) => entry.insert(GlobalAllocation { addr, initializer: global.get_initializer(), initialized: Cell::new(initialized) }),
                     Entry::Occupied(_) => panic!("Duplicate definitions found for module-private global variable or function {:?} in module {:?}", global.get_name(), &module.name),
                 };
                 AllocationResult::ModulePrivate
@@ -221,12 +253,15 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
                 debug!("Allocating {:?} (public, strong) at {:?}", global.get_name(), &addr);
                 match self.allocated_globals.entry(global.get_name()) {
                     Entry::Vacant(entry) => {
-                        entry.insert(Definition::Strong(addr));
+                        entry.insert(Definition::Strong(GlobalAllocation { addr, initializer: global.get_initializer(), initialized: Cell::new(initialized) }));
                     },
                     Entry::Occupied(mut entry) => {
                         match entry.get() {
                             Definition::Strong(_) => panic!("Duplicate strong definitions found for public global variable or function {:?}", global.get_name()),
-                            Definition::Weak(_) => entry.insert(Definition::Strong(addr)),  // discard the weak definition in favor of this strong one
+                            Definition::Weak(_) => entry.insert(
+                                // discard the weak definition in favor of this strong one
+                                Definition::Strong(GlobalAllocation { addr, initializer: global.get_initializer(), initialized: Cell::new(initialized) })
+                            ),
                         };
                     },
                 };
@@ -243,7 +278,7 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
                 match self.allocated_globals.entry(global.get_name()) {
                     Entry::Vacant(entry) => {
                         debug!("Allocating {:?} (public, weak) at {:?}", global.get_name(), &addr);
-                        entry.insert(Definition::Weak(addr));
+                        entry.insert(Definition::Weak(GlobalAllocation { addr, initializer: global.get_initializer(), initialized: Cell::new(initialized) }));
                         AllocationResult::Public
                     },
                     Entry::Occupied(_) => {
@@ -259,13 +294,20 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
         }
     }
 
-    /// Get the address at which the global variable or function with the given
-    /// `Name` has been allocated; or `None` if not found.
+    /// Get the `GlobalAllocation` for the global variable or function with the
+    /// given `Name`; or `None` if not found. The `GlobalAllocation` includes the
+    /// address at which the global variable or function has been allocated, and
+    /// also information about whether the global variable has been initialized
+    /// (irrelevant for functions).
     ///
     /// `module`: The `Module` in which the `Name` appeared. Note that modules
     /// may have their own module-private globals with the same name, so the name
     /// alone is not sufficient to identify a unique global.
-    pub fn get_global_address(&self, name: &Name, module: &Module) -> Option<&B::BV> {
+    ///
+    /// If the global variable hasn't been initialized, the caller probably wants
+    /// to initialize it. If so, be sure to update the `.initialized` field of
+    /// the `GlobalAllocation`.
+    pub fn get_global_address(&self, name: &Name, module: &Module) -> Option<&GlobalAllocation<B::BV>> {
         // First look for a module-private definition. We allow this to have precedence over any public definition that may exist.
         self.module_private_allocated_globals
             .get(&module.name)
@@ -308,18 +350,15 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     /// the call to `SolverRef::duplicate()`.
     pub fn change_solver(&mut self, new_solver: B::SolverRef) {
         for def in self.allocated_globals.values_mut() {
-            let new_bv = new_solver.match_bv(def.get()).unwrap();
-            *def = match def {
-                Definition::Strong(_) => Definition::Strong(new_bv),
-                Definition::Weak(_) => Definition::Weak(new_bv),
-            };
+            let new_bv = new_solver.match_bv(&def.get().addr).unwrap();
+            def.get_mut().addr = new_bv;
         }
         for bv in self.allocated_hooks.values_mut() {
             *bv = new_solver.match_bv(bv).unwrap();
         }
         for hm in self.module_private_allocated_globals.values_mut() {
-            for bv in hm.values_mut() {
-                *bv = new_solver.match_bv(bv).unwrap();
+            for ga in hm.values_mut() {
+                ga.addr = new_solver.match_bv(&ga.addr).unwrap();
             }
         }
     }
