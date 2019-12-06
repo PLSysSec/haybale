@@ -224,14 +224,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             let addr_bv = BV::from_u64(state.solver.clone(), addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
             state.global_allocations.allocate_function(func, module, addr, addr_bv);
-       }
-       debug!("Allocating function hooks");
-       for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
-           let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-           let addr_bv = BV::from_u64(state.solver.clone(), addr, 64);
-           debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
-           state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
-       }
+        }
+        debug!("Allocating function hooks");
+        for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
+            let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
+            let addr_bv = BV::from_u64(state.solver.clone(), addr, 64);
+            debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
+            state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
+        }
         // Now we do initialization of global variables.
         debug!("Initializing global variables");
         for (var, module) in project.all_global_vars() {
