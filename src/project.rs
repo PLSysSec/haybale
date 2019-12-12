@@ -178,6 +178,29 @@ impl Project {
         retval
     }
 
+    /// Given a `NamedStructType`, get the `StructType` corresponding to the
+    /// actual definition of that `NamedStructType`. This may be as simple as
+    /// upgrading the weak reference, but in the case of opaque struct types may
+    /// involve searching the `Project` for a definition of the relevant struct.
+    ///
+    /// Returns `None` if the struct is fully opaque, meaning it has no
+    /// definition in the `Project`.
+    pub fn get_inner_struct_type_from_named(&self, ty: &Type) -> Option<Arc<RwLock<Type>>> {
+        match ty {
+            Type::NamedStructType { name, ty } => match &ty.as_ref() {
+                Some(ty) => Some(ty.upgrade().expect("Failed to upgrade weak reference")),
+                None => {
+                    // This is an opaque struct definition. Try to find a non-opaque definition of the same struct.
+                    match self.get_named_struct_type_by_name(name).unwrap_or_else(|| panic!("Have a struct with name {:?}, but no struct of that name found in the Project", name)) {
+                        (Some(arc), _) => Some(arc.clone()),
+                        (None, _) => None,
+                    }
+                }
+            },
+            _ => panic!("Project::get_inner_struct_type_from_named: called with a Type which is not a NamedStructType: {:?}", ty),
+        }
+    }
+
     fn modules_from_bc_dir(path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<Vec<Module>, io::Error> {
         // warning, we use both `Iterator::map` and `Result::map` in here, and it's easy to get them confused
         path
