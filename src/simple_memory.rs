@@ -104,16 +104,21 @@ impl Memory {
             return Err(Error::NullPointerDereference);
         }
 
-        assert_eq!(bits % Self::BITS_IN_BYTE, 0, "Read with size {} bits", bits);
-        let bytes = bits / Self::BITS_IN_BYTE;
-        assert!(bytes > 0, "Read of length 0");
-        let rval = (0 .. bytes)
-            .map(|byte_num| {
-                let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), Self::INDEX_BITS));
-                self.read_byte(&offset_addr)
-            })
-            .reduce(|a,b| b.concat(&a))
-            .unwrap();  // because bytes > 0, there must have been at least 1 item in the iterator
+        let rval = if bits < Self::BITS_IN_BYTE {
+            let byte = self.read_byte(&addr);
+            byte.slice(bits-1, 0)
+        } else {
+            assert_eq!(bits % Self::BITS_IN_BYTE, 0, "Read with size {} bits", bits);
+            let bytes = bits / Self::BITS_IN_BYTE;
+            assert!(bytes > 0, "Read of length 0");
+            (0 .. bytes)
+                .map(|byte_num| {
+                    let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), Self::INDEX_BITS));
+                    self.read_byte(&offset_addr)
+                })
+                .reduce(|a,b| b.concat(&a))
+                .unwrap()  // because bytes > 0, there must have been at least 1 item in the iterator
+        };
         debug!("Value read is {:?}", rval);
         Ok(rval)
     }
@@ -281,6 +286,27 @@ mod tests {
         assert_eq!(solver_utils::sat(&btor), Ok(true));
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val))));
+
+        Ok(())
+    }
+
+    #[test]
+    fn read_single_bit() -> Result<()> {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let btor = <Rc<Btor> as SolverRef>::new();
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+
+        // Store 8 bits of data to an aligned address
+        let data_val = 0x55;
+        let data = BV::from_u64(btor.clone().into(), data_val, 8);
+        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        mem.write(&addr, data)?;
+
+        // Ensure that we can read a single bit
+        let read_bv = mem.read(&addr, 1)?;
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
+        assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(1))));  // we should read the least significant bit, which should have value 1
 
         Ok(())
     }

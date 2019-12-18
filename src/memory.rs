@@ -492,6 +492,27 @@ mod tests {
     }
 
     #[test]
+    fn read_single_bit() -> Result<()> {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let btor = <Rc<Btor> as SolverRef>::new();
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+
+        // Store 8 bits of data to an aligned address
+        let data_val = 0x55;
+        let data = BV::from_u64(btor.clone().into(), data_val, 8);
+        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        mem.write(&addr, data)?;
+
+        // Ensure that we can read a single bit
+        let read_bv = mem.read(&addr, 1)?;
+        assert_eq!(solver_utils::sat(&btor), Ok(true));
+        let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
+        assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(1))));  // we should read the least significant bit, which should have value 1
+
+        Ok(())
+    }
+
+    #[test]
     fn read_and_write_unaligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
