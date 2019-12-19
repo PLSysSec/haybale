@@ -176,7 +176,7 @@ To test whether `retval` can be equal to `0` in this `State`, we can use
 `state.bvs_can_be_equal()`:
 
 ```rust
-let zero = BV::zero(state.solver.clone(), 32);  // The 32-bit constant 0
+let zero = state.zero(32);  // The 32-bit constant 0
 if state.bvs_can_be_equal(&retval, &zero)? {
     println!("retval can be 0!");
 }

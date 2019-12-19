@@ -2,7 +2,7 @@
 //! These may be useful in implementing hooks for various functions that
 //! perform memory allocation.
 
-use crate::backend::{Backend, BV};
+use crate::backend::Backend;
 use crate::error::*;
 use crate::state::State;
 use llvm_ir::*;
@@ -39,7 +39,7 @@ pub fn zalloc<B: Backend>(state: &mut State<B>, num_bytes: &Operand) -> Result<B
     }
     let num_bits = num_bytes * 8;
     let addr = state.allocate(num_bits);
-    state.write(&addr, B::BV::zero(state.solver.clone(), num_bits as u32))?;
+    state.write(&addr, state.zero(num_bits as u32))?;
     Ok(addr)
 }
 
@@ -59,7 +59,7 @@ pub fn calloc<B: Backend>(state: &mut State<B>, a: &Operand, b: &Operand) -> Res
     }
     let num_bits = num_bytes * 8;
     let addr = state.allocate(num_bits);
-    state.write(&addr, B::BV::zero(state.solver.clone(), num_bits as u32))?;
+    state.write(&addr, state.zero(num_bits as u32))?;
     Ok(addr)
 }
 

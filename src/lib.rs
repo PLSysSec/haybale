@@ -106,12 +106,12 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
     let (func, _) = project.get_func_by_name(funcname).unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
     for (param, bv) in func.parameters.iter().zip(em.param_bvs()) {
         if let Type::PointerType { .. } = param.get_type() {
-            bv._ne(&BV::zero(em.state().solver.clone(), bv.get_width())).assert();
+            bv._ne(&em.state().zero(bv.get_width())).assert();
         }
     }
 
     let returnwidth = size(&func.return_type);
-    let zero = BV::zero(em.state().solver.clone(), returnwidth as u32);
+    let zero = em.state().zero(returnwidth as u32);
     let mut found = false;
     while let Some(bvretval) = em.next() {
         match bvretval.unwrap() {
@@ -182,7 +182,7 @@ pub fn get_possible_return_values_of_func<'p>(
     let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
     for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
         if let Some(val) = arg {
-            let val = BV::from_u64(em.state().solver.clone(), val, size(&param.ty) as u32);
+            let val = em.state().bv_from_u64(val, size(&param.ty) as u32);
             em.mut_state().overwrite_latest_version_of_bv(&param.name, val);
         }
     }
@@ -196,7 +196,7 @@ pub fn get_possible_return_values_of_func<'p>(
                 let state = em.mut_state();
                 // rule out all the values we already have - we're interested in new values
                 for candidate in candidate_values.iter() {
-                    bvretval._ne(&BV::from_u64(state.solver.clone(), *candidate, return_width as u32)).assert();
+                    bvretval._ne(&state.bv_from_u64(*candidate, return_width as u32)).assert();
                 }
                 match state.get_possible_solutions_for_bv(&bvretval, n).unwrap() {
                     PossibleSolutions::Exactly(v) => {

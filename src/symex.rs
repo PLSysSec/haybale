@@ -389,8 +389,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Type::VectorType { element_type, num_elements } => match *element_type {
                 Type::IntegerType { bits } if bits == 1 => match op0_type {
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
-                        let zero = B::BV::zero(self.state.solver.clone(), 1);
-                        let one = B::BV::one(self.state.solver.clone(), 1);
+                        let zero = self.state.zero(1);
+                        let one = self.state.one(1);
                         let final_bv = Self::binary_on_vector(&btorfirstop, &btorsecondop, num_elements as u32, |a,b| btorpred(a,b).cond_bv(&one, &zero))?;
                         self.state.record_bv_result(icmp, final_bv)
                     },
@@ -525,7 +525,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
     fn get_offset_recursive(state: &State<'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         match indices.next() {
-            None => Ok(BV::zero(state.solver.clone(), result_bits)),
+            None => Ok(state.zero(result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = zero_extend_to_bits(state.operand_to_bv(index)?, result_bits);
@@ -537,7 +537,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                         let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                         Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                            .map(|bv| bv.add(&B::BV::from_u32(state.solver.clone(), offset as u32, result_bits)))
+                            .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
                     },
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                 },
@@ -553,7 +553,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                                 let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                                 Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                                    .map(|bv| bv.add(&B::BV::from_u32(state.solver.clone(), offset as u32, result_bits)))
+                                    .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                         }
@@ -620,20 +620,20 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             let insertion_bitindex_high = (index+1) * el_size - 1;  // highest bit number in the vector which will be overwritten
 
                             // mask_clear is 0's in the bit positions that will be written, 1's elsewhere
-                            let zeroes = B::BV::zero(self.state.solver.clone(), el_size);
+                            let zeroes = self.state.zero(el_size);
                             let mask_clear = if insertion_bitindex_high == highest_bit_index {
                                 if insertion_bitindex_low == 0 {
                                     zeroes
                                 } else {
-                                    zeroes.concat(&B::BV::ones(self.state.solver.clone(), insertion_bitindex_low))
+                                    zeroes.concat(&self.state.ones(insertion_bitindex_low))
                                 }
                             } else {
-                                let top = B::BV::ones(self.state.solver.clone(), highest_bit_index - insertion_bitindex_high)
+                                let top = self.state.ones(highest_bit_index - insertion_bitindex_high)
                                     .concat(&zeroes);
                                 if insertion_bitindex_low == 0 {
                                     top
                                 } else {
-                                    top.concat(&B::BV::ones(self.state.solver.clone(), insertion_bitindex_low))
+                                    top.concat(&self.state.ones(insertion_bitindex_low))
                                 }
                             };
 
@@ -642,7 +642,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             let mask_insert = if insertion_bitindex_low == 0 {
                                 top
                             } else {
-                                top.concat(&B::BV::zero(self.state.solver.clone(), insertion_bitindex_low))
+                                top.concat(&self.state.zero(insertion_bitindex_low))
                             };
 
                             let with_insertion = vector
@@ -919,7 +919,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             let default_dest_constraint = dests.iter()
                 .map(|(c,_)| c._eq(&switchval).not())
                 .reduce(|a,b| a.and(&b))
-                .unwrap_or_else(|| B::BV::from_bool(self.state.solver.clone(), true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
+                .unwrap_or_else(|| self.state.bv_from_bool(true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
             if self.state.sat_with_extra_constraints(std::iter::once(&default_dest_constraint))? {
                 self.state.save_backtracking_point(switch.default_dest.clone(), default_dest_constraint);
             }
@@ -1042,7 +1042,7 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                 Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Prefer(val, _) => {
-                    let val_as_bv = B::BV::from_u64(state.solver.clone(), val, num_bytes.get_width());
+                    let val_as_bv = state.bv_from_u64(val, num_bytes.get_width());
                     if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
                         val
                     } else {
@@ -1057,7 +1057,7 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     // In this case we just do the entire write here and return
                     let max_num_bytes = solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap();
                     let mut addr = addr;
-                    let mut bytes_written = B::BV::zero(state.solver.clone(), num_bytes.get_width());
+                    let mut bytes_written = state.zero(num_bytes.get_width());
                     for _ in 0 ..= max_num_bytes {
                         let old_val = state.read(&addr, 8)?;
                         let should_write = num_bytes.ugt(&bytes_written);
@@ -1068,7 +1068,7 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     return Ok(());
                 }
             };
-            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert()?;
+            num_bytes._eq(&state.bv_from_u64(num_bytes_concrete, num_bytes.get_width())).assert()?;
             num_bytes_concrete
         }
     };
@@ -1080,12 +1080,12 @@ fn symex_memset<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
         debug!("Processing a memset of {} bytes", num_bytes);
         // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
         assert_eq!(val.get_width(), 8);
-        let big_val = if state.bvs_must_be_equal(&val, &B::BV::zero(state.solver.clone(), 8))? {
+        let big_val = if state.bvs_must_be_equal(&val, &state.zero(8))? {
             // optimize this special case
-            B::BV::zero(state.solver.clone(), 8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
-        } else if state.bvs_must_be_equal(&val, &B::BV::ones(state.solver.clone(), 8))? {
+            state.zero(8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
+        } else if state.bvs_must_be_equal(&val, &state.ones(8))? {
             // optimize this special case
-            B::BV::ones(state.solver.clone(), 8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
+            state.ones(8 * u32::try_from(num_bytes).map_err(|e| Error::OtherError(format!("memset too big: {} bytes (error: {})", num_bytes, e)))?)
         } else {
             std::iter::repeat(val).take(num_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap()
         };
@@ -1123,7 +1123,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                 Concretize::Minimum => solver_utils::min_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Maximum => solver_utils::max_possible_solution_for_bv(state.solver.clone(), &num_bytes)?.unwrap(),
                 Concretize::Prefer(val, _) => {
-                    let val_as_bv = B::BV::from_u64(state.solver.clone(), val, num_bytes.get_width());
+                    let val_as_bv = state.bv_from_u64(val, num_bytes.get_width());
                     if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
                         val
                     } else {
@@ -1140,7 +1140,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     debug!("Processing a memcpy with symbolic num_bytes, up to {}", max_num_bytes);
                     let mut src_addr = src;
                     let mut dest_addr = dest;
-                    let mut bytes_written = B::BV::zero(state.solver.clone(), num_bytes.get_width());
+                    let mut bytes_written = state.zero(num_bytes.get_width());
                     for _ in 0 ..= max_num_bytes {
                         let src_val = state.read(&src_addr, 8)?;
                         let dst_val = state.read(&dest_addr, 8)?;
@@ -1153,7 +1153,7 @@ fn symex_memcpy<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruction:
                     return Ok(());
                 }
             };
-            num_bytes._eq(&B::BV::from_u64(state.solver.clone(), num_bytes_concrete, num_bytes.get_width())).assert()?;
+            num_bytes._eq(&state.bv_from_u64(num_bytes_concrete, num_bytes.get_width())).assert()?;
             num_bytes_concrete
         },
     };
@@ -1186,8 +1186,8 @@ fn symex_objectsize<'p, B: Backend>(state: &mut State<'p, B>, call: &'p instruct
     // 'unknown', as this is valid behavior according to the LLVM spec.
     let arg1 = state.operand_to_bv(&call.arguments[1].0)?;
     let width = size(&call.get_type());
-    let zero = B::BV::zero(state.solver.clone(), width as u32);
-    let minusone = B::BV::ones(state.solver.clone(), width as u32);
+    let zero = state.zero(width as u32);
+    let minusone = state.ones(width as u32);
     state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), arg1.cond_bv(&zero, &minusone))
 }
 

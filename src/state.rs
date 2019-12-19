@@ -238,14 +238,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         debug!("Allocating functions");
         for (func, module) in project.all_functions() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-            let addr_bv = BV::from_u64(state.solver.clone(), addr, 64);
+            let addr_bv = state.bv_from_u64(addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
             state.global_allocations.allocate_function(func, module, addr, addr_bv);
         }
         debug!("Allocating function hooks");
         for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
             let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
-            let addr_bv = BV::from_u64(state.solver.clone(), addr, 64);
+            let addr_bv = state.bv_from_u64(addr, 64);
             debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
             state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
         }
@@ -291,7 +291,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// A common use case for this function is to test whether some `BV` must be
     /// equal to a given concrete value. You can do this with something like
-    /// `state.bvs_must_be_equal(bv, BV::from_u64(...))`.
+    /// `state.bvs_must_be_equal(bv, &state.bv_from_u64(...))`.
     ///
     /// This function and `bvs_can_be_equal()` are both more efficient than
     /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
@@ -308,7 +308,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// A common use case for this function is to test whether some `BV` can be
     /// equal to a given concrete value. You can do this with something like
-    /// `state.bvs_can_be_equal(bv, BV::from_u64(...))`.
+    /// `state.bvs_can_be_equal(bv, &state.bv_from_u64(...))`.
     ///
     /// This function and `bvs_must_be_equal()` are both more efficient than
     /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
@@ -417,6 +417,59 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         solver_utils::min_possible_solution_for_bv(self.solver.clone(), bv)
     }
 
+    /// Create a `BV` constant representing the given `bool` (either constant
+    /// `true` or constant `false`).
+    /// The resulting `BV` will be either constant `0` or constant `1`, and will
+    /// have bitwidth `1`.
+    pub fn bv_from_bool(&self, b: bool) -> B::BV {
+        B::BV::from_bool(self.solver.clone(), b)
+    }
+
+    /// Create a `BV` representing the given constant `i32` value, with the given
+    /// bitwidth.
+    pub fn bv_from_i32(&self, i: i32, width: u32) -> B::BV {
+        B::BV::from_i32(self.solver.clone(), i, width)
+    }
+
+    /// Create a `BV` representing the given constant `u32` value, with the given
+    /// bitwidth.
+    pub fn bv_from_u32(&self, u: u32, width: u32) -> B::BV {
+        B::BV::from_u32(self.solver.clone(), u, width)
+    }
+
+    /// Create a `BV` representing the given constant `i64` value, with the given
+    /// bitwidth.
+    pub fn bv_from_i64(&self, i: i64, width: u32) -> B::BV {
+        B::BV::from_i64(self.solver.clone(), i, width)
+    }
+
+    /// Create a `BV` representing the given constant `u64` value, with the given
+    /// bitwidth.
+    pub fn bv_from_u64(&self, u: u64, width: u32) -> B::BV {
+        B::BV::from_u64(self.solver.clone(), u, width)
+    }
+
+    /// Create a `BV` representing the constant `0` of the given bitwidth.
+    /// This is equivalent to `self.bv_from_i32(0, width)` but may be more
+    /// efficient.
+    pub fn zero(&self, width: u32) -> B::BV {
+        B::BV::zero(self.solver.clone(), width)
+    }
+
+    /// Create a `BV` representing the constant `1` of the given bitwidth.
+    /// This is equivalent to `self.bv_from_i32(1, width)` but may be more
+    /// efficient.
+    pub fn one(&self, width: u32) -> B::BV {
+        B::BV::one(self.solver.clone(), width)
+    }
+
+    /// Create a `BV` constant of the given width, where all bits are set to one.
+    /// This is equivalent to `self.bv_from_i32(-1, width)` but may be more
+    /// efficient.
+    pub fn ones(&self, width: u32) -> B::BV {
+        B::BV::ones(self.solver.clone(), width)
+    }
+
     /// Create a new (unconstrained) `BV` for the given `Name` (in the current function).
     ///
     /// This function performs uniquing, so if you call it twice
@@ -493,11 +546,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Convert a `Constant` to the appropriate `BV`.
     pub fn const_to_bv(&self, c: &Constant) -> Result<B::BV> {
         match c {
-            Constant::Int { bits, value } => Ok(BV::from_u64(self.solver.clone(), *value, *bits)),
+            Constant::Int { bits, value } => Ok(self.bv_from_u64(*value, *bits)),
             Constant::Null(ty)
             | Constant::AggregateZero(ty)
             | Constant::Undef(ty)
-                => Ok(BV::zero(self.solver.clone(), size(ty) as u32)),
+                => Ok(self.zero(size(ty) as u32)),
             Constant::Struct { values: elements, .. }
             | Constant::Array { elements, .. }
             | Constant::Vector(elements)
@@ -683,7 +736,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
     fn get_offset_recursive<'a>(&self, mut indices: impl Iterator<Item = &'a Constant>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
         match indices.next() {
-            None => Ok(BV::zero(self.solver.clone(), result_bits)),
+            None => Ok(self.zero(result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = zero_extend_to_bits(self.const_to_bv(index)?, result_bits);
@@ -695,7 +748,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                     Constant::Int { value: index, .. } => {
                         let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
                         self.get_offset_recursive(indices, &nested_ty, result_bits)
-                            .map(|bv| bv.add(&B::BV::from_u64(self.solver.clone(), offset as u64, result_bits)))
+                            .map(|bv| bv.add(&self.bv_from_u64(offset as u64, result_bits)))
                     },
                     _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                 },
@@ -710,7 +763,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                         match index {
                             Constant::Int { value: index, .. } => {
                                 let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
-                                self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&B::BV::from_u64(self.solver.clone(), offset as u64, result_bits)))
+                                self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&self.bv_from_u64(offset as u64, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                         }
@@ -832,7 +885,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             let addr_width = addr.get_width();
             let op_lower = addr;
             let bytes = if bits < 8 { 1 } else { bits / 8 };
-            let op_upper = addr.add(&B::BV::from_u32(self.solver.clone(), bytes - 1, addr_width));
+            let op_upper = addr.add(&self.bv_from_u32(bytes - 1, addr_width));
             for watchpoint in self.mem_watchpoints.iter() {
                 if self.is_watchpoint_triggered(watchpoint, op_lower, &op_upper)? {
                     retval = true;
@@ -848,8 +901,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         let width = interval_lower.get_width();
         assert_eq!(width, interval_upper.get_width());
 
-        let watchpoint_lower = B::BV::from_u64(self.solver.clone(), watchpoint.lower(), width);
-        let watchpoint_upper = B::BV::from_u64(self.solver.clone(), watchpoint.upper(), width);
+        let watchpoint_lower = self.bv_from_u64(watchpoint.lower(), width);
+        let watchpoint_upper = self.bv_from_u64(watchpoint.upper(), width);
 
         // There are exactly 3 possibilities for how the watchpoint could be triggered:
         //
@@ -879,7 +932,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Allocate a value of size `bits`; return a pointer to the newly allocated object
     pub fn allocate(&mut self, bits: impl Into<u64>) -> B::BV {
         let raw_ptr = self.alloc.alloc(bits);
-        BV::from_u64(self.solver.clone(), raw_ptr, 64)
+        self.bv_from_u64(raw_ptr, 64)
     }
 
     /// Get the size, in bits, of the allocation at the given address, or `None`
@@ -1015,12 +1068,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use boolector::Btor;
     use crate::solver_utils::SolutionCount;
     use std::collections::HashMap;
-    use std::rc::Rc;
-
-    type BV = boolector::BV<Rc<Btor>>;
 
     // we don't include tests here for Memory, Alloc, or VarMap; those are tested in their own modules.
     // Instead, here we just test the nontrivial functionality that `State` has itself.
@@ -1062,103 +1111,113 @@ mod tests {
     }
 
     #[test]
-    fn sat() {
+    fn sat() -> Result<()> {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let state = blank_state(&project, "test_func");
+        let mut state = blank_state(&project, "test_func");
 
         // empty state should be sat
         assert_eq!(state.sat(), Ok(true));
 
         // adding True constraint should still be sat
-        BV::from_bool(state.solver.clone().into(), true).assert();
+        state.bv_from_bool(true).assert();
         assert_eq!(state.sat(), Ok(true));
 
         // adding x > 0 constraint should still be sat
-        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
-        x.sgt(&BV::zero(state.solver.clone().into(), 64)).assert();
+        let x = state.new_bv_with_name(Name::from("x"), 64)?;
+        x.sgt(&state.zero(64)).assert();
         assert_eq!(state.sat(), Ok(true));
+
+        Ok(())
     }
 
     #[test]
-    fn unsat() {
+    fn unsat() -> Result<()> {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
         let state = blank_state(&project, "test_func");
 
         // adding False constraint should be unsat
-        BV::from_bool(state.solver.clone().into(), false).assert();
+        state.bv_from_bool(false).assert();
         assert_eq!(state.sat(), Ok(false));
+
+        Ok(())
     }
 
     #[test]
-    fn unsat_with_extra_constraints() {
+    fn unsat_with_extra_constraints() -> Result<()> {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let state = blank_state(&project, "test_func");
+        let mut state = blank_state(&project, "test_func");
 
         // adding x > 3 constraint should still be sat
-        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
-        x.ugt(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
+        let x = state.new_bv_with_name(Name::from("x"), 64)?;
+        x.ugt(&state.bv_from_u64(3, 64)).assert();
         assert_eq!(state.sat(), Ok(true));
 
         // adding x < 3 constraint should make us unsat
-        let bad_constraint = x.ult(&BV::from_u64(state.solver.clone().into(), 3, 64));
+        let bad_constraint = x.ult(&state.bv_from_u64(3, 64));
         assert_eq!(state.sat_with_extra_constraints(std::iter::once(&bad_constraint)), Ok(false));
 
         // the state itself should still be sat, extra constraints weren't permanently added
         assert_eq!(state.sat(), Ok(true));
+
+        Ok(())
     }
 
     #[test]
-    fn get_a_solution() {
+    fn get_a_solution() -> Result<()> {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let state = blank_state(&project, "test_func");
+        let mut state = blank_state(&project, "test_func");
 
         // add x > 3 constraint
-        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
-        x.ugt(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
+        let x = state.new_bv_with_name(Name::from("x"), 64)?;
+        x.ugt(&state.bv_from_u64(3, 64)).assert();
 
         // check that the computed value of x is > 3
         let x_value = state.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x").as_u64().unwrap();
         assert!(x_value > 3);
+
+        Ok(())
     }
 
     #[test]
-    fn possible_solutions() {
+    fn possible_solutions() -> Result<()> {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
-        let state = blank_state(&project, "test_func");
+        let mut state = blank_state(&project, "test_func");
 
         // add x > 3 constraint
-        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
-        x.ugt(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
+        let x = state.new_bv_with_name(Name::from("x"), 64)?;
+        x.ugt(&state.bv_from_u64(3, 64)).assert();
 
         // check that there are more than 2 solutions
         let num_solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().count();
         assert_eq!(num_solutions, SolutionCount::AtLeast(3));
 
         // add x < 6 constraint
-        x.ult(&BV::from_u64(state.solver.clone().into(), 6, 64)).assert();
+        x.ult(&state.bv_from_u64(6, 64)).assert();
 
         // check that there are now exactly two solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::from_iter(vec![4,5].into_iter()))));
 
         // add x < 5 constraint
-        x.ult(&BV::from_u64(state.solver.clone().into(), 5, 64)).assert();
+        x.ult(&state.bv_from_u64(5, 64)).assert();
 
         // check that there is now exactly one solution
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(4)))));
 
         // add x < 3 constraint
-        x.ult(&BV::from_u64(state.solver.clone().into(), 3, 64)).assert();
+        x.ult(&state.bv_from_u64(3, 64)).assert();
 
         // check that there are now no solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::new())));
+
+        Ok(())
     }
 
     #[test]
@@ -1233,30 +1292,30 @@ mod tests {
     }
 
     #[test]
-    fn backtracking() {
+    fn backtracking() -> Result<()> {
         let func = blank_function("test_func");
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
         state.record_path_entry();
 
         // assert x > 11
-        let x = BV::new(state.solver.clone().into(), 64, Some("x"));
-        x.sgt(&BV::from_i64(state.solver.clone().into(), 11, 64)).assert();
+        let x = state.new_bv_with_name(Name::from("x"), 64)?;
+        x.sgt(&state.bv_from_i64(11, 64)).assert();
 
         // create a backtrack point with constraint y > 5
-        let y = BV::new(state.solver.clone().into(), 64, Some("y"));
-        let constraint = y.sgt(&BV::from_i64(state.solver.clone().into(), 5, 64));
+        let y = state.new_bv_with_name(Name::from("y"), 64)?;
+        let constraint = y.sgt(&state.bv_from_i64(5, 64));
         let bb = BasicBlock::new(Name::from("bb_target"));
         state.save_backtracking_point(bb.name.clone(), constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
         assert_eq!(
-            state.sat_with_extra_constraints(std::iter::once(&y.slt(&BV::from_i64(state.solver.clone().into(), 4, 64)))),
+            state.sat_with_extra_constraints(std::iter::once(&y.slt(&state.bv_from_i64(4, 64)))),
             Ok(true),
         );
 
         // assert x < 8 to make us unsat
-        x.slt(&BV::from_i64(state.solver.clone().into(), 8, 64)).assert();
+        x.slt(&state.bv_from_i64(8, 64)).assert();
         assert_eq!(state.sat(), Ok(false));
 
         // note the pre-rollback location
@@ -1285,6 +1344,8 @@ mod tests {
 
         // check that trying to backtrack again fails
         assert!(!state.revert_to_backtracking_point().unwrap());
+
+        Ok(())
     }
 
     #[test]
@@ -1295,10 +1356,10 @@ mod tests {
 
         // assert x < 42
         let x = state.new_bv_with_name(Name::from("x"), 64).unwrap();
-        x.ult(&BV::from_u32(state.solver.clone().into(), 42, 64)).assert();
+        x.ult(&state.bv_from_u32(42, 64)).assert();
 
         // `y` is equal to `x + 7`
-        let y = x.add(&BV::from_u32(state.solver.clone().into(), 7, 64));
+        let y = x.add(&state.bv_from_u32(7, 64));
         state.assign_bv_to_name(Name::from("y"), y).unwrap();
 
         // fork the state
@@ -1313,8 +1374,8 @@ mod tests {
         let y_2 = state_2.operand_to_bv(&op_y).unwrap();
 
         // in one state, we assert `x > 3`, while in the other, we assert `x < 3`
-        x_1.ugt(&BV::from_u32(state.solver.clone().into(), 3, 64)).assert();
-        x_2.ult(&BV::from_u32(state_2.solver.clone().into(), 3, 64)).assert();
+        x_1.ugt(&state.bv_from_u32(3, 64)).assert();
+        x_2.ult(&state_2.bv_from_u32(3, 64)).assert();
 
         // check that in the first state, `y > 10` (looking up two different ways)
         let y_solution = state
@@ -1359,7 +1420,7 @@ mod tests {
         state.add_mem_watchpoint(Watchpoint::new(0x2000, 32));
 
         // Experiments on the first watchpoint
-        let addr = BV::from_u32(state.solver.clone(), 0x1000, 64);
+        let addr = state.bv_from_u32(0x1000, 64);
 
         // check that we can trigger it with a 1-byte write to 0x1000
         assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
@@ -1368,43 +1429,43 @@ mod tests {
         assert!(state.process_watchpoint_triggers(&addr, 64, true)?);
 
         // check that we can trigger it with a 1-byte write to 0x1002
-        let addr = BV::from_u32(state.solver.clone(), 0x1002, 64);
+        let addr = state.bv_from_u32(0x1002, 64);
         assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
 
         // check that we can trigger it with a 8-byte write to 0x1002
         assert!(state.process_watchpoint_triggers(&addr, 64, true)?);
 
         // check that we don't trigger it with a 1-byte write to 0x0fff
-        let addr = BV::from_u32(state.solver.clone(), 0x0fff, 64);
+        let addr = state.bv_from_u32(0x0fff, 64);
         assert!(!state.process_watchpoint_triggers(&addr, 8, true)?);
 
         // check that we can trigger it with an 8-byte write to 0x0fff
         assert!(state.process_watchpoint_triggers(&addr, 64, true)?);
 
         // check that we don't trigger it with a 1-byte write to 0x1008
-        let addr = BV::from_u32(state.solver.clone(), 0x1008, 64);
+        let addr = state.bv_from_u32(0x1008, 64);
         assert!(!state.process_watchpoint_triggers(&addr, 8, true)?);
 
         // check that we do trigger it with a 0x100-byte write to 0x0ff0
-        let addr = BV::from_u32(state.solver.clone(), 0x0ff0, 64);
+        let addr = state.bv_from_u32(0x0ff0, 64);
         assert!(state.process_watchpoint_triggers(&addr, 0x100 * 8, true)?);
 
         // Experiments on the second watchpoint
-        let addr = BV::from_u32(state.solver.clone(), 0x2000, 64);
+        let addr = state.bv_from_u32(0x2000, 64);
 
         // check that we can trigger it with a 1-byte write to 0x2000
         assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
 
         // check that we can trigger it with a 1-byte write to 0x2010
-        let addr = BV::from_u32(state.solver.clone(), 0x2010, 64);
+        let addr = state.bv_from_u32(0x2010, 64);
         assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
 
         // check that a write touching both watchpoints does trigger
-        let addr = BV::from_u32(state.solver.clone(), 0x0ff0, 64);
+        let addr = state.bv_from_u32(0x0ff0, 64);
         assert!(state.process_watchpoint_triggers(&addr, 0x10000, true)?);
 
         // check that a write in between the two watchpoints doesn't trigger
-        let addr = BV::from_u32(state.solver.clone(), 0x1f00, 64);
+        let addr = state.bv_from_u32(0x1f00, 64);
         assert!(!state.process_watchpoint_triggers(&addr, 16, true)?);
 
         Ok(())
