@@ -4,8 +4,9 @@ use crate::error::*;
 use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
+use crate::watchpoints::Watchpoint;
 use llvm_ir::instruction;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
@@ -29,6 +30,11 @@ pub struct Config<'p, B> where B: Backend {
     /// The set of currently active function hooks; see
     /// [`FunctionHooks`](struct.FunctionHooks.html) for more details
     pub function_hooks: FunctionHooks<'p, B>,
+
+    /// The initial set of memory watchpoints when a `State` is created.
+    /// More watchpoints may be added or removed at any time with
+    /// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.
+    pub initial_mem_watchpoints: HashSet<Watchpoint>,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -71,7 +77,8 @@ pub enum Concretize {
 
 impl<'p, B: Backend> Config<'p, B> {
     /// Creates a new `Config` with the given `loop_bound` and
-    /// `concretize_memcpy_lengths()` options, and no function hooks.
+    /// `concretize_memcpy_lengths()` options, and no function hooks or memory
+    /// watchpoints.
     ///
     /// You may want to consider `Config::default()` which provides defaults for
     /// all parameters and comes with predefined hooks for common functions.
@@ -81,6 +88,7 @@ impl<'p, B: Backend> Config<'p, B> {
             null_detection,
             concretize_memcpy_lengths,
             function_hooks: FunctionHooks::new(),
+            initial_mem_watchpoints: HashSet::new(),
         }
     }
 }
@@ -102,6 +110,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,
             function_hooks: FunctionHooks::default(),
+            initial_mem_watchpoints: HashSet::new(),
         }
     }
 }

@@ -25,6 +25,7 @@ mod alloc;
 mod varmap;
 mod double_keyed_map;
 mod global_allocations;
+pub mod watchpoints;
 
 pub mod solver_utils;
 use solver_utils::PossibleSolutions;
