@@ -6,5 +6,4 @@ implementors["haybale"] = [];
             } else {
                 window.pending_implementors = implementors;
             }
-        
-})()
+        })()

@@ -6,5 +6,4 @@ implementors["haybale"] = [{text:"impl&lt;'p, B:&nbsp;<a class=\"trait\" href=\"
             } else {
                 window.pending_implementors = implementors;
             }
-        
-})()
+        })()

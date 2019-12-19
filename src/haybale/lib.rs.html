@@ -269,38 +269,38 @@
 }
 
 <span class="kw">impl</span> <span class="ident">SolutionValue</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i8</span>(<span class="self">self</span>) <span class="op">-&gt;</span> <span class="ident">i8</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i8</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">i8</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">SolutionValue</span>::<span class="ident">I8</span>(<span class="ident">i</span>) <span class="op">=&gt;</span> <span class="ident">i</span>,
-            <span class="kw">_</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i8 on {:?}&quot;</span>, <span class="self">self</span>),
+            <span class="ident">SolutionValue</span>::<span class="ident">I8</span>(<span class="ident">i</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">i</span>,
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i8 on {:?}&quot;</span>, <span class="self">self</span>),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i16</span>(<span class="self">self</span>) <span class="op">-&gt;</span> <span class="ident">i16</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i16</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">i16</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">SolutionValue</span>::<span class="ident">I16</span>(<span class="ident">i</span>) <span class="op">=&gt;</span> <span class="ident">i</span>,
-            <span class="kw">_</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i16 on {:?}&quot;</span>, <span class="self">self</span>),
+            <span class="ident">SolutionValue</span>::<span class="ident">I16</span>(<span class="ident">i</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">i</span>,
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i16 on {:?}&quot;</span>, <span class="self">self</span>),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i32</span>(<span class="self">self</span>) <span class="op">-&gt;</span> <span class="ident">i32</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i32</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">i32</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">SolutionValue</span>::<span class="ident">I32</span>(<span class="ident">i</span>) <span class="op">=&gt;</span> <span class="ident">i</span>,
-            <span class="kw">_</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i32 on {:?}&quot;</span>, <span class="self">self</span>),
+            <span class="ident">SolutionValue</span>::<span class="ident">I32</span>(<span class="ident">i</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">i</span>,
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i32 on {:?}&quot;</span>, <span class="self">self</span>),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i64</span>(<span class="self">self</span>) <span class="op">-&gt;</span> <span class="ident">i64</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_i64</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">i64</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">SolutionValue</span>::<span class="ident">I64</span>(<span class="ident">i</span>) <span class="op">=&gt;</span> <span class="ident">i</span>,
-            <span class="kw">_</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i64 on {:?}&quot;</span>, <span class="self">self</span>),
+            <span class="ident">SolutionValue</span>::<span class="ident">I64</span>(<span class="ident">i</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">i</span>,
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_i64 on {:?}&quot;</span>, <span class="self">self</span>),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_ptr</span>(<span class="self">self</span>) <span class="op">-&gt;</span> <span class="ident">u64</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">unwrap_to_ptr</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u64</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">SolutionValue</span>::<span class="ident">Ptr</span>(<span class="ident">u</span>) <span class="op">=&gt;</span> <span class="ident">u</span>,
-            <span class="kw">_</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_ptr on {:?}&quot;</span>, <span class="self">self</span>),
+            <span class="ident">SolutionValue</span>::<span class="ident">Ptr</span>(<span class="ident">u</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">u</span>,
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;unwrap_to_ptr on {:?}&quot;</span>, <span class="self">self</span>),
         }
     }
 }
@@ -319,11 +319,11 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// Note: `find_zero_of_func()` may be of some use itself, but also serves as an</span>
 <span class="doccomment">/// example of how you can use the other public functions in the crate.</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">find_zero_of_func</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(<span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>, <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">config</span>: <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">BtorBackend</span><span class="op">&gt;</span>) <span class="op">-&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">SolutionValue</span><span class="op">&gt;&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">find_zero_of_func</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(<span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>, <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">config</span>: <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">BtorBackend</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">SolutionValue</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">em</span>: <span class="ident">ExecutionManager</span><span class="op">&lt;</span><span class="ident">BtorBackend</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">symex_function</span>(<span class="ident">funcname</span>, <span class="ident">project</span>, <span class="ident">config</span>);
 
     <span class="comment">// constrain pointer arguments to be not-null</span>
-    <span class="kw">let</span> (<span class="ident">func</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="ident">project</span>.<span class="ident">get_func_by_name</span>(<span class="ident">funcname</span>).<span class="ident">unwrap_or_else</span>(<span class="op">||</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Failed to find function named {:?}&quot;</span>, <span class="ident">funcname</span>));
+    <span class="kw">let</span> (<span class="ident">func</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="ident">project</span>.<span class="ident">get_func_by_name</span>(<span class="ident">funcname</span>).<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Failed to find function named {:?}&quot;</span>, <span class="ident">funcname</span>));
     <span class="kw">for</span> (<span class="ident">param</span>, <span class="ident">bv</span>) <span class="kw">in</span> <span class="ident">func</span>.<span class="ident">parameters</span>.<span class="ident">iter</span>().<span class="ident">zip</span>(<span class="ident">em</span>.<span class="ident">param_bvs</span>()) {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span> <span class="ident">param</span>.<span class="ident">get_type</span>() {
             <span class="ident">bv</span>.<span class="ident">_ne</span>(<span class="kw-2">&amp;</span><span class="ident">BV</span>::<span class="ident">zero</span>(<span class="ident">em</span>.<span class="ident">state</span>().<span class="ident">solver</span>.<span class="ident">clone</span>(), <span class="ident">bv</span>.<span class="ident">get_width</span>())).<span class="ident">assert</span>();
@@ -335,8 +335,8 @@
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">found</span> <span class="op">=</span> <span class="bool-val">false</span>;
     <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">bvretval</span>) <span class="op">=</span> <span class="ident">em</span>.<span class="ident">next</span>() {
         <span class="kw">match</span> <span class="ident">bvretval</span>.<span class="ident">unwrap</span>() {
-            <span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Function shouldn&#39;t return void&quot;</span>),
-            <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bvretval</span>) <span class="op">=&gt;</span> {
+            <span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Function shouldn&#39;t return void&quot;</span>),
+            <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bvretval</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">em</span>.<span class="ident">mut_state</span>();
                 <span class="ident">bvretval</span>.<span class="ident">_eq</span>(<span class="kw-2">&amp;</span><span class="ident">zero</span>).<span class="ident">assert</span>();
                 <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">sat</span>().<span class="ident">unwrap</span>() {
@@ -357,12 +357,12 @@
                 .<span class="ident">as_u64</span>()
                 .<span class="ident">expect</span>(<span class="string">&quot;parameter more than 64 bits wide&quot;</span>);
             <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">p</span>.<span class="ident">ty</span> {
-                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">8</span> } <span class="op">=&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I8</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i8</span>),
-                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">16</span> } <span class="op">=&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I16</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i16</span>),
-                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">32</span> } <span class="op">=&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I32</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i32</span>),
-                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">64</span> } <span class="op">=&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I64</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i64</span>),
-                <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">Ptr</span>(<span class="ident">param_as_u64</span>),
-                <span class="ident">ty</span> <span class="op">=&gt;</span> <span class="macro">unimplemented</span><span class="macro">!</span>(<span class="string">&quot;Function parameter with type {:?}&quot;</span>, <span class="ident">ty</span>)
+                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">8</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I8</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i8</span>),
+                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">16</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I16</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i16</span>),
+                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">32</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I32</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i32</span>),
+                <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">64</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">I64</span>(<span class="ident">param_as_u64</span> <span class="kw">as</span> <span class="ident">i64</span>),
+                <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">SolutionValue</span>::<span class="ident">Ptr</span>(<span class="ident">param_as_u64</span>),
+                <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">unimplemented</span><span class="macro">!</span>(<span class="string">&quot;Function parameter with type {:?}&quot;</span>, <span class="ident">ty</span>)
             }
         }).<span class="ident">collect</span>())
     } <span class="kw">else</span> {
@@ -392,11 +392,11 @@
 <span class="doccomment">/// the crate.</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_possible_return_values_of_func</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(
     <span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
-    <span class="ident">args</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;&gt;</span>,
+    <span class="ident">args</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">config</span>: <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">BtorBackend</span><span class="op">&gt;</span>,
     <span class="ident">n</span>: <span class="ident">usize</span>,
-) <span class="op">-&gt;</span> <span class="ident">PossibleSolutions</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> {
+) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">PossibleSolutions</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> {
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">em</span>: <span class="ident">ExecutionManager</span><span class="op">&lt;</span><span class="ident">BtorBackend</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">symex_function</span>(<span class="ident">funcname</span>, <span class="ident">project</span>, <span class="ident">config</span>);
 
     <span class="kw">let</span> (<span class="ident">func</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="ident">project</span>.<span class="ident">get_func_by_name</span>(<span class="ident">funcname</span>).<span class="ident">expect</span>(<span class="string">&quot;Failed to find function&quot;</span>);
@@ -411,21 +411,21 @@
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">candidate_values</span> <span class="op">=</span> <span class="ident">HashSet</span>::<span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>::<span class="ident">new</span>();
     <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">bvretval</span>) <span class="op">=</span> <span class="ident">em</span>.<span class="ident">next</span>() {
         <span class="kw">match</span> <span class="ident">bvretval</span>.<span class="ident">unwrap</span>() {
-            <span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span> <span class="op">=&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;This function shouldn&#39;t be called with functions that return void&quot;</span>),
-            <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bvretval</span>) <span class="op">=&gt;</span> {
+            <span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;This function shouldn&#39;t be called with functions that return void&quot;</span>),
+            <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bvretval</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">em</span>.<span class="ident">mut_state</span>();
                 <span class="comment">// rule out all the values we already have - we&#39;re interested in new values</span>
                 <span class="kw">for</span> <span class="ident">candidate</span> <span class="kw">in</span> <span class="ident">candidate_values</span>.<span class="ident">iter</span>() {
                     <span class="ident">bvretval</span>.<span class="ident">_ne</span>(<span class="kw-2">&amp;</span><span class="ident">BV</span>::<span class="ident">from_u64</span>(<span class="ident">state</span>.<span class="ident">solver</span>.<span class="ident">clone</span>(), <span class="kw-2">*</span><span class="ident">candidate</span>, <span class="ident">return_width</span> <span class="kw">as</span> <span class="ident">u32</span>)).<span class="ident">assert</span>();
                 }
                 <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">get_possible_solutions_for_bv</span>(<span class="kw-2">&amp;</span><span class="ident">bvretval</span>, <span class="ident">n</span>).<span class="ident">unwrap</span>() {
-                    <span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">v</span>) <span class="op">=&gt;</span> {
+                    <span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="ident">candidate_values</span>.<span class="ident">extend</span>(<span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">bvsol</span><span class="op">|</span> <span class="ident">bvsol</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>()));
                         <span class="kw">if</span> <span class="ident">candidate_values</span>.<span class="ident">len</span>() <span class="op">&gt;</span> <span class="ident">n</span> {
                             <span class="kw">break</span>;
                         }
                     },
-                    <span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>(<span class="ident">v</span>) <span class="op">=&gt;</span> {
+                    <span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="ident">candidate_values</span>.<span class="ident">extend</span>(<span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">bvsol</span><span class="op">|</span> <span class="ident">bvsol</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>()));
                         <span class="kw">break</span>;  <span class="comment">// the total must be over n at this point</span>
                     },

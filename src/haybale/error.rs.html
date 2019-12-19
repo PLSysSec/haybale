@@ -79,25 +79,25 @@
 }
 
 <span class="kw">impl</span> <span class="ident">fmt</span>::<span class="ident">Display</span> <span class="kw">for</span> <span class="ident">Error</span> {
-    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">fmt</span>::<span class="ident">Formatter</span>) <span class="op">-&gt;</span> <span class="ident">fmt</span>::<span class="prelude-ty">Result</span> {
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">fmt</span>::<span class="ident">Formatter</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="prelude-ty">Result</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">Error</span>::<span class="ident">Unsat</span> <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">Unsat</span> <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`Unsat`: the current state or path is unsat&quot;</span>),
-            <span class="ident">Error</span>::<span class="ident">LoopBoundExceeded</span> <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">LoopBoundExceeded</span> <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`LoopBoundExceeded`: the current path has exceeded the configured `loop_bound`&quot;</span>),
-            <span class="ident">Error</span>::<span class="ident">NullPointerDereference</span> <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">NullPointerDereference</span> <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`NullPointerDereference`: the current path has attempted to dereference a null pointer&quot;</span>),
-            <span class="ident">Error</span>::<span class="ident">FunctionNotFound</span>(<span class="ident">funcname</span>) <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">FunctionNotFound</span>(<span class="ident">funcname</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`FunctionNotFound`: encountered a call of a function named {:?}, but failed to find an LLVM definition, a function hook, or a built-in handler for it&quot;</span>, <span class="ident">funcname</span>),
-            <span class="ident">Error</span>::<span class="ident">BoolCoercionError</span>(<span class="ident">bv</span>, <span class="ident">size</span>) <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">BoolCoercionError</span>(<span class="ident">bv</span>, <span class="ident">size</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`BoolCoercionError`: can&#39;t coerce a BV {} bits long into a Bool; the BV was {}&quot;</span>, <span class="ident">size</span>, <span class="ident">bv</span>),
-            <span class="ident">Error</span>::<span class="ident">SolverError</span>(<span class="ident">details</span>) <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">SolverError</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`SolverError`: the solver returned this processing error while evaluating a query: {}&quot;</span>, <span class="ident">details</span>),
-            <span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="ident">details</span>) <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`UnsupportedInstruction`: encountered an LLVM instruction which is not currently supported: {}&quot;</span>, <span class="ident">details</span>),
-            <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="ident">details</span>) <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`MalformedInstruction`: encountered an LLVM instruction which was malformed, or at least didn&#39;t conform to our expected invariants: {}&quot;</span>, <span class="ident">details</span>),
-            <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="ident">details</span>) <span class="op">=&gt;</span>
+            <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`OtherError`: {}&quot;</span>, <span class="ident">details</span>),
         }
     }
