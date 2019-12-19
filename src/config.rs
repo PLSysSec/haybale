@@ -31,10 +31,12 @@ pub struct Config<'p, B> where B: Backend {
     /// [`FunctionHooks`](struct.FunctionHooks.html) for more details
     pub function_hooks: FunctionHooks<'p, B>,
 
-    /// The initial set of memory watchpoints when a `State` is created.
+    /// The initial set of memory watchpoints when a `State` is created (their
+    /// names, and the actual watchpoints).
+    ///
     /// More watchpoints may be added or removed at any time with
     /// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.
-    pub initial_mem_watchpoints: HashSet<Watchpoint>,
+    pub initial_mem_watchpoints: HashSet<(String, Watchpoint)>,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]

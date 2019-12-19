@@ -19,7 +19,7 @@ use crate::layout::*;
 use crate::project::Project;
 use crate::solver_utils::{self, PossibleSolutions};
 use crate::varmap::{VarMap, RestoreInfo};
-use crate::watchpoints::Watchpoint;
+use crate::watchpoints::{Watchpoint, Watchpoints};
 
 /// A `State` describes the full program state at a given moment during symbolic
 /// execution.
@@ -54,8 +54,9 @@ pub struct State<'p, B: Backend> {
     ///
     /// These will persist across backtracking - i.e., backtracking will not
     /// restore watchpoints to what they were at the backtrack point;
-    /// backtracking will not touch the set of mem_watchpoints.
-    mem_watchpoints: HashSet<Watchpoint>,
+    /// backtracking will not touch the set of mem_watchpoints or their
+    /// enabled statuses.
+    mem_watchpoints: Watchpoints,
 }
 
 /// Describes one segment of a path through the LLVM IR.
@@ -187,7 +188,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             stack: Vec::new(),
             backtrack_points: Vec::new(),
             path: Vec::new(),
-            mem_watchpoints: config.initial_mem_watchpoints.clone(),
+            mem_watchpoints: Watchpoints::from_iter(config.initial_mem_watchpoints.iter().cloned()),
 
             // listed last (out-of-order) so that they can be used above but moved in now
             solver,
@@ -839,94 +840,56 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Read a value `bits` bits long from memory at `addr`.
     /// Note that `bits` can be arbitrarily large.
     pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
-        self.process_watchpoint_triggers(addr, bits, false)?;
+        self.mem_watchpoints.process_watchpoint_triggers(self, addr, bits, false)?;
         self.mem.borrow().read(addr, bits)
     }
 
     /// Write a value into memory at `addr`.
     /// Note that `val` can be an arbitrarily large bitvector.
     pub fn write(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
-        self.process_watchpoint_triggers(addr, val.get_width(), true)?;
+        self.mem_watchpoints.process_watchpoint_triggers(self, addr, val.get_width(), true)?;
         self.mem.borrow_mut().write(addr, val)
     }
 
-    /// Add a memory watchpoint.
+    /// Add a memory watchpoint. It will be enabled unless/until
+    /// `disable_watchpoint()` is called on it.
+    ///
+    /// If a watchpoint with the same name was previously added, this will
+    /// replace that watchpoint and return `true`. Otherwise, this will return
+    /// `false`.
     ///
     /// When any watched memory is read or written to, an INFO-level log message
     /// will be generated.
-    pub fn add_mem_watchpoint(&mut self, watchpoint: Watchpoint) {
-        self.mem_watchpoints.insert(watchpoint);
+    pub fn add_mem_watchpoint(&mut self, name: impl Into<String>, watchpoint: Watchpoint) -> bool {
+        self.mem_watchpoints.add(name, watchpoint)
     }
 
-    /// Remove a memory watchpoint.
+    /// Remove the memory watchpoint with the given `name`.
     ///
-    /// Does nothing if that `Watchpoint` (or an equivalent `Watchpoint` as
-    /// determined by `Eq`) was not previously added.
-    ///
-    /// Returns `true` if removal was successful, or `false` if the desired watchpoint
-    /// was not found (in which case no action was taken).
-    pub fn rm_mem_watchpoint(&mut self, watchpoint: &Watchpoint) -> bool {
-        self.mem_watchpoints.remove(watchpoint)
+    /// Returns `true` if the operation was successful, or `false` if no
+    /// watchpoint with that name was found.
+    pub fn rm_mem_watchpoint(&mut self, name: &str) -> bool {
+        self.mem_watchpoints.remove(name)
     }
 
-    /// For a memory operation on the given address with the given bitwidth,
-    /// check whether it triggers any active watchpoints.
+    /// Disable the memory watchpoint with the given `name`. Disabled
+    /// watchpoints will not generate any log messages unless/until
+    /// `enable_watchpoint()` is called on them.
     ///
-    /// If it does, then generate the appropriate log messages for watchpoints
-    /// being triggered.
-    ///
-    /// Returns `true` if any watchpoints were triggered, `false` if not.
-    ///
-    /// `is_write`: whether the operation is a read (`false`) or write (`true`),
-    /// used only for composing the log message.
-    fn process_watchpoint_triggers(&self, addr: &B::BV, bits: u32, is_write: bool) -> Result<bool> {
-        let mut retval = false;
-        if !self.mem_watchpoints.is_empty() {
-            let addr_width = addr.get_width();
-            let op_lower = addr;
-            let bytes = if bits < 8 { 1 } else { bits / 8 };
-            let op_upper = addr.add(&self.bv_from_u32(bytes - 1, addr_width));
-            for watchpoint in self.mem_watchpoints.iter() {
-                if self.is_watchpoint_triggered(watchpoint, op_lower, &op_upper)? {
-                    retval = true;
-                    info!("Memory watchpoint {} {} by {:?}", watchpoint, if is_write { "written" } else { "read" }, self.cur_loc);
-                }
-            }
-        }
-        Ok(retval)
+    /// Returns `true` if the operation is successful, or `false` if no
+    /// watchpoint with that name was found. Disabling an already-disabled
+    /// watchpoint will have no effect and will return `true`.
+    pub fn disable_watchpoint(&mut self, name: &str) -> bool {
+        self.mem_watchpoints.disable(name)
     }
 
-    /// Is the given watchpoint triggered on any address in the given interval (with both endpoints inclusive)?
-    fn is_watchpoint_triggered(&self, watchpoint: &Watchpoint, interval_lower: &B::BV, interval_upper: &B::BV) -> Result<bool> {
-        let width = interval_lower.get_width();
-        assert_eq!(width, interval_upper.get_width());
-
-        let watchpoint_lower = self.bv_from_u64(watchpoint.lower(), width);
-        let watchpoint_upper = self.bv_from_u64(watchpoint.upper(), width);
-
-        // There are exactly 3 possibilities for how the watchpoint could be triggered:
-        //
-        // - the lower endpoint of the current mem read/write is contained in the watched interval
-        //   current mem op:            -----
-        //   watchpoint:           --------
-        //
-        // - the upper endpoint of the current mem read/write is contained in the watched interval
-        //   current mem op:        -----
-        //   watchpoint:              --------
-        //
-        // - neither endpoint of the current mem read/write is contained, but the read/write contains the entire watched interval
-        //   current mem op:        ---------------
-        //   watchpoint:              --------
-        //
-        // - (you may think there's a fourth case, where the watched interval contains the
-        //      current mem read/write, but that will trigger both #1 and #2)
-        let interval_lower_contained = interval_lower.ugte(&watchpoint_lower).and(&interval_lower.ulte(&watchpoint_upper));
-        let interval_upper_contained = interval_upper.ugte(&watchpoint_lower).and(&interval_upper.ulte(&watchpoint_upper));
-        let contains_entire_watchpoint = interval_lower.ulte(&watchpoint_lower).and(&interval_upper.ugte(&watchpoint_upper));
-
-        self.sat_with_extra_constraints(std::iter::once(
-            &interval_lower_contained.or(&interval_upper_contained).or(&contains_entire_watchpoint)
-        ))
+    /// Enable the memory watchpoint(s) with the given name.
+    ///
+    /// Returns `true` if the operation is successful, or `false` if no
+    /// watchpoint with that name was found. Enabling an already-enabled
+    /// watchpoint will have no effect and will return `true`.
+    pub fn enable_watchpoint(&mut self, name: &str) -> bool {
+        self.mem_watchpoints.enable(name)
     }
 
     /// Allocate a value of size `bits`; return a pointer to the newly allocated object
@@ -1071,7 +1034,7 @@ mod tests {
     use crate::solver_utils::SolutionCount;
     use std::collections::HashMap;
 
-    // we don't include tests here for Memory, Alloc, or VarMap; those are tested in their own modules.
+    // we don't include tests here for Memory, Alloc, VarMap, or Watchpoints; those are tested in their own modules.
     // Instead, here we just test the nontrivial functionality that `State` has itself.
     // We do repeat many of the tests from the `solver_utils` module, making sure that they also pass when
     // we use the `State` interfaces.
@@ -1408,66 +1371,5 @@ mod tests {
             .as_u64()
             .unwrap();
         assert!(y_2_solution < 10);
-    }
-
-    #[test]
-    fn watchpoints() -> Result<()> {
-        let func = blank_function("test_func");
-        let project = blank_project("test_mod", func);
-        let mut state = blank_state(&project, "test_func");
-
-        state.add_mem_watchpoint(Watchpoint::new(0x1000, 8));
-        state.add_mem_watchpoint(Watchpoint::new(0x2000, 32));
-
-        // Experiments on the first watchpoint
-        let addr = state.bv_from_u32(0x1000, 64);
-
-        // check that we can trigger it with a 1-byte write to 0x1000
-        assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
-
-        // check that we can trigger it with an 8-byte write to 0x1000
-        assert!(state.process_watchpoint_triggers(&addr, 64, true)?);
-
-        // check that we can trigger it with a 1-byte write to 0x1002
-        let addr = state.bv_from_u32(0x1002, 64);
-        assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
-
-        // check that we can trigger it with a 8-byte write to 0x1002
-        assert!(state.process_watchpoint_triggers(&addr, 64, true)?);
-
-        // check that we don't trigger it with a 1-byte write to 0x0fff
-        let addr = state.bv_from_u32(0x0fff, 64);
-        assert!(!state.process_watchpoint_triggers(&addr, 8, true)?);
-
-        // check that we can trigger it with an 8-byte write to 0x0fff
-        assert!(state.process_watchpoint_triggers(&addr, 64, true)?);
-
-        // check that we don't trigger it with a 1-byte write to 0x1008
-        let addr = state.bv_from_u32(0x1008, 64);
-        assert!(!state.process_watchpoint_triggers(&addr, 8, true)?);
-
-        // check that we do trigger it with a 0x100-byte write to 0x0ff0
-        let addr = state.bv_from_u32(0x0ff0, 64);
-        assert!(state.process_watchpoint_triggers(&addr, 0x100 * 8, true)?);
-
-        // Experiments on the second watchpoint
-        let addr = state.bv_from_u32(0x2000, 64);
-
-        // check that we can trigger it with a 1-byte write to 0x2000
-        assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
-
-        // check that we can trigger it with a 1-byte write to 0x2010
-        let addr = state.bv_from_u32(0x2010, 64);
-        assert!(state.process_watchpoint_triggers(&addr, 8, true)?);
-
-        // check that a write touching both watchpoints does trigger
-        let addr = state.bv_from_u32(0x0ff0, 64);
-        assert!(state.process_watchpoint_triggers(&addr, 0x10000, true)?);
-
-        // check that a write in between the two watchpoints doesn't trigger
-        let addr = state.bv_from_u32(0x1f00, 64);
-        assert!(!state.process_watchpoint_triggers(&addr, 16, true)?);
-
-        Ok(())
     }
 }
