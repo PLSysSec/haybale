@@ -726,12 +726,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             },
             Either::Left(_) => return Err(Error::UnsupportedInstruction("inline assembly".to_owned())),
         };
+        // If a hook is not active for this function, `hook` will be `None`,
+        // and `funcname` will hold the name of the function being called.
+        //
         // If a hook is active for this function, `hook` will be `Some`. If
         // we're hooking a real function as opposed to a function pointer,
         // `funcname` will hold the name of the function being hooked.
         let (hook, funcname): (Option<FunctionHook<B>>, Option<&str>) = match funcname_or_hook {
             Either::Left(funcname) => (self.state.config.function_hooks.get_hook_for(funcname).cloned(), Some(funcname)),
-            Either::Right(ref hook) => (Some(hook.clone()), None),
+            Either::Right(hook) => (Some(hook), None),
         };
         // If a hook is active, process the hook
         if let Some(hook) = hook {
@@ -764,7 +767,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             return Ok(None);
         }
         // If we're still here, there's no hook active
-        let funcname = funcname_or_hook.left().unwrap();  // must have been an Either::Left at this point
+        let funcname = funcname.unwrap();  // `funcname` must have been `Some`; see comments above
         if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
             assert_eq!(call.arguments.len(), callee.parameters.len());
             let btorargs: Vec<B::BV> = call.arguments.iter()
