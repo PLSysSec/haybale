@@ -709,113 +709,105 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
     fn symex_call(&mut self, call: &'p instruction::Call) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing call {:?}", call);
-        let (hook, funcname) = self.resolve_function(&call.function)?;
-        // If a hook is active, process the hook
-        if let Some(hook) = hook {
-            let pretty_funcname = match funcname {
-                Some(funcname) => format!("function {:?}", funcname),
-                None => "a function pointer".to_owned(),
-            };
-            info!("Invoking hook for {}", pretty_funcname);
-            match hook.call_hook(&self.project, &mut self.state, call)? {
-                ReturnValue::ReturnVoid => {
-                    if call.get_type() != Type::VoidType {
-                        return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", pretty_funcname)));
-                    }
-                },
-                ReturnValue::Return(retval) => {
-                    let ret_type = call.get_type();
-                    if ret_type == Type::VoidType {
-                        return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", pretty_funcname)));
-                    } else {
-                        let retwidth = size(&ret_type);
-                        if retval.get_width() != retwidth as u32 {
-                            return Err(Error::OtherError(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", pretty_funcname, retval.get_width(), retwidth)));
+        match self.resolve_function(&call.function)? {
+            ResolvedFunction::HookActive { hook, hooked_funcname } => {
+                let pretty_funcname = match hooked_funcname {
+                    Some(funcname) => format!("function {:?}", funcname),
+                    None => "a function pointer".to_owned(),
+                };
+                info!("Processing hook for {}", pretty_funcname);
+                match hook.call_hook(&self.project, &mut self.state, call)? {
+                    ReturnValue::ReturnVoid => {
+                        if call.get_type() != Type::VoidType {
+                            return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", pretty_funcname)));
                         }
-                        // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
-                        self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
+                    },
+                    ReturnValue::Return(retval) => {
+                        let ret_type = call.get_type();
+                        if ret_type == Type::VoidType {
+                            return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", pretty_funcname)));
+                        } else {
+                            let retwidth = size(&ret_type);
+                            if retval.get_width() != retwidth as u32 {
+                                return Err(Error::OtherError(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", pretty_funcname, retval.get_width(), retwidth)));
+                            }
+                            // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
+                            self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
+                        }
                     }
                 }
-            }
-            info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
-            return Ok(None);
-        }
-        // If we're still here, there's no hook active
-        let funcname = funcname.unwrap();  // `funcname` must have been `Some`; see comments above
-        if let Some((callee, callee_mod)) = self.project.get_func_by_name(funcname) {
-            assert_eq!(call.arguments.len(), callee.parameters.len());
-            let btorargs: Vec<B::BV> = call.arguments.iter()
-                .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
-                .collect::<Result<Vec<B::BV>>>()?;
-            let saved_loc = self.state.cur_loc.clone();
-            self.state.push_callsite();
-            let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
-            self.state.cur_loc = Location {
-                module: callee_mod,
-                func: callee,
-                bbname: bb.name.clone(),
-                instr: 0,
-            };
-            for (btorarg, param) in btorargs.into_iter().zip(callee.parameters.iter()) {
-                self.state.assign_bv_to_name(param.name.clone(), btorarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
-            }
-            info!("Entering function {:?} in module {:?}", funcname, &callee_mod.name);
-            let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
-            match self.state.pop_callsite() {
-                None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                Some(ref loc) if loc == &saved_loc => {
-                    self.state.cur_loc = saved_loc;
-                    self.state.cur_loc.instr += 1;  // advance past the call instruction itself before recording the path entry
-                    self.state.record_path_entry();
-                    match returned_bv {
-                        ReturnValue::Return(bv) => {
-                            // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
-                            self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
-                        },
-                        ReturnValue::ReturnVoid => assert_eq!(call.dest, None),
+                info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                return Ok(None);
+            },
+            ResolvedFunction::NoHookActive { called_funcname } => {
+                if let Some((callee, callee_mod)) = self.project.get_func_by_name(called_funcname) {
+                    assert_eq!(call.arguments.len(), callee.parameters.len());
+                    let btorargs: Vec<B::BV> = call.arguments.iter()
+                        .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+                        .collect::<Result<Vec<B::BV>>>()?;
+                    let saved_loc = self.state.cur_loc.clone();
+                    self.state.push_callsite();
+                    let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
+                    self.state.cur_loc = Location {
+                        module: callee_mod,
+                        func: callee,
+                        bbname: bb.name.clone(),
+                        instr: 0,
                     };
-                    debug!("Completed ordinary return to caller");
-                    info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}", funcname, &self.state.cur_loc.func.name, pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
+                    for (btorarg, param) in btorargs.into_iter().zip(callee.parameters.iter()) {
+                        self.state.assign_bv_to_name(param.name.clone(), btorarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
+                    }
+                    info!("Entering function {:?} in module {:?}", called_funcname, &callee_mod.name);
+                    let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
+                    match self.state.pop_callsite() {
+                        None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
+                        Some(ref loc) if loc == &saved_loc => {
+                            self.state.cur_loc = saved_loc;
+                            self.state.cur_loc.instr += 1;  // advance past the call instruction itself before recording the path entry
+                            self.state.record_path_entry();
+                            match returned_bv {
+                                ReturnValue::Return(bv) => {
+                                    // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
+                                    self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
+                                },
+                                ReturnValue::ReturnVoid => assert_eq!(call.dest, None),
+                            };
+                            debug!("Completed ordinary return to caller");
+                            info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}", called_funcname, &self.state.cur_loc.func.name, pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
+                            Ok(None)
+                        },
+                        Some(loc) => panic!("Received unexpected callsite {:?}", loc),
+                    }
+                } else if called_funcname.starts_with("llvm.memset")
+                    || called_funcname.starts_with("__memset")
+                {
+                    symex_memset(&mut self.state, call)?;
                     Ok(None)
-                },
-                Some(loc) => panic!("Received unexpected callsite {:?}", loc),
-            }
-        } else if funcname.starts_with("llvm.memset")
-            || funcname.starts_with("__memset")
-        {
-            symex_memset(&mut self.state, call)?;
-            Ok(None)
-        } else if funcname.starts_with("llvm.memcpy")
-            || funcname.starts_with("llvm.memmove")
-            || funcname.starts_with("__memcpy")
-        {
-            // Our memcpy implementation also works for memmove
-            symex_memcpy(&mut self.state, call)?;
-            Ok(None)
-        } else if funcname.starts_with("llvm.objectsize") {
-            symex_objectsize(&mut self.state, call)?;
-            Ok(None)
-        } else if funcname.starts_with("llvm.lifetime")
-            || funcname.starts_with("llvm.invariant")
-            || funcname.starts_with("llvm.launder.invariant")
-            || funcname.starts_with("llvm.strip.invariant")
-            || funcname.starts_with("llvm.dbg")
-        {
-            Ok(None) // these are all safe to ignore
-        } else {
-            Err(Error::FunctionNotFound(funcname.to_owned()))
+                } else if called_funcname.starts_with("llvm.memcpy")
+                    || called_funcname.starts_with("llvm.memmove")
+                    || called_funcname.starts_with("__memcpy")
+                {
+                    // Our memcpy implementation also works for memmove
+                    symex_memcpy(&mut self.state, call)?;
+                    Ok(None)
+                } else if called_funcname.starts_with("llvm.objectsize") {
+                    symex_objectsize(&mut self.state, call)?;
+                    Ok(None)
+                } else if called_funcname.starts_with("llvm.lifetime")
+                    || called_funcname.starts_with("llvm.invariant")
+                    || called_funcname.starts_with("llvm.launder.invariant")
+                    || called_funcname.starts_with("llvm.strip.invariant")
+                    || called_funcname.starts_with("llvm.dbg")
+                {
+                    Ok(None) // these are all safe to ignore
+                } else {
+                    Err(Error::FunctionNotFound(called_funcname.to_owned()))
+                }
+            },
         }
     }
 
-    /// If a hook is not active for this function, this returns `Ok((None,
-    /// funcname))`, where `funcname` is the name of the function being called.
-    ///
-    /// If a hook is active for this function, this returns `Ok((Some(hook),
-    /// funcname))`. In this case, if we're hooking a real function as opposed to
-    /// a function pointer, `funcname` will be `Some` with the name of the
-    /// function being hooked. On the other hand, if we're hooking a function
-    /// pointer, `funcname` will be `None`.
-    fn resolve_function(&mut self, function: &'p Either<InlineAssembly, Operand>) -> Result<(Option<FunctionHook<'p, B>>, Option<&'p str>)> {
+    fn resolve_function(&mut self, function: &'p Either<InlineAssembly, Operand>) -> Result<ResolvedFunction<'p, B>> {
         use crate::global_allocations::Callable;
         let funcname_or_hook: Either<&str, FunctionHook<B>> = match function {
             // the first two cases are really just optimizations for the third case; things should still work without the first two lines
@@ -834,8 +826,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Either::Left(_) => return Err(Error::UnsupportedInstruction("inline assembly".to_owned())),
         };
         match funcname_or_hook {
-            Either::Left(funcname) => Ok((self.state.config.function_hooks.get_hook_for(funcname).cloned(), Some(funcname))),
-            Either::Right(hook) => Ok((Some(hook), None)),
+            Either::Left(funcname) => match self.state.config.function_hooks.get_hook_for(funcname) {
+                Some(hook) => Ok(ResolvedFunction::HookActive { hook: hook.clone(), hooked_funcname: Some(funcname) }),
+                None => Ok(ResolvedFunction::NoHookActive { called_funcname: funcname }),
+            },
+            Either::Right(hook) => Ok(ResolvedFunction::HookActive { hook, hooked_funcname: None }),
         }
     }
 
@@ -1021,6 +1016,16 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             ty => Err(Error::MalformedInstruction(format!("Expected select condition to be i1 or vector of i1, but got {:?}", ty))),
         }
     }
+}
+
+enum ResolvedFunction<'p, B: Backend> {
+    HookActive {
+        hook: FunctionHook<'p, B>,
+        hooked_funcname: Option<&'p str>,  // if this is `None`, we are hooking a function pointer rather than a call of a named function
+    },
+    NoHookActive {
+        called_funcname: &'p str,
+    },
 }
 
 // Built-in "hooks" for LLVM intrinsics
