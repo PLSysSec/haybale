@@ -716,26 +716,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Some(funcname) => format!("function {:?}", funcname),
                     None => "a function pointer".to_owned(),
                 };
-                info!("Processing hook for {}", pretty_funcname);
-                match hook.call_hook(&self.project, &mut self.state, call)? {
-                    ReturnValue::ReturnVoid => {
-                        if call.get_type() != Type::VoidType {
-                            return Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", pretty_funcname)));
-                        }
-                    },
+                match self.symex_hook(call, &hook, &pretty_funcname)? {
+                    // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                     ReturnValue::Return(retval) => {
-                        let ret_type = call.get_type();
-                        if ret_type == Type::VoidType {
-                            return Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", pretty_funcname)));
-                        } else {
-                            let retwidth = size(&ret_type);
-                            if retval.get_width() != retwidth as u32 {
-                                return Err(Error::OtherError(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", pretty_funcname, retval.get_width(), retwidth)));
-                            }
-                            // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
-                            self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
-                        }
-                    }
+                        // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
+                        self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
+                    },
+                    ReturnValue::ReturnVoid => {},
                 }
                 info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                 return Ok(None);
@@ -832,6 +819,35 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 None => Ok(ResolvedFunction::NoHookActive { called_funcname: funcname }),
             },
             Either::Right(hook) => Ok(ResolvedFunction::HookActive { hook, hooked_funcname: None }),
+        }
+    }
+
+    /// Execute the hook `hook` hooking the call `call`, returning the hook's `ReturnValue`.
+    ///
+    /// `hooked_funcname`: Name of the hooked function, used only for logging and error messages
+    fn symex_hook(&mut self, call: &'p impl IsCall, hook: &FunctionHook<'p, B>, hooked_funcname: &str) -> Result<ReturnValue<B::BV>> {
+        info!("Processing hook for {}", hooked_funcname);
+        match hook.call_hook(&self.project, &mut self.state, call)? {
+            ReturnValue::ReturnVoid => {
+                if call.get_type() != Type::VoidType {
+                    Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", hooked_funcname)))
+                } else {
+                    Ok(ReturnValue::ReturnVoid)
+                }
+            },
+            ReturnValue::Return(retval) => {
+                let ret_type = call.get_type();
+                if ret_type == Type::VoidType {
+                    Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", hooked_funcname)))
+                } else {
+                    let retwidth = size(&ret_type);
+                    if retval.get_width() != retwidth as u32 {
+                        Err(Error::OtherError(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", hooked_funcname, retval.get_width(), retwidth)))
+                    } else {
+                        Ok(ReturnValue::Return(retval))
+                    }
+                }
+            }
         }
     }
 
