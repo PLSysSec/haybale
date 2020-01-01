@@ -246,6 +246,17 @@
 <span id="246">246</span>
 <span id="247">247</span>
 <span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="ident">Backend</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">default_hooks</span>;
@@ -253,8 +264,9 @@
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">return_value</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::<span class="ident">State</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">watchpoints</span>::<span class="ident">Watchpoint</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">instruction</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashMap</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">hash</span>::{<span class="ident">Hash</span>, <span class="ident">Hasher</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">rc</span>::<span class="ident">Rc</span>;
 
@@ -278,6 +290,13 @@
     <span class="doccomment">/// The set of currently active function hooks; see</span>
     <span class="doccomment">/// [`FunctionHooks`](struct.FunctionHooks.html) for more details</span>
     <span class="kw">pub</span> <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+
+    <span class="doccomment">/// The initial set of memory watchpoints when a `State` is created (their</span>
+    <span class="doccomment">/// names, and the actual watchpoints).</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// More watchpoints may be added or removed at any time with</span>
+    <span class="doccomment">/// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.</span>
+    <span class="kw">pub</span> <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashSet</span><span class="op">&lt;</span>(<span class="ident">String</span>, <span class="ident">Watchpoint</span>)<span class="op">&gt;</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
@@ -320,7 +339,8 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Creates a new `Config` with the given `loop_bound` and</span>
-    <span class="doccomment">/// `concretize_memcpy_lengths()` options, and no function hooks.</span>
+    <span class="doccomment">/// `concretize_memcpy_lengths()` options, and no function hooks or memory</span>
+    <span class="doccomment">/// watchpoints.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// You may want to consider `Config::default()` which provides defaults for</span>
     <span class="doccomment">/// all parameters and comes with predefined hooks for common functions.</span>
@@ -330,6 +350,7 @@
             <span class="ident">null_detection</span>,
             <span class="ident">concretize_memcpy_lengths</span>,
             <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span>::<span class="ident">new</span>(),
+            <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashSet</span>::<span class="ident">new</span>(),
         }
     }
 }
@@ -351,6 +372,7 @@
             <span class="ident">null_detection</span>: <span class="bool-val">true</span>,
             <span class="ident">concretize_memcpy_lengths</span>: <span class="ident">Concretize</span>::<span class="ident">Symbolic</span>,
             <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span>::<span class="ident">default</span>(),
+            <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashSet</span>::<span class="ident">new</span>(),
         }
     }
 }

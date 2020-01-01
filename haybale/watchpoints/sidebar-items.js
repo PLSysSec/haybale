@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Watchpoint","A `Watchpoint` describes a segment of memory to watch."],["Watchpoints","Stores information about watchpoints and performs operations with them."]]});
