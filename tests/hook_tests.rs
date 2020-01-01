@@ -1,7 +1,7 @@
 use haybale::*;
 use haybale::backend::Backend;
+use haybale::function_hooks::IsCall;
 use haybale::solver_utils::PossibleSolutions;
-use llvm_ir::*;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::path::Path;
@@ -12,8 +12,8 @@ fn init_logging() {
 }
 
 // Hook call.c's "simple_callee" to just return 5 instead of executing its actual body
-fn hook_for_simple_callee<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
-    assert_eq!(call.arguments.len(), 2);
+fn hook_for_simple_callee<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
     Ok(ReturnValue::Return(state.bv_from_u32(5, layout::size(&call.get_type()) as u32)))
 }
 
@@ -32,16 +32,16 @@ fn hook_a_function() {
 }
 
 // Hook functionptr.c's "get_function_ptr" to return a pointer to our hook "target_hook" instead of "foo" or "bar" like it normally does
-fn hook_for_get_function_ptr<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
-    assert_eq!(call.arguments.len(), 1);
+fn hook_for_get_function_ptr<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 1);
     state.get_pointer_to_function_hook("asdfjkl")
         .cloned()
         .ok_or_else(|| Error::OtherError("Failed to get a pointer to function hook".to_owned()))
         .map(ReturnValue::Return)
 }
 
-fn target_hook<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p instruction::Call) -> Result<ReturnValue<B::BV>> {
-    assert_eq!(call.arguments.len(), 2);
+fn target_hook<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
     Ok(ReturnValue::Return(state.bv_from_u32(5, layout::size(&call.get_type()) as u32)))
 }
 

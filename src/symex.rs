@@ -11,6 +11,7 @@ use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
 use crate::extend::*;
+use crate::function_hooks::*;
 use crate::layout::*;
 use crate::solver_utils::{self, PossibleSolutions};
 use crate::project::Project;

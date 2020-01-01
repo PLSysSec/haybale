@@ -1,5 +1,5 @@
 use crate::backend::{Backend, SolverRef};
-use crate::config::FunctionHook;
+use crate::function_hooks::FunctionHook;
 use llvm_ir::*;
 use llvm_ir::module::{GlobalVariable, Linkage};
 use log::debug;
