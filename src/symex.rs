@@ -1,5 +1,5 @@
 use llvm_ir::*;
-use llvm_ir::instruction::BinaryOp;
+use llvm_ir::instruction::{BinaryOp, InlineAssembly};
 use log::{debug, info};
 use either::Either;
 use reduce::Reduce;
@@ -709,33 +709,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
     fn symex_call(&mut self, call: &'p instruction::Call) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing call {:?}", call);
-        use crate::global_allocations::Callable;
-        let funcname_or_hook: Either<&str, FunctionHook<B>> = match &call.function {
-            // the first two cases are really just optimizations for the third case; things should still work without the first two lines
-            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => Either::Left(name),
-            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
-            Either::Right(operand) => {
-                match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
-                    PossibleSolutions::AtLeast(_) => return Err(Error::OtherError("calling a function pointer which has multiple possible targets".to_owned())),  // there must be at least 2 targets since we passed n==1 to `interpret_as_function_ptr`
-                    PossibleSolutions::Exactly(v) => match v.iter().next() {
-                        None => return Err(Error::Unsat),  // no valid solutions for the function pointer
-                        Some(Callable::LLVMFunction(f)) => Either::Left(&f.name),
-                        Some(Callable::FunctionHook(h)) => Either::Right(h.clone()),
-                    }
-                }
-            },
-            Either::Left(_) => return Err(Error::UnsupportedInstruction("inline assembly".to_owned())),
-        };
-        // If a hook is not active for this function, `hook` will be `None`,
-        // and `funcname` will hold the name of the function being called.
-        //
-        // If a hook is active for this function, `hook` will be `Some`. If
-        // we're hooking a real function as opposed to a function pointer,
-        // `funcname` will hold the name of the function being hooked.
-        let (hook, funcname): (Option<FunctionHook<B>>, Option<&str>) = match funcname_or_hook {
-            Either::Left(funcname) => (self.state.config.function_hooks.get_hook_for(funcname).cloned(), Some(funcname)),
-            Either::Right(hook) => (Some(hook), None),
-        };
+        let (hook, funcname) = self.resolve_function(&call.function)?;
         // If a hook is active, process the hook
         if let Some(hook) = hook {
             let pretty_funcname = match funcname {
@@ -830,6 +804,38 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Ok(None) // these are all safe to ignore
         } else {
             Err(Error::FunctionNotFound(funcname.to_owned()))
+        }
+    }
+
+    /// If a hook is not active for this function, this returns `Ok((None,
+    /// funcname))`, where `funcname` is the name of the function being called.
+    ///
+    /// If a hook is active for this function, this returns `Ok((Some(hook),
+    /// funcname))`. In this case, if we're hooking a real function as opposed to
+    /// a function pointer, `funcname` will be `Some` with the name of the
+    /// function being hooked. On the other hand, if we're hooking a function
+    /// pointer, `funcname` will be `None`.
+    fn resolve_function(&mut self, function: &'p Either<InlineAssembly, Operand>) -> Result<(Option<FunctionHook<'p, B>>, Option<&'p str>)> {
+        use crate::global_allocations::Callable;
+        let funcname_or_hook: Either<&str, FunctionHook<B>> = match function {
+            // the first two cases are really just optimizations for the third case; things should still work without the first two lines
+            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => Either::Left(name),
+            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
+            Either::Right(operand) => {
+                match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
+                    PossibleSolutions::AtLeast(_) => return Err(Error::OtherError("calling a function pointer which has multiple possible targets".to_owned())),  // there must be at least 2 targets since we passed n==1 to `interpret_as_function_ptr`
+                    PossibleSolutions::Exactly(v) => match v.iter().next() {
+                        None => return Err(Error::Unsat),  // no valid solutions for the function pointer
+                        Some(Callable::LLVMFunction(f)) => Either::Left(&f.name),
+                        Some(Callable::FunctionHook(h)) => Either::Right(h.clone()),
+                    }
+                }
+            },
+            Either::Left(_) => return Err(Error::UnsupportedInstruction("inline assembly".to_owned())),
+        };
+        match funcname_or_hook {
+            Either::Left(funcname) => Ok((self.state.config.function_hooks.get_hook_for(funcname).cloned(), Some(funcname))),
+            Either::Right(hook) => Ok((Some(hook), None)),
         }
     }
 
