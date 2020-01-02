@@ -1,11 +1,12 @@
 use crate::backend::Backend;
 use crate::error::*;
 use crate::default_hooks;
+use crate::layout;
 use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
 use either::Either;
-use llvm_ir::{Operand, Typed, instruction::InlineAssembly};
+use llvm_ir::{Name, Operand, Type, Typed, instruction::InlineAssembly};
 use llvm_ir::function::{CallingConvention, FunctionAttribute, ParameterAttribute};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -98,11 +99,12 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// (1) If the function is hooked, then the hook will be used instead of any
     /// other option. That is, the hook has the highest precedence.
     ///
-    /// (2) Else, if the function is not hooked but is defined in an available
-    /// LLVM `Module`, the function will be symbolically executed (called).
+    /// (2) Haybale provides default hooks for certain LLVM intrinsics like
+    /// `memcpy`, which have specially reserved names; it will apply these hooks
+    /// unless a different hook was defined for the intrinsic in (1).
     ///
-    /// (3) Haybale provides default hooks for certain LLVM intrinsics like
-    /// `memcpy`, which it will apply if the first two options fail.
+    /// (3) Else, if the function is not hooked but is defined in an available
+    /// LLVM `Module`, the function will be symbolically executed (called).
     ///
     /// (4) If none of the above options apply, an error will be raised.
     /// Note that this means that calls to external functions will always
@@ -199,5 +201,26 @@ impl<'p, B: Backend> FunctionHook<'p, B> {
 
     pub fn call_hook(&self, proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
         (self.hook)(proj, state, call)
+    }
+}
+
+/// This hook ignores the function arguments and returns an unconstrained value
+/// of the appropriate size for the function's return value (or void for
+/// void-typed functions).
+///
+/// May be used for functions taking any number and type of arguments, and with
+/// any return type.
+pub fn generic_stub_hook<B: Backend>(
+    _proj: &Project,
+    state: &mut State<B>,
+    call: &dyn IsCall,
+) -> Result<ReturnValue<B::BV>> {
+    match call.get_type() {
+        Type::VoidType => Ok(ReturnValue::ReturnVoid),
+        ty => {
+            let width = layout::size(&ty);
+            let bv = state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width as u32)?;
+            Ok(ReturnValue::Return(bv))
+        },
     }
 }

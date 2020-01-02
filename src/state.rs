@@ -14,7 +14,9 @@ use crate::backend::*;
 use crate::config::Config;
 use crate::error::*;
 use crate::extend::*;
+use crate::function_hooks::{self, FunctionHooks};
 use crate::global_allocations::*;
+use crate::intrinsic_hooks;
 use crate::layout::*;
 use crate::project::Project;
 use crate::solver_utils::{self, PossibleSolutions};
@@ -37,6 +39,10 @@ pub struct State<'p, B: Backend> {
     mem: RefCell<B::Memory>,
     alloc: Alloc,
     global_allocations: GlobalAllocations<'p, B>,
+    /// Separate from the user-defined hooks in the `config`, these are built-in
+    /// hooks for LLVM intrinsics. They can be overridden by hooks in the
+    /// `config`; see notes on function resolution in function_hooks.rs.
+    pub(crate) intrinsic_hooks: FunctionHooks<'p, B>,
     /// This tracks the call stack of the symbolic execution.
     /// The first entry is the top-level caller, while the last entry is the
     /// caller of the current function.
@@ -185,6 +191,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             mem: RefCell::new(Memory::new_uninitialized(solver.clone(), config.null_detection, None)),
             alloc: Alloc::new(),
             global_allocations: GlobalAllocations::new(),
+            intrinsic_hooks: {
+                let mut intrinsic_hooks = FunctionHooks::new();
+                intrinsic_hooks.add("intrinsic: llvm.memset", &intrinsic_hooks::symex_memset);
+                intrinsic_hooks.add("intrinsic: llvm.memcpy/memmove", &intrinsic_hooks::symex_memcpy);
+                intrinsic_hooks.add("intrinsic: llvm.objectsize", &intrinsic_hooks::symex_objectsize);
+                intrinsic_hooks.add("intrinsic: generic_stub_hook", &function_hooks::generic_stub_hook);
+                intrinsic_hooks
+            },
             stack: Vec::new(),
             backtrack_points: Vec::new(),
             path: Vec::new(),

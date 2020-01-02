@@ -17,6 +17,7 @@ mod config;
 pub use config::*;
 pub mod function_hooks;
 mod default_hooks;
+mod intrinsic_hooks;
 pub mod alloc_utils;
 
 mod state;
