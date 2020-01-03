@@ -158,6 +158,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Instruction::ExtractElement(ee) => self.symex_extractelement(ee),
                     Instruction::InsertElement(ie) => self.symex_insertelement(ie),
                     Instruction::ShuffleVector(sv) => self.symex_shufflevector(sv),
+                    Instruction::ExtractValue(ev) => self.symex_extractvalue(ev),
                     Instruction::ZExt(zext) => self.symex_zext(zext),
                     Instruction::SExt(sext) => self.symex_sext(sext),
                     Instruction::Trunc(trunc) => self.symex_trunc(trunc),
@@ -189,6 +190,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Terminator::Br(br) => self.symex_br(br),
             Terminator::CondBr(condbr) => self.symex_condbr(condbr),
             Terminator::Switch(switch) => self.symex_switch(switch),
+            Terminator::Invoke(invoke) => self.symex_invoke(invoke),
+            Terminator::Resume(resume) => self.symex_resume(resume),
+            Terminator::Unreachable(_) => Err(Error::OtherError("Reached an LLVM 'Unreachable' instruction".to_owned())),
             term => Err(Error::UnsupportedInstruction(format!("terminator {:?}", term))),
         }
     }
@@ -229,39 +233,91 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `Ok(None)` if no possible paths were found.
     fn symex_from_inst_in_bb(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
         match self.symex_from_inst_in_bb_through_end_of_function(bb, inst)? {
-            Some(symexresult) => match self.state.pop_callsite() {
-                Some(callsite) => {
-                    // Return to callsite
-                    info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
-                        self.state.cur_loc.func.name,
-                        callsite.func.name,
-                        pretty_bb_name(&callsite.bbname),
-                        callsite.module.name,
-                    );
-                    self.state.cur_loc = callsite.clone();
-                    // Assign the returned value as the result of the caller's call instruction
-                    match symexresult {
-                        ReturnValue::Return(bv) => {
-                            let call: &Instruction = callsite.func
-                                .get_bb_by_name(&callsite.bbname)
-                                .expect("Malformed callsite (bb not found)")
-                                .instrs
-                                .get(callsite.instr)
-                                .expect("Malformed callsite (instr out of range)");
-                            let call: &instruction::Call = match call {
-                                Instruction::Call(call) => call,
-                                _ => panic!("Malformed callsite: expected a Call, got {:?}", call),
-                            };
-                            if self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv).is_err() {
-                                // This path is dead, try backtracking again
-                                return self.backtrack_and_continue();
-                            };
+            Some(ReturnValue::Throw(bvptr)) => {
+                // pop callsites until we find an `invoke` instruction that can direct us to a catch block
+                loop {
+                    match self.state.pop_callsite() {
+                        Some(callsite) => match callsite.instr {
+                            Either::Left(_call) => {
+                                // a normal callsite, not an `invoke` instruction
+                                info!("Caller {:?} (bb {}) in module {:?} is not prepared to catch the exception, rethrowing",
+                                    callsite.loc.func.name,
+                                    pretty_bb_name(&callsite.loc.bbname),
+                                    callsite.loc.module.name,
+                                );
+                                continue;
+                            },
+                            Either::Right(invoke) => {
+                                // catch the thrown value
+                                info!("Caller {:?} (bb {}) in module {:?} catching the thrown value at bb {}",
+                                    callsite.loc.func.name,
+                                    pretty_bb_name(&callsite.loc.bbname),
+                                    callsite.loc.module.name,
+                                    pretty_bb_name(&invoke.exception_label),
+                                );
+                                self.state.cur_loc = callsite.loc.clone();
+                                return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
+                            },
                         },
-                        ReturnValue::ReturnVoid => { },
-                    };
-                    // Continue execution in caller, with the instruction after the call instruction
-                    self.state.cur_loc.instr += 1;  // advance past the call instruction, to the next instruction
-                    self.symex_from_cur_loc()
+                        None => {
+                            // no callsite to return to, so we're done; exception was uncaught
+                            return Ok(Some(ReturnValue::Throw(bvptr)));
+                        },
+                    }
+                }
+            },
+            Some(symexresult) => match self.state.pop_callsite() {
+                Some(callsite) => match callsite.instr {
+                    Either::Left(call) => {
+                        // Return to normal callsite
+                        info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
+                            self.state.cur_loc.func.name,
+                            callsite.loc.func.name,
+                            pretty_bb_name(&callsite.loc.bbname),
+                            callsite.loc.module.name,
+                        );
+                        self.state.cur_loc = callsite.loc.clone();
+                        // Assign the returned value as the result of the caller's call instruction
+                        match symexresult {
+                            ReturnValue::Return(bv) => {
+                                if self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv).is_err() {
+                                    // This path is dead, try backtracking again
+                                    return self.backtrack_and_continue();
+                                };
+                            },
+                            ReturnValue::ReturnVoid => { },
+                            ReturnValue::Throw(_) => panic!("This case should have been handled above"),
+                        };
+                        // Continue execution in caller, with the instruction after the call instruction
+                        self.state.cur_loc.instr += 1;  // advance past the call instruction, to the next instruction
+                        self.symex_from_cur_loc()
+                    },
+                    Either::Right(invoke) => {
+                        // Normal return to an `Invoke` instruction
+                        info!("Leaving function {:?}, continuing in caller {:?} (finished invoke in bb {}, now in bb {}) in module {:?}",
+                            self.state.cur_loc.func.name,
+                            callsite.loc.func.name,
+                            pretty_bb_name(&callsite.loc.bbname),
+                            pretty_bb_name(&invoke.return_label),
+                            callsite.loc.module.name,
+                        );
+                        self.state.cur_loc = callsite.loc.clone();
+                        // Assign the returned value as the result of the `Invoke` instruction
+                        match symexresult {
+                            ReturnValue::Return(bv) => {
+                                if self.state.assign_bv_to_name(invoke.result.clone(), bv).is_err() {
+                                    // This path is dead, try backtracking again
+                                    return self.backtrack_and_continue();
+                                };
+                            },
+                            ReturnValue::ReturnVoid => { },
+                            ReturnValue::Throw(_) => panic!("This case should have been handled above"),
+                        };
+                        // Continue execution in caller, at the normal-return label of the `Invoke` instruction
+                        self.state.cur_loc.bbname = invoke.return_label.clone();
+                        self.state.cur_loc.instr = 0;
+                        self.symex_from_cur_loc()
+                    }
                 },
                 None => {
                     // No callsite to return to, so we're done
@@ -552,7 +608,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // this code copied from the StructType case
                         match index {
                             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                                let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
+                                let (offset, nested_ty) = get_offset_constant_index(actual_ty, *index as usize)?;
                                 Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
                                     .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
                             },
@@ -706,7 +762,50 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
-    /// If the returned value is `Ok(Some(_))`, then this is the final return value of the top-level function (we had backtracking and finished on a different path).
+    fn symex_extractvalue(&mut self, ev: &'p instruction::ExtractValue) -> Result<()> {
+        debug!("Symexing extractvalue {:?}", ev);
+        let aggregate = self.state.operand_to_bv(&ev.aggregate)?;
+        let (offset_bytes, size_bits) = Self::get_offset_recursive_const_indices(ev.indices.iter().map(|i| *i as usize), &ev.aggregate.get_type())?;
+        let low_offset_bits = offset_bytes * 8;  // inclusive
+        let high_offset_bits = low_offset_bits + size_bits;  // exclusive
+        assert!(aggregate.get_width() >= high_offset_bits as u32, "Trying to extractvalue from an aggregate with total size {} bits, extracting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits - 1);
+        self.state.record_bv_result(ev, aggregate.slice((high_offset_bits - 1) as u32, low_offset_bits as u32))
+    }
+
+    /// Like `get_offset_recursive()` above, but with constant indices rather than `Operand`s.
+    ///
+    /// Returns the start offset (in bytes) of the indicated element, and the size (in bits) of the indicated element.
+    fn get_offset_recursive_const_indices(mut indices: impl Iterator<Item = usize>, base_type: &Type) -> Result<(usize, usize)> {
+        match indices.next() {
+            None => Ok((0, size(base_type))),
+            Some(index) => match base_type {
+                Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } | Type::StructType { .. } => {
+                    let (offset, nested_ty) = get_offset_constant_index(base_type, index)?;
+                    Self::get_offset_recursive_const_indices(indices, &nested_ty).map(|(val, size)| (val + offset, size))
+                },
+                Type::NamedStructType { ty, .. } => {
+                    let arc: Arc<RwLock<Type>> = ty.as_ref()
+                        .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
+                        .upgrade()
+                        .expect("Failed to upgrade weak reference");
+                    let actual_ty: &Type = &arc.read().unwrap();
+                    if let Type::StructType { .. } = actual_ty {
+                        let (offset, nested_ty) = get_offset_constant_index(actual_ty, index)?;
+                        Self::get_offset_recursive_const_indices(indices, &nested_ty).map(|(val, size)| (val + offset, size))
+                    } else {
+                        Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+                    }
+                },
+                _ => panic!("get_offset_recursive_const_indices with base type {:?}", base_type),
+            }
+        }
+    }
+
+    /// If the returned value is `Ok(Some(_))`, then this is the final return value of the
+    /// _current function_ (the function containing the call instruction), because either:
+    ///     - we had backtracking and finished on a different path, and this is the final return value of the top-level function
+    ///     - the called function threw an exception which the current function isn't set up to catch, so this is a `ReturnValue::Throw` which should be thrown from the current function
+    ///
     /// If the returned value is `Ok(None)`, then we finished the call normally, and execution should continue from here.
     fn symex_call(&mut self, call: &'p instruction::Call) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing call {:?}", call);
@@ -723,6 +822,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
                     },
                     ReturnValue::ReturnVoid => {},
+                    ReturnValue::Throw(bvptr) => {
+                        debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
+                        return Ok(Some(ReturnValue::Throw(bvptr)));
+                    },
                 }
                 info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                 return Ok(None);
@@ -730,11 +833,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             ResolvedFunction::NoHookActive { called_funcname } => {
                 if let Some((callee, callee_mod)) = self.project.get_func_by_name(called_funcname) {
                     assert_eq!(call.arguments.len(), callee.parameters.len());
-                    let btorargs: Vec<B::BV> = call.arguments.iter()
+                    let bvargs: Vec<B::BV> = call.arguments.iter()
                         .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                         .collect::<Result<Vec<B::BV>>>()?;
                     let saved_loc = self.state.cur_loc.clone();
-                    self.state.push_callsite();
+                    self.state.push_callsite(call);
                     let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
                     self.state.cur_loc = Location {
                         module: callee_mod,
@@ -742,14 +845,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         bbname: bb.name.clone(),
                         instr: 0,
                     };
-                    for (btorarg, param) in btorargs.into_iter().zip(callee.parameters.iter()) {
-                        self.state.assign_bv_to_name(param.name.clone(), btorarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
+                    for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
+                        self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
                     info!("Entering function {:?} in module {:?}", called_funcname, &callee_mod.name);
                     let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
                     match self.state.pop_callsite() {
                         None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                        Some(ref loc) if loc == &saved_loc => {
+                        Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_left() => {
                             self.state.cur_loc = saved_loc;
                             self.state.cur_loc.instr += 1;  // advance past the call instruction itself before recording the path entry
                             self.state.record_path_entry();
@@ -759,12 +862,16 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                     self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
                                 },
                                 ReturnValue::ReturnVoid => assert_eq!(call.dest, None),
+                                ReturnValue::Throw(bvptr) => {
+                                    debug!("Callee threw an exception, but caller isn't inside a try block; rethrowing upwards");
+                                    return Ok(Some(ReturnValue::Throw(bvptr)));
+                                },
                             };
                             debug!("Completed ordinary return to caller");
                             info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}", called_funcname, &self.state.cur_loc.func.name, pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
                             Ok(None)
                         },
-                        Some(loc) => panic!("Received unexpected callsite {:?}", loc),
+                        Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
                     }
                 } else {
                     Err(Error::FunctionNotFound(called_funcname.to_owned()))
@@ -864,7 +971,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Ok(ReturnValue::Return(retval))
                     }
                 }
-            }
+            },
+            ReturnValue::Throw(bvptr) => Ok(ReturnValue::Throw(bvptr)),  // throwing is always OK and doesn't need to be checked against function type
         }
     }
 
@@ -972,6 +1080,189 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         }
+    }
+
+    /// Continues to the target of the `Invoke` and eventually returns the new
+    /// `ReturnValue` representing the return value of the function (when it
+    /// reaches the end of the function), or `Ok(None)` if no possible paths were
+    /// found.
+    fn symex_invoke(&mut self, invoke: &'p terminator::Invoke) -> Result<Option<ReturnValue<B::BV>>> {
+        debug!("Symexing invoke {:?}", invoke);
+        match self.resolve_function(&invoke.function)? {
+            ResolvedFunction::HookActive { hook, hooked_funcname } => {
+                let pretty_funcname = match hooked_funcname {
+                    Some(funcname) => format!("function {:?}", funcname),
+                    None => "a function pointer".to_owned(),
+                };
+                match self.symex_hook(invoke, &hook, &pretty_funcname)? {
+                    // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
+                    ReturnValue::Return(retval) => {
+                        self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
+                    },
+                    ReturnValue::ReturnVoid => {},
+                    ReturnValue::Throw(bvptr) => {
+                        info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&invoke.exception_label), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                        return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
+                    },
+                };
+                let old_bb_name = self.state.cur_loc.bbname.clone();
+                // We had a normal return, so continue at the `return_label`
+                self.state.cur_loc.bbname = invoke.return_label.clone();
+                self.state.cur_loc.instr = 0;
+                info!("Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}", pretty_funcname, self.state.cur_loc.func.name, pretty_bb_name(&old_bb_name), pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.module.name);
+                self.symex_from_cur_loc_through_end_of_function()
+            },
+            ResolvedFunction::NoHookActive { called_funcname } => {
+                if let Some((callee, callee_mod)) = self.project.get_func_by_name(called_funcname) {
+                    assert_eq!(invoke.arguments.len(), callee.parameters.len());
+                    let bvargs: Vec<B::BV> = invoke.arguments.iter()
+                        .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+                        .collect::<Result<Vec<B::BV>>>()?;
+                    let saved_loc = self.state.cur_loc.clone();
+                    self.state.push_invokesite(invoke);
+                    let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
+                    self.state.cur_loc = Location {
+                        module: callee_mod,
+                        func: callee,
+                        bbname: bb.name.clone(),
+                        instr: 0,
+                    };
+                    for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
+                        self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
+                    }
+                    info!("Entering function {:?} in module {:?}", called_funcname, &callee_mod.name);
+                    let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
+                    match self.state.pop_callsite() {
+                        None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
+                        Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_right() => {
+                            let old_bb_name = self.state.cur_loc.bbname.clone();
+                            self.state.cur_loc = saved_loc;
+                            match returned_bv {
+                                ReturnValue::Return(retval) => {
+                                    self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
+                                },
+                                ReturnValue::ReturnVoid => {},
+                                ReturnValue::Throw(bvptr) => {
+                                    info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}, module {:?}", self.state.cur_loc.func.name, called_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                                    return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
+                                },
+                            }
+                            // Returned normally, so continue at the `return_label`
+                            self.state.cur_loc.bbname = invoke.return_label.clone();
+                            self.state.cur_loc.instr = 0;
+                            debug!("Completed ordinary return from invoke");
+                            info!("Leaving function {:?}, continuing in caller {:?} (finished the invoke in bb {}, now in bb {}) in module {:?}", called_funcname, &self.state.cur_loc.func.name, pretty_bb_name(&old_bb_name), pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
+                            self.symex_from_cur_loc_through_end_of_function()
+                        },
+                        Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
+                    }
+                } else {
+                    Err(Error::FunctionNotFound(called_funcname.to_owned()))
+                }
+            },
+        }
+    }
+
+    fn symex_resume(&mut self, resume: &'p terminator::Resume) -> Result<Option<ReturnValue<B::BV>>> {
+        debug!("Symexing resume {:?}", resume);
+
+        // (At least for C++ exceptions) the operand of the resume operand is the struct {exception_ptr, type_index}
+        // (see notes on `catch_with_type_index()`). For now we don't handle the type_index, so we just strip out the
+        // exception_ptr and throw that
+        let operand = self.state.operand_to_bv(&resume.operand)?;
+        let exception_ptr = operand.slice(POINTER_SIZE_BITS as u32 - 1, 0);  // strip out the first element, assumed to be a pointer
+        Ok(Some(ReturnValue::Throw(exception_ptr)))
+    }
+
+    /// Catches an exception, then continues execution in the function and
+    /// eventually returns the `ReturnValue` representing the return value of the
+    /// function (when it reaches the end of the function), or `Ok(None)` if no
+    /// possible paths were found.
+    ///
+    /// `thrown_ptr`: pointer to the value or object that was thrown
+    ///
+    /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
+    fn catch_at_exception_label(&mut self, thrown_ptr: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {
+        // For now we just add an unconstrained type index
+        let type_index = self.state.new_bv_with_name(Name::from("unconstrained_type_index_for_thrown_value"), 32)?;
+        self.catch_with_type_index(thrown_ptr, &type_index, bbname)
+    }
+
+    /// Catches an exception, then continues execution in the function and
+    /// eventually returns the `ReturnValue` representing the return value of the
+    /// function (when it reaches the end of the function), or `Ok(None)` if no
+    /// possible paths were found.
+    ///
+    /// `thrown_ptr`: pointer to the value or object that was thrown
+    ///
+    /// `type_index`: should be an `i32` indicating the type of value which was thrown.
+    /// [LLVM's exception handling docs](https://releases.llvm.org/8.0.0/docs/ExceptionHandling.html#overview) call this a type info index.
+    ///
+    /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
+    fn catch_with_type_index(&mut self, thrown_ptr: &B::BV, type_index: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {
+        debug!("Catching exception {{{:?}, {:?}}} at bb {}", thrown_ptr, type_index, pretty_bb_name(bbname));
+        self.state.cur_loc.bbname = bbname.clone();
+        self.state.cur_loc.instr = 0;
+        self.state.record_path_entry();
+        let bb = self.state.cur_loc.func.get_bb_by_name(&bbname)
+            .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", bbname, self.state.cur_loc.func.name));
+        let mut found_landingpad = false;
+        for (instnum, inst) in bb.instrs.iter().enumerate() {
+            self.state.cur_loc.instr = instnum;
+            let result = match inst {
+                Instruction::Phi(phi) => self.symex_phi(phi),  // phi instructions are allowed before the landingpad
+                Instruction::LandingPad(lp) => { found_landingpad = true; self.symex_landing_pad(lp, thrown_ptr, type_index) },
+                _ => Err(Error::MalformedInstruction(format!("Expected exception-catching block ({}) to have a `LandingPad` as its first non-phi instruction, but found {:?}", pretty_bb_name(bbname), inst))),
+            };
+            match result {
+                Ok(()) => {
+                    if found_landingpad {
+                        // continue executing the block normally
+                        return self.symex_from_inst_in_bb_through_end_of_function(bb, instnum+1);
+                    } else {
+                        // move on to the next instruction in our for loop
+                        continue;
+                    }
+                },
+                Err(Error::Unsat) | Err(Error::LoopBoundExceeded) => {
+                    // we can't continue down this path anymore
+                    info!("Path is either unsat or exceeds the loop bound");
+                    return self.backtrack_and_continue();
+                },
+                Err(e) => return Err(e),  // propagate any other errors
+            }
+        }
+        if found_landingpad {
+            panic!("shouldn't reach this point if we found a landingpad")
+        } else {
+            Err(Error::MalformedInstruction(format!("Expected exception-catching block ({}) to have a `LandingPad`, but it seems not to", pretty_bb_name(bbname))))
+        }
+    }
+
+    /// `thrown_ptr` and `type_index` arguments: see descriptions on `self.throw()`
+    fn symex_landing_pad(&mut self, lp: &'p instruction::LandingPad, thrown_ptr: &B::BV, type_index: &B::BV) -> Result<()> {
+        debug!("Symexing landingpad {:?}", lp);
+        let result_ty = lp.get_type();
+        match result_ty {
+            Type::StructType { element_types, .. } => {
+                if element_types.len() != 2 {
+                    return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct of 2 elements, got a struct of {} elements: {:?}", element_types.len(), element_types)));
+                }
+                match &element_types[0] {
+                    ty@Type::PointerType { .. } => assert_eq!(thrown_ptr.get_width(), size(ty) as u32, "Expected thrown_ptr to be a pointer, got a value of width {:?}", thrown_ptr.get_width()),
+                    ty => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct with first element a pointer, got first element {:?}", ty))),
+                }
+                match &element_types[1] {
+                    Type::IntegerType { bits: 32 } => {},
+                    ty => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct with second element an i32, got second element {:?}", ty))),
+                }
+            },
+            _ => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct, got {:?}", result_ty))),
+        }
+        // Partly due to current restrictions in `llvm-ir` (not enough info
+        // available on landingpad clauses - see `llvm-ir` docs), for now we
+        // assume that the landingpad always catches
+        self.state.record_bv_result(lp, type_index.concat(thrown_ptr))
     }
 
     fn symex_phi(&mut self, phi: &'p instruction::Phi) -> Result<()> {

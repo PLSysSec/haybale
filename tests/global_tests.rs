@@ -29,8 +29,8 @@ fn read_global() {
     init_logging();
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     );
 }
 
@@ -40,8 +40,8 @@ fn modify_global() {
     init_logging();
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     )
 }
 
@@ -51,8 +51,8 @@ fn modify_global_with_call() {
     init_logging();
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     )
 }
 
@@ -62,8 +62,8 @@ fn dont_confuse_globals() {
     init_logging();
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     )
 }
 
@@ -75,8 +75,8 @@ fn cross_module_read_global() {
     init_logging();
     let proj = get_cross_module_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     );
 }
 
@@ -86,8 +86,8 @@ fn cross_module_read_global_via_call() {
     init_logging();
     let proj = get_cross_module_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     );
 }
 
@@ -97,8 +97,8 @@ fn cross_module_modify_global() {
     init_logging();
     let proj = get_cross_module_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     );
 }
 
@@ -108,8 +108,8 @@ fn cross_module_modify_global_via_call() {
     init_logging();
     let proj = get_cross_module_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(3))),
+        get_possible_return_values_of_func(funcname, std::iter::once(Some(3)), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
     );
 }
 
@@ -121,7 +121,7 @@ fn globals_initialization() {
     let proj = Project::from_bc_paths(modnames.into_iter().map(Path::new))
         .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(1052))),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(1052)))),
     )
 }

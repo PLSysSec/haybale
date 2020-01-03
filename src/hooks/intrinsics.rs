@@ -1,3 +1,5 @@
+//! Default hooks for some LLVM intrinsics
+
 use crate::backend::{Backend, BV};
 use crate::config::Concretize;
 use crate::error::*;

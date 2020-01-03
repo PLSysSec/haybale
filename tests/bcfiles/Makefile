@@ -1,4 +1,5 @@
 CC=clang-8
+CXX=$$LLVMPATH/bin/clang++
 CFLAGS=-O3
 
 .PHONY: all
@@ -15,12 +16,19 @@ all: basic.bc basic.ll \
 			functionptr.bc functionptr.ll \
 			simd.bc simd.ll \
 			simd_cl.bc simd_cl.ll \
+			throwcatch.bc throwcatch.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
 
 %.bc : %.c
 	$(CC) $(CFLAGS) -c -emit-llvm $^ -o $@
+
+%.ll : %.cpp
+	$(CXX) $(CFLAGS) -S -emit-llvm $^ -o $@
+
+%.bc : %.cpp
+	$(CXX) $(CFLAGS) -c -emit-llvm $^ -o $@
 
 %.ll : %.cl
 	$(CC) $(CFLAGS) -Xclang -finclude-default-header -S -emit-llvm $^ -o $@

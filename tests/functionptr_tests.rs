@@ -21,8 +21,8 @@ fn call_through_function_ptr() {
     init_logging();
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(22))),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(22)))),
     );
 }
 
@@ -31,7 +31,7 @@ fn call_through_function_ptr_struct() {
     let funcname = "struct_driver";
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(15))),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(15)))),
     );
 }

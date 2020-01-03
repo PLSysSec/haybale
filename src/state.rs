@@ -1,5 +1,6 @@
 use boolector::BVSolution;
 use boolector::option::{BtorOption, ModelGen};
+use either::Either;
 use llvm_ir::*;
 use log::{debug, info};
 use reduce::Reduce;
@@ -16,7 +17,7 @@ use crate::error::*;
 use crate::extend::*;
 use crate::function_hooks::{self, FunctionHooks};
 use crate::global_allocations::*;
-use crate::intrinsic_hooks;
+use crate::hooks;
 use crate::layout::*;
 use crate::project::Project;
 use crate::solver_utils::{self, PossibleSolutions};
@@ -133,10 +134,22 @@ impl<'p> From<Location<'p>> for PathEntry {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+/// Fully describes the code location of a `Call` or `Invoke` instruction within
+/// the LLVM IR, and also includes a reference to the `Call` or `Invoke` instruction
+/// itself.
+#[derive(PartialEq, Clone, Debug)]
+pub struct Callsite<'p> {
+    /// Indicates the call or invoke instruction which was responsible for the call
+    pub loc: Location<'p>,
+    /// Reference to the actual instruction (either a `Call` or `Invoke`) which was
+    /// responsible for the call
+    pub instr: Either<&'p instruction::Call, &'p terminator::Invoke>,
+}
+
+#[derive(PartialEq, Clone, Debug)]
 struct StackFrame<'p, V: BV> {
-    /// Indicates the call instruction which was responsible for the call
-    callsite: Location<'p>,
+    /// Indicates the call or invoke instruction which was responsible for the call
+    callsite: Callsite<'p>,
     /// Caller's local variables, so they can be restored when we return to the caller.
     /// This is necessary in the case of (direct or indirect) recursion.
     /// See notes on `VarMap.get_restore_info_for_fn()`.
@@ -193,9 +206,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             global_allocations: GlobalAllocations::new(),
             intrinsic_hooks: {
                 let mut intrinsic_hooks = FunctionHooks::new();
-                intrinsic_hooks.add("intrinsic: llvm.memset", &intrinsic_hooks::symex_memset);
-                intrinsic_hooks.add("intrinsic: llvm.memcpy/memmove", &intrinsic_hooks::symex_memcpy);
-                intrinsic_hooks.add("intrinsic: llvm.objectsize", &intrinsic_hooks::symex_objectsize);
+                // we use "function names" that are clearly illegal, as an additional precaution to avoid collisions with actual function names
+                intrinsic_hooks.add("intrinsic: llvm.memset", &hooks::intrinsics::symex_memset);
+                intrinsic_hooks.add("intrinsic: llvm.memcpy/memmove", &hooks::intrinsics::symex_memcpy);
+                intrinsic_hooks.add("intrinsic: llvm.objectsize", &hooks::intrinsics::symex_objectsize);
                 intrinsic_hooks.add("intrinsic: generic_stub_hook", &function_hooks::generic_stub_hook);
                 intrinsic_hooks
             },
@@ -946,10 +960,22 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         &self.path
     }
 
-    /// Record entering a call at the current location
-    pub fn push_callsite(&mut self) {
+    /// Record entering a normal `Call` at the current location
+    pub fn push_callsite(&mut self, call: &'p instruction::Call) {
+        self.push_generic_callsite(Either::Left(call))
+    }
+
+    /// Record entering the given `Invoke` at the current location
+    pub fn push_invokesite(&mut self, invoke: &'p terminator::Invoke) {
+        self.push_generic_callsite(Either::Right(invoke))
+    }
+
+    fn push_generic_callsite(&mut self, instr: Either<&'p instruction::Call, &'p terminator::Invoke>) {
         self.stack.push(StackFrame {
-            callsite: self.cur_loc.clone(),
+            callsite: Callsite {
+                loc: self.cur_loc.clone(),
+                instr,
+            },
             // TODO: taking this `restore_info` every time a callsite is pushed
             // may be expensive, and is only necessary if the call we're going
             // to make will eventually (directly or indirectly) recurse. In the
@@ -959,12 +985,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         })
     }
 
-    /// Record leaving the current function. Returns the `Location` at which the
+    /// Record leaving the current function. Returns the `Callsite` at which the
     /// current function was called, or `None` if the current function was the
     /// top-level function.
     ///
     /// Also restores the caller's local variables.
-    pub fn pop_callsite(&mut self) -> Option<Location<'p>> {
+    pub fn pop_callsite(&mut self) -> Option<Callsite<'p>> {
         if let Some(StackFrame { callsite, restore_info }) = self.stack.pop() {
             self.varmap.restore_fn_vars(restore_info);
             Some(callsite)
@@ -1022,7 +1048,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn pretty_llvm_backtrace(&self) -> String {
         std::iter::once(format!("  #1: {:?}\n", PathEntry::from(self.cur_loc.clone())))
             .chain(self.stack.iter().rev().zip(2..).map(|(frame, num)| {
-                format!("  #{}: {:?}\n", num, PathEntry::from(frame.callsite.clone()))
+                format!("  #{}: {:?}\n", num, PathEntry::from(frame.callsite.loc.clone()))
             }))
             .collect()
     }

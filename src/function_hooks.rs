@@ -1,6 +1,8 @@
+//! Functions and structures for defining and activating function hooks
+
 use crate::backend::Backend;
 use crate::error::*;
-use crate::default_hooks;
+use crate::hooks;
 use crate::layout;
 use crate::project::Project;
 use crate::return_value::*;
@@ -141,7 +143,9 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
 
 impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
     /// Provides predefined hooks for common functions. (At the time of this
-    /// writing, only `malloc()`, `calloc()`, `realloc()`, and `free()`.)
+    /// writing, this includes malloc-related functions `malloc()`, `calloc()`,
+    /// `realloc()`, and `free()`, as well as some C++ exception-handling
+    /// functions such as `__cxa_throw()` and `__cxa_allocate_exception()`.)
     ///
     /// If you don't want these hooks, you can use
     /// [`FunctionHooks::remove_function_hook()`](struct.FunctionHooks.html#method.remove_function_hook)
@@ -149,10 +153,15 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
     /// comes with no predefined hooks.
     fn default() -> Self {
         let mut fhooks = Self::new();
-        fhooks.add("malloc", &default_hooks::malloc_hook);
-        fhooks.add("calloc", &default_hooks::calloc_hook);
-        fhooks.add("realloc", &default_hooks::realloc_hook);
-        fhooks.add("free", &default_hooks::free_hook);
+        fhooks.add("malloc", &hooks::allocation::malloc_hook);
+        fhooks.add("calloc", &hooks::allocation::calloc_hook);
+        fhooks.add("realloc", &hooks::allocation::realloc_hook);
+        fhooks.add("free", &hooks::allocation::free_hook);
+        fhooks.add("__cxa_allocate_exception", &hooks::exceptions::cxa_allocate_exception);
+        fhooks.add("__cxa_throw", &hooks::exceptions::cxa_throw);
+        fhooks.add("__cxa_begin_catch", &hooks::exceptions::cxa_begin_catch);
+        fhooks.add("__cxa_end_catch", &hooks::exceptions::cxa_end_catch);
+        fhooks.add("llvm.eh.typeid.for", &hooks::exceptions::llvm_eh_typeid_for);
         fhooks
     }
 }
