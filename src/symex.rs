@@ -235,8 +235,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 // pop callsites until we find an `invoke` instruction that can direct us to a catch block
                 loop {
                     match self.state.pop_callsite() {
-                        Some(callsite) => match callsite.invoke {
-                            None => {
+                        Some(callsite) => match callsite.instr {
+                            Either::Left(_call) => {
                                 // a normal callsite, not an `invoke` instruction
                                 info!("Caller {:?} (bb {}) in module {:?} is not prepared to catch the exception, rethrowing",
                                     callsite.loc.func.name,
@@ -245,7 +245,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 );
                                 continue;
                             },
-                            Some(invoke) => {
+                            Either::Right(invoke) => {
                                 // catch the thrown value
                                 info!("Caller {:?} (bb {}) in module {:?} catching the thrown value at bb {}",
                                     callsite.loc.func.name,
@@ -265,8 +265,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 }
             },
             Some(symexresult) => match self.state.pop_callsite() {
-                Some(callsite) => match callsite.invoke {
-                    None => {
+                Some(callsite) => match callsite.instr {
+                    Either::Left(call) => {
                         // Return to normal callsite
                         info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
                             self.state.cur_loc.func.name,
@@ -278,16 +278,6 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // Assign the returned value as the result of the caller's call instruction
                         match symexresult {
                             ReturnValue::Return(bv) => {
-                                let call: &Instruction = callsite.loc.func
-                                    .get_bb_by_name(&callsite.loc.bbname)
-                                    .expect("Malformed callsite (bb not found)")
-                                    .instrs
-                                    .get(callsite.loc.instr)
-                                    .expect("Malformed callsite (instr out of range)");
-                                let call: &instruction::Call = match call {
-                                    Instruction::Call(call) => call,
-                                    _ => panic!("Malformed callsite: expected a Call, got {:?}", call),
-                                };
                                 if self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv).is_err() {
                                     // This path is dead, try backtracking again
                                     return self.backtrack_and_continue();
@@ -300,7 +290,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         self.state.cur_loc.instr += 1;  // advance past the call instruction, to the next instruction
                         self.symex_from_cur_loc()
                     },
-                    Some(invoke) => {
+                    Either::Right(invoke) => {
                         // Normal return to an `Invoke` instruction
                         info!("Leaving function {:?}, continuing in caller {:?} (finished invoke in bb {}, now in bb {}) in module {:?}",
                             self.state.cur_loc.func.name,
@@ -806,7 +796,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                         .collect::<Result<Vec<B::BV>>>()?;
                     let saved_loc = self.state.cur_loc.clone();
-                    self.state.push_callsite();
+                    self.state.push_callsite(call);
                     let bb = callee.basic_blocks.get(0).expect("Failed to get entry basic block");
                     self.state.cur_loc = Location {
                         module: callee_mod,
@@ -821,7 +811,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
                     match self.state.pop_callsite() {
                         None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                        Some(ref callsite) if callsite.loc == saved_loc && callsite.invoke == None => {
+                        Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_left() => {
                             self.state.cur_loc = saved_loc;
                             self.state.cur_loc.instr += 1;  // advance past the call instruction itself before recording the path entry
                             self.state.record_path_entry();
@@ -1103,7 +1093,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     let returned_bv = self.symex_from_bb_through_end_of_function(&bb)?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
                     match self.state.pop_callsite() {
                         None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                        Some(ref callsite) if callsite.loc == saved_loc && callsite.invoke == Some(invoke) => {
+                        Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_right() => {
                             let old_bb_name = self.state.cur_loc.bbname.clone();
                             self.state.cur_loc = saved_loc;
                             match returned_bv {

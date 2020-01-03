@@ -1,5 +1,6 @@
 use boolector::BVSolution;
 use boolector::option::{BtorOption, ModelGen};
+use either::Either;
 use llvm_ir::*;
 use log::{debug, info};
 use reduce::Reduce;
@@ -134,15 +135,15 @@ impl<'p> From<Location<'p>> for PathEntry {
 }
 
 /// Fully describes the code location of a `Call` or `Invoke` instruction within
-/// the LLVM IR, and also includes a reference to the particular `Invoke`
-/// instruction if the location is an `Invoke` instruction.
+/// the LLVM IR, and also includes a reference to the `Call` or `Invoke` instruction
+/// itself.
 #[derive(PartialEq, Clone, Debug)]
 pub struct Callsite<'p> {
     /// Indicates the call or invoke instruction which was responsible for the call
     pub loc: Location<'p>,
-    /// If the call was an `Invoke` instruction, then `Some` with a reference to that `Invoke` instruction.
-    /// Otherwise (if the call was a normal `Call` instruction), this will be `None`.
-    pub invoke: Option<&'p terminator::Invoke>,
+    /// Reference to the actual instruction (either a `Call` or `Invoke`) which was
+    /// responsible for the call
+    pub instr: Either<&'p instruction::Call, &'p terminator::Invoke>,
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -960,20 +961,20 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     }
 
     /// Record entering a normal `Call` at the current location
-    pub fn push_callsite(&mut self) {
-        self.push_generic_callsite(None)
+    pub fn push_callsite(&mut self, call: &'p instruction::Call) {
+        self.push_generic_callsite(Either::Left(call))
     }
 
     /// Record entering the given `Invoke` at the current location
     pub fn push_invokesite(&mut self, invoke: &'p terminator::Invoke) {
-        self.push_generic_callsite(Some(invoke))
+        self.push_generic_callsite(Either::Right(invoke))
     }
 
-    fn push_generic_callsite(&mut self, invoke: Option<&'p terminator::Invoke>) {
+    fn push_generic_callsite(&mut self, instr: Either<&'p instruction::Call, &'p terminator::Invoke>) {
         self.stack.push(StackFrame {
             callsite: Callsite {
                 loc: self.cur_loc.clone(),
-                invoke,
+                instr,
             },
             // TODO: taking this `restore_info` every time a callsite is pushed
             // may be expensive, and is only necessary if the call we're going
