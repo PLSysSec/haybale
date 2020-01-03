@@ -26,8 +26,8 @@ fn hook_a_function() {
     config.function_hooks.add("simple_callee", &hook_for_simple_callee);
     // with that hook, simple_caller should always return 5 regardless of the value of its argument
     assert_eq!(
-        get_possible_return_values_of_func("simple_caller", std::iter::once(None), &proj, config, 3),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(5))),
+        get_possible_return_values_of_func("simple_caller", std::iter::once(None), &proj, config, None, 3),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(5)))),
     );
 }
 
@@ -59,7 +59,7 @@ fn hook_a_function_ptr() {
     // with these hooks, now `get_function_ptr` should return a pointer to `target_hook` instead of `foo` like it normally does,
     // and therefore fptr_driver() should return 15 instead of 22
     assert_eq!(
-        get_possible_return_values_of_func("fptr_driver", std::iter::empty(), &proj, config, 3),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(15))),
+        get_possible_return_values_of_func("fptr_driver", std::iter::empty(), &proj, config, None, 3),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(15)))),
     );
 }

@@ -5,11 +5,14 @@ use crate::error::*;
 use llvm_ir::types::{Type, FPType};
 use std::sync::{Arc, RwLock};
 
+/// our convention is that pointers are 64 bits
+pub const POINTER_SIZE_BITS: usize = 64;
+
 /// Get the size of the `Type`, in bits
 pub fn size(ty: &Type) -> usize {
     match ty {
         Type::IntegerType { bits } => *bits as usize,
-        Type::PointerType { .. } => 64,  // our convention is that pointers are 64 bits
+        Type::PointerType { .. } => POINTER_SIZE_BITS,
         Type::ArrayType { element_type, num_elements } => num_elements * size(element_type),
         Type::VectorType { element_type, num_elements } => num_elements * size(element_type),
         Type::StructType { element_types, .. } => element_types.iter().map(size).sum(),

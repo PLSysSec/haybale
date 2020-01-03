@@ -20,8 +20,8 @@ fn simd_add() {
     // So with x=3 and y=5, we should have 12 + 20 + 6 = 38.
     let args = std::iter::once(3).chain(std::iter::once(5)).map(Some);
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(38))),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(38)))),
     );
 }
 
@@ -64,8 +64,8 @@ fn simd_ops() {
     let g_4: u32 = f_4 << 5;
     let retval: u32 = g_1 + g_2 + g_3 + g_4;
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(retval as u64))),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(retval as u64)))),
     );
 }
 
@@ -92,8 +92,8 @@ fn simd_select() {
     let c_4: u32 = if a_4 < b_4 { a_4 } else { b_4 };
     let retval = c_1 + c_2 + c_3 + c_4;
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(retval as u64))),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(retval as u64)))),
     );
 }
 
@@ -108,8 +108,8 @@ fn simd_add_autovectorized() {
     let y_sum: u32 = (2 .. 18).sum();
     let z_sum: u32 = x_sum + y_sum;
     assert_eq!(
-        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(z_sum as u64))),
+        get_possible_return_values_of_func(funcname, std::iter::empty(), &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(z_sum as u64)))),
     );
 }
 
@@ -148,7 +148,7 @@ fn simd_typeconversions() {
     let f_4: u32 = e_4 as u32;
     let retval = f_1 + f_2 + f_3 + f_4;
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(retval as u64))),
+        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(retval as u64)))),
     )
 }
