@@ -78,8 +78,6 @@ fn throw_multiple_values() {
 }
 
 #[test]
-// TODO: this test currently fails, blocked on support for ExtractValue
-#[should_panic(expected = "not currently supported: instruction ExtractValue")]
 fn throw_uncaught_wrongtype() {
     let funcname = "throw_uncaught_wrongtype";
     init_logging();
@@ -116,8 +114,6 @@ fn throw_uncaught_caller() {
 }
 
 #[test]
-// TODO: this test currently fails, blocked on support for ExtractValue
-#[should_panic(expected = "not currently supported: instruction ExtractValue")]
 fn throw_and_catch_wildcard() {
     let funcname = "throw_and_catch_wildcard";
     init_logging();
@@ -136,8 +132,6 @@ fn throw_and_catch_wildcard() {
 }
 
 #[test]
-// TODO: this test currently fails, blocked on support for ExtractValue
-#[should_panic(expected = "not currently supported: instruction ExtractValue")]
 fn throw_and_catch_val() {
     let funcname = "throw_and_catch_val";
     init_logging();
@@ -156,8 +150,6 @@ fn throw_and_catch_val() {
 }
 
 #[test]
-// TODO: this test currently fails, blocked on support for ExtractValue
-#[should_panic(expected = "not currently supported: instruction ExtractValue")]
 fn throw_and_catch_in_caller() {
     let funcname = "throw_and_catch_in_caller";
     init_logging();
@@ -176,8 +168,6 @@ fn throw_and_catch_in_caller() {
 }
 
 #[test]
-// TODO: this test currently fails, blocked on support for ExtractValue
-#[should_panic(expected = "not currently supported: instruction ExtractValue")]
 fn throw_and_rethrow_in_caller() {
     let funcname = "throw_and_rethrow_in_caller";
     init_logging();

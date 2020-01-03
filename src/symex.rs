@@ -158,6 +158,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Instruction::ExtractElement(ee) => self.symex_extractelement(ee),
                     Instruction::InsertElement(ie) => self.symex_insertelement(ie),
                     Instruction::ShuffleVector(sv) => self.symex_shufflevector(sv),
+                    Instruction::ExtractValue(ev) => self.symex_extractvalue(ev),
                     Instruction::ZExt(zext) => self.symex_zext(zext),
                     Instruction::SExt(sext) => self.symex_sext(sext),
                     Instruction::Trunc(trunc) => self.symex_trunc(trunc),
@@ -606,7 +607,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // this code copied from the StructType case
                         match index {
                             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                                let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
+                                let (offset, nested_ty) = get_offset_constant_index(actual_ty, *index as usize)?;
                                 Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
                                     .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
                             },
@@ -757,6 +758,45 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 self.state.record_bv_result(sv, final_bv)
             },
             ty => Err(Error::MalformedInstruction(format!("Expected ShuffleVector operands to be vectors, got {:?}", ty))),
+        }
+    }
+
+    fn symex_extractvalue(&mut self, ev: &'p instruction::ExtractValue) -> Result<()> {
+        debug!("Symexing extractvalue {:?}", ev);
+        let aggregate = self.state.operand_to_bv(&ev.aggregate)?;
+        let (offset_bytes, size_bits) = Self::get_offset_recursive_const_indices(ev.indices.iter().map(|i| *i as usize), &ev.aggregate.get_type())?;
+        let low_offset_bits = offset_bytes * 8;  // inclusive
+        let high_offset_bits = low_offset_bits + size_bits;  // exclusive
+        assert!(aggregate.get_width() >= high_offset_bits as u32, "Trying to extractvalue from an aggregate with total size {} bits, extracting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits - 1);
+        self.state.record_bv_result(ev, aggregate.slice((high_offset_bits - 1) as u32, low_offset_bits as u32))
+    }
+
+    /// Like `get_offset_recursive()` above, but with constant indices rather than `Operand`s.
+    ///
+    /// Returns the start offset (in bytes) of the indicated element, and the size (in bits) of the indicated element.
+    fn get_offset_recursive_const_indices(mut indices: impl Iterator<Item = usize>, base_type: &Type) -> Result<(usize, usize)> {
+        match indices.next() {
+            None => Ok((0, size(base_type))),
+            Some(index) => match base_type {
+                Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } | Type::StructType { .. } => {
+                    let (offset, nested_ty) = get_offset_constant_index(base_type, index)?;
+                    Self::get_offset_recursive_const_indices(indices, &nested_ty).map(|(val, size)| (val + offset, size))
+                },
+                Type::NamedStructType { ty, .. } => {
+                    let arc: Arc<RwLock<Type>> = ty.as_ref()
+                        .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
+                        .upgrade()
+                        .expect("Failed to upgrade weak reference");
+                    let actual_ty: &Type = &arc.read().unwrap();
+                    if let Type::StructType { .. } = actual_ty {
+                        let (offset, nested_ty) = get_offset_constant_index(actual_ty, index)?;
+                        Self::get_offset_recursive_const_indices(indices, &nested_ty).map(|(val, size)| (val + offset, size))
+                    } else {
+                        Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+                    }
+                },
+                _ => panic!("get_offset_recursive_const_indices with base type {:?}", base_type),
+            }
         }
     }
 

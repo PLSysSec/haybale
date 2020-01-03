@@ -157,8 +157,11 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
         fhooks.add("calloc", &hooks::allocation::calloc_hook);
         fhooks.add("realloc", &hooks::allocation::realloc_hook);
         fhooks.add("free", &hooks::allocation::free_hook);
-        fhooks.add("__cxa_allocate_exception", &hooks::exceptions::cxa_allocate_exception_hook);
-        fhooks.add("__cxa_throw", &hooks::exceptions::cxa_throw_hook);
+        fhooks.add("__cxa_allocate_exception", &hooks::exceptions::cxa_allocate_exception);
+        fhooks.add("__cxa_throw", &hooks::exceptions::cxa_throw);
+        fhooks.add("__cxa_begin_catch", &hooks::exceptions::cxa_begin_catch);
+        fhooks.add("__cxa_end_catch", &hooks::exceptions::cxa_end_catch);
+        fhooks.add("llvm.eh.typeid.for", &hooks::exceptions::llvm_eh_typeid_for);
         fhooks
     }
 }
