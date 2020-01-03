@@ -275,7 +275,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
-    fn binop_to_btorbinop<'a, V: BV + 'a>(bop: &instruction::groups::BinaryOp) -> Result<Box<dyn for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
+    fn binop_to_bvbinop<'a, V: BV + 'a>(bop: &instruction::groups::BinaryOp) -> Result<Box<dyn for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
         match bop {
             // TODO: how to not clone the inner instruction here
             instruction::groups::BinaryOp::Add(_) => Ok(Box::new(V::add)),
@@ -295,7 +295,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
-    fn intpred_to_btorpred(pred: IntPredicate) -> Box<dyn Fn(&B::BV, &B::BV) -> B::BV + 'p> {
+    fn intpred_to_bvpred(pred: IntPredicate) -> Box<dyn Fn(&B::BV, &B::BV) -> B::BV + 'p> {
         match pred {
             IntPredicate::EQ => Box::new(B::BV::_eq),
             IntPredicate::NE => Box::new(B::BV::_ne),
@@ -351,17 +351,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             return Err(Error::MalformedInstruction(format!("Expected binary op to have two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
         }
         let op_type = op0_type;
-        let btorop0 = self.state.operand_to_bv(op0)?;
-        let btorop1 = self.state.operand_to_bv(op1)?;
-        let btoroperation = Self::binop_to_btorbinop(bop)?;
+        let bvop0 = self.state.operand_to_bv(op0)?;
+        let bvop1 = self.state.operand_to_bv(op1)?;
+        let bvoperation = Self::binop_to_bvbinop(bop)?;
         match op_type {
             Type::IntegerType { .. } => {
-                self.state.record_bv_result(bop, btoroperation(&btorop0, &btorop1))
+                self.state.record_bv_result(bop, bvoperation(&bvop0, &bvop1))
             },
             Type::VectorType { element_type, num_elements } => {
                 match *element_type {
                     Type::IntegerType { .. } => {
-                        self.state.record_bv_result(bop, Self::binary_on_vector(&btorop0, &btorop1, num_elements as u32, btoroperation)?)
+                        self.state.record_bv_result(bop, Self::binary_on_vector(&bvop0, &bvop1, num_elements as u32, bvoperation)?)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected binary operation's vector operands to have integer elements, but elements are type {:?}", ty))),
                 }
@@ -372,9 +372,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
 
     fn symex_icmp(&mut self, icmp: &'p instruction::ICmp) -> Result<()> {
         debug!("Symexing icmp {:?}", icmp);
-        let btorfirstop = self.state.operand_to_bv(&icmp.operand0)?;
-        let btorsecondop = self.state.operand_to_bv(&icmp.operand1)?;
-        let btorpred = Self::intpred_to_btorpred(icmp.predicate);
+        let bvfirstop = self.state.operand_to_bv(&icmp.operand0)?;
+        let bvsecondop = self.state.operand_to_bv(&icmp.operand1)?;
+        let bvpred = Self::intpred_to_bvpred(icmp.predicate);
         let op0_type = icmp.operand0.get_type();
         let op1_type = icmp.operand1.get_type();
         if op0_type != op1_type {
@@ -383,7 +383,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         match icmp.get_type() {
             Type::IntegerType { bits } if bits == 1 => match op0_type {
                 Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
-                    self.state.record_bv_result(icmp, btorpred(&btorfirstop, &btorsecondop))
+                    self.state.record_bv_result(icmp, bvpred(&bvfirstop, &bvsecondop))
                 },
                 ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
             },
@@ -392,7 +392,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
                         let zero = self.state.zero(1);
                         let one = self.state.one(1);
-                        let final_bv = Self::binary_on_vector(&btorfirstop, &btorsecondop, num_elements as u32, |a,b| btorpred(a,b).cond_bv(&one, &zero))?;
+                        let final_bv = Self::binary_on_vector(&bvfirstop, &bvsecondop, num_elements as u32, |a,b| bvpred(a,b).cond_bv(&one, &zero))?;
                         self.state.record_bv_result(icmp, final_bv)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
@@ -407,10 +407,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         debug!("Symexing zext {:?}", zext);
         match zext.operand.get_type() {
             Type::IntegerType { bits } => {
-                let btorop = self.state.operand_to_bv(&zext.operand)?;
+                let bvop = self.state.operand_to_bv(&zext.operand)?;
                 let source_size = bits;
                 let dest_size = size(&zext.get_type()) as u32;
-                self.state.record_bv_result(zext, btorop.zext(dest_size - source_size))
+                self.state.record_bv_result(zext, bvop.zext(dest_size - source_size))
             },
             Type::VectorType { element_type, num_elements } => {
                 let in_vector = self.state.operand_to_bv(&zext.operand)?;
@@ -437,10 +437,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         debug!("Symexing sext {:?}", sext);
         match sext.operand.get_type() {
             Type::IntegerType { bits } => {
-                let btorop = self.state.operand_to_bv(&sext.operand)?;
+                let bvop = self.state.operand_to_bv(&sext.operand)?;
                 let source_size = bits;
                 let dest_size = size(&sext.get_type()) as u32;
-                self.state.record_bv_result(sext, btorop.sext(dest_size - source_size))
+                self.state.record_bv_result(sext, bvop.sext(dest_size - source_size))
             },
             Type::VectorType { element_type, num_elements } => {
                 let in_vector = self.state.operand_to_bv(&sext.operand)?;
@@ -467,9 +467,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         debug!("Symexing trunc {:?}", trunc);
         match trunc.operand.get_type() {
             Type::IntegerType { .. } => {
-                let btorop = self.state.operand_to_bv(&trunc.operand)?;
+                let bvop = self.state.operand_to_bv(&trunc.operand)?;
                 let dest_size = size(&trunc.get_type()) as u32;
-                self.state.record_bv_result(trunc, btorop.slice(dest_size-1, 0))
+                self.state.record_bv_result(trunc, bvop.slice(dest_size-1, 0))
             },
             Type::VectorType { num_elements, .. } => {
                 let in_vector = self.state.operand_to_bv(&trunc.operand)?;
@@ -492,31 +492,31 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Use this for any unary operation that can be treated as a cast
     fn symex_cast_op(&mut self, cast: &'p impl instruction::UnaryOp) -> Result<()> {
         debug!("Symexing cast op {:?}", cast);
-        let btorop = self.state.operand_to_bv(&cast.get_operand())?;
-        self.state.record_bv_result(cast, btorop)  // from Boolector's perspective a cast is simply a no-op; the bit patterns are equal
+        let bvop = self.state.operand_to_bv(&cast.get_operand())?;
+        self.state.record_bv_result(cast, bvop)  // from Boolector's perspective a cast is simply a no-op; the bit patterns are equal
     }
 
     fn symex_load(&mut self, load: &'p instruction::Load) -> Result<()> {
         debug!("Symexing load {:?}", load);
-        let btoraddr = self.state.operand_to_bv(&load.address)?;
+        let bvaddr = self.state.operand_to_bv(&load.address)?;
         let dest_size = size(&load.get_type());
-        self.state.record_bv_result(load, self.state.read(&btoraddr, dest_size as u32)?)
+        self.state.record_bv_result(load, self.state.read(&bvaddr, dest_size as u32)?)
     }
 
     fn symex_store(&mut self, store: &'p instruction::Store) -> Result<()> {
         debug!("Symexing store {:?}", store);
-        let btorval = self.state.operand_to_bv(&store.value)?;
-        let btoraddr = self.state.operand_to_bv(&store.address)?;
-        self.state.write(&btoraddr, btorval)
+        let bvval = self.state.operand_to_bv(&store.value)?;
+        let bvaddr = self.state.operand_to_bv(&store.address)?;
+        self.state.write(&bvaddr, bvval)
     }
 
     fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<()> {
         debug!("Symexing gep {:?}", gep);
         match gep.get_type() {
             Type::PointerType { .. } => {
-                let btorbase = self.state.operand_to_bv(&gep.address)?;
-                let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), btorbase.get_width())?;
-                self.state.record_bv_result(gep, btorbase.add(&offset))
+                let bvbase = self.state.operand_to_bv(&gep.address)?;
+                let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), bvbase.get_width())?;
+                self.state.record_bv_result(gep, bvbase.add(&offset))
             },
             Type::VectorType { .. } => Err(Error::UnsupportedInstruction("GEP calculating a vector of pointers".to_owned())),
             ty => Err(Error::MalformedInstruction(format!("Expected GEP result type to be pointer or vector of pointers; got {:?}", ty))),
@@ -895,27 +895,31 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `Ok(None)` if no possible paths were found.
     fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing condbr {:?}", condbr);
-        let btorcond = self.state.operand_to_bv(&condbr.condition)?;
-        let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond))?;
-        let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
+        let bvcond = self.state.operand_to_bv(&condbr.condition)?;
+        let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond))?;
+        let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond.not()))?;
         if true_feasible && false_feasible {
+            debug!("both true and false branches are feasible");
             // for now we choose to explore true first, and backtrack to false if necessary
-            self.state.save_backtracking_point(condbr.false_dest.clone(), btorcond.not());
-            btorcond.assert()?;
+            self.state.save_backtracking_point(condbr.false_dest.clone(), bvcond.not());
+            bvcond.assert()?;
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
-            btorcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
+            debug!("only the true branch is feasible");
+            bvcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = condbr.true_dest.clone();
             self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
-            btorcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
+            debug!("only the false branch is feasible");
+            bvcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.bbname = condbr.false_dest.clone();
             self.state.cur_loc.instr = 0;
             self.symex_from_cur_loc_through_end_of_function()
         } else {
+            debug!("neither branch is feasible");
             self.backtrack_and_continue()
         }
     }
@@ -996,27 +1000,27 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         };
         match select.condition.get_type() {
             Type::IntegerType { bits: 1 } => {
-                let btorcond = self.state.operand_to_bv(&select.condition)?;
-                let btortrueval = self.state.operand_to_bv(&select.true_value)?;
-                let btorfalseval = self.state.operand_to_bv(&select.false_value)?;
+                let bvcond = self.state.operand_to_bv(&select.condition)?;
+                let bvtrueval = self.state.operand_to_bv(&select.true_value)?;
+                let bvfalseval = self.state.operand_to_bv(&select.false_value)?;
                 let do_feasibility_checks = false;
                 if do_feasibility_checks {
-                    let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond))?;
-                    let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&btorcond.not()))?;
+                    let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond))?;
+                    let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond.not()))?;
                     if true_feasible && false_feasible {
-                        self.state.record_bv_result(select, btorcond.cond_bv(&btortrueval, &btorfalseval))
+                        self.state.record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
                     } else if true_feasible {
-                        btorcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
-                        self.state.record_bv_result(select, btortrueval)
+                        bvcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
+                        self.state.record_bv_result(select, bvtrueval)
                     } else if false_feasible {
-                        btorcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
-                        self.state.record_bv_result(select, btorfalseval)
+                        bvcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
+                        self.state.record_bv_result(select, bvfalseval)
                     } else {
                         // this path is unsat
                         Err(Error::Unsat)
                     }
                 } else {
-                    self.state.record_bv_result(select, btorcond.cond_bv(&btortrueval, &btorfalseval))
+                    self.state.record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
                 }
             },
             Type::VectorType { element_type, num_elements } => {
