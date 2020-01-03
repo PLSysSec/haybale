@@ -191,6 +191,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Terminator::CondBr(condbr) => self.symex_condbr(condbr),
             Terminator::Switch(switch) => self.symex_switch(switch),
             Terminator::Invoke(invoke) => self.symex_invoke(invoke),
+            Terminator::Resume(resume) => self.symex_resume(resume),
             Terminator::Unreachable(_) => Err(Error::OtherError("Reached an LLVM 'Unreachable' instruction".to_owned())),
             term => Err(Error::UnsupportedInstruction(format!("terminator {:?}", term))),
         }
@@ -1162,6 +1163,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
+    fn symex_resume(&mut self, resume: &'p terminator::Resume) -> Result<Option<ReturnValue<B::BV>>> {
+        debug!("Symexing resume {:?}", resume);
+
+        // (At least for C++ exceptions) the operand of the resume operand is the struct {exception_ptr, type_index}
+        // (see notes on `catch_with_type_index()`). For now we don't handle the type_index, so we just strip out the
+        // exception_ptr and throw that
+        let operand = self.state.operand_to_bv(&resume.operand)?;
+        let exception_ptr = operand.slice(POINTER_SIZE_BITS as u32 - 1, 0);  // strip out the first element, assumed to be a pointer
+        Ok(Some(ReturnValue::Throw(exception_ptr)))
+    }
+
     /// Catches an exception, then continues execution in the function and
     /// eventually returns the `ReturnValue` representing the return value of the
     /// function (when it reaches the end of the function), or `Ok(None)` if no
@@ -1188,7 +1200,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     ///
     /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
     fn catch_with_type_index(&mut self, thrown_ptr: &B::BV, type_index: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {
-        debug!("Processing throw of {{{:?}, {:?}}} to {}", thrown_ptr, type_index, pretty_bb_name(bbname));
+        debug!("Catching exception {{{:?}, {:?}}} at bb {}", thrown_ptr, type_index, pretty_bb_name(bbname));
         self.state.cur_loc.bbname = bbname.clone();
         self.state.cur_loc.instr = 0;
         self.state.record_path_entry();
@@ -1200,7 +1212,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             let result = match inst {
                 Instruction::Phi(phi) => self.symex_phi(phi),  // phi instructions are allowed before the landingpad
                 Instruction::LandingPad(lp) => { found_landingpad = true; self.symex_landing_pad(lp, thrown_ptr, type_index) },
-                _ => Err(Error::MalformedInstruction(format!("Expected exception-catching block to have a `LandingPad` as its first non-phi instruction, but found {:?}", inst))),
+                _ => Err(Error::MalformedInstruction(format!("Expected exception-catching block ({}) to have a `LandingPad` as its first non-phi instruction, but found {:?}", pretty_bb_name(bbname), inst))),
             };
             match result {
                 Ok(()) => {
@@ -1250,7 +1262,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         // Partly due to current restrictions in `llvm-ir` (not enough info
         // available on landingpad clauses - see `llvm-ir` docs), for now we
         // assume that the landingpad always catches
-        self.state.record_bv_result(lp, thrown_ptr.concat(type_index))
+        self.state.record_bv_result(lp, type_index.concat(thrown_ptr))
     }
 
     fn symex_phi(&mut self, phi: &'p instruction::Phi) -> Result<()> {
