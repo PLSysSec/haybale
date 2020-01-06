@@ -1,6 +1,8 @@
 CC=clang-8
 CXX=$$LLVMPATH/bin/clang++
 CFLAGS=-O3
+RUSTC=rustc
+RUSTFLAGS=--crate-type=lib
 
 .PHONY: all
 all: basic.bc basic.ll \
@@ -17,6 +19,8 @@ all: basic.bc basic.ll \
 			simd.bc simd.ll \
 			simd_cl.bc simd_cl.ll \
 			throwcatch.bc throwcatch.ll \
+			abort.bc abort.ll \
+			panic.bc panic.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
@@ -35,6 +39,12 @@ all: basic.bc basic.ll \
 
 %.bc : %.cl
 	$(CC) $(CFLAGS) -Xclang -finclude-default-header -c -emit-llvm $^ -o $@
+
+%.ll : %.rs
+	$(RUSTC) $(RUSTFLAGS) --emit=llvm-ir $^ -o $@
+
+%.bc : %.rs
+	$(RUSTC) $(RUSTFLAGS) --emit=llvm-bc $^ -o $@
 
 # use -O1 on loop.c
 loop.ll : loop.c

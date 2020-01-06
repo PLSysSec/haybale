@@ -118,6 +118,7 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
         match bvretval.unwrap() {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
             ReturnValue::Throw(_) => continue,  // we're looking for values that result in _returning_ zero, not _throwing_ zero
+            ReturnValue::Abort => continue,
             ReturnValue::Return(bvretval) => {
                 let state = em.mut_state();
                 bvretval._eq(&zero).assert();
@@ -210,6 +211,12 @@ pub fn get_possible_return_values_of_func<'p>(
                     break;
                 }
             },
+            ReturnValue::Abort => {
+                candidate_values.insert(ReturnValue::Abort);
+                if candidate_values.len() > n {
+                    break;
+                }
+            }
             ReturnValue::Return(bvretval) => {
                 let state = em.mut_state();
                 // rule out all the returned values we already have - we're interested in new values

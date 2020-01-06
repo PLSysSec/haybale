@@ -152,13 +152,14 @@ let retval = em.next().expect("Expected at least one path")?;
 We're given the function return value, `retval`, as a Boolector [`BV`] (bitvector)
 wrapped in the [`ReturnValue`] enum.
 Since we know that `foo` isn't a void-typed function (and won't throw an
-exception), we can simply unwrap the `ReturnValue` to get the `BV`:
+exception or abort), we can simply unwrap the `ReturnValue` to get the `BV`:
 
 ```rust
 let retval = match retval {
+    ReturnValue::Return(r) => r,
     ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
     ReturnValue::Throw(_) => panic!("Function shouldn't throw an exception"),
-    ReturnValue::Return(r) => r,
+    ReturnValue::Abort => panic!("Function shouldn't panic or exit()"),
 };
 ```
 

@@ -11,10 +11,11 @@ keywords = ["symbolic", "llvm", "IR", "SMT"]
 license = "MIT"
 
 [dependencies]
-llvm-ir = "0.3.2"
+llvm-ir = "0.3.3"
 boolector = "0.1.2"
 either = "1.5.3"
 itertools = "0.8.2"
 reduce = "0.1"
+rustc-demangle = "0.1"
 log = { version = "0.4.8", features = ["max_level_debug", "release_max_level_info"] }
 env_logger = "0.6.2"

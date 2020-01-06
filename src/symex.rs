@@ -159,6 +159,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Instruction::InsertElement(ie) => self.symex_insertelement(ie),
                     Instruction::ShuffleVector(sv) => self.symex_shufflevector(sv),
                     Instruction::ExtractValue(ev) => self.symex_extractvalue(ev),
+                    Instruction::InsertValue(iv) => self.symex_insertvalue(iv),
                     Instruction::ZExt(zext) => self.symex_zext(zext),
                     Instruction::SExt(sext) => self.symex_sext(sext),
                     Instruction::Trunc(trunc) => self.symex_trunc(trunc),
@@ -266,6 +267,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     }
                 }
             },
+            Some(ReturnValue::Abort) => return Ok(Some(ReturnValue::Abort)),
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => match callsite.instr {
                     Either::Left(call) => {
@@ -287,6 +289,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             },
                             ReturnValue::ReturnVoid => { },
                             ReturnValue::Throw(_) => panic!("This case should have been handled above"),
+                            ReturnValue::Abort => panic!("This case should have been handled above"),
                         };
                         // Continue execution in caller, with the instruction after the call instruction
                         self.state.cur_loc.instr += 1;  // advance past the call instruction, to the next instruction
@@ -312,6 +315,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             },
                             ReturnValue::ReturnVoid => { },
                             ReturnValue::Throw(_) => panic!("This case should have been handled above"),
+                            ReturnValue::Abort => panic!("This case should have been handled above"),
                         };
                         // Continue execution in caller, at the normal-return label of the `Invoke` instruction
                         self.state.cur_loc.bbname = invoke.return_label.clone();
@@ -670,41 +674,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             Err(Error::MalformedInstruction(format!("InsertElement index out of range: index {} with {} elements", index, num_elements)))
                         } else {
                             let vec_size = vector.get_width();
-                            let highest_bit_index = vec_size - 1;
                             let el_size = size(&element_type) as u32;
                             assert_eq!(vec_size, el_size * num_elements as u32);
                             let insertion_bitindex_low = index * el_size;  // lowest bit number in the vector which will be overwritten
                             let insertion_bitindex_high = (index+1) * el_size - 1;  // highest bit number in the vector which will be overwritten
 
-                            // mask_clear is 0's in the bit positions that will be written, 1's elsewhere
-                            let zeroes = self.state.zero(el_size);
-                            let mask_clear = if insertion_bitindex_high == highest_bit_index {
-                                if insertion_bitindex_low == 0 {
-                                    zeroes
-                                } else {
-                                    zeroes.concat(&self.state.ones(insertion_bitindex_low))
-                                }
-                            } else {
-                                let top = self.state.ones(highest_bit_index - insertion_bitindex_high)
-                                    .concat(&zeroes);
-                                if insertion_bitindex_low == 0 {
-                                    top
-                                } else {
-                                    top.concat(&self.state.ones(insertion_bitindex_low))
-                                }
-                            };
-
-                            // mask_insert is the insertion data in the appropriate bit positions, 0's elsewhere
-                            let top = zero_extend_to_bits(element, vec_size - insertion_bitindex_low);
-                            let mask_insert = if insertion_bitindex_low == 0 {
-                                top
-                            } else {
-                                top.concat(&self.state.zero(insertion_bitindex_low))
-                            };
-
-                            let with_insertion = vector
-                                .and(&mask_clear)  // zero out the element we'll be writing
-                                .or(&mask_insert);  // write the data into the element's position
+                            let with_insertion = Self::overwrite_bv_segment(&mut self.state, &vector, element, insertion_bitindex_low, insertion_bitindex_high);
 
                             self.state.record_bv_result(ie, with_insertion)
                         }
@@ -772,6 +747,20 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         self.state.record_bv_result(ev, aggregate.slice((high_offset_bits - 1) as u32, low_offset_bits as u32))
     }
 
+    fn symex_insertvalue(&mut self, iv: &'p instruction::InsertValue) -> Result<()> {
+        debug!("Symexing insertvalue {:?}", iv);
+        let aggregate = self.state.operand_to_bv(&iv.aggregate)?;
+        let element = self.state.operand_to_bv(&iv.element)?;
+        let (offset_bytes, size_bits) = Self::get_offset_recursive_const_indices(iv.indices.iter().map(|i| *i as usize), &iv.aggregate.get_type())?;
+        let low_offset_bits = offset_bytes * 8;  // inclusive
+        let high_offset_bits = low_offset_bits + size_bits - 1;  // inclusive
+        assert!(aggregate.get_width() >= high_offset_bits as u32, "Trying to insertvalue into an aggregate with total size {} bits, inserting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits);
+
+        let new_aggregate = Self::overwrite_bv_segment(&mut self.state, &aggregate, element, low_offset_bits as u32, high_offset_bits as u32);
+
+        self.state.record_bv_result(iv, new_aggregate)
+    }
+
     /// Like `get_offset_recursive()` above, but with constant indices rather than `Operand`s.
     ///
     /// Returns the start offset (in bytes) of the indicated element, and the size (in bits) of the indicated element.
@@ -801,6 +790,49 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
+    /// Helper function which overwrites a particular segment of a BV, returning the new BV
+    ///
+    /// Specifically, offsets `low_bitindex` to `high_bitindex` of
+    /// `original_bv` (inclusive) will be overwritten with the data in
+    /// `overwrite_data`, which must be exactly the correct length
+    fn overwrite_bv_segment(state: &mut State<B>, original_bv: &B::BV, overwrite_data: B::BV, low_bitindex: u32, high_bitindex: u32) -> B::BV {
+        let full_width = original_bv.get_width();
+        let highest_bit_index = full_width - 1;
+        assert!(high_bitindex <= highest_bit_index, "overwrite_bv_segment: high_bitindex {} is larger than highest valid bit index {} for an original_bv of width {}", high_bitindex, highest_bit_index, full_width);
+        assert!(high_bitindex >= low_bitindex, "overwrite_bv_segment: high_bitindex {} is lower than low_bitindex {}", high_bitindex, low_bitindex);
+        let overwrite_width = overwrite_data.get_width();
+        assert_eq!(overwrite_width, high_bitindex - low_bitindex + 1, "overwrite_bv_segment: indicated a segment from bit {} to bit {} (width {}), but provided overwrite_data has width {}", low_bitindex, high_bitindex, high_bitindex - low_bitindex + 1, overwrite_width);
+
+        // mask_clear is 0's in the bit positions that will be written, 1's elsewhere
+        let zeroes = state.zero(overwrite_width);
+        let mask_clear = if high_bitindex == highest_bit_index {
+            if low_bitindex == 0 {
+                zeroes
+            } else {
+                zeroes.concat(&state.ones(low_bitindex))
+            }
+        } else {
+            let top = state.ones(highest_bit_index - high_bitindex).concat(&zeroes);
+            if low_bitindex == 0 {
+                top
+            } else {
+                top.concat(&state.ones(low_bitindex))
+            }
+        };
+
+        // mask_overwrite is the overwrite data in the appropriate bit positions, 0's elsewhere
+        let top = zero_extend_to_bits(overwrite_data, full_width - low_bitindex);
+        let mask_overwrite = if low_bitindex == 0 {
+            top
+        } else {
+            top.concat(&state.zero(low_bitindex))
+        };
+
+        original_bv
+            .and(&mask_clear)  // zero out the segment we'll be writing
+            .or(&mask_overwrite)  // write the data into the appropriate position
+    }
+
     /// If the returned value is `Ok(Some(_))`, then this is the final return value of the
     /// _current function_ (the function containing the call instruction), because either:
     ///     - we had backtracking and finished on a different path, and this is the final return value of the top-level function
@@ -826,6 +858,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
                         return Ok(Some(ReturnValue::Throw(bvptr)));
                     },
+                    ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 }
                 info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                 return Ok(None);
@@ -866,6 +899,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                     debug!("Callee threw an exception, but caller isn't inside a try block; rethrowing upwards");
                                     return Ok(Some(ReturnValue::Throw(bvptr)));
                                 },
+                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             };
                             debug!("Completed ordinary return to caller");
                             info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}", called_funcname, &self.state.cur_loc.func.name, pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
@@ -922,7 +956,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         })
                     } else if funcname.starts_with("llvm.objectsize") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM instrinsic objectsize hook"),
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM intrinsic objectsize hook"),
                             hooked_funcname: Some(funcname),
                         })
                     } else if funcname.starts_with("llvm.lifetime")
@@ -973,6 +1007,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 }
             },
             ReturnValue::Throw(bvptr) => Ok(ReturnValue::Throw(bvptr)),  // throwing is always OK and doesn't need to be checked against function type
+            ReturnValue::Abort => Ok(ReturnValue::Abort),  // aborting is always OK and doesn't need to be checked against function type
         }
     }
 
@@ -1104,6 +1139,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&invoke.exception_label), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                         return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                     },
+                    ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 };
                 let old_bb_name = self.state.cur_loc.bbname.clone();
                 // We had a normal return, so continue at the `return_label`
@@ -1146,6 +1182,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                     info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}, module {:?}", self.state.cur_loc.func.name, called_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                                     return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                                 },
+                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             }
                             // Returned normally, so continue at the `return_label`
                             self.state.cur_loc.bbname = invoke.return_label.clone();

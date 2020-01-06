@@ -10,6 +10,7 @@ use crate::state::State;
 use either::Either;
 use llvm_ir::{Name, Operand, Type, Typed, instruction::InlineAssembly};
 use llvm_ir::function::{CallingConvention, FunctionAttribute, ParameterAttribute};
+use rustc_demangle::demangle;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -19,9 +20,19 @@ use std::rc::Rc;
 /// one of those hooked functions.
 #[derive(Clone)]
 pub struct FunctionHooks<'p, B: Backend + 'p> {
-    /// Map from function names to the hook to use.
-    /// If a function name isn't in this map, the function isn't hooked.
+    /// `hooks` and `demangled_hooks` are each maps from function names to the
+    /// hook to use. In `hooks`, the function names are exactly as they appear
+    /// in the LLVM IR. In `demangled_hooks`, the function names are
+    /// (Rust-)demangled versions of thenames that appear in the LLVM IR.
+    ///
+    /// It's intended that a function should only be hooked in one of these
+    /// maps, not both; but if both the mangled and demangled function names
+    /// are hooked, the hook in `hooks` (that is, for the mangled name) takes
+    /// priority.
+    ///
+    /// If a function name isn't in either map, the function isn't hooked.
     hooks: HashMap<String, FunctionHook<'p, B>>,
+    rust_demangled_hooks: HashMap<String, FunctionHook<'p, B>>,
 
     /// For internal use in creating unique `id`s for `FunctionHook`s
     cur_id: usize,
@@ -85,6 +96,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     pub fn new() -> Self {
         Self {
             hooks: HashMap::new(),
+            rust_demangled_hooks: HashMap::new(),
             cur_id: 0,
         }
     }
@@ -118,21 +130,41 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
         self.cur_id += 1;
     }
 
-    /// Removes the function hook for the given function. That function will no
-    /// longer be hooked.
+    /// Exactly like `add()`, but takes the (Rust) _demangled_ name of the function
+    /// to hook, so you can use a function name like "module::function".
+    pub fn add_rust_demangled<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
+        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    {
+        self.rust_demangled_hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
+        self.cur_id += 1;
+    }
+
+    /// Removes the function hook for the given function, which was added with
+    /// `add()`. That function will no longer be hooked.
     pub fn remove(&mut self, hooked_function: &str) {
         self.hooks.remove(hooked_function);
     }
 
+    /// Removes the function hook for the given function, which was added with
+    /// `add_rust_demangled()`. That function will no longer be hooked.
+    pub fn remove_rust_demangled(&mut self, hooked_function: &str) {
+        self.rust_demangled_hooks.remove(hooked_function);
+    }
+
     /// Iterate over all function hooks, as (function name, hook) pairs.
+    /// Function names may include both mangled and demangled names.
     pub(crate) fn get_all_hooks(&self) -> impl Iterator<Item = (&String, &FunctionHook<'p, B>)> {
-        self.hooks.iter()
+        self.hooks.iter().chain(self.rust_demangled_hooks.iter())
     }
 
     /// Get the `FunctionHook` active for the given `funcname`, or `None` if
-    /// there is no hook active for the function.
+    /// there is no hook active for the function. `funcname` may be either a
+    /// mangled or a (Rust-)demangled function name.
     pub(crate) fn get_hook_for(&self, funcname: &str) -> Option<&FunctionHook<'p, B>> {
-        self.hooks.get(funcname)
+        match self.hooks.get(funcname) {
+            Some(hook) => Some(hook),
+            None => self.rust_demangled_hooks.get(&format!("{:#}", demangle(funcname))),
+        }
     }
 
     /// Determine whether there is an active hook for the given `funcname`
@@ -145,7 +177,8 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
     /// Provides predefined hooks for common functions. (At the time of this
     /// writing, this includes malloc-related functions `malloc()`, `calloc()`,
     /// `realloc()`, and `free()`, as well as some C++ exception-handling
-    /// functions such as `__cxa_throw()` and `__cxa_allocate_exception()`.)
+    /// functions such as `__cxa_throw()` and `__cxa_allocate_exception()`,
+    /// and a few other C standard library functions.)
     ///
     /// If you don't want these hooks, you can use
     /// [`FunctionHooks::remove_function_hook()`](struct.FunctionHooks.html#method.remove_function_hook)
@@ -162,6 +195,8 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
         fhooks.add("__cxa_begin_catch", &hooks::exceptions::cxa_begin_catch);
         fhooks.add("__cxa_end_catch", &hooks::exceptions::cxa_end_catch);
         fhooks.add("llvm.eh.typeid.for", &hooks::exceptions::llvm_eh_typeid_for);
+        fhooks.add("exit", &abort_hook);
+        fhooks.add_rust_demangled("std::panicking::begin_panic", &abort_hook);
         fhooks
     }
 }
@@ -232,4 +267,15 @@ pub fn generic_stub_hook<B: Backend>(
             Ok(ReturnValue::Return(bv))
         },
     }
+}
+
+/// This hook ignores the function arguments and returns `ReturnValue::Abort`.
+/// It is suitable for hooking functions such as C's `exit()` which abort the
+/// program and never return.
+pub fn abort_hook<B: Backend>(
+    _proj: &Project,
+    _state: &mut State<B>,
+    _call: &dyn IsCall,
+) -> Result<ReturnValue<B::BV>> {
+    Ok(ReturnValue::Abort)
 }

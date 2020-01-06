@@ -211,6 +211,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 intrinsic_hooks.add("intrinsic: llvm.memcpy/memmove", &hooks::intrinsics::symex_memcpy);
                 intrinsic_hooks.add("intrinsic: llvm.objectsize", &hooks::intrinsics::symex_objectsize);
                 intrinsic_hooks.add("intrinsic: generic_stub_hook", &function_hooks::generic_stub_hook);
+                intrinsic_hooks.add("intrinsic: abort_hook", &function_hooks::abort_hook);
                 intrinsic_hooks
             },
             stack: Vec::new(),

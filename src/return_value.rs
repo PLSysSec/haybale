@@ -11,4 +11,7 @@ pub enum ReturnValue<V> {
     /// (note that, unless other comments say otherwise, this is a pointer to the
     /// actual value or object thrown, not the value itself)
     Throw(V),
+    /// The function or call aborts without ever returning (e.g., with a Rust
+    /// panic, or by calling the C `exit()` function)
+    Abort,
 }

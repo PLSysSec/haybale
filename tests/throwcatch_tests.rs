@@ -32,6 +32,7 @@ fn doesnt_throw() {
                     ReturnValue::Return(rval) => assert!(rval > 0),
                     ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
                     ReturnValue::Throw(throwval) => panic!("Function shouldn't throw, but it threw {:?}", throwval),
+                    ReturnValue::Abort => panic!("Function shouldn't abort, but it did"),
                 }
             }
         },

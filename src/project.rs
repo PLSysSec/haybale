@@ -1,6 +1,7 @@
 use llvm_ir::{Function, Module, Type};
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
 use log::info;
+use rustc_demangle::demangle;
 use std::fs::DirEntry;
 use std::io;
 use std::path::Path;
@@ -127,6 +128,9 @@ impl Project {
     /// Search the project for a function with the given name.
     /// If a matching function is found, return both it and the module it was
     /// found in.
+    ///
+    /// For projects containing Rust code, you can pass either the mangled or
+    /// demangled function name.
     pub fn get_func_by_name<'p>(&'p self, name: &str) -> Option<(&'p Function, &'p Module)> {
         let mut retval = None;
         for module in &self.modules {
@@ -136,6 +140,32 @@ impl Project {
                     Some((_, retmod)) => panic!("Multiple functions found with name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
                 };
             }
+        }
+        if retval.is_some() {
+            return retval;
+        }
+        // if we get to this point, we haven't found the function normally; maybe we were
+        // given a demangled name
+        for module in &self.modules {
+           if let Some(f) = module.functions.iter().find(|func| demangle(&func.name).to_string() == name) {
+               match retval {
+                   None => retval = Some((f, module)),
+                   Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
+               };
+           }
+        }
+        if retval.is_some() {
+            return retval;
+        }
+        // if we get to this point, we still haven't found the function; try one more
+        // time, this time also stripping the trailing hash value from the mangled name
+        for module in &self.modules {
+           if let Some(f) = module.functions.iter().find(|func| format!("{:#}", demangle(&func.name)) == name) {
+               match retval {
+                   None => retval = Some((f, module)),
+                   Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
+               };
+           }
         }
         retval
     }
