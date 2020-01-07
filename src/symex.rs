@@ -173,6 +173,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Ok(None) => Ok(()),
                         Ok(Some(symexresult)) => return Ok(Some(symexresult)),
                     },
+                    Instruction::LandingPad(_) => return Err(Error::UnsupportedInstruction("Encountered an LLVM `LandingPad` instruction, but wasn't expecting it (there is no inflight exception)".to_owned())),
                     _ => return Err(Error::UnsupportedInstruction(format!("instruction {:?}", inst))),
                 }
             };
