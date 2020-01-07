@@ -1,3 +1,4 @@
+use crate::function_hooks::cpp_demangle;
 use llvm_ir::{Function, Module, Type};
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
 use log::info;
@@ -129,8 +130,8 @@ impl Project {
     /// If a matching function is found, return both it and the module it was
     /// found in.
     ///
-    /// For projects containing Rust code, you can pass either the mangled or
-    /// demangled function name.
+    /// For projects containing C++ or Rust code, you can pass either the mangled
+    /// or demangled function name.
     pub fn get_func_by_name<'p>(&'p self, name: &str) -> Option<(&'p Function, &'p Module)> {
         let mut retval = None;
         for module in &self.modules {
@@ -145,7 +146,7 @@ impl Project {
             return retval;
         }
         // if we get to this point, we haven't found the function normally; maybe we were
-        // given a demangled name
+        // given a Rust demangled name
         for module in &self.modules {
            if let Some(f) = module.functions.iter().find(|func| demangle(&func.name).to_string() == name) {
                match retval {
@@ -157,8 +158,8 @@ impl Project {
         if retval.is_some() {
             return retval;
         }
-        // if we get to this point, we still haven't found the function; try one more
-        // time, this time also stripping the trailing hash value from the mangled name
+        // if we get to this point, we still haven't found the function; try
+        // stripping the trailing hash value from the Rust mangled name
         for module in &self.modules {
            if let Some(f) = module.functions.iter().find(|func| format!("{:#}", demangle(&func.name)) == name) {
                match retval {
@@ -166,6 +167,19 @@ impl Project {
                    Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
                };
            }
+        }
+        if retval.is_some() {
+            return retval;
+        }
+        // if we get to this point, we still haven't found the function;
+        // maybe we were given a C++ demangled name
+        for module in &self.modules {
+            if let Some(f) = module.functions.iter().find(|func| cpp_demangle(&func.name).as_ref().map(|s| s.as_str()) == Some(name)) {
+                match retval {
+                    None => retval = Some((f, module)),
+                    Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
+                };
+            }
         }
         retval
     }

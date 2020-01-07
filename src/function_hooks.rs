@@ -20,18 +20,20 @@ use std::rc::Rc;
 /// one of those hooked functions.
 #[derive(Clone)]
 pub struct FunctionHooks<'p, B: Backend + 'p> {
-    /// `hooks` and `demangled_hooks` are each maps from function names to the
-    /// hook to use. In `hooks`, the function names are exactly as they appear
-    /// in the LLVM IR. In `demangled_hooks`, the function names are
-    /// (Rust-)demangled versions of thenames that appear in the LLVM IR.
+    /// `hooks`, `cpp_demangled_hooks`, and `rust_demangled_hooks` are each maps
+    /// from function names to the hook to use. In `hooks`, the function names
+    /// are exactly as they appear in the LLVM IR. In `cpp_demangled_hooks` and
+    /// `rust_demangled_hooks`, the function names are demangled versions (using
+    /// the C++ and Rust demanglers respectively) of the names that appear in the
+    /// LLVM IR.
     ///
-    /// It's intended that a function should only be hooked in one of these
-    /// maps, not both; but if both the mangled and demangled function names
-    /// are hooked, the hook in `hooks` (that is, for the mangled name) takes
-    /// priority.
+    /// It's intended that a function should only be hooked in one of these maps;
+    /// but if both the mangled and demangled function names are hooked, the hook
+    /// in `hooks` (that is, for the mangled name) takes priority.
     ///
-    /// If a function name isn't in either map, the function isn't hooked.
+    /// If a function name isn't in any of these maps, the function isn't hooked.
     hooks: HashMap<String, FunctionHook<'p, B>>,
+    cpp_demangled_hooks: HashMap<String, FunctionHook<'p, B>>,
     rust_demangled_hooks: HashMap<String, FunctionHook<'p, B>>,
 
     /// For internal use in creating unique `id`s for `FunctionHook`s
@@ -96,6 +98,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     pub fn new() -> Self {
         Self {
             hooks: HashMap::new(),
+            cpp_demangled_hooks: HashMap::new(),
             rust_demangled_hooks: HashMap::new(),
             cur_id: 0,
         }
@@ -130,6 +133,15 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
         self.cur_id += 1;
     }
 
+    /// Exactly like `add()`, but takes the (C++) _demangled_ name of the function
+    /// to hook, so you can use a function name like "namespace::function".
+    pub fn add_cpp_demangled<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
+        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    {
+        self.cpp_demangled_hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
+        self.cur_id += 1;
+    }
+
     /// Exactly like `add()`, but takes the (Rust) _demangled_ name of the function
     /// to hook, so you can use a function name like "module::function".
     pub fn add_rust_demangled<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
@@ -146,6 +158,12 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     }
 
     /// Removes the function hook for the given function, which was added with
+    /// `add_cpp_demangled()`. That function will no longer be hooked.
+    pub fn remove_cpp_demangled(&mut self, hooked_function: &str) {
+        self.cpp_demangled_hooks.remove(hooked_function);
+    }
+
+    /// Removes the function hook for the given function, which was added with
     /// `add_rust_demangled()`. That function will no longer be hooked.
     pub fn remove_rust_demangled(&mut self, hooked_function: &str) {
         self.rust_demangled_hooks.remove(hooked_function);
@@ -154,16 +172,22 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Iterate over all function hooks, as (function name, hook) pairs.
     /// Function names may include both mangled and demangled names.
     pub(crate) fn get_all_hooks(&self) -> impl Iterator<Item = (&String, &FunctionHook<'p, B>)> {
-        self.hooks.iter().chain(self.rust_demangled_hooks.iter())
+        self.hooks.iter().chain(self.cpp_demangled_hooks.iter()).chain(self.rust_demangled_hooks.iter())
     }
 
     /// Get the `FunctionHook` active for the given `funcname`, or `None` if
     /// there is no hook active for the function. `funcname` may be either a
-    /// mangled or a (Rust-)demangled function name.
+    /// mangled or a demangled function name.
     pub(crate) fn get_hook_for(&self, funcname: &str) -> Option<&FunctionHook<'p, B>> {
         match self.hooks.get(funcname) {
             Some(hook) => Some(hook),
-            None => self.rust_demangled_hooks.get(&format!("{:#}", demangle(funcname))),
+            None => match self.rust_demangled_hooks.get(&format!("{:#}", demangle(funcname))) {
+                Some(hook) => Some(hook),
+                None => match cpp_demangle(funcname) {
+                    Some(demangled) => self.cpp_demangled_hooks.get(&demangled),
+                    None => None,
+                },
+            },
         }
     }
 
@@ -171,6 +195,17 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     pub fn is_hooked(&self, funcname: &str) -> bool {
         self.get_hook_for(funcname).is_some()
     }
+}
+
+/// Helper function to demangle function names with the C++ demangler.
+///
+/// Returns `Some` if successfully demangled, or `None` if any error occurs
+/// (for instance, if `funcname` isn't a valid C++ mangled name)
+pub(crate) fn cpp_demangle(funcname: &str) -> Option<String> {
+    let opts = cpp_demangle::DemangleOptions {
+        no_params: true,
+    };
+    cpp_demangle::Symbol::new(funcname).ok().and_then(|sym| sym.demangle(&opts).ok())
 }
 
 impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {

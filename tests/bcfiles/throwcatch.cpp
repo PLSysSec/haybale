@@ -1,5 +1,6 @@
 #include <cstdint>
 
+// this function extern "C" so we don't have to worry about demangling
 extern "C" {
 
 // this function never throws, and should always return a positive number
@@ -23,6 +24,9 @@ int doesnt_throw(int a) {
     } catch (...) {
         return -2;
     }
+}
+
+// remaining functions are not extern "C", to test demangling
 }
 
 // this function either returns 2 or throws 20
@@ -114,6 +118,4 @@ int throw_and_rethrow_in_caller(bool shouldthrow) {
         throw;
     }
     return 2;
-}
-
 }

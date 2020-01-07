@@ -94,7 +94,7 @@ declare void @__cxa_end_catch() local_unnamed_addr
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_uncaught(i32) local_unnamed_addr #0 {
+define i32 @_Z14throw_uncaughti(i32) local_unnamed_addr #0 {
   %2 = alloca i32, align 4
   store volatile i32 %0, i32* %2, align 4, !tbaa !3
   %3 = load volatile i32, i32* %2, align 4, !tbaa !3
@@ -114,7 +114,7 @@ define i32 @throw_uncaught(i32) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_multiple_values(i32) local_unnamed_addr #0 {
+define i32 @_Z21throw_multiple_valuesi(i32) local_unnamed_addr #0 {
   %2 = alloca i32, align 4
   store volatile i32 %0, i32* %2, align 4, !tbaa !3
   %3 = load volatile i32, i32* %2, align 4, !tbaa !3
@@ -148,7 +148,7 @@ define i32 @throw_multiple_values(i32) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_uncaught_wrongtype(i32) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define i32 @_Z24throw_uncaught_wrongtypei(i32) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
   %2 = alloca i32, align 4
   store volatile i32 %0, i32* %2, align 4, !tbaa !3
   %3 = load volatile i32, i32* %2, align 4, !tbaa !3
@@ -192,7 +192,7 @@ define i32 @throw_uncaught_wrongtype(i32) local_unnamed_addr #0 personality i8* 
 declare i32 @llvm.eh.typeid.for(i8*) #2
 
 ; Function Attrs: noinline ssp uwtable
-define void @throw_uncaught_void(i32*) local_unnamed_addr #3 {
+define void @_Z19throw_uncaught_voidPVi(i32*) local_unnamed_addr #3 {
   %2 = load volatile i32, i32* %0, align 4, !tbaa !3
   %3 = icmp eq i32 %2, 0
   br i1 %3, label %4, label %5
@@ -210,18 +210,18 @@ define void @throw_uncaught_void(i32*) local_unnamed_addr #3 {
 }
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_uncaught_caller(i32) local_unnamed_addr #0 {
+define i32 @_Z21throw_uncaught_calleri(i32) local_unnamed_addr #0 {
   %2 = alloca i32, align 4
   %3 = bitcast i32* %2 to i8*
   call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %3) #4
   store volatile i32 %0, i32* %2, align 4, !tbaa !3
-  call void @throw_uncaught_void(i32* nonnull %2)
+  call void @_Z19throw_uncaught_voidPVi(i32* nonnull %2)
   call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %3) #4
   ret i32 1
 }
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_and_catch_wildcard(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define i32 @_Z24throw_and_catch_wildcardb(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
   br i1 %0, label %2, label %9
 
 ; <label>:2:                                      ; preds = %1
@@ -248,7 +248,7 @@ define i32 @throw_and_catch_wildcard(i1 zeroext) local_unnamed_addr #0 personali
 }
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_and_catch_val(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define i32 @_Z19throw_and_catch_valb(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
   br i1 %0, label %2, label %15
 
 ; <label>:2:                                      ; preds = %1
@@ -286,7 +286,7 @@ define i32 @throw_and_catch_val(i1 zeroext) local_unnamed_addr #0 personality i8
 }
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_and_catch_in_caller(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define i32 @_Z25throw_and_catch_in_callerb(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
   %2 = alloca i32, align 4
   %3 = bitcast i32* %2 to i8*
   call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %3) #4
@@ -294,7 +294,7 @@ define i32 @throw_and_catch_in_caller(i1 zeroext) local_unnamed_addr #0 personal
   br i1 %0, label %4, label %15
 
 ; <label>:4:                                      ; preds = %1
-  invoke void @throw_uncaught_void(i32* nonnull %2)
+  invoke void @_Z19throw_uncaught_voidPVi(i32* nonnull %2)
           to label %15 unwind label %5
 
 ; <label>:5:                                      ; preds = %4
@@ -325,7 +325,7 @@ define i32 @throw_and_catch_in_caller(i1 zeroext) local_unnamed_addr #0 personal
 }
 
 ; Function Attrs: ssp uwtable
-define i32 @throw_and_rethrow_in_caller(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define i32 @_Z27throw_and_rethrow_in_callerb(i1 zeroext) local_unnamed_addr #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
   %2 = alloca i32, align 4
   %3 = bitcast i32* %2 to i8*
   call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %3) #4
@@ -333,7 +333,7 @@ define i32 @throw_and_rethrow_in_caller(i1 zeroext) local_unnamed_addr #0 person
   br i1 %0, label %4, label %17
 
 ; <label>:4:                                      ; preds = %1
-  invoke void @throw_uncaught_void(i32* nonnull %2)
+  invoke void @_Z19throw_uncaught_voidPVi(i32* nonnull %2)
           to label %17 unwind label %5
 
 ; <label>:5:                                      ; preds = %4
