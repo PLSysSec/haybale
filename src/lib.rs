@@ -1,6 +1,10 @@
 //! For an introduction to the crate and how to get started,
 //! see the [crate's README](https://github.com/PLSysSec/haybale/blob/master/README.md).
 
+// this ensures that crate users generating docs with --no-deps will still
+// properly get links to the public docs for haybale's types
+#![doc(html_root_url = "https://PLSysSec.github.io/haybale")]
+
 use llvm_ir::{Type, Typed};
 use std::collections::HashSet;
 
