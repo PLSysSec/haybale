@@ -37,6 +37,10 @@ impl fmt::Display for Watchpoint {
 }
 
 /// Stores information about watchpoints and performs operations with them.
+///
+/// External users (that is, `haybale` users) probably don't want to use this
+/// directly - instead, you're probably looking for the watchpoint-related
+/// methods on [`State`](../struct.State.html).
 //
 // Maps watchpoint name to `Watchpoint` object and a `bool` indicating whether
 // that `Watchpoint` is currently enabled.
@@ -44,10 +48,13 @@ impl fmt::Display for Watchpoint {
 pub struct Watchpoints(HashMap<String, (Watchpoint, bool)>);
 
 impl Watchpoints {
+    /// Construct a new `Watchpoints` instance with no watchpoints
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
+    /// Construct a new `Watchpoints` instance from an iterator over (watchpoint
+    /// name, watchpoint) pairs
     pub fn from_iter(iter: impl IntoIterator<Item = (String, Watchpoint)>) -> Self {
         Self(iter.into_iter().map(|(name, w)| (name, (w, true))).collect())
     }

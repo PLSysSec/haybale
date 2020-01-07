@@ -217,7 +217,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             stack: Vec::new(),
             backtrack_points: Vec::new(),
             path: Vec::new(),
-            mem_watchpoints: Watchpoints::from_iter(config.initial_mem_watchpoints.iter().cloned()),
+            mem_watchpoints: Watchpoints::from_iter(config.initial_mem_watchpoints.clone().into_iter()),
 
             // listed last (out-of-order) so that they can be used above but moved in now
             solver,

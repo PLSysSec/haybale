@@ -1,7 +1,7 @@
 use crate::backend::Backend;
 use crate::function_hooks::FunctionHooks;
 use crate::watchpoints::Watchpoint;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 /// Various settings which affect how the symbolic execution is performed.
 #[derive(Clone)]
@@ -24,12 +24,12 @@ pub struct Config<'p, B> where B: Backend {
     /// [`FunctionHooks`](struct.FunctionHooks.html) for more details
     pub function_hooks: FunctionHooks<'p, B>,
 
-    /// The initial set of memory watchpoints when a `State` is created (their
-    /// names, and the actual watchpoints).
+    /// The initial memory watchpoints when a `State` is created (mapping from
+    /// watchpoint name to the actual watchpoint).
     ///
     /// More watchpoints may be added or removed at any time with
     /// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.
-    pub initial_mem_watchpoints: HashSet<(String, Watchpoint)>,
+    pub initial_mem_watchpoints: HashMap<String, Watchpoint>,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -83,7 +83,7 @@ impl<'p, B: Backend> Config<'p, B> {
             null_detection,
             concretize_memcpy_lengths,
             function_hooks: FunctionHooks::new(),
-            initial_mem_watchpoints: HashSet::new(),
+            initial_mem_watchpoints: HashMap::new(),
         }
     }
 }
@@ -105,7 +105,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,
             function_hooks: FunctionHooks::default(),
-            initial_mem_watchpoints: HashSet::new(),
+            initial_mem_watchpoints: HashMap::new(),
         }
     }
 }
