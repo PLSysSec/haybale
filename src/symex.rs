@@ -1233,7 +1233,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `thrown_ptr`: pointer to the value or object that was thrown
     ///
     /// `type_index`: should be an `i32` indicating the type of value which was thrown.
-    /// [LLVM's exception handling docs](https://releases.llvm.org/8.0.0/docs/ExceptionHandling.html#overview) call this a type info index.
+    /// [LLVM's exception handling docs](https://releases.llvm.org/9.0.0/docs/ExceptionHandling.html#overview) call this a type info index.
     ///
     /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
     fn catch_with_type_index(&mut self, thrown_ptr: &B::BV, type_index: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {

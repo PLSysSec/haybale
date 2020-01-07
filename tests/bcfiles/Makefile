@@ -1,4 +1,4 @@
-CC=clang-8
+CC=clang-9
 CXX=$$LLVMPATH/bin/clang++
 CFLAGS=-O3
 RUSTC=rustc

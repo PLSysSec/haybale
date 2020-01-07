@@ -63,7 +63,7 @@ pub fn cxa_begin_catch<B: Backend>(
 
     // Since we're not doing anything fancy with exception frames (our exceptions are just pointers to the thrown values),
     // our __cxa_begin_catch() just returns its argument directly.
-    // See [this section of the LLVM docs on exception handling](https://releases.llvm.org/8.0.0/docs/ExceptionHandling.html#try-catch).
+    // See [this section of the LLVM docs on exception handling](https://releases.llvm.org/9.0.0/docs/ExceptionHandling.html#try-catch).
     let arg = &call.get_arguments()[0].0;
     let arg = state.operand_to_bv(arg)?;
     Ok(ReturnValue::Return(arg))

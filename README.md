@@ -41,7 +41,7 @@ add it as a dependency in your `Cargo.toml`:
 haybale = "0.1.3"
 ```
 
-`haybale` also depends (indirectly) on the LLVM 8 and Boolector libraries, which
+`haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
 must both be available on your system.
 See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
 
@@ -242,7 +242,10 @@ or of course you can generate local documentation with `cargo doc --open`.
 
 ## Compatibility
 
-Currently, `haybale` only supports LLVM 8.
+Currently, `haybale` only supports LLVM 9. A version of `haybale` supporting
+LLVM 8 is available on the `llvm-8` branch of this repo, and is approximately
+at feature parity with `haybale` version 0.2.0. However, there is no promise
+that future `haybale` features will be backported to the `llvm-8` branch.
 
 `haybale` works on stable Rust, and requires Rust 1.36+.
 

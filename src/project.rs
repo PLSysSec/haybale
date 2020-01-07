@@ -109,7 +109,7 @@ impl Project {
     ///
     /// If the `Type` in the triplet is `None`, that means the struct type is
     /// opaque; see
-    /// [LLVM 8 docs on Opaque Structure Types](https://releases.llvm.org/8.0.0/docs/LangRef.html#t-opaque).
+    /// [LLVM 9 docs on Opaque Structure Types](https://releases.llvm.org/9.0.0/docs/LangRef.html#t-opaque).
     pub fn all_named_struct_types(&self) -> impl Iterator<Item = (&String, Option<Type>, &Module)> {
         self.modules.iter()
             .map(|m| m.named_struct_types.iter()
@@ -193,7 +193,7 @@ impl Project {
     ///
     /// If `Some(None, <module>)` is returned, that means the struct type is
     /// opaque; see
-    /// [LLVM 8 docs on Opaque Structure Types](https://releases.llvm.org/8.0.0/docs/LangRef.html#t-opaque).
+    /// [LLVM 9 docs on Opaque Structure Types](https://releases.llvm.org/9.0.0/docs/LangRef.html#t-opaque).
     ///
     /// If the named struct type is defined in multiple modules in the `Project`,
     /// this returns one of them arbitrarily. However, it will only return

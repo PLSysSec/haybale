@@ -74,19 +74,19 @@ define i32 @conditional_true(i32, i32) local_unnamed_addr #0 {
   %3 = icmp sgt i32 %0, %1
   br i1 %3, label %4, label %8
 
-; <label>:4:                                      ; preds = %2
+4:                                                ; preds = %2
   %5 = add nsw i32 %0, -1
   %6 = add nsw i32 %1, -1
   %7 = mul nsw i32 %6, %5
   br label %12
 
-; <label>:8:                                      ; preds = %2
+8:                                                ; preds = %2
   %9 = add nsw i32 %1, %0
   %10 = srem i32 %9, 3
   %11 = add nsw i32 %10, 10
   br label %12
 
-; <label>:12:                                     ; preds = %8, %4
+12:                                               ; preds = %8, %4
   %13 = phi i32 [ %7, %4 ], [ %11, %8 ]
   ret i32 %13
 }
@@ -96,19 +96,19 @@ define i32 @conditional_false(i32, i32) local_unnamed_addr #0 {
   %3 = icmp sgt i32 %0, %1
   br i1 %3, label %4, label %8
 
-; <label>:4:                                      ; preds = %2
+4:                                                ; preds = %2
   %5 = add nsw i32 %1, %0
   %6 = srem i32 %5, 3
   %7 = add nsw i32 %6, 10
   br label %12
 
-; <label>:8:                                      ; preds = %2
+8:                                                ; preds = %2
   %9 = add nsw i32 %0, -1
   %10 = add nsw i32 %1, -1
   %11 = mul nsw i32 %10, %9
   br label %12
 
-; <label>:12:                                     ; preds = %8, %4
+12:                                               ; preds = %8, %4
   %13 = phi i32 [ %7, %4 ], [ %11, %8 ]
   ret i32 %13
 }
@@ -118,27 +118,27 @@ define i32 @conditional_nozero(i32, i32) local_unnamed_addr #0 {
   %3 = icmp sgt i32 %0, 2
   br i1 %3, label %14, label %4
 
-; <label>:4:                                      ; preds = %2
+4:                                                ; preds = %2
   %5 = icmp slt i32 %1, 1
   br i1 %5, label %6, label %8
 
-; <label>:6:                                      ; preds = %4
+6:                                                ; preds = %4
   %7 = add nsw i32 %1, -3
   br label %14
 
-; <label>:8:                                      ; preds = %4
+8:                                                ; preds = %4
   %9 = icmp slt i32 %0, 1
   br i1 %9, label %10, label %12
 
-; <label>:10:                                     ; preds = %8
+10:                                               ; preds = %8
   %11 = add nsw i32 %0, -7
   br label %14
 
-; <label>:12:                                     ; preds = %8
+12:                                               ; preds = %8
   %13 = mul nsw i32 %1, %0
   br label %14
 
-; <label>:14:                                     ; preds = %2, %12, %10, %6
+14:                                               ; preds = %2, %12, %10, %6
   %15 = phi i32 [ %7, %6 ], [ %11, %10 ], [ %13, %12 ], [ %0, %2 ]
   ret i32 %15
 }
@@ -164,29 +164,29 @@ define i32 @has_switch(i32, i32) local_unnamed_addr #0 {
     i32 451, label %11
   ]
 
-; <label>:4:                                      ; preds = %2
+4:                                                ; preds = %2
   br label %14
 
-; <label>:5:                                      ; preds = %2
+5:                                                ; preds = %2
   %6 = add nsw i32 %0, -3
   br label %14
 
-; <label>:7:                                      ; preds = %2
+7:                                                ; preds = %2
   %8 = mul nsw i32 %1, %0
   %9 = add nsw i32 %8, 1
   br label %14
 
-; <label>:10:                                     ; preds = %2
+10:                                               ; preds = %2
   br label %14
 
-; <label>:11:                                     ; preds = %2
+11:                                               ; preds = %2
   br label %14
 
-; <label>:12:                                     ; preds = %2
+12:                                               ; preds = %2
   %13 = add nsw i32 %3, -1
   br label %14
 
-; <label>:14:                                     ; preds = %2, %12, %11, %10, %7, %5, %4
+14:                                               ; preds = %2, %12, %11, %10, %7, %5, %4
   %15 = phi i32 [ %13, %12 ], [ -5, %11 ], [ -300, %10 ], [ %9, %7 ], [ %6, %5 ], [ 3, %4 ], [ -1, %2 ]
   ret i32 %15
 }
@@ -231,11 +231,11 @@ define i64 @mixed_bitwidths(i8 signext, i16 signext, i32, i64) local_unnamed_add
   ret i64 %11
 }
 
-attributes #0 = { norecurse nounwind readnone ssp uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="penryn" "target-features"="+cx16,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { norecurse nounwind readnone ssp uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="penryn" "target-features"="+cx16,+cx8,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
 
 !llvm.module.flags = !{!0, !1}
 !llvm.ident = !{!2}
 
 !0 = !{i32 1, !"wchar_size", i32 4}
 !1 = !{i32 7, !"PIC Level", i32 2}
-!2 = !{!"clang version 8.0.0 (tags/RELEASE_800/final)"}
+!2 = !{!"clang version 9.0.0 (tags/RELEASE_900/final)"}
