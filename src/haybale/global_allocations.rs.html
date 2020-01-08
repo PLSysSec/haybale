@@ -363,12 +363,16 @@
 <span id="363">363</span>
 <span id="364">364</span>
 <span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::{<span class="ident">Backend</span>, <span class="ident">SolverRef</span>};
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">config</span>::<span class="ident">FunctionHook</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">FunctionHook</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">module</span>::{<span class="ident">GlobalVariable</span>, <span class="ident">Linkage</span>};
-<span class="kw">use</span> <span class="ident">log</span>::<span class="ident">debug</span>;
+<span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">debug</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">cell</span>::<span class="ident">Cell</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashMap</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">hash_map</span>::<span class="ident">Entry</span>;
@@ -656,6 +660,10 @@
                     },
                 }
             },
+            <span class="ident">Linkage</span>::<span class="ident">Appending</span> <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;Global {:?} has &#39;appending&#39; linkage type, which is not supported. Any attempted use of this global will result in an error.&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>());
+                <span class="ident">AllocationResult</span>::<span class="ident">NoAllocate</span>
+            }
             <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">unimplemented</span><span class="macro">!</span>(<span class="string">&quot;Linkage type {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_linkage</span>()),
         }
     }

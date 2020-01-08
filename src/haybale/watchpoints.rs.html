@@ -295,6 +295,13 @@
 <span id="295">295</span>
 <span id="296">296</span>
 <span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Structures for defining and processing memory watchpoints</span>
 
@@ -335,6 +342,10 @@
 }
 
 <span class="doccomment">/// Stores information about watchpoints and performs operations with them.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// External users (that is, `haybale` users) probably don&#39;t want to use this</span>
+<span class="doccomment">/// directly - instead, you&#39;re probably looking for the watchpoint-related</span>
+<span class="doccomment">/// methods on [`State`](../struct.State.html).</span>
 <span class="comment">//</span>
 <span class="comment">// Maps watchpoint name to `Watchpoint` object and a `bool` indicating whether</span>
 <span class="comment">// that `Watchpoint` is currently enabled.</span>
@@ -342,10 +353,13 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Watchpoints</span>(<span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, (<span class="ident">Watchpoint</span>, <span class="ident">bool</span>)<span class="op">&gt;</span>);
 
 <span class="kw">impl</span> <span class="ident">Watchpoints</span> {
+    <span class="doccomment">/// Construct a new `Watchpoints` instance with no watchpoints</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span>(<span class="ident">HashMap</span>::<span class="ident">new</span>())
     }
 
+    <span class="doccomment">/// Construct a new `Watchpoints` instance from an iterator over (watchpoint</span>
+    <span class="doccomment">/// name, watchpoint) pairs</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">from_iter</span>(<span class="ident">iter</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="ident">String</span>, <span class="ident">Watchpoint</span>)<span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span>(<span class="ident">iter</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">name</span>, <span class="ident">w</span>)<span class="op">|</span> (<span class="ident">name</span>, (<span class="ident">w</span>, <span class="bool-val">true</span>))).<span class="ident">collect</span>())
     }
