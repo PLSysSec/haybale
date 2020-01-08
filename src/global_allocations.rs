@@ -2,7 +2,7 @@ use crate::backend::{Backend, SolverRef};
 use crate::function_hooks::FunctionHook;
 use llvm_ir::*;
 use llvm_ir::module::{GlobalVariable, Linkage};
-use log::debug;
+use log::{debug, warn};
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -290,6 +290,10 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
                     },
                 }
             },
+            Linkage::Appending => {
+                warn!("Global {:?} has 'appending' linkage type, which is not supported. Any attempted use of this global will result in an error.", global.get_name());
+                AllocationResult::NoAllocate
+            }
             _ => unimplemented!("Linkage type {:?}", global.get_linkage()),
         }
     }
