@@ -960,6 +960,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM intrinsic objectsize hook"),
                             hooked_funcname: Some(funcname),
                         })
+                    } else if funcname.starts_with("llvm.read_register")
+                        || funcname.starts_with("llvm.write_register")
+                    {
+                        // These can just ignore their arguments and return unconstrained data, as appropriate
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
+                            hooked_funcname: Some(funcname),
+                        })
                     } else if funcname.starts_with("llvm.lifetime")
                         || funcname.starts_with("llvm.invariant")
                         || funcname.starts_with("llvm.launder.invariant")
@@ -968,7 +976,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     {
                         // these are all safe to ignore
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find LLVM intrinsic generic stub hook"),
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
                             hooked_funcname: Some(funcname),
                         })
                     } else {
