@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.1.3"
+haybale = "0.2.0"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
