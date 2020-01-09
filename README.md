@@ -33,17 +33,27 @@ as the questions listed above.
 
 ### 1. Install
 
-`haybale` is on [crates.io](https://crates.io/crates/haybale), so you can simply
-add it as a dependency in your `Cargo.toml`:
+You're looking at the `llvm-8` branch of `haybale`, which is not published on
+[crates.io](https://crates.io/crates/haybale). Instead, you'll have to add a
+Git dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.1.3"
+haybale = { git = "https://github.com/PLSysSec/haybale", branch = "llvm-8" }
 ```
 
-`haybale` also depends (indirectly) on the LLVM 8 and Boolector libraries, which
-must both be available on your system.
+This branch of `haybale` also depends (indirectly) on the LLVM 8 and
+Boolector libraries, which must both be available on your system.
 See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
+
+Alternately, the `master` branch of `haybale` supports/requires LLVM 9 and is
+guaranteed to have all the latest and greatest `haybale` features.
+You can find it on [crates.io](https://crates.io/crates/haybale) as `haybale`.
+
+As one final note, the [official documentation](https://PLSysSec.github.io/haybale),
+including many of the links scattered throughout the rest of this README, is
+for the `master` branch. It should mostly also apply to this branch (at least
+as of this writing), but there is no guarantee that the two will perfectly line up.
 
 ### 2. Acquire bitcode to analyze
 
@@ -237,12 +247,20 @@ println!("Parameter values for which foo returns 0: a = {}, b = {}", a, b);
 
 ## Documentation
 
-Full documentation for `haybale` can be found [here](https://PLSysSec.github.io/haybale),
-or of course you can generate local documentation with `cargo doc --open`.
+Full documentation for the `master` branch of `haybale` can be found
+[here](https://PLSysSec.github.io/haybale), and should mostly also apply to
+this branch (at least as of this writing), but there is no guarantee that the
+two will perfectly line up. In any case, you can always generate local
+documentation for your exact version of `haybale` with `cargo doc --open`.
 
 ## Compatibility
 
-Currently, `haybale` only supports LLVM 8.
+You're looking at the `llvm-8` branch of `haybale`, which only supports LLVM 8.
+The `master` branch of `haybale` currently only supports LLVM 9.
+This `llvm-8` branch is approximately at feature parity with `haybale` version
+0.2.0, as of this writing.
+However, there is no promise that future `haybale` features will be backported
+to the `llvm-8` branch.
 
 `haybale` works on stable Rust, and requires Rust 1.36+.
 
