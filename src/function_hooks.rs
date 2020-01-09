@@ -36,6 +36,22 @@ pub struct FunctionHooks<'p, B: Backend + 'p> {
     cpp_demangled_hooks: HashMap<String, FunctionHook<'p, B>>,
     rust_demangled_hooks: HashMap<String, FunctionHook<'p, B>>,
 
+    /// Hook (if any) to use for calls to inline assembly.
+    /// This one hook will handle all calls to any inline assembly, regardless of
+    /// the contents; it is responsible for inspecting the contents and acting
+    /// appropriately.
+    ///
+    /// Note that as of this writing, due to a limitation of the LLVM C API (see
+    /// the 'Limitations' section of the
+    /// [`llvm-ir` README](https://github.com/cdisselkoen/llvm-ir/blob/master/README.md)),
+    /// the hook will actually have no way of obtaining the contents of the asm
+    /// string itself, although it can still inspect function parameters etc.
+    /// For now, this is the best we can do.
+    ///
+    /// If no hook is provided here, then all calls to inline assembly will
+    /// result in errors.
+    inline_asm_hook: Option<FunctionHook<'p, B>>,
+
     /// For internal use in creating unique `id`s for `FunctionHook`s
     cur_id: usize,
 }
@@ -100,6 +116,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
             hooks: HashMap::new(),
             cpp_demangled_hooks: HashMap::new(),
             rust_demangled_hooks: HashMap::new(),
+            inline_asm_hook: None,
             cur_id: 0,
         }
     }
@@ -151,6 +168,39 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
         self.cur_id += 1;
     }
 
+    /// Add a hook to be used for calls to inline assembly.
+    /// This one hook will handle all calls to any inline assembly, regardless of
+    /// the contents; it is responsible for inspecting the contents and acting
+    /// appropriately.
+    /// If another inline assembly hook is added, it will replace any inline
+    /// assembly hook which was previously present.
+    ///
+    /// Returns `true` if an inline assembly hook was previously present, or
+    /// `false` if no inline assembly hook was present.
+    ///
+    /// Note that as of this writing, due to a limitation of the LLVM C API (see
+    /// the 'Limitations' section of the
+    /// [`llvm-ir` README](https://github.com/cdisselkoen/llvm-ir/blob/master/README.md)),
+    /// the hook will actually have no way of obtaining the contents of the asm
+    /// string itself, although it can still inspect function parameters etc.
+    /// For now, this is the best we can do.
+    pub fn add_inline_asm_hook<H>(&mut self, hook: &'p H) -> bool
+        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    {
+        match &mut self.inline_asm_hook {
+            h@Some(_) => {
+                *h = Some(FunctionHook::new(self.cur_id, hook));
+                self.cur_id += 1;
+                true
+            },
+            h@None => {
+                *h = Some(FunctionHook::new(self.cur_id, hook));
+                self.cur_id += 1;
+                false
+            },
+        }
+    }
+
     /// Removes the function hook for the given function, which was added with
     /// `add()`. That function will no longer be hooked.
     pub fn remove(&mut self, hooked_function: &str) {
@@ -167,6 +217,14 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// `add_rust_demangled()`. That function will no longer be hooked.
     pub fn remove_rust_demangled(&mut self, hooked_function: &str) {
         self.rust_demangled_hooks.remove(hooked_function);
+    }
+
+    /// Removes the function hook used for calls to inline assembly, which was
+    /// added with `add_inline_asm_hook()`. Calls to inline assembly will no
+    /// longer be hooked, and thus will result in errors, until the next call to
+    /// `add_inline_asm_hook()`.
+    pub fn remove_inline_asm_hook(&mut self) {
+        self.inline_asm_hook = None;
     }
 
     /// Iterate over all function hooks, as (function name, hook) pairs.
@@ -189,6 +247,13 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
                 },
             },
         }
+    }
+
+    /// Get the `FunctionHook` used for calls to inline assembly, if there is one.
+    ///
+    /// See docs on `add_inline_asm_hook()` above
+    pub(crate) fn get_inline_asm_hook(&self) -> Option<&FunctionHook<'p, B>> {
+        self.inline_asm_hook.as_ref()
     }
 
     /// Determine whether there is an active hook for the given `funcname`
