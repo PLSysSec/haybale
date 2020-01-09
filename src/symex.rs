@@ -4,6 +4,7 @@ use log::{debug, info};
 use either::Either;
 use reduce::Reduce;
 use std::convert::TryInto;
+use std::fmt;
 use std::sync::{Arc, RwLock};
 
 pub use crate::state::{State, Location, PathEntry, pretty_bb_name};
@@ -843,12 +844,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_call(&mut self, call: &'p instruction::Call) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing call {:?}", call);
         match self.resolve_function(&call.function)? {
-            ResolvedFunction::HookActive { hook, hooked_funcname } => {
-                let pretty_funcname = match hooked_funcname {
-                    Some(funcname) => format!("function {:?}", funcname),
-                    None => "a function pointer".to_owned(),
-                };
-                match self.symex_hook(call, &hook, &pretty_funcname)? {
+            ResolvedFunction::HookActive { hook, hooked_thing } => {
+                let pretty_hookedthing = hooked_thing.to_string();
+                match self.symex_hook(call, &hook, &pretty_hookedthing)? {
                     // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                     ReturnValue::Return(retval) => {
                         // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
@@ -861,7 +859,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     },
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 }
-                info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_hookedthing, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                 return Ok(None);
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
@@ -931,11 +929,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     }
                 }
             },
-            Either::Left(_) => return Err(Error::UnsupportedInstruction("inline assembly".to_owned())),
+            Either::Left(_) => match self.state.config.function_hooks.get_inline_asm_hook() {
+                Some(hook) => return Ok(ResolvedFunction::HookActive {
+                    hook: hook.clone(),
+                    hooked_thing: HookedThing::InlineAsm,
+                }),
+                None => return Err(Error::OtherError(format!("Encountered a call to inline assembly, but we have no inline assembly hook. Perhaps you want to add an inline assembly hook (see the documentation on FunctionHooks)?"))),
+            },
         };
         match funcname_or_hook {
             Either::Left(funcname) => match self.state.config.function_hooks.get_hook_for(funcname) {
-                Some(hook) => Ok(ResolvedFunction::HookActive { hook: hook.clone(), hooked_funcname: Some(funcname) }),
+                Some(hook) => Ok(ResolvedFunction::HookActive { hook: hook.clone(), hooked_thing: HookedThing::Function(funcname) }),
                 None => {
                     // No hook currently defined for this function, check if any intrinsic hooks apply
                     // (see notes on function resolution in function_hooks.rs)
@@ -944,7 +948,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     {
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.memset").cloned().expect("Failed to find LLVM intrinsic memset hook"),
-                            hooked_funcname: Some(funcname),
+                            hooked_thing: HookedThing::Function(funcname),
                         })
                     } else if funcname.starts_with("llvm.memcpy")
                         || funcname.starts_with("llvm.memmove")
@@ -953,12 +957,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // Our memcpy implementation also works for memmove
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.memcpy/memmove").cloned().expect("Failed to find LLVM intrinsic memcpy/memmove hook"),
-                            hooked_funcname: Some(funcname),
+                            hooked_thing: HookedThing::Function(funcname),
                         })
                     } else if funcname.starts_with("llvm.objectsize") {
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM intrinsic objectsize hook"),
-                            hooked_funcname: Some(funcname),
+                            hooked_thing: HookedThing::Function(funcname),
                         })
                     } else if funcname.starts_with("llvm.read_register")
                         || funcname.starts_with("llvm.write_register")
@@ -966,7 +970,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // These can just ignore their arguments and return unconstrained data, as appropriate
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
-                            hooked_funcname: Some(funcname),
+                            hooked_thing: HookedThing::Function(funcname),
                         })
                     } else if funcname.starts_with("llvm.lifetime")
                         || funcname.starts_with("llvm.invariant")
@@ -977,7 +981,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // these are all safe to ignore
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
-                            hooked_funcname: Some(funcname),
+                            hooked_thing: HookedThing::Function(funcname),
                         })
                     } else {
                         // No hook currently defined for this function, and none of our intrinsic hooks apply
@@ -985,7 +989,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     }
                 },
             },
-            Either::Right(hook) => Ok(ResolvedFunction::HookActive { hook, hooked_funcname: None }),
+            Either::Right(hook) => Ok(ResolvedFunction::HookActive { hook, hooked_thing: HookedThing::FunctionPtr }),
         }
     }
 
@@ -1133,19 +1137,16 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_invoke(&mut self, invoke: &'p terminator::Invoke) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing invoke {:?}", invoke);
         match self.resolve_function(&invoke.function)? {
-            ResolvedFunction::HookActive { hook, hooked_funcname } => {
-                let pretty_funcname = match hooked_funcname {
-                    Some(funcname) => format!("function {:?}", funcname),
-                    None => "a function pointer".to_owned(),
-                };
-                match self.symex_hook(invoke, &hook, &pretty_funcname)? {
+            ResolvedFunction::HookActive { hook, hooked_thing } => {
+                let pretty_hookedthing = hooked_thing.to_string();
+                match self.symex_hook(invoke, &hook, &pretty_hookedthing)? {
                     // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                     ReturnValue::Return(retval) => {
                         self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
                     },
                     ReturnValue::ReturnVoid => {},
                     ReturnValue::Throw(bvptr) => {
-                        info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}", pretty_funcname, pretty_bb_name(&invoke.exception_label), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                        info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}", pretty_hookedthing, pretty_bb_name(&invoke.exception_label), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                         return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                     },
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
@@ -1154,7 +1155,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 // We had a normal return, so continue at the `return_label`
                 self.state.cur_loc.bbname = invoke.return_label.clone();
                 self.state.cur_loc.instr = 0;
-                info!("Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}", pretty_funcname, self.state.cur_loc.func.name, pretty_bb_name(&old_bb_name), pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.module.name);
+                info!("Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}", pretty_hookedthing, self.state.cur_loc.func.name, pretty_bb_name(&old_bb_name), pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.module.name);
                 self.symex_from_cur_loc_through_end_of_function()
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
@@ -1396,11 +1397,30 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
 enum ResolvedFunction<'p, B: Backend> {
     HookActive {
         hook: FunctionHook<'p, B>,
-        hooked_funcname: Option<&'p str>,  // if this is `None`, we are hooking a function pointer rather than a call of a named function
+        hooked_thing: HookedThing<'p>,
     },
     NoHookActive {
         called_funcname: &'p str,
     },
+}
+
+enum HookedThing<'p> {
+    /// We are hooking the call of a function with this name
+    Function(&'p str),
+    /// We are hooking the call of a function pointer
+    FunctionPtr,
+    /// We are hooking a call to inline assembly
+    InlineAsm,
+}
+
+impl<'p> fmt::Display for HookedThing<'p> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            HookedThing::Function(funcname) => write!(f, "function {:?}", funcname),
+            HookedThing::FunctionPtr => write!(f, "a function pointer"),
+            HookedThing::InlineAsm => write!(f, "inline assembly"),
+        }
+    }
 }
 
 #[cfg(test)]
