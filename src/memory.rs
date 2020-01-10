@@ -45,12 +45,12 @@ impl Memory {
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
         let default_name = "mem";
         Self {
-            mem: Array::new(btor.clone().into(), log_num_cells, Self::CELL_BITS, name.or(Some(default_name))),
+            mem: Array::new(btor.clone(), log_num_cells, Self::CELL_BITS, name.or(Some(default_name))),
             name: name.unwrap_or(default_name).into(),
             null_detection,
-            cell_bytes_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
-            log_bits_in_byte_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
-            log_bits_in_byte_as_wide_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
+            cell_bytes_as_bv: BV::from_u64(btor.clone(), u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
+            log_bits_in_byte_as_bv: BV::from_u64(btor.clone(), u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
+            log_bits_in_byte_as_wide_bv: BV::from_u64(btor.clone(), u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
             btor,  // out of order so it can be used above but moved in here
         }
     }
@@ -66,12 +66,12 @@ impl Memory {
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
         let default_name = "mem_initialized";
         Self {
-            mem: Array::new_initialized(btor.clone().into(), log_num_cells, Self::CELL_BITS, name.or(Some(default_name)), &BV::zero(btor.clone().into(), Self::CELL_BITS)),
+            mem: Array::new_initialized(btor.clone(), log_num_cells, Self::CELL_BITS, name.or(Some(default_name)), &BV::zero(btor.clone(), Self::CELL_BITS)),
             name: name.unwrap_or(default_name).into(),
             null_detection,
-            cell_bytes_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
-            log_bits_in_byte_as_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
-            log_bits_in_byte_as_wide_bv: BV::from_u64(btor.clone().into(), u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
+            cell_bytes_as_bv: BV::from_u64(btor.clone(), u64::from(Self::CELL_BYTES), Self::INDEX_BITS),
+            log_bits_in_byte_as_bv: BV::from_u64(btor.clone(), u64::from(Self::LOG_BITS_IN_BYTE), Self::CELL_BITS),
+            log_bits_in_byte_as_wide_bv: BV::from_u64(btor.clone(), u64::from(Self::LOG_BITS_IN_BYTE), 2*Self::CELL_BITS),
             btor,  // out of order so it can be used above but moved in here
         }
     }
@@ -147,7 +147,7 @@ impl Memory {
 
             // mask_clear is 0's in the bit positions that will be written, 1's elsewhere.
             // We construct the inverse of this mask, then bitwise negate it.
-            let mask_clear = BV::ones(self.btor.clone().into(), write_size)  // a bitvector of ones, of width equal to the width that will be written
+            let mask_clear = BV::ones(self.btor.clone(), write_size)  // a bitvector of ones, of width equal to the width that will be written
                 .uext(Self::CELL_BITS - write_size)  // zero-extend to CELL_BITS
                 .sll(&offset)  // now we have ones in the bit positions that will be written, zeroes elsewhere
                 .not();  // the final desired mask
@@ -199,7 +199,7 @@ impl Memory {
 
             // mask_clear is 0's in the bit positions that will be written, 1's elsewhere.
             // We construct the inverse of this mask, then bitwise negate it.
-            let mask_clear = BV::ones(self.btor.clone().into(), write_size)  // a bitvector of ones, of width equal to the width that will be written
+            let mask_clear = BV::ones(self.btor.clone(), write_size)  // a bitvector of ones, of width equal to the width that will be written
                 .uext(2*Self::CELL_BITS - write_size)  // zero-extend to 2*CELL_BITS
                 .sll(&offset)  // now we have ones in the bit positions that will be written, zeroes elsewhere
                 .not();  // the final desired mask
@@ -228,7 +228,7 @@ impl Memory {
             .map(|(i,sz)| {
                 let offset_bytes = i as u64 * u64::from(Self::CELL_BYTES);
                 // note that all reads in the sequence must be within-cell, i.e., not cross cell boundaries, because of how we constructed the sequence
-                self.read_within_cell(&addr.add(&BV::from_u64(self.btor.clone().into(), offset_bytes, Self::INDEX_BITS)), sz)
+                self.read_within_cell(&addr.add(&BV::from_u64(self.btor.clone(), offset_bytes, Self::INDEX_BITS)), sz)
             })
             .reduce(|a,b| b.concat(&a))
             .unwrap()  // because of the std::iter::once, there must have been at least 1 item in the iterator
@@ -247,7 +247,7 @@ impl Memory {
             let offset_bytes = i as u64 * u64::from(Self::CELL_BYTES);
             let offset_bits = i as u32 * Self::CELL_BITS;
             let write_data = val.slice(sz + offset_bits - 1, offset_bits);
-            self.write_within_cell(&addr.add(&BV::from_u64(self.btor.clone().into(), offset_bytes, Self::INDEX_BITS)), write_data);
+            self.write_within_cell(&addr.add(&BV::from_u64(self.btor.clone(), offset_bytes, Self::INDEX_BITS)), write_data);
         }
     }
 
@@ -258,7 +258,7 @@ impl Memory {
         let addr_width = addr.get_width();
         assert_eq!(addr_width, Self::INDEX_BITS, "Read address has wrong width");
 
-        if self.null_detection && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone().into(), addr_width))? {
+        if self.null_detection && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone(), addr_width))? {
             return Err(Error::NullPointerDereference);
         }
 
@@ -278,7 +278,7 @@ impl Memory {
                     // first read the remainder of the cell to bring us to a cell boundary; this read must be <= Self::CELL_BITS
                     let first = self.read_small(addr, bytes_till_cell_boundary as u32 * Self::BITS_IN_BYTE);
                     // now read the rest, which will be a cell-aligned read
-                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone().into(), bytes_till_cell_boundary, addr_width));
+                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone(), bytes_till_cell_boundary, addr_width));
                     let rest = self.read_large_aligned(&next_cell_addr, bits - bytes_till_cell_boundary as u32 * Self::BITS_IN_BYTE);
                     // put them together and return
                     rest.concat(&first)
@@ -290,7 +290,7 @@ impl Memory {
                 assert!(bytes > 0);
                 (0 .. bytes)
                     .map(|byte_num| {
-                        let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), addr_width));
+                        let offset_addr = addr.add(&BV::from_u64(self.btor.clone(), u64::from(byte_num), addr_width));
                         self.read_within_cell(&offset_addr, Self::BITS_IN_BYTE)
                     })
                     .reduce(|a,b| b.concat(&a))
@@ -307,7 +307,7 @@ impl Memory {
         let addr_width = addr.get_width();
         assert_eq!(addr_width, Self::INDEX_BITS, "Write address has wrong width");
 
-        if self.null_detection && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone().into(), addr_width))? {
+        if self.null_detection && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone(), addr_width))? {
             return Err(Error::NullPointerDereference);
         }
 
@@ -330,7 +330,7 @@ impl Memory {
                     self.write_small(addr, first);
                     // now write the rest, which will be a cell-aligned write
                     let rest = val.slice(val.get_width() - 1, bytes_till_cell_boundary as u32 * Self::BITS_IN_BYTE);
-                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone().into(), bytes_till_cell_boundary, addr_width));
+                    let next_cell_addr = addr.add(&BV::from_u64(self.btor.clone(), bytes_till_cell_boundary, addr_width));
                     self.write_large_aligned(&next_cell_addr, rest);
                 }
             } else {
@@ -339,7 +339,7 @@ impl Memory {
                 let write_size_bytes = write_size / Self::BITS_IN_BYTE;
                 for byte_num in 0 .. write_size_bytes {
                     let val_byte = val.slice((byte_num+1) * Self::BITS_IN_BYTE - 1, byte_num * Self::BITS_IN_BYTE);
-                    let offset_addr = addr.add(&BV::from_u64(self.btor.clone().into(), u64::from(byte_num), addr_width));
+                    let offset_addr = addr.add(&BV::from_u64(self.btor.clone(), u64::from(byte_num), addr_width));
                     self.write_within_cell(&offset_addr, val_byte);
                 }
             }
@@ -388,8 +388,8 @@ mod tests {
         let btor = <Rc<Btor> as SolverRef>::new();
         let mem = Memory::new_uninitialized(btor.clone(), true, None);
 
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
-        let zero = BV::zero(btor.clone().into(), Memory::CELL_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
+        let zero = BV::zero(btor.clone(), Memory::CELL_BITS);
 
         // Read a value from (uninitialized) memory
         let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
@@ -417,7 +417,7 @@ mod tests {
         let btor = <Rc<Btor> as SolverRef>::new();
         let mem = Memory::new_zero_initialized(btor.clone(), true, None);
 
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
 
         // Read a value from (zero-initialized) memory and check that the only possible value is 0
         let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
@@ -436,8 +436,8 @@ mod tests {
 
         // Store a cell's worth of data to address 0
         let data_val = 0x1234_5678;
-        let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
-        let zero = BV::zero(btor.clone().into(), Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, Memory::CELL_BITS);
+        let zero = BV::zero(btor.clone(), Memory::INDEX_BITS);
         mem.write(&zero, data)?;
 
         // Ensure that we can read it back again
@@ -457,8 +457,8 @@ mod tests {
 
         // Store a cell's worth of data to a nonzero, but aligned, address
         let data_val = 0x1234_5678;
-        let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
-        let aligned = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, Memory::CELL_BITS);
+        let aligned = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&aligned, data)?;
 
         // Ensure that we can read it back again
@@ -478,8 +478,8 @@ mod tests {
 
         // Store 8 bits of data to an aligned address
         let data_val = 0x4F;
-        let data = BV::from_u64(btor.clone().into(), data_val, 8);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 8);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Ensure that we can read it back again
@@ -499,8 +499,8 @@ mod tests {
 
         // Store 8 bits of data to an aligned address
         let data_val = 0x55;
-        let data = BV::from_u64(btor.clone().into(), data_val, 8);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 8);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Ensure that we can read a single bit
@@ -520,8 +520,8 @@ mod tests {
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
-        let data = BV::from_u64(btor.clone().into(), data_val, 8);
-        let unaligned = BV::from_u64(btor.clone().into(), 0x10001, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 8);
+        let unaligned = BV::from_u64(btor.clone(), 0x10001, Memory::INDEX_BITS);
         mem.write(&unaligned, data)?;
 
         // Ensure that we can read it back again
@@ -541,8 +541,8 @@ mod tests {
 
         // Store 64 bits of data such that half is in one cell and half in the next
         let data_val: u64 = 0x12345678_9abcdef0;
-        let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
-        let addr = BV::from_u64(btor.clone().into(), 0x10004, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, Memory::CELL_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10004, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Ensure that we can read it back again
@@ -562,8 +562,8 @@ mod tests {
 
         // Store 64 bits of data to a symbolic address
         let data_val: u64 = 0x12345678_9abcdef0;
-        let data = BV::from_u64(btor.clone().into(), data_val, Memory::CELL_BITS);
-        let addr = BV::new(btor.clone().into(), Memory::INDEX_BITS, Some("symbolic_addr"));
+        let data = BV::from_u64(btor.clone(), data_val, Memory::CELL_BITS);
+        let addr = BV::new(btor.clone(), Memory::INDEX_BITS, Some("symbolic_addr"));
         mem.write(&addr, data)?;
 
         // Ensure that we can read it back again
@@ -584,9 +584,9 @@ mod tests {
         // Store two cells' worth of data to an aligned address
         let data_val_0: u64 = 0x12345678_9abcdef0;
         let data_val_1: u64 = 0x2468ace0_13579bdf;
-        let write_val = BV::from_u64(btor.clone().into(), data_val_1, 64).concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
+        let write_val = BV::from_u64(btor.clone(), data_val_1, 64).concat(&BV::from_u64(btor.clone(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 2*Memory::CELL_BITS);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
@@ -611,12 +611,12 @@ mod tests {
         let data_val_1: u64 = 0x2468ace0_13579bdf;
         let data_val_2: u64 = 0xfedcba98_76543210;
         let data_val_3: u64 = 0xef;
-        let write_val = BV::from_u64(btor.clone().into(), data_val_3, 8)
-            .concat(&BV::from_u64(btor.clone().into(), data_val_2, 64))
-            .concat(&BV::from_u64(btor.clone().into(), data_val_1, 64))
-            .concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
+        let write_val = BV::from_u64(btor.clone(), data_val_3, 8)
+            .concat(&BV::from_u64(btor.clone(), data_val_2, 64))
+            .concat(&BV::from_u64(btor.clone(), data_val_1, 64))
+            .concat(&BV::from_u64(btor.clone(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 200);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
@@ -645,12 +645,12 @@ mod tests {
         let data_val_1: u64 = 0x2468ace0_13579bdf;
         let data_val_2: u64 = 0xfedcba98_76543210;
         let data_val_3: u64 = 0xef;
-        let write_val = BV::from_u64(btor.clone().into(), data_val_3, 8)
-            .concat(&BV::from_u64(btor.clone().into(), data_val_2, 64))
-            .concat(&BV::from_u64(btor.clone().into(), data_val_1, 64))
-            .concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
+        let write_val = BV::from_u64(btor.clone(), data_val_3, 8)
+            .concat(&BV::from_u64(btor.clone(), data_val_2, 64))
+            .concat(&BV::from_u64(btor.clone(), data_val_1, 64))
+            .concat(&BV::from_u64(btor.clone(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 200);
-        let addr = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10003, Memory::INDEX_BITS);
         mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
@@ -679,12 +679,12 @@ mod tests {
         let data_val_1: u64 = 0x2468ace0_13579bdf;
         let data_val_2: u64 = 0xfedcba98_76543210;
         let data_val_3: u64 = 0xef;
-        let write_val = BV::from_u64(btor.clone().into(), data_val_3, 8)
-            .concat(&BV::from_u64(btor.clone().into(), data_val_2, 64))
-            .concat(&BV::from_u64(btor.clone().into(), data_val_1, 64))
-            .concat(&BV::from_u64(btor.clone().into(), data_val_0, 64));
+        let write_val = BV::from_u64(btor.clone(), data_val_3, 8)
+            .concat(&BV::from_u64(btor.clone(), data_val_2, 64))
+            .concat(&BV::from_u64(btor.clone(), data_val_1, 64))
+            .concat(&BV::from_u64(btor.clone(), data_val_0, 64));
         assert_eq!(write_val.get_width(), 200);
-        let addr = BV::new(btor.clone().into(), Memory::INDEX_BITS, Some("symbolic_addr"));
+        let addr = BV::new(btor.clone(), Memory::INDEX_BITS, Some("symbolic_addr"));
         mem.write(&addr, write_val)?;
 
         // Ensure that we can read it back again
@@ -710,13 +710,13 @@ mod tests {
 
         // Store 8 bits of data
         let data_val = 0x4F;
-        let data = BV::from_u64(btor.clone().into(), data_val, 8);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 8);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Store a different 8 bits of data to the same address
         let data_val = 0x3A;
-        let data = BV::from_u64(btor.clone().into(), data_val, 8);
+        let data = BV::from_u64(btor.clone(), data_val, 8);
         mem.write(&addr, data)?;
 
         // Ensure that we get back the most recent data
@@ -736,14 +736,14 @@ mod tests {
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
-        let data = BV::from_u64(btor.clone().into(), data_val, 32);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 32);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Store a different 32 bits of data to a different cell
         let data_val_2 = 0xfedc_ba98;
-        let data_2 = BV::from_u64(btor.clone().into(), data_val_2, 32);
-        let addr_2 = BV::from_u64(btor.clone().into(), 0x10008, Memory::INDEX_BITS);
+        let data_2 = BV::from_u64(btor.clone(), data_val_2, 32);
+        let addr_2 = BV::from_u64(btor.clone(), 0x10008, Memory::INDEX_BITS);
         mem.write(&addr_2, data_2)?;
 
         // Ensure that we can read them both individually
@@ -767,14 +767,14 @@ mod tests {
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
-        let data = BV::from_u64(btor.clone().into(), data_val, 32);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 32);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Store a different 32 bits of data to the other half of the cell
         let data_val_2 = 0xfedc_ba98;
-        let data_2 = BV::from_u64(btor.clone().into(), data_val_2, 32);
-        let addr_2 = BV::from_u64(btor.clone().into(), 0x10004, Memory::INDEX_BITS);
+        let data_2 = BV::from_u64(btor.clone(), data_val_2, 32);
+        let addr_2 = BV::from_u64(btor.clone(), 0x10004, Memory::INDEX_BITS);
         mem.write(&addr_2, data_2)?;
 
         // Ensure that we can read them both individually
@@ -798,13 +798,13 @@ mod tests {
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
-        let data = BV::from_u64(btor.clone().into(), data_val, 8);
-        let unaligned = BV::from_u64(btor.clone().into(), 0x10001, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 8);
+        let unaligned = BV::from_u64(btor.clone(), 0x10001, Memory::INDEX_BITS);
         mem.write(&unaligned, data.clone())?;
 
         // Ensure that reading from beginning of the cell adds zeroed low-order bits
         // (we are little-endian)
-        let aligned = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let aligned = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         let read_bv = mem.read(&aligned, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
@@ -817,8 +817,8 @@ mod tests {
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x004F))));
 
         // Ensure that reading elsewhere gives all zeroes
-        let garbage_addr_1 = BV::from_u64(btor.clone().into(), 0x10004, Memory::INDEX_BITS);
-        let garbage_addr_2 = BV::from_u64(btor.clone().into(), 0x10008, Memory::INDEX_BITS);
+        let garbage_addr_1 = BV::from_u64(btor.clone(), 0x10004, Memory::INDEX_BITS);
+        let garbage_addr_2 = BV::from_u64(btor.clone(), 0x10008, Memory::INDEX_BITS);
         let read_bv_1 = mem.read(&garbage_addr_1, 8)?;
         let read_bv_2 = mem.read(&garbage_addr_2, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
@@ -838,8 +838,8 @@ mod tests {
 
         // Store 32 bits of data to offset 2 in a cell
         let data_val = 0x1234_5678;
-        let data = BV::from_u64(btor.clone().into(), data_val, 32);
-        let offset_2 = BV::from_u64(btor.clone().into(), 0x10002, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), data_val, 32);
+        let offset_2 = BV::from_u64(btor.clone(), 0x10002, Memory::INDEX_BITS);
         mem.write(&offset_2, data.clone())?;
 
         // Ensure that reading 8 bits from offset 2 gives the low-order byte
@@ -851,14 +851,14 @@ mod tests {
 
         // Ensure that reading 8 bits from offset 5 gives the high-order byte
         // (we are little-endian)
-        let offset_5 = BV::from_u64(btor.clone().into(), 0x10005, Memory::INDEX_BITS);
+        let offset_5 = BV::from_u64(btor.clone(), 0x10005, Memory::INDEX_BITS);
         let read_bv = mem.read(&offset_5, 8)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12))));
 
         // Ensure that reading 16 bits from offset 3 gives the middle two bytes
-        let offset_3 = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
+        let offset_3 = BV::from_u64(btor.clone(), 0x10003, Memory::INDEX_BITS);
         let read_bv = mem.read(&offset_3, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();
@@ -874,13 +874,13 @@ mod tests {
         let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Write an entire cell
-        let data = BV::from_u64(btor.clone().into(), 0x12345678_12345678, Memory::CELL_BITS);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), 0x12345678_12345678, Memory::CELL_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Write over just the first part
         let overwrite_data_val = 0xdcba;
-        let overwrite_data = BV::from_u64(btor.clone().into(), overwrite_data_val, 16);
+        let overwrite_data = BV::from_u64(btor.clone(), overwrite_data_val, 16);
         mem.write(&addr, overwrite_data)?;
 
         // Ensure that we can read the smaller overwrite back
@@ -905,14 +905,14 @@ mod tests {
         let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
 
         // Write an entire cell
-        let data = BV::from_u64(btor.clone().into(), 0x12345678_12345678, Memory::CELL_BITS);
-        let addr = BV::from_u64(btor.clone().into(), 0x10000, Memory::INDEX_BITS);
+        let data = BV::from_u64(btor.clone(), 0x12345678_12345678, Memory::CELL_BITS);
+        let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         mem.write(&addr, data)?;
 
         // Write over just part of the middle
-        let overwrite_addr = BV::from_u64(btor.clone().into(), 0x10002, Memory::INDEX_BITS);
+        let overwrite_addr = BV::from_u64(btor.clone(), 0x10002, Memory::INDEX_BITS);
         let overwrite_data_val = 0xdcba;
-        let overwrite_data = BV::from_u64(btor.clone().into(), overwrite_data_val, 16);
+        let overwrite_data = BV::from_u64(btor.clone(), overwrite_data_val, 16);
         mem.write(&overwrite_addr, overwrite_data)?;
 
         // Ensure that we can read the smaller overwrite back
@@ -928,7 +928,7 @@ mod tests {
         assert_eq!(ps, PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12345678_dcba5678))));
 
         // Now a different partial read with some original data and some overwritten
-        let new_addr = BV::from_u64(btor.clone().into(), 0x10003, Memory::INDEX_BITS);
+        let new_addr = BV::from_u64(btor.clone(), 0x10003, Memory::INDEX_BITS);
         let read_bv = mem.read(&new_addr, 16)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?.as_u64_solutions().unwrap();

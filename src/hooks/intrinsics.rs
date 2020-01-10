@@ -14,6 +14,7 @@ use log::debug;
 use reduce::Reduce;
 use std::convert::TryFrom;
 
+#[allow(clippy::collapsible_if)]  // I think not collapsing the `if` that clippy warns about actually improves readability here
 pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 4);
     let addr = &call.get_arguments()[0].0;
@@ -106,6 +107,7 @@ pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
     }
 }
 
+#[allow(clippy::collapsible_if)]  // I think not collapsing the `if` that clippy warns about actually improves readability here
 pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
     let dest = &call.get_arguments()[0].0;
     let src = &call.get_arguments()[1].0;
