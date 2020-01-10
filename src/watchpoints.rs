@@ -6,6 +6,7 @@ use crate::state::State;
 use log::info;
 use std::collections::HashMap;
 use std::fmt;
+use std::iter::FromIterator;
 
 /// A `Watchpoint` describes a segment of memory to watch.
 #[derive(Eq, PartialEq, Clone, Debug, Hash)]
@@ -44,19 +45,24 @@ impl fmt::Display for Watchpoint {
 //
 // Maps watchpoint name to `Watchpoint` object and a `bool` indicating whether
 // that `Watchpoint` is currently enabled.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Watchpoints(HashMap<String, (Watchpoint, bool)>);
 
+impl FromIterator<(String, Watchpoint)> for Watchpoints {
+    fn from_iter<I: IntoIterator<Item = (String, Watchpoint)>>(iter: I) -> Self {
+        Self(iter.into_iter().map(|(name, w)| (name, (w, true))).collect())
+    }
+}
+
 impl Watchpoints {
-    /// Construct a new `Watchpoints` instance with no watchpoints
+    /// Construct a new `Watchpoints` instance with no watchpoints.
+    ///
+    /// To construct a new `Watchpoints` instance that contains some initial
+    /// watchpoints, note that `Watchpoints` implements `FromIterator<(String, Watchpoint)>`,
+    /// so you can for instance use `collect()` with an iterator over (watchpoint
+    /// name, watchpoint) pairs.
     pub fn new() -> Self {
         Self(HashMap::new())
-    }
-
-    /// Construct a new `Watchpoints` instance from an iterator over (watchpoint
-    /// name, watchpoint) pairs
-    pub fn from_iter(iter: impl IntoIterator<Item = (String, Watchpoint)>) -> Self {
-        Self(iter.into_iter().map(|(name, w)| (name, (w, true))).collect())
     }
 
     /// Add a memory watchpoint. It will be enabled unless/until

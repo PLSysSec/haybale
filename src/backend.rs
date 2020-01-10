@@ -211,40 +211,40 @@ impl BV for boolector::BV<Rc<Btor>> {
     type SolverRef = Rc<Btor>;
 
     fn new(btor: Rc<Btor>, width: u32, name: Option<&str>) -> Self {
-        boolector::BV::new(btor.into(), width, name)
+        boolector::BV::new(btor, width, name)
     }
     fn from_bool(btor: Rc<Btor>, b: bool) -> Self {
-        boolector::BV::from_bool(btor.into(), b)
+        boolector::BV::from_bool(btor, b)
     }
     fn from_i32(btor: Rc<Btor>, i: i32, width: u32) -> Self {
-        boolector::BV::from_i32(btor.into(), i, width)
+        boolector::BV::from_i32(btor, i, width)
     }
     fn from_u32(btor: Rc<Btor>, u: u32, width: u32) -> Self {
-        boolector::BV::from_u32(btor.into(), u, width)
+        boolector::BV::from_u32(btor, u, width)
     }
     fn from_i64(btor: Rc<Btor>, i: i64, width: u32) -> Self {
-        boolector::BV::from_i64(btor.into(), i, width)
+        boolector::BV::from_i64(btor, i, width)
     }
     fn from_u64(btor: Rc<Btor>, u: u64, width: u32) -> Self {
-        boolector::BV::from_u64(btor.into(), u, width)
+        boolector::BV::from_u64(btor, u, width)
     }
     fn zero(btor: Rc<Btor>, width: u32) -> Self {
-        boolector::BV::zero(btor.into(), width)
+        boolector::BV::zero(btor, width)
     }
     fn one(btor: Rc<Btor>, width: u32) -> Self {
-        boolector::BV::one(btor.into(), width)
+        boolector::BV::one(btor, width)
     }
     fn ones(btor: Rc<Btor>, width: u32) -> Self {
-        boolector::BV::ones(btor.into(), width)
+        boolector::BV::ones(btor, width)
     }
     fn from_binary_str(btor: Rc<Btor>, bits: &str) -> Self {
-        boolector::BV::from_binary_str(btor.into(), bits)
+        boolector::BV::from_binary_str(btor, bits)
     }
     fn from_dec_str(btor: Rc<Btor>, num: &str, width: u32) -> Self {
-        boolector::BV::from_dec_str(btor.into(), num, width)
+        boolector::BV::from_dec_str(btor, num, width)
     }
     fn from_hex_str(btor: Rc<Btor>, num: &str, width: u32) -> Self {
-        boolector::BV::from_hex_str(btor.into(), num, width)
+        boolector::BV::from_hex_str(btor, num, width)
     }
     fn as_binary_str(&self) -> Option<String> {
         self.as_binary_str()

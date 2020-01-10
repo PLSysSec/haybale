@@ -217,7 +217,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             stack: Vec::new(),
             backtrack_points: Vec::new(),
             path: Vec::new(),
-            mem_watchpoints: Watchpoints::from_iter(config.initial_mem_watchpoints.clone().into_iter()),
+            mem_watchpoints: config.initial_mem_watchpoints.clone().into_iter().collect(),
 
             // listed last (out-of-order) so that they can be used above but moved in now
             solver,
@@ -418,6 +418,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
     /// query itself fails.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn max_possible_solution_for_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
         solver_utils::max_possible_solution_for_bv(self.solver.clone(), bv)
@@ -442,6 +443,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
     /// query itself fails.
+    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn min_possible_solution_for_irname(&self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
         solver_utils::min_possible_solution_for_bv(self.solver.clone(), bv)

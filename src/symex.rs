@@ -269,7 +269,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     }
                 }
             },
-            Some(ReturnValue::Abort) => return Ok(Some(ReturnValue::Abort)),
+            Some(ReturnValue::Abort) => Ok(Some(ReturnValue::Abort)),
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => match callsite.instr {
                     Either::Left(call) => {
@@ -860,7 +860,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 }
                 info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_hookedthing, pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
-                return Ok(None);
+                Ok(None)
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
                 if let Some((callee, callee_mod)) = self.project.get_func_by_name(called_funcname) {
@@ -913,6 +913,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         }
     }
 
+    #[allow(clippy::if_same_then_else)]  // in this case, having some identical `if` blocks actually improves readability, I think
     fn resolve_function(&mut self, function: &'p Either<InlineAssembly, Operand>) -> Result<ResolvedFunction<'p, B>> {
         use crate::global_allocations::Callable;
         let funcname_or_hook: Either<&str, FunctionHook<B>> = match function {
@@ -934,7 +935,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     hook: hook.clone(),
                     hooked_thing: HookedThing::InlineAsm,
                 }),
-                None => return Err(Error::OtherError(format!("Encountered a call to inline assembly, but we have no inline assembly hook. Perhaps you want to add an inline assembly hook (see the documentation on FunctionHooks)?"))),
+                None => return Err(Error::OtherError("Encountered a call to inline assembly, but we have no inline assembly hook. Perhaps you want to add an inline assembly hook (see the documentation on FunctionHooks)?".to_owned())),
             },
         };
         match funcname_or_hook {
