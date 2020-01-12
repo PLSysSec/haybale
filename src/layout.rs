@@ -2,13 +2,16 @@
 
 use crate::backend::*;
 use crate::error::*;
+use crate::project::Project;
 use llvm_ir::types::{Type, FPType};
 use std::sync::{Arc, RwLock};
 
 /// our convention is that pointers are 64 bits
 pub const POINTER_SIZE_BITS: usize = 64;
 
-/// Get the size of the `Type`, in bits
+/// Get the size of the `Type`, in bits.
+///
+/// Will panic if given an opaque struct type.
 pub fn size(ty: &Type) -> usize {
     match ty {
         Type::IntegerType { bits } => *bits as usize,
@@ -25,6 +28,29 @@ pub fn size(ty: &Type) -> usize {
         ),
         Type::FPType(fpt) => fp_size(*fpt),
         ty => panic!("Not sure how to get the size of {:?}", ty),
+    }
+}
+
+/// Get the size of the `Type`, in bits.
+///
+/// Differs from the basic `size` method above in how it handles opaque struct
+/// types.
+/// While `size` will simply panic, this will search the given `Project` for a
+/// definition of the struct and use that, only panicking if the struct has no
+/// definition in the entire `Project`.
+pub fn size_opaque_aware(ty: &Type, proj: &Project) -> usize {
+    match ty {
+        ty@Type::NamedStructType { .. } => size_opaque_aware(
+            &proj.get_inner_struct_type_from_named(ty)
+                .expect("Can't get size of struct type: it is opaque in the entire Project")
+                .read()
+                .unwrap(),
+            proj
+        ),
+        Type::ArrayType { element_type, num_elements } => num_elements * size_opaque_aware(element_type, proj),
+        Type::VectorType { element_type, num_elements } => num_elements * size_opaque_aware(element_type, proj),
+        Type::StructType { element_types, .. } => element_types.iter().map(|ty| size_opaque_aware(ty, proj)).sum(),
+        _ => size(ty),  // for all other cases, just fall back on the basic size()
     }
 }
 

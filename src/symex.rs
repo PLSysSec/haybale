@@ -42,7 +42,7 @@ pub fn symex_function<'p, B: Backend>(
     };
     let mut state = State::new(project, start_loc, config);
     let bvparams: Vec<_> = func.parameters.iter().map(|param| {
-        state.new_bv_with_name(param.name.clone(), size(&param.ty) as u32).unwrap()
+        state.new_bv_with_name(param.name.clone(), size_opaque_aware(&param.ty, project) as u32).unwrap()
     }).collect();
     ExecutionManager::new(state, project, bvparams, &bb)
 }
@@ -463,7 +463,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             }
             ty => Err(Error::MalformedInstruction(format!("Expected ICmp result type to be i1 or vector of i1; got {:?}", ty))),
         }
-   }
+    }
 
     fn symex_zext(&mut self, zext: &'p instruction::ZExt) -> Result<()> {
         debug!("Symexing zext {:?}", zext);
@@ -633,7 +633,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         debug!("Symexing alloca {:?}", alloca);
         match &alloca.num_elements {
             Operand::ConstantOperand(Constant::Int { value: num_elements, .. }) => {
-                let allocation_size = size(&alloca.allocated_type) as u64 * num_elements;
+                let allocation_size = size_opaque_aware(&alloca.allocated_type, self.project) as u64 * num_elements;
                 let allocated = self.state.allocate(allocation_size);
                 self.state.record_bv_result(alloca, allocated)
             },
