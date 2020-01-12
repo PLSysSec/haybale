@@ -218,7 +218,7 @@ impl Project {
                             // duplicate definitions of the struct will appear to conflict due to the
                             // anonymous union being numbered differently in the two modules, even if the
                             // union has the same contents in both modules.
-                            warn!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n", name, retmod.name, module.name, def1, def2);
+                            warn!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n  We will (arbitrarily) use the first one.", name, retmod.name, module.name, def1, def2);
                             // then we'll do nothing, leaving (arbitrarily) the first definition we found
                         } else {
                             // do nothing, leaving (arbitrarily) the first definition we found
