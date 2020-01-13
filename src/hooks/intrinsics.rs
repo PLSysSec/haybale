@@ -14,7 +14,6 @@ use log::debug;
 use reduce::Reduce;
 use std::convert::TryFrom;
 
-#[allow(clippy::collapsible_if)]  // I think not collapsing the `if` that clippy warns about actually improves readability here
 pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 4);
     let addr = &call.get_arguments()[0].0;
@@ -48,12 +47,10 @@ pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
                     let val_as_bv = state.bv_from_u64(val, num_bytes.get_width());
                     if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
                         Some(val)
+                    } else if !state.sat()? {
+                        return Err(Error::Unsat);
                     } else {
-                        if state.sat()? {
-                            return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
-                        } else {
-                            return Err(Error::Unsat);
-                        }
+                        return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }
                 },
                 Concretize::Symbolic => {
@@ -107,7 +104,6 @@ pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
     }
 }
 
-#[allow(clippy::collapsible_if)]  // I think not collapsing the `if` that clippy warns about actually improves readability here
 pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
     let dest = &call.get_arguments()[0].0;
     let src = &call.get_arguments()[1].0;
@@ -134,12 +130,10 @@ pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
                     let val_as_bv = state.bv_from_u64(val, num_bytes.get_width());
                     if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
                         Some(val)
+                    } else if !state.sat()? {
+                        return Err(Error::Unsat);
                     } else {
-                        if state.sat()? {
-                            return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
-                        } else {
-                            return Err(Error::Unsat);
-                        }
+                        return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }
                 },
                 Concretize::Symbolic => {
