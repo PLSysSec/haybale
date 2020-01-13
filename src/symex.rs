@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
-pub use crate::state::{State, Location, PathEntry, pretty_bb_name};
+pub use crate::state::{State, Location, PathEntry, pretty_bb_name, pretty_var_name};
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
@@ -114,9 +114,21 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
             debug!("ExecutionManager: requesting next path");
             self.backtrack_and_continue()
         };
-        retval.transpose().map(|r| r.map_err(|e|
-            format!("Received the following error:\n  {}\nLLVM backtrace:\n{}\n", e, self.state.pretty_llvm_backtrace())
-        ))
+        retval.transpose().map(|r| r.map_err(|e| {
+            let mut err_msg = format!("Received the following error:\n  {}\nLLVM backtrace:\n{}\n", e, self.state.pretty_llvm_backtrace());
+            if std::env::var("HAYBALE_DUMP_VARS") == Ok("1".to_owned()) {
+                err_msg.push_str("Latest values of variables at time of error, in current function:\n");
+                err_msg.push_str("(Ignore any values from past the point of error, they may be from other paths)\n\n");
+                for (varname, value) in self.state.all_vars_in_cur_fn() {
+                    err_msg.push_str(&format!("  {}: {:?}\n", pretty_var_name(varname), value));
+                }
+            } else {
+                err_msg.push_str("note: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n");
+                err_msg.push_str("To enable (much) more detailed logs, rerun with `RUST_LOG=haybale`.\n");
+                err_msg.push_str("  (For how to enable more granular logging options, see docs for the env_logger crate).\n");
+            }
+            err_msg
+        }))
     }
 }
 
