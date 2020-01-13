@@ -5,6 +5,7 @@
 use crate::backend::{BV, SolverRef};
 use crate::double_keyed_map::DoubleKeyedMap;
 use crate::error::*;
+use itertools::Itertools;
 use log::debug;
 
 use llvm_ir::Name;
@@ -118,6 +119,17 @@ impl<V: BV> VarMap<V> {
             .get_mut(funcname, name)
             .unwrap_or_else(|| panic!("failed to find current active version of {:?} (function {:?}) in map", name, funcname));
         *mapvalue = bv;
+    }
+
+    /// Get the most recent `BV` created for each `Name` in the given function.
+    /// Returns pairs of the `Name` and the `BV` assigned to that `Name`.
+    ///
+    /// Returned pairs will be sorted by `Name`.
+    pub fn get_all_vars_in_fn(&self, funcname: &String) -> impl Iterator<Item = (&Name, &V)> {
+        self.active_version.iter()
+            .filter(|&(fname, _, _)| funcname == fname)
+            .map(|(_, name, bv)| (name, bv))
+            .sorted_by_key(|&(name, _)| name)
     }
 
     /// Given a `Name` (from a particular function), creates a new version of it

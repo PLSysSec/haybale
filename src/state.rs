@@ -88,6 +88,11 @@ pub fn pretty_bb_name(name: &Name) -> String {
     }
 }
 
+/// Format a variable `Name` into a concise representation for printing
+pub fn pretty_var_name(name: &Name) -> String {
+    pretty_bb_name(name)  // currently the same as the pretty_bb_name representation, which will also be the same as the new `Display` impl for `Name` coming in llvm-ir 0.4.2
+}
+
 impl fmt::Debug for PathEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{{}: {} {}, instr {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname), self.instr)
@@ -1054,6 +1059,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 format!("  #{}: {:?}\n", num, PathEntry::from(frame.callsite.loc.clone()))
             }))
             .collect()
+    }
+
+    /// Get the most recent `BV` created for each `Name` in the current function.
+    /// Returns pairs of the `Name` and the `BV` assigned to that `Name`.
+    ///
+    /// Returned pairs will be sorted by `Name`.
+    pub fn all_vars_in_cur_fn(&self) -> impl Iterator<Item = (&Name, &B::BV)> {
+        self.varmap.get_all_vars_in_fn(&self.cur_loc.func.name)
     }
 
     /// returns a `String` describing a set of satisfying assignments for all variables
