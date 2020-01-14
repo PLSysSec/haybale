@@ -1,3 +1,4 @@
+use crate::function_hooks::cpp_demangle;
 use std::fmt;
 
 /// Error types used throughout this crate
@@ -33,8 +34,18 @@ impl fmt::Display for Error {
                 write!(f, "`LoopBoundExceeded`: the current path has exceeded the configured `loop_bound`"),
             Error::NullPointerDereference =>
                 write!(f, "`NullPointerDereference`: the current path has attempted to dereference a null pointer"),
-            Error::FunctionNotFound(funcname) =>
-                write!(f, "`FunctionNotFound`: encountered a call of a function named {:?}, but failed to find an LLVM definition, a function hook, or a built-in handler for it", funcname),
+            Error::FunctionNotFound(funcname) => {
+                write!(f, "`FunctionNotFound`: encountered a call of a function named {:?}", funcname)?;
+                match cpp_demangle(funcname) {
+                    Some(demangled) => write!(f, " (C++ demangled: {:?})", demangled)?,
+                    None => {},
+                };
+                if let Ok(demangled) = rustc_demangle::try_demangle(funcname) {
+                    write!(f, " (Rust demangled: \"{:#}\")", demangled)?;
+                }
+                write!(f, ", but failed to find an LLVM definition, a function hook, or a built-in handler for it")?;
+                Ok(())
+            },
             Error::BoolCoercionError(bv, size) =>
                 write!(f, "`BoolCoercionError`: can't coerce a BV {} bits long into a Bool; the BV was {}", size, bv),
             Error::SolverError(details) =>
