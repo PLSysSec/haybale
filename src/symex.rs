@@ -982,6 +982,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.memcpy/memmove").cloned().expect("Failed to find LLVM intrinsic memcpy/memmove hook"),
                             hooked_thing: HookedThing::Function(funcname),
                         })
+                    } else if funcname.starts_with("llvm.bswap") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.bswap").cloned().expect("Failed to find LLVM intrinsic bswap hook"),
+                            hooked_thing: HookedThing::Function(funcname),
+                        })
                     } else if funcname.starts_with("llvm.objectsize") {
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM intrinsic objectsize hook"),

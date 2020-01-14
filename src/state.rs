@@ -214,6 +214,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 // we use "function names" that are clearly illegal, as an additional precaution to avoid collisions with actual function names
                 intrinsic_hooks.add("intrinsic: llvm.memset", &hooks::intrinsics::symex_memset);
                 intrinsic_hooks.add("intrinsic: llvm.memcpy/memmove", &hooks::intrinsics::symex_memcpy);
+                intrinsic_hooks.add("intrinsic: llvm.bswap", &hooks::intrinsics::symex_bswap);
                 intrinsic_hooks.add("intrinsic: llvm.objectsize", &hooks::intrinsics::symex_objectsize);
                 intrinsic_hooks.add("intrinsic: generic_stub_hook", &function_hooks::generic_stub_hook);
                 intrinsic_hooks.add("intrinsic: abort_hook", &function_hooks::abort_hook);

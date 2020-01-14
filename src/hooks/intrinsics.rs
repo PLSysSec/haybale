@@ -182,6 +182,35 @@ pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
     }
 }
 
+pub fn symex_bswap<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 1);
+    let arg = &call.get_arguments()[0].0;
+    let argty = arg.get_type();
+    let retty = call.get_type();
+    if argty != retty {
+        return Err(Error::OtherError("Expected bswap argument to be the same type as its return type".to_owned()));
+    }
+
+    let arg = state.operand_to_bv(arg)?;
+    match argty {
+        Type::IntegerType { bits: 16 } => {
+            let high_byte = arg.slice(15, 8);
+            let low_byte = arg.slice(7, 0);
+            Ok(ReturnValue::Return(low_byte.concat(&high_byte)))
+        },
+        Type::IntegerType { bits: 32 } => {
+            let byte_0 = arg.slice(7, 0);
+            let byte_1 = arg.slice(15, 8);
+            let byte_2 = arg.slice(23, 16);
+            let byte_3 = arg.slice(31, 24);
+            Ok(ReturnValue::Return(
+                byte_0.concat(&byte_1).concat(&byte_2).concat(&byte_3)
+            ))
+        },
+        _ => Err(Error::UnsupportedInstruction(format!("llvm.bswap with argument type {:?}", argty))),
+    }
+}
+
 pub fn symex_objectsize<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
     // We have no way of tracking in-memory types, so we can't provide the
     // intended answers for this intrinsic. Instead, we just always return
