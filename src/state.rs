@@ -98,15 +98,12 @@ impl fmt::Display for BBInstrIndex {
 
 /// Format a basic block `Name` into a concise representation for printing
 pub fn pretty_bb_name(name: &Name) -> String {
-    match name {
-        Name::Name(ref s) => format!("{:?}", s),
-        Name::Number(n) => format!("%{}", n),
-    }
+    name.to_string()  // use the `Display` trait
 }
 
 /// Format a variable `Name` into a concise representation for printing
 pub fn pretty_var_name(name: &Name) -> String {
-    pretty_bb_name(name)  // currently the same as the pretty_bb_name representation, which will also be the same as the new `Display` impl for `Name` coming in llvm-ir 0.4.2
+    name.to_string()  // use the `Display` trait
 }
 
 impl fmt::Debug for LocationDescription {
