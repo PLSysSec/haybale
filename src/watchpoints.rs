@@ -185,7 +185,7 @@ mod tests {
     use super::*;
     use crate::backend::BtorBackend;
     use crate::config::Config;
-    use crate::state::Location;
+    use crate::state::{BBInstrIndex, Location};
     use crate::project::Project;
     use llvm_ir::*;
 
@@ -198,7 +198,7 @@ mod tests {
             module,
             func,
             bbname: "test_bb".to_owned().into(),
-            instr: 0,
+            instr: BBInstrIndex::Instr(0),
         };
         State::new(project, start_loc, Config::default())
     }

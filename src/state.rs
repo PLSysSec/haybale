@@ -66,18 +66,34 @@ pub struct State<'p, B: Backend> {
     mem_watchpoints: Watchpoints,
 }
 
-/// Describes one segment of a path through the LLVM IR.
-///
-/// Uses a format suitable for recording - for instance, uses function names
-/// rather than references to `Function` objects. For a richer representation of
-/// a code location, see [`Location`](struct.Location.html).
+/// Describes a location in LLVM IR in a format suitable for recording - for
+/// instance, uses function names rather than references to `Function` objects.
+/// For a richer representation of a code location, see
+/// [`Location`](struct.Location.html).
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct PathEntry {
+pub struct LocationDescription {
     pub modname: String,
     pub funcname: String,
     pub bbname: Name,
-    /// Index of the instruction within the basic block at which execution started. E.g., 0 means we started at the beginning of the basic block.
-    pub instr: usize,
+    pub instr: BBInstrIndex,
+}
+
+/// Denotes either a particular instruction in a basic block, or its terminator.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Debug)]
+pub enum BBInstrIndex {
+    /// Index of the instruction within the basic block. 0-indexed, so 0 means the first instruction of the basic block.
+    Instr(usize),
+    /// Indicates the basic block terminator (not one of its instructions)
+    Terminator,
+}
+
+impl fmt::Display for BBInstrIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Instr(i) => write!(f, "instr {}", i),
+            Self::Terminator => write!(f, "terminator"),
+        }
+    }
 }
 
 /// Format a basic block `Name` into a concise representation for printing
@@ -93,9 +109,27 @@ pub fn pretty_var_name(name: &Name) -> String {
     pretty_bb_name(name)  // currently the same as the pretty_bb_name representation, which will also be the same as the new `Display` impl for `Name` coming in llvm-ir 0.4.2
 }
 
+impl fmt::Debug for LocationDescription {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{{}: {} {}, {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname), self.instr)
+    }
+}
+
+/// Describes one segment of a path through the LLVM IR. The "segment" will be
+/// one or more consecutive instructions in a single basic block.
+///
+/// For now, it's just a wrapper around a `LocationDescription` describing where
+/// the path segment started.
+/// E.g., instr 0 within some basic block means we started at the beginning of
+/// that basic block.
+/// Since the segment stays within a single basic block, the end of the segment
+/// must be somewhere within that basic block.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+pub struct PathEntry(pub LocationDescription);
+
 impl fmt::Debug for PathEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{}: {} {}, instr {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname), self.instr)
+        write!(f, "{{{}: {} {}, starting at {}}}", self.0.modname, self.0.funcname, pretty_bb_name(&self.0.bbname), self.0.instr)
     }
 }
 
@@ -105,8 +139,7 @@ pub struct Location<'p> {
     pub module: &'p Module,
     pub func: &'p Function,
     pub bbname: Name,
-    /// Index of the instruction within the basic block. E.g., 0 means the first instruction of the basic block.
-    pub instr: usize,
+    pub instr: BBInstrIndex,
 }
 
 /// Implementation of `PartialEq` assumes that module and function names are unique
@@ -124,17 +157,35 @@ impl<'p> Eq for Location<'p> {}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Location: module {:?}, func {:?}, bb {}, instr {}>", self.module.name, self.func.name, pretty_bb_name(&self.bbname), self.instr)
+        write!(f, "<Location: module {:?}, func {:?}, bb {}, {}>", self.module.name, self.func.name, pretty_bb_name(&self.bbname), self.instr)
     }
 }
 
-impl<'p> From<Location<'p>> for PathEntry {
-    fn from(loc: Location<'p>) -> PathEntry {
-        PathEntry {
+impl<'p> From<Location<'p>> for LocationDescription {
+    fn from(loc: Location<'p>) -> LocationDescription {
+        LocationDescription {
             modname: loc.module.name.clone(),
             funcname: loc.func.name.clone(),
             bbname: loc.bbname,
             instr: loc.instr,
+        }
+    }
+}
+
+impl<'p> Location<'p> {
+    /// Move to the start of the basic block with the given name, in the same function
+    pub(crate) fn move_to_start_of_bb(&mut self, bbname: Name) {
+        self.bbname = bbname;
+        self.instr = BBInstrIndex::Instr(0);
+    }
+
+    /// Increment the instruction index in the `Location`.
+    /// Caller is responsible for ensuring that the `Location` did not point to a
+    /// terminator, or this function will panic.
+    pub(crate) fn inc(&mut self) {
+        match self.instr {
+            BBInstrIndex::Instr(i) => self.instr = BBInstrIndex::Instr(i+1),
+            BBInstrIndex::Terminator => panic!("called inc() on a Location pointing to a terminator"),
         }
     }
 }
@@ -959,7 +1010,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// Record the current location as a `PathEntry` in the current path.
     pub fn record_path_entry(&mut self) {
-        let entry = PathEntry::from(self.cur_loc.clone());
+        let entry = PathEntry(LocationDescription::from(self.cur_loc.clone()));
         debug!("Recording a path entry {:?}", entry);
         self.path.push(entry);
     }
@@ -1018,7 +1069,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             module: self.cur_loc.module,
             func: self.cur_loc.func,
             bbname: bb_to_enter,
-            instr: 0,
+            instr: BBInstrIndex::Instr(0),
         };
         self.backtrack_points.push(BacktrackPoint {
             loc: backtrack_loc,
@@ -1055,21 +1106,21 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// returns a `String` containing a formatted view of the current LLVM backtrace
     pub fn pretty_llvm_backtrace(&self) -> String {
-        let mut pathentries = std::iter::once(PathEntry::from(self.cur_loc.clone()))
-            .chain(self.stack.iter().rev().map(|frame| PathEntry::from(frame.callsite.loc.clone())))
-            .collect::<Vec<PathEntry>>();
-        for pathentry in pathentries.iter_mut() {
-            self.maybe_demangle_pathentry(pathentry);
+        let mut locdescrs = std::iter::once(LocationDescription::from(self.cur_loc.clone()))
+            .chain(self.stack.iter().rev().map(|frame| LocationDescription::from(frame.callsite.loc.clone())))
+            .collect::<Vec<LocationDescription>>();
+        for locdescr in locdescrs.iter_mut() {
+            self.maybe_demangle_locdescr(locdescr);
         }
-        pathentries.into_iter().zip(1..).map(|(pathentry, framenum)| {
-            format!("  #{}: {:?}\n", framenum, pathentry)
+        locdescrs.into_iter().zip(1..).map(|(locdescr, framenum)| {
+            format!("  #{}: {:?}\n", framenum, locdescr)
         }).collect()
     }
 
-    /// Attempts to demangle the function name in the `PathEntry`, as appropriate
-    /// based on the `Config`.
-    fn maybe_demangle_pathentry(&self, pathentry: &mut PathEntry) {
-        pathentry.funcname = self.config.demangling.maybe_demangle(&pathentry.funcname);
+    /// Attempts to demangle the function name in the `LocationDescription`, as
+    /// appropriate based on the `Config`.
+    fn maybe_demangle_locdescr(&self, locdescr: &mut LocationDescription) {
+        locdescr.funcname = self.config.demangling.maybe_demangle(&locdescr.funcname);
     }
 
     /// Get the most recent `BV` created for each `Name` in the current function.
@@ -1113,7 +1164,7 @@ mod tests {
             module,
             func,
             bbname: "test_bb".to_owned().into(),
-            instr: 0,
+            instr: BBInstrIndex::Instr(0),
         };
         State::new(project, start_loc, Config::default())
     }
@@ -1356,12 +1407,12 @@ mod tests {
         assert!(state.revert_to_backtracking_point().unwrap());
         assert_eq!(state.cur_loc.func, pre_rollback.func);
         assert_eq!(state.cur_loc.bbname, bb.name);
-        assert_eq!(state.get_path(), &vec![PathEntry {
+        assert_eq!(state.get_path(), &vec![PathEntry(LocationDescription {
             modname: "test_mod".into(),
             funcname: "test_func".into(),
             bbname: "test_bb".into(),  // the `blank_state` comes with this as the current bb name
-            instr: 0,
-        }]);
+            instr: BBInstrIndex::Instr(0),
+        })]);
 
         // check that the constraint x < 8 was removed: we're sat again
         assert_eq!(state.sat(), Ok(true));

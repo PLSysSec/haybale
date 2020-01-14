@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
-pub use crate::state::{State, Location, PathEntry, pretty_bb_name, pretty_var_name};
+pub use crate::state::{State, BBInstrIndex, Location, LocationDescription, PathEntry, pretty_bb_name, pretty_var_name};
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
@@ -38,7 +38,7 @@ pub fn symex_function<'p, B: Backend>(
         module,
         func,
         bbname: bb.name.clone(),
-        instr: 0,
+        instr: BBInstrIndex::Instr(0),
     };
     let mut state = State::new(project, start_loc, config);
     let bvparams: Vec<_> = func.parameters.iter().map(|param| {
@@ -149,7 +149,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
-        self.symex_from_inst_in_bb_through_end_of_function(bb, self.state.cur_loc.instr)
+        let inst = match self.state.cur_loc.instr {
+            BBInstrIndex::Instr(i) => i,
+            BBInstrIndex::Terminator => bb.instrs.len(),  // this will be too large, so `symex_from_inst_in_bb_through_end_of_function()` will start with the terminator
+        };
+        self.symex_from_inst_in_bb_through_end_of_function(bb, inst)
     }
 
     /// Symex the given bb, through the rest of the function.
@@ -162,13 +166,16 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Symex starting from the given `inst` index in the given bb, through the rest of the function.
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
+    ///
+    /// If `inst` is too large to be a valid instruction index for the bb, we
+    /// will start at the bb's terminator instead.
     fn symex_from_inst_in_bb_through_end_of_function(&mut self, bb: &'p BasicBlock, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
         assert_eq!(bb.name, self.state.cur_loc.bbname);
         debug!("Symexing basic block {:?} in function {}", bb.name, self.state.cur_loc.func.name);
-        self.state.cur_loc.instr = inst;
+        self.state.cur_loc.instr = BBInstrIndex::Instr(inst);
         self.state.record_path_entry();
         for (instnum, inst) in bb.instrs.iter().enumerate().skip(inst) {
-            self.state.cur_loc.instr = instnum;
+            self.state.cur_loc.instr = BBInstrIndex::Instr(instnum);
             let result = if let Ok(binop) = inst.clone().try_into() {
                 self.symex_binop(&binop)
             } else {
@@ -210,6 +217,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 Err(e) => return Err(e),  // propagate any other errors
             };
         }
+        self.state.cur_loc.instr = BBInstrIndex::Terminator;
         match &bb.term {
             Terminator::Ret(ret) => self.symex_return(ret).map(Some),
             Terminator::Br(br) => self.symex_br(br),
@@ -247,12 +255,19 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_from_cur_loc(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         let bb = self.state.cur_loc.func.get_bb_by_name(&self.state.cur_loc.bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", self.state.cur_loc.bbname, self.state.cur_loc.func.name));
-        self.symex_from_inst_in_bb(&bb, self.state.cur_loc.instr)
+        let inst = match self.state.cur_loc.instr {
+            BBInstrIndex::Instr(i) => i,
+            BBInstrIndex::Terminator => bb.instrs.len(),  // this will be too large, so `symex_from_inst_in_bb()` will start with the terminator
+        };
+        self.symex_from_inst_in_bb(&bb, inst)
     }
 
     /// Symex starting from the given `inst` index in the given bb, returning
     /// (using the saved callstack) all the way back to the end of the top-level
     /// function.
+    ///
+    /// If `inst` is too large to be a valid instruction index for the bb, we
+    /// will start at the bb's terminator instead.
     ///
     /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
@@ -316,7 +331,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             ReturnValue::Abort => panic!("This case should have been handled above"),
                         };
                         // Continue execution in caller, with the instruction after the call instruction
-                        self.state.cur_loc.instr += 1;  // advance past the call instruction, to the next instruction
+                        self.state.cur_loc.inc();   // advance past the call instruction itself before recording the path entry. `saved_loc` must have been a call instruction, so can't be a terminator, so the call to `inc()` is safe.
                         self.symex_from_cur_loc()
                     },
                     Either::Right(invoke) => {
@@ -342,8 +357,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             ReturnValue::Abort => panic!("This case should have been handled above"),
                         };
                         // Continue execution in caller, at the normal-return label of the `Invoke` instruction
-                        self.state.cur_loc.bbname = invoke.return_label.clone();
-                        self.state.cur_loc.instr = 0;
+                        self.state.cur_loc.move_to_start_of_bb(invoke.return_label.clone());
                         self.symex_from_cur_loc()
                     }
                 },
@@ -897,7 +911,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         module: callee_mod,
                         func: callee,
                         bbname: bb.name.clone(),
-                        instr: 0,
+                        instr: BBInstrIndex::Instr(0),
                     };
                     for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
@@ -908,7 +922,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
                         Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_left() => {
                             self.state.cur_loc = saved_loc;
-                            self.state.cur_loc.instr += 1;  // advance past the call instruction itself before recording the path entry
+                            self.state.cur_loc.inc();  // advance past the call instruction itself before recording the path entry. `saved_loc` must have been a call instruction, so can't be a terminator, so the call to `inc()` is safe.
                             self.state.record_path_entry();
                             match returned_bv {
                                 ReturnValue::Return(bv) => {
@@ -1068,8 +1082,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// function), or `Ok(None)` if no possible paths were found.
     fn symex_br(&mut self, br: &'p terminator::Br) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing br {:?}", br);
-        self.state.cur_loc.bbname = br.dest.clone();
-        self.state.cur_loc.instr = 0;
+        self.state.cur_loc.move_to_start_of_bb(br.dest.clone());
         self.symex_from_cur_loc_through_end_of_function()
     }
 
@@ -1087,20 +1100,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             // for now we choose to explore true first, and backtrack to false if necessary
             self.state.save_backtracking_point(condbr.false_dest.clone(), bvcond.not());
             bvcond.assert()?;
-            self.state.cur_loc.bbname = condbr.true_dest.clone();
-            self.state.cur_loc.instr = 0;
+            self.state.cur_loc.move_to_start_of_bb(condbr.true_dest.clone());
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
             debug!("only the true branch is feasible");
             bvcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
-            self.state.cur_loc.bbname = condbr.true_dest.clone();
-            self.state.cur_loc.instr = 0;
+            self.state.cur_loc.move_to_start_of_bb(condbr.true_dest.clone());
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
             debug!("only the false branch is feasible");
             bvcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
-            self.state.cur_loc.bbname = condbr.false_dest.clone();
-            self.state.cur_loc.instr = 0;
+            self.state.cur_loc.move_to_start_of_bb(condbr.false_dest.clone());
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             debug!("neither branch is feasible");
@@ -1133,8 +1143,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             .collect::<Vec<(&B::BV, &Name)>>();
         if feasible_dests.is_empty() {
             // none of the dests are feasible, we will always end up in the default dest
-            self.state.cur_loc.bbname = switch.default_dest.clone();
-            self.state.cur_loc.instr = 0;
+            self.state.cur_loc.move_to_start_of_bb(switch.default_dest.clone());
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             // make backtracking points for all but the first destination
@@ -1152,8 +1161,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             // follow the first destination
             let (val, name) = &feasible_dests[0];
             val._eq(&switchval).assert()?;  // unnecessary, but may help Boolector more than it hurts?
-            self.state.cur_loc.bbname = (*name).clone();
-            self.state.cur_loc.instr = 0;
+            self.state.cur_loc.move_to_start_of_bb((*name).clone());
             self.symex_from_cur_loc_through_end_of_function()
         }
     }
@@ -1181,8 +1189,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 };
                 let old_bb_name = self.state.cur_loc.bbname.clone();
                 // We had a normal return, so continue at the `return_label`
-                self.state.cur_loc.bbname = invoke.return_label.clone();
-                self.state.cur_loc.instr = 0;
+                self.state.cur_loc.move_to_start_of_bb(invoke.return_label.clone());
                 info!("Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}", pretty_hookedthing, self.state.cur_loc.func.name, pretty_bb_name(&old_bb_name), pretty_bb_name(&self.state.cur_loc.bbname), self.state.cur_loc.module.name);
                 self.symex_from_cur_loc_through_end_of_function()
             },
@@ -1199,7 +1206,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         module: callee_mod,
                         func: callee,
                         bbname: bb.name.clone(),
-                        instr: 0,
+                        instr: BBInstrIndex::Instr(0),
                     };
                     for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
@@ -1223,8 +1230,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             }
                             // Returned normally, so continue at the `return_label`
-                            self.state.cur_loc.bbname = invoke.return_label.clone();
-                            self.state.cur_loc.instr = 0;
+                            self.state.cur_loc.move_to_start_of_bb(invoke.return_label.clone());
                             debug!("Completed ordinary return from invoke");
                             info!("Leaving function {:?}, continuing in caller {:?} (finished the invoke in bb {}, now in bb {}) in module {:?}", called_funcname, &self.state.cur_loc.func.name, pretty_bb_name(&old_bb_name), pretty_bb_name(&self.state.cur_loc.bbname), &self.state.cur_loc.module.name);
                             self.symex_from_cur_loc_through_end_of_function()
@@ -1276,14 +1282,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
     fn catch_with_type_index(&mut self, thrown_ptr: &B::BV, type_index: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Catching exception {{{:?}, {:?}}} at bb {}", thrown_ptr, type_index, pretty_bb_name(bbname));
-        self.state.cur_loc.bbname = bbname.clone();
-        self.state.cur_loc.instr = 0;
+        self.state.cur_loc.move_to_start_of_bb(bbname.clone());
         self.state.record_path_entry();
         let bb = self.state.cur_loc.func.get_bb_by_name(&bbname)
             .unwrap_or_else(|| panic!("Failed to find bb named {:?} in function {:?}", bbname, self.state.cur_loc.func.name));
         let mut found_landingpad = false;
         for (instnum, inst) in bb.instrs.iter().enumerate() {
-            self.state.cur_loc.instr = instnum;
+            self.state.cur_loc.instr = BBInstrIndex::Instr(instnum);
             let result = match inst {
                 Instruction::Phi(phi) => self.symex_phi(phi),  // phi instructions are allowed before the landingpad
                 Instruction::LandingPad(lp) => { found_landingpad = true; self.symex_landing_pad(lp, thrown_ptr, type_index) },
@@ -1345,7 +1350,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         let path = self.state.get_path();
         let prev_bb = match path.len() {
             0|1 => panic!("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block"),
-            len => &path[len - 2].bbname,  // the last entry is our current block, so we want the one before
+            len => &path[len - 2].0.bbname,  // the last entry is our current block, so we want the one before
         };
         let chosen_value = phi.incoming_values.iter()
             .find(|&(_, bbname)| bbname == prev_bb)
@@ -1490,7 +1495,12 @@ mod tests {
     fn path_from_bbnames(modname: &str, funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path {
         let mut vec = vec![];
         for bbname in bbnames {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname, instr: 0 });
+            vec.push(PathEntry(LocationDescription {
+                modname: modname.to_owned(),
+                funcname: funcname.to_owned(),
+                bbname,
+                instr: BBInstrIndex::Instr(0),
+            }));
         }
         Path(vec)
     }
@@ -1504,7 +1514,12 @@ mod tests {
     fn path_from_bbnum_instr_pairs(modname: &str, funcname: &str, pairs: impl IntoIterator<Item = (usize, usize)>) -> Path {
         let mut vec = vec![];
         for (bbnum, instr) in pairs {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::from(bbnum), instr });
+            vec.push(PathEntry(LocationDescription {
+                modname: modname.to_owned(),
+                funcname: funcname.to_owned(),
+                bbname: Name::from(bbnum),
+                instr: BBInstrIndex::Instr(instr),
+            }));
         }
         Path(vec)
     }
@@ -1513,7 +1528,12 @@ mod tests {
     fn path_from_tuples_with_bbnames<'a>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, Name, usize)>) -> Path {
         let mut vec = vec![];
         for (funcname, bbname, instr) in tuples {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname, instr });
+            vec.push(PathEntry(LocationDescription {
+                modname: modname.to_owned(),
+                funcname: funcname.to_owned(),
+                bbname,
+                instr: BBInstrIndex::Instr(instr),
+            }));
         }
         Path(vec)
     }
@@ -1527,7 +1547,12 @@ mod tests {
     fn path_from_tuples_varying_modules<'a>(tuples: impl IntoIterator<Item = (&'a str, &'a str, usize, usize)>) -> Path {
         let mut vec = vec![];
         for (modname, funcname, bbnum, instr) in tuples {
-            vec.push(PathEntry { modname: modname.to_owned(), funcname: funcname.to_owned(), bbname: Name::from(bbnum), instr });
+            vec.push(PathEntry(LocationDescription {
+                modname: modname.to_owned(),
+                funcname: funcname.to_owned(),
+                bbname: Name::from(bbnum),
+                instr: BBInstrIndex::Instr(instr),
+            }));
         }
         Path(vec)
     }
