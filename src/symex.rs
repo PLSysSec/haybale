@@ -929,7 +929,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
                     }
                 } else {
-                    Err(Error::FunctionNotFound(called_funcname.to_owned()))
+                    Err(Error::FunctionNotFound(self.state.config.demangling.maybe_demangle(called_funcname)))
                 }
             },
         }
@@ -1232,7 +1232,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
                     }
                 } else {
-                    Err(Error::FunctionNotFound(called_funcname.to_owned()))
+                    Err(Error::FunctionNotFound(self.state.config.demangling.maybe_demangle(called_funcname)))
                 }
             },
         }

@@ -1,4 +1,5 @@
 use crate::backend::Backend;
+use crate::demangling::Demangling;
 use crate::function_hooks::FunctionHooks;
 use crate::watchpoints::Watchpoint;
 use std::collections::HashMap;
@@ -30,6 +31,10 @@ pub struct Config<'p, B> where B: Backend {
     /// More watchpoints may be added or removed at any time with
     /// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.
     pub initial_mem_watchpoints: HashMap<String, Watchpoint>,
+
+    /// Controls the (attempted) demangling of function names in error messages
+    /// and backtraces.
+    pub demangling: Demangling,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -84,6 +89,7 @@ impl<'p, B: Backend> Config<'p, B> {
             concretize_memcpy_lengths,
             function_hooks: FunctionHooks::new(),
             initial_mem_watchpoints: HashMap::new(),
+            demangling: Demangling::None,
         }
     }
 }
@@ -106,6 +112,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             concretize_memcpy_lengths: Concretize::Symbolic,
             function_hooks: FunctionHooks::default(),
             initial_mem_watchpoints: HashMap::new(),
+            demangling: Demangling::None,
         }
     }
 }

@@ -1055,11 +1055,21 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// returns a `String` containing a formatted view of the current LLVM backtrace
     pub fn pretty_llvm_backtrace(&self) -> String {
-        std::iter::once(format!("  #1: {:?}\n", PathEntry::from(self.cur_loc.clone())))
-            .chain(self.stack.iter().rev().zip(2..).map(|(frame, num)| {
-                format!("  #{}: {:?}\n", num, PathEntry::from(frame.callsite.loc.clone()))
-            }))
-            .collect()
+        let mut pathentries = std::iter::once(PathEntry::from(self.cur_loc.clone()))
+            .chain(self.stack.iter().rev().map(|frame| PathEntry::from(frame.callsite.loc.clone())))
+            .collect::<Vec<PathEntry>>();
+        for pathentry in pathentries.iter_mut() {
+            self.maybe_demangle_pathentry(pathentry);
+        }
+        pathentries.into_iter().zip(1..).map(|(pathentry, framenum)| {
+            format!("  #{}: {:?}\n", framenum, pathentry)
+        }).collect()
+    }
+
+    /// Attempts to demangle the function name in the `PathEntry`, as appropriate
+    /// based on the `Config`.
+    fn maybe_demangle_pathentry(&self, pathentry: &mut PathEntry) {
+        pathentry.funcname = self.config.demangling.maybe_demangle(&pathentry.funcname);
     }
 
     /// Get the most recent `BV` created for each `Name` in the current function.

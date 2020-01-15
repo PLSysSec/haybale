@@ -19,6 +19,8 @@ use layout::*;
 
 mod config;
 pub use config::*;
+mod demangling;
+pub use demangling::Demangling;
 pub mod function_hooks;
 mod hooks;
 pub mod alloc_utils;
