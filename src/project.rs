@@ -1,4 +1,4 @@
-use crate::function_hooks::cpp_demangle;
+use crate::demangling::try_cpp_demangle;
 use llvm_ir::{Function, Module, Type};
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
 use log::{info, warn};
@@ -174,7 +174,7 @@ impl Project {
         // if we get to this point, we still haven't found the function;
         // maybe we were given a C++ demangled name
         for module in &self.modules {
-            if let Some(f) = module.functions.iter().find(|func| cpp_demangle(&func.name).as_ref().map(|s| s.as_str()) == Some(name)) {
+            if let Some(f) = module.functions.iter().find(|func| try_cpp_demangle(&func.name).as_ref().map(|s| s.as_str()) == Some(name)) {
                 match retval {
                     None => retval = Some((f, module)),
                     Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),

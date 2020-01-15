@@ -1,6 +1,7 @@
 //! Functions and structures for defining and activating function hooks
 
 use crate::backend::Backend;
+use crate::demangling;
 use crate::error::*;
 use crate::hooks;
 use crate::layout;
@@ -10,7 +11,6 @@ use crate::state::State;
 use either::Either;
 use llvm_ir::{Name, Operand, Type, Typed, instruction::InlineAssembly};
 use llvm_ir::function::{CallingConvention, FunctionAttribute, ParameterAttribute};
-use rustc_demangle::demangle;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -237,16 +237,15 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// there is no hook active for the function. `funcname` may be either a
     /// mangled or a demangled function name.
     pub(crate) fn get_hook_for(&self, funcname: &str) -> Option<&FunctionHook<'p, B>> {
-        match self.hooks.get(funcname) {
-            Some(hook) => Some(hook),
-            None => match self.rust_demangled_hooks.get(&format!("{:#}", demangle(funcname))) {
-                Some(hook) => Some(hook),
-                None => match cpp_demangle(funcname) {
-                    Some(demangled) => self.cpp_demangled_hooks.get(&demangled),
-                    None => None,
-                },
-            },
-        }
+        self.hooks.get(funcname)
+            .or_else(|| {
+                demangling::try_rust_demangle(funcname)
+                    .and_then(|demangled| self.rust_demangled_hooks.get(&demangled))
+            })
+            .or_else(|| {
+                demangling::try_cpp_demangle(funcname)
+                    .and_then(|demangled| self.cpp_demangled_hooks.get(&demangled))
+            })
     }
 
     /// Get the `FunctionHook` used for calls to inline assembly, if there is one.
@@ -260,17 +259,6 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     pub fn is_hooked(&self, funcname: &str) -> bool {
         self.get_hook_for(funcname).is_some()
     }
-}
-
-/// Helper function to demangle function names with the C++ demangler.
-///
-/// Returns `Some` if successfully demangled, or `None` if any error occurs
-/// (for instance, if `funcname` isn't a valid C++ mangled name)
-pub(crate) fn cpp_demangle(funcname: &str) -> Option<String> {
-    let opts = cpp_demangle::DemangleOptions {
-        no_params: true,
-    };
-    cpp_demangle::Symbol::new(funcname).ok().and_then(|sym| sym.demangle(&opts).ok())
 }
 
 impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
