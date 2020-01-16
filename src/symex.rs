@@ -7,7 +7,8 @@ use std::convert::TryInto;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
-pub use crate::state::{State, BBInstrIndex, Location, LocationDescription, PathEntry, pretty_bb_name, pretty_var_name};
+pub use crate::state::{State, BBInstrIndex, Location, LocationDescription, PathEntry};
+use crate::state::{pretty_bb_name, pretty_var_name};
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
