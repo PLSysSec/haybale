@@ -97,16 +97,6 @@ impl fmt::Display for BBInstrIndex {
     }
 }
 
-/// Format a basic block `Name` into a concise representation for printing
-pub fn pretty_bb_name(name: &Name) -> String {
-    name.to_string()  // use the `Display` trait
-}
-
-/// Format a variable `Name` into a concise representation for printing
-pub fn pretty_var_name(name: &Name) -> String {
-    name.to_string()  // use the `Display` trait
-}
-
 pub fn pretty_source_loc(source_loc: &DebugLoc) -> String {
     let pretty_directory = match &source_loc.directory {
         Some(dir) => dir,
@@ -132,7 +122,7 @@ pub fn pretty_source_loc(source_loc: &DebugLoc) -> String {
 
 impl<'p> fmt::Debug for LocationDescription<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{}: {} {}, {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname), self.instr)
+        write!(f, "{{{}: {} {}, {}}}", self.modname, self.funcname, self.bbname, self.instr)
     }
 }
 
@@ -150,7 +140,7 @@ pub struct PathEntry<'p>(pub LocationDescription<'p>);
 
 impl<'p> fmt::Debug for PathEntry<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{}: {} {}, starting at {}}}", self.0.modname, self.0.funcname, pretty_bb_name(&self.0.bbname), self.0.instr)
+        write!(f, "{{{}: {} {}, starting at {}}}", self.0.modname, self.0.funcname, self.0.bbname, self.0.instr)
     }
 }
 
@@ -182,7 +172,7 @@ impl<'p> Eq for Location<'p> {}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Location: module {:?}, func {:?}, bb {}, {}>", self.module.name, self.func.name, pretty_bb_name(&self.bb.name), self.instr)
+        write!(f, "<Location: module {:?}, func {:?}, bb {}, {}>", self.module.name, self.func.name, self.bb.name, self.instr)
     }
 }
 
@@ -208,7 +198,9 @@ impl<'p> Location<'p> {
     /// Move to the start of the basic block with the given name, in the same function
     pub(crate) fn move_to_start_of_bb_by_name(&mut self, bbname: &Name) {
         self.move_to_start_of_bb(
-            self.func.get_bb_by_name(bbname).unwrap_or_else(|| panic!("Failed to find bb named {} in function {:?}", pretty_bb_name(bbname), self.func.name))
+            self.func.get_bb_by_name(bbname).unwrap_or_else(||
+                panic!("Failed to find bb named {} in function {:?}", bbname, self.func.name)
+            )
         )
     }
 

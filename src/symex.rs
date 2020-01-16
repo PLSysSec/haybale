@@ -8,7 +8,7 @@ use std::fmt;
 use std::sync::{Arc, RwLock};
 
 pub use crate::state::{State, BBInstrIndex, Location, LocationDescription, PathEntry};
-use crate::state::{pretty_bb_name, pretty_var_name, pretty_source_loc};
+use crate::state::pretty_source_loc;
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
@@ -134,7 +134,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
                 err_msg.push_str("\nLatest values of variables at time of error, in current function:\n");
                 err_msg.push_str("(Ignore any values from past the point of error, they may be from other paths)\n\n");
                 for (varname, value) in self.state.all_vars_in_cur_fn() {
-                    err_msg.push_str(&format!("  {}: {:?}\n", pretty_var_name(varname), value));
+                    err_msg.push_str(&format!("  {}: {:?}\n", varname, value));
                 }
             } else {
                 err_msg.push_str("note: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n");
@@ -252,7 +252,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn backtrack_and_continue(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         if self.state.revert_to_backtracking_point()? {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
-            info!("Continuing in bb {} in function {:?}, module {:?}", pretty_bb_name(&self.state.cur_loc.bb.name), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+            info!("Continuing in bb {} in function {:?}, module {:?}",
+                self.state.cur_loc.bb.name, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
             self.symex_from_cur_loc()
         } else {
             // No backtrack points (and therefore no paths) remain
@@ -293,7 +294,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 // a normal callsite, not an `invoke` instruction
                                 info!("Caller {:?} (bb {}) in module {:?} is not prepared to catch the exception, rethrowing",
                                     callsite.loc.func.name,
-                                    pretty_bb_name(&callsite.loc.bb.name),
+                                    callsite.loc.bb.name,
                                     callsite.loc.module.name,
                                 );
                                 continue;
@@ -302,9 +303,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 // catch the thrown value
                                 info!("Caller {:?} (bb {}) in module {:?} catching the thrown value at bb {}",
                                     callsite.loc.func.name,
-                                    pretty_bb_name(&callsite.loc.bb.name),
+                                    callsite.loc.bb.name,
                                     callsite.loc.module.name,
-                                    pretty_bb_name(&invoke.exception_label),
+                                    invoke.exception_label,
                                 );
                                 self.state.cur_loc = callsite.loc.clone();
                                 return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
@@ -325,7 +326,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
                             self.state.cur_loc.func.name,
                             callsite.loc.func.name,
-                            pretty_bb_name(&callsite.loc.bb.name),
+                            callsite.loc.bb.name,
                             callsite.loc.module.name,
                         );
                         self.state.cur_loc = callsite.loc.clone();
@@ -350,8 +351,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         info!("Leaving function {:?}, continuing in caller {:?} (finished invoke in bb {}, now in bb {}) in module {:?}",
                             self.state.cur_loc.func.name,
                             callsite.loc.func.name,
-                            pretty_bb_name(&callsite.loc.bb.name),
-                            pretty_bb_name(&invoke.return_label),
+                            callsite.loc.bb.name,
+                            invoke.return_label,
                             callsite.loc.module.name,
                         );
                         self.state.cur_loc = callsite.loc.clone();
@@ -906,7 +907,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     },
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 }
-                info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}", pretty_hookedthing, pretty_bb_name(&self.state.cur_loc.bb.name), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}",
+                    pretty_hookedthing, self.state.cur_loc.bb.name, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                 Ok(None)
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
@@ -948,7 +950,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             };
                             debug!("Completed ordinary return to caller");
-                            info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}", called_funcname, &self.state.cur_loc.func.name, pretty_bb_name(&self.state.cur_loc.bb.name), &self.state.cur_loc.module.name);
+                            info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
+                                called_funcname, self.state.cur_loc.func.name, self.state.cur_loc.bb.name, self.state.cur_loc.module.name);
                             Ok(None)
                         },
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
@@ -1193,7 +1196,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     },
                     ReturnValue::ReturnVoid => {},
                     ReturnValue::Throw(bvptr) => {
-                        info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}", pretty_hookedthing, pretty_bb_name(&invoke.exception_label), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                        info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}",
+                            pretty_hookedthing, invoke.exception_label, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                         return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                     },
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
@@ -1201,7 +1205,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let old_bb_name = &self.state.cur_loc.bb.name;
                 // We had a normal return, so continue at the `return_label`
                 self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
-                info!("Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}", pretty_hookedthing, self.state.cur_loc.func.name, pretty_bb_name(old_bb_name), pretty_bb_name(&self.state.cur_loc.bb.name), self.state.cur_loc.module.name);
+                info!("Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}",
+                    pretty_hookedthing, self.state.cur_loc.func.name, old_bb_name, self.state.cur_loc.bb.name, self.state.cur_loc.module.name);
                 self.symex_from_cur_loc_through_end_of_function()
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
@@ -1235,7 +1240,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 },
                                 ReturnValue::ReturnVoid => {},
                                 ReturnValue::Throw(bvptr) => {
-                                    info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}, module {:?}", self.state.cur_loc.func.name, called_funcname, pretty_bb_name(&self.state.cur_loc.bb.name), self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                                    info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}, module {:?}",
+                                        self.state.cur_loc.func.name, called_funcname, self.state.cur_loc.bb.name, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
                                     return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                                 },
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
@@ -1243,7 +1249,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             // Returned normally, so continue at the `return_label`
                             self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
                             debug!("Completed ordinary return from invoke");
-                            info!("Leaving function {:?}, continuing in caller {:?} (finished the invoke in bb {}, now in bb {}) in module {:?}", called_funcname, &self.state.cur_loc.func.name, pretty_bb_name(old_bb_name), pretty_bb_name(&self.state.cur_loc.bb.name), &self.state.cur_loc.module.name);
+                            info!("Leaving function {:?}, continuing in caller {:?} (finished the invoke in bb {}, now in bb {}) in module {:?}",
+                                called_funcname, self.state.cur_loc.func.name, old_bb_name, self.state.cur_loc.bb.name, self.state.cur_loc.module.name);
                             self.symex_from_cur_loc_through_end_of_function()
                         },
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
@@ -1292,7 +1299,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     ///
     /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
     fn catch_with_type_index(&mut self, thrown_ptr: &B::BV, type_index: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {
-        debug!("Catching exception {{{:?}, {:?}}} at bb {}", thrown_ptr, type_index, pretty_bb_name(bbname));
+        debug!("Catching exception {{{:?}, {:?}}} at bb {}", thrown_ptr, type_index, bbname);
         self.state.cur_loc.move_to_start_of_bb_by_name(bbname);
         let mut found_landingpad = false;
         let mut first_iter = true;  // is it the first iteration of the for loop
@@ -1306,7 +1313,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             let result = match inst {
                 Instruction::Phi(phi) => self.symex_phi(phi),  // phi instructions are allowed before the landingpad
                 Instruction::LandingPad(lp) => { found_landingpad = true; self.symex_landing_pad(lp, thrown_ptr, type_index) },
-                _ => Err(Error::MalformedInstruction(format!("Expected exception-catching block ({}) to have a `LandingPad` as its first non-phi instruction, but found {:?}", pretty_bb_name(bbname), inst))),
+                _ => Err(Error::MalformedInstruction(format!("Expected exception-catching block ({}) to have a `LandingPad` as its first non-phi instruction, but found {:?}", bbname, inst))),
             };
             match result {
                 Ok(()) => {
@@ -1329,7 +1336,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         if found_landingpad {
             panic!("shouldn't reach this point if we found a landingpad")
         } else {
-            Err(Error::MalformedInstruction(format!("Expected exception-catching block ({}) to have a `LandingPad`, but it seems not to", pretty_bb_name(bbname))))
+            Err(Error::MalformedInstruction(format!("Expected exception-catching block ({}) to have a `LandingPad`, but it seems not to", bbname)))
         }
     }
 
