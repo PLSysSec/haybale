@@ -271,25 +271,16 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Symex starting from the current location, returning (using the saved
     /// callstack) all the way back to the end of the top-level function.
     ///
+    /// The current instruction index (`self.state.cur_loc.instr`) must be a
+    /// valid instruction index for the current bb, with the exception that if
+    /// the current bb contains no instructions (only a terminator),
+    /// `BBInstrIndex::Instr(0)` will still be considered valid, and be treated
+    /// equivalently to `BBInstrIndex::Terminator`.
+    ///
     /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
     fn symex_from_cur_loc(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        self.symex_from_inst_in_cur_bb(self.state.cur_loc.instr)
-    }
-
-    /// Symex starting from the given index in the current bb, returning (using
-    /// the saved callstack) all the way back to the end of the top-level
-    /// function.
-    ///
-    /// `inst` must be a valid instruction index for the current bb, with the
-    /// exception that if the current bb contains no instructions (only a
-    /// terminator), `BBInstrIndex::Instr(0)` will still be considered valid, and
-    /// be treated equivalently to `BBInstrIndex::Terminator`.
-    ///
-    /// Returns the `ReturnValue` representing the final return value, or
-    /// `Ok(None)` if no possible paths were found.
-    fn symex_from_inst_in_cur_bb(&mut self, inst: BBInstrIndex) -> Result<Option<ReturnValue<B::BV>>> {
-        match self.symex_from_inst_in_cur_bb_through_end_of_function(inst)? {
+        match self.symex_from_inst_in_cur_bb_through_end_of_function(self.state.cur_loc.instr)? {
             Some(ReturnValue::Throw(bvptr)) => {
                 // pop callsites until we find an `invoke` instruction that can direct us to a catch block
                 loop {
