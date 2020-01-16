@@ -197,7 +197,7 @@ mod tests {
         let start_loc = Location {
             module,
             func,
-            bbname: "test_bb".to_owned().into(),
+            bb: func.basic_blocks.get(0).expect("Function must contain at least one basic block"),
             instr: BBInstrIndex::Instr(0),
             source_loc: None,
         };
@@ -223,7 +223,9 @@ mod tests {
 
     /// utility that creates a technically valid (but functionally useless) `Function` for testing
     fn blank_function(name: impl Into<String>) -> Function {
-        Function::new(name)
+        let mut func = Function::new(name);
+        func.basic_blocks.push(BasicBlock::new(Name::from("test_bb")));
+        func
     }
 
     #[test]

@@ -159,18 +159,20 @@ impl<'p> fmt::Debug for PathEntry<'p> {
 pub struct Location<'p> {
     pub module: &'p Module,
     pub func: &'p Function,
-    pub bbname: Name,
+    pub bb: &'p BasicBlock,
     pub instr: BBInstrIndex,
     /// Source location which this IR location corresponds to, if available.
     pub source_loc: Option<&'p DebugLoc>,
 }
 
-/// Implementation of `PartialEq` assumes that module and function names are unique
+/// Implementation of `PartialEq` assumes that module names are unique;
+/// that function names are unique within a module;
+/// and that bb names are unique within a function
 impl<'p> PartialEq for Location<'p> {
     fn eq(&self, other: &Self) -> bool {
         self.module.name == other.module.name
             && self.func.name == other.func.name
-            && self.bbname == other.bbname
+            && self.bb.name == other.bb.name
             && self.instr == other.instr
     }
 }
@@ -180,7 +182,7 @@ impl<'p> Eq for Location<'p> {}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Location: module {:?}, func {:?}, bb {}, {}>", self.module.name, self.func.name, pretty_bb_name(&self.bbname), self.instr)
+        write!(f, "<Location: module {:?}, func {:?}, bb {}, {}>", self.module.name, self.func.name, pretty_bb_name(&self.bb.name), self.instr)
     }
 }
 
@@ -189,7 +191,7 @@ impl<'p> From<Location<'p>> for LocationDescription<'p> {
         LocationDescription {
             modname: loc.module.name.clone(),
             funcname: loc.func.name.clone(),
-            bbname: loc.bbname,
+            bbname: loc.bb.name.clone(),
             instr: loc.instr,
             source_loc: loc.source_loc,
         }
@@ -197,10 +199,17 @@ impl<'p> From<Location<'p>> for LocationDescription<'p> {
 }
 
 impl<'p> Location<'p> {
-    /// Move to the start of the basic block with the given name, in the same function
-    pub(crate) fn move_to_start_of_bb(&mut self, bbname: Name) {
-        self.bbname = bbname;
+    /// Move to the start of the given basic block, in the same function
+    pub(crate) fn move_to_start_of_bb(&mut self, bb: &'p BasicBlock) {
+        self.bb = bb;
         self.instr = BBInstrIndex::Instr(0);
+    }
+
+    /// Move to the start of the basic block with the given name, in the same function
+    pub(crate) fn move_to_start_of_bb_by_name(&mut self, bbname: &Name) {
+        self.move_to_start_of_bb(
+            self.func.get_bb_by_name(bbname).unwrap_or_else(|| panic!("Failed to find bb named {} in function {:?}", pretty_bb_name(bbname), self.func.name))
+        )
     }
 
     /// Increment the instruction index in the `Location`.
@@ -264,7 +273,7 @@ struct BacktrackPoint<'p, B: Backend> {
 
 impl<'p, B: Backend> fmt::Display for BacktrackPoint<'p, B> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<BacktrackPoint to execute bb {:?} with constraint {:?} and {} frames on the callstack>", self.loc.bbname, self.constraint, self.stack.len())
+        write!(f, "<BacktrackPoint to execute bb {} with constraint {:?} and {} frames on the callstack>", self.loc.bb.name, self.constraint, self.stack.len())
     }
 }
 
@@ -1086,13 +1095,15 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Save the current state, about to enter the `BasicBlock` with the given `Name` (which must be
     /// in the same `Module` and `Function` as `state.cur_loc`), as a backtracking point.
     /// The constraint will be added only if we end up backtracking to this point, and only then.
-    pub fn save_backtracking_point(&mut self, bb_to_enter: Name, constraint: B::BV) {
+    pub fn save_backtracking_point(&mut self, bb_to_enter: &Name, constraint: B::BV) {
         debug!("Saving a backtracking point, which would enter bb {:?} with constraint {:?}", bb_to_enter, constraint);
         self.solver.push(1);
+        let bb_to_enter = self.cur_loc.func.get_bb_by_name(&bb_to_enter)
+            .unwrap_or_else(|| panic!("Failed to find bb named {} in function {:?}", bb_to_enter, self.cur_loc.func.name));
         let backtrack_loc = Location {
             module: self.cur_loc.module,
             func: self.cur_loc.func,
-            bbname: bb_to_enter,
+            bb: bb_to_enter,
             instr: BBInstrIndex::Instr(0),
             source_loc: None,
         };
@@ -1195,7 +1206,7 @@ mod tests {
         let start_loc = Location {
             module,
             func,
-            bbname: "test_bb".to_owned().into(),
+            bb: func.basic_blocks.get(0).expect("Function must contain at least one basic block"),
             instr: BBInstrIndex::Instr(0),
             source_loc: None,
         };
@@ -1219,14 +1230,22 @@ mod tests {
         })
     }
 
-    /// utility that creates a technically valid (but functionally useless) `Function` for testing
-    fn blank_function(name: impl Into<String>) -> Function {
-        Function::new(name)
+    /// utility that creates a technically valid (but functionally useless)
+    /// `Function` for testing
+    ///
+    /// the `Function` will contain technically valid (but functionally useless)
+    /// `BasicBlock`s, one per name provided in `bbnames`
+    fn blank_function(name: impl Into<String>, bbnames: Vec<Name>) -> Function {
+        let mut func = Function::new(name);
+        for bbname in bbnames {
+            func.basic_blocks.push(BasicBlock::new(bbname));
+        }
+        func
     }
 
     #[test]
     fn sat() -> Result<()> {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
 
@@ -1247,7 +1266,7 @@ mod tests {
 
     #[test]
     fn unsat() -> Result<()> {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let state = blank_state(&project, "test_func");
 
@@ -1260,7 +1279,7 @@ mod tests {
 
     #[test]
     fn unsat_with_extra_constraints() -> Result<()> {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
 
@@ -1281,7 +1300,7 @@ mod tests {
 
     #[test]
     fn get_a_solution() -> Result<()> {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
 
@@ -1298,7 +1317,7 @@ mod tests {
 
     #[test]
     fn possible_solutions() -> Result<()> {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
 
@@ -1336,7 +1355,7 @@ mod tests {
 
     #[test]
     fn lookup_vars_via_operand() {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
 
@@ -1357,7 +1376,7 @@ mod tests {
 
     #[test]
     fn const_bv() {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let state = blank_state(&project, "test_func");
 
@@ -1374,7 +1393,7 @@ mod tests {
 
     #[test]
     fn const_bool() {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let state = blank_state(&project, "test_func");
 
@@ -1407,7 +1426,7 @@ mod tests {
 
     #[test]
     fn backtracking() -> Result<()> {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("bb_start"), Name::from("bb_target")]);
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
         state.record_path_entry();
@@ -1419,8 +1438,12 @@ mod tests {
         // create a backtrack point with constraint y > 5
         let y = state.new_bv_with_name(Name::from("y"), 64)?;
         let constraint = y.sgt(&state.bv_from_i64(5, 64));
-        let bb = BasicBlock::new(Name::from("bb_target"));
-        state.save_backtracking_point(bb.name.clone(), constraint);
+        let bb = project.get_func_by_name("test_func")
+            .map(|(func, _)| func)
+            .expect("Expected to find function named 'test_func'")
+            .get_bb_by_name(&Name::from("bb_target"))
+            .expect("Expected to find bb named 'bb_target'");
+        state.save_backtracking_point(&bb.name, constraint);
 
         // check that the constraint y > 5 wasn't added: adding y < 4 should keep us sat
         assert_eq!(
@@ -1439,11 +1462,11 @@ mod tests {
         // and with the right path
         assert!(state.revert_to_backtracking_point().unwrap());
         assert_eq!(state.cur_loc.func, pre_rollback.func);
-        assert_eq!(state.cur_loc.bbname, bb.name);
+        assert_eq!(state.cur_loc.bb.name, bb.name);
         assert_eq!(state.get_path(), &vec![PathEntry(LocationDescription {
             modname: "test_mod".into(),
             funcname: "test_func".into(),
-            bbname: "test_bb".into(),  // the `blank_state` comes with this as the current bb name
+            bbname: "bb_start".into(),
             instr: BBInstrIndex::Instr(0),
             source_loc: None,
         })]);
@@ -1465,7 +1488,7 @@ mod tests {
 
     #[test]
     fn fork() {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
 
