@@ -249,9 +249,9 @@ or of course you can generate local documentation with `cargo doc --open`.
 ## Compatibility
 
 Currently, `haybale` only supports LLVM 9. A version of `haybale` supporting
-LLVM 8 is available on the `llvm-8` branch of this repo, and is approximately
-at feature parity with `haybale` version 0.2.0. However, there is no promise
-that future `haybale` features will be backported to the `llvm-8` branch.
+LLVM 8 is available on the `llvm-8` branch of this repo; it is approximately
+at feature parity with `haybale` 0.2.1, and will likely be stuck at that
+point indefinitely unless there is demand for additional backported features.
 
 `haybale` works on stable Rust, and requires Rust 1.36+.
 
