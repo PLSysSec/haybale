@@ -2484,6 +2484,54 @@
 <span id="2484">2484</span>
 <span id="2485">2485</span>
 <span id="2486">2486</span>
+<span id="2487">2487</span>
+<span id="2488">2488</span>
+<span id="2489">2489</span>
+<span id="2490">2490</span>
+<span id="2491">2491</span>
+<span id="2492">2492</span>
+<span id="2493">2493</span>
+<span id="2494">2494</span>
+<span id="2495">2495</span>
+<span id="2496">2496</span>
+<span id="2497">2497</span>
+<span id="2498">2498</span>
+<span id="2499">2499</span>
+<span id="2500">2500</span>
+<span id="2501">2501</span>
+<span id="2502">2502</span>
+<span id="2503">2503</span>
+<span id="2504">2504</span>
+<span id="2505">2505</span>
+<span id="2506">2506</span>
+<span id="2507">2507</span>
+<span id="2508">2508</span>
+<span id="2509">2509</span>
+<span id="2510">2510</span>
+<span id="2511">2511</span>
+<span id="2512">2512</span>
+<span id="2513">2513</span>
+<span id="2514">2514</span>
+<span id="2515">2515</span>
+<span id="2516">2516</span>
+<span id="2517">2517</span>
+<span id="2518">2518</span>
+<span id="2519">2519</span>
+<span id="2520">2520</span>
+<span id="2521">2521</span>
+<span id="2522">2522</span>
+<span id="2523">2523</span>
+<span id="2524">2524</span>
+<span id="2525">2525</span>
+<span id="2526">2526</span>
+<span id="2527">2527</span>
+<span id="2528">2528</span>
+<span id="2529">2529</span>
+<span id="2530">2530</span>
+<span id="2531">2531</span>
+<span id="2532">2532</span>
+<span id="2533">2533</span>
+<span id="2534">2534</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">instruction</span>::{<span class="ident">BinaryOp</span>, <span class="ident">InlineAssembly</span>};
@@ -2491,9 +2539,10 @@
 <span class="kw">use</span> <span class="ident">either</span>::<span class="ident">Either</span>;
 <span class="kw">use</span> <span class="ident">reduce</span>::<span class="ident">Reduce</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::<span class="ident">TryInto</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::{<span class="ident">Arc</span>, <span class="ident">RwLock</span>};
 
-<span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::{<span class="ident">State</span>, <span class="ident">Location</span>, <span class="ident">PathEntry</span>, <span class="ident">pretty_bb_name</span>};
+<span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::{<span class="ident">State</span>, <span class="ident">Location</span>, <span class="ident">PathEntry</span>, <span class="ident">pretty_bb_name</span>, <span class="ident">pretty_var_name</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">config</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="kw-2">*</span>;
@@ -2528,7 +2577,7 @@
     };
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">State</span>::<span class="ident">new</span>(<span class="ident">project</span>, <span class="ident">start_loc</span>, <span class="ident">config</span>);
     <span class="kw">let</span> <span class="ident">bvparams</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">func</span>.<span class="ident">parameters</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">param</span><span class="op">|</span> {
-        <span class="ident">state</span>.<span class="ident">new_bv_with_name</span>(<span class="ident">param</span>.<span class="ident">name</span>.<span class="ident">clone</span>(), <span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">param</span>.<span class="ident">ty</span>) <span class="kw">as</span> <span class="ident">u32</span>).<span class="ident">unwrap</span>()
+        <span class="ident">state</span>.<span class="ident">new_bv_with_name</span>(<span class="ident">param</span>.<span class="ident">name</span>.<span class="ident">clone</span>(), <span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">param</span>.<span class="ident">ty</span>, <span class="ident">project</span>) <span class="kw">as</span> <span class="ident">u32</span>).<span class="ident">unwrap</span>()
     }).<span class="ident">collect</span>();
     <span class="ident">ExecutionManager</span>::<span class="ident">new</span>(<span class="ident">state</span>, <span class="ident">project</span>, <span class="ident">bvparams</span>, <span class="kw-2">&amp;</span><span class="ident">bb</span>)
 }
@@ -2600,9 +2649,31 @@
             <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;ExecutionManager: requesting next path&quot;</span>);
             <span class="self">self</span>.<span class="ident">backtrack_and_continue</span>()
         };
-        <span class="ident">retval</span>.<span class="ident">transpose</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span>
-            <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Received the following error:\n  {}\nLLVM backtrace:\n{}\n&quot;</span>, <span class="ident">e</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">pretty_llvm_backtrace</span>())
-        ))
+        <span class="ident">retval</span>.<span class="ident">transpose</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">err_msg</span> <span class="op">=</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Received the following error:\n  {}\n&quot;</span>, <span class="ident">e</span>);
+            <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;LLVM backtrace:\n{}&quot;</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">pretty_llvm_backtrace</span>()));
+            <span class="kw">if</span> <span class="ident">std</span>::<span class="ident">env</span>::<span class="ident">var</span>(<span class="string">&quot;HAYBALE_DUMP_PATH&quot;</span>) <span class="op">=</span><span class="op">=</span> <span class="prelude-val">Ok</span>(<span class="string">&quot;1&quot;</span>.<span class="ident">to_owned</span>()) {
+                <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;Path to error:\n&quot;</span>);
+                <span class="kw">for</span> <span class="ident">path_entry</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">get_path</span>() {
+                    <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;  {:?}\n&quot;</span>, <span class="ident">path_entry</span>));
+                }
+            } <span class="kw">else</span> {
+                <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;note: For a dump of the path that led to this error, rerun with `HAYBALE_DUMP_PATH=1` environment variable.\n&quot;</span>);
+            }
+            <span class="kw">if</span> <span class="ident">std</span>::<span class="ident">env</span>::<span class="ident">var</span>(<span class="string">&quot;HAYBALE_DUMP_VARS&quot;</span>) <span class="op">=</span><span class="op">=</span> <span class="prelude-val">Ok</span>(<span class="string">&quot;1&quot;</span>.<span class="ident">to_owned</span>()) {
+                <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;\nLatest values of variables at time of error, in current function:\n&quot;</span>);
+                <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;(Ignore any values from past the point of error, they may be from other paths)\n\n&quot;</span>);
+                <span class="kw">for</span> (<span class="ident">varname</span>, <span class="ident">value</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">all_vars_in_cur_fn</span>() {
+                    <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;  {}: {:?}\n&quot;</span>, <span class="ident">pretty_var_name</span>(<span class="ident">varname</span>), <span class="ident">value</span>));
+                }
+            } <span class="kw">else</span> {
+                <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;note: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n&quot;</span>);
+                <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;note: to enable (much) more detailed logs, rerun with `RUST_LOG=haybale`.\n&quot;</span>);
+                <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;  (For how to enable more granular logging options, see docs for the env_logger crate).\n&quot;</span>);
+            }
+            <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;\n&quot;</span>);
+            <span class="ident">err_msg</span>
+        }))
     }
 }
 
@@ -2755,7 +2826,7 @@
                     }
                 }
             },
-            <span class="prelude-val">Some</span>(<span class="ident">ReturnValue</span>::<span class="ident">Abort</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">ReturnValue</span>::<span class="ident">Abort</span>)),
+            <span class="prelude-val">Some</span>(<span class="ident">ReturnValue</span>::<span class="ident">Abort</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">ReturnValue</span>::<span class="ident">Abort</span>)),
             <span class="prelude-val">Some</span>(<span class="ident">symexresult</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">pop_callsite</span>() {
                 <span class="prelude-val">Some</span>(<span class="ident">callsite</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">callsite</span>.<span class="ident">instr</span> {
                     <span class="ident">Either</span>::<span class="ident">Left</span>(<span class="ident">call</span>) <span class="op">=</span><span class="op">&gt;</span> {
@@ -2949,7 +3020,7 @@
             }
             <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Expected ICmp result type to be i1 or vector of i1; got {:?}&quot;</span>, <span class="ident">ty</span>))),
         }
-   }
+    }
 
     <span class="kw">fn</span> <span class="ident">symex_zext</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">zext</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">instruction</span>::<span class="ident">ZExt</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Symexing zext {:?}&quot;</span>, <span class="ident">zext</span>);
@@ -3119,7 +3190,7 @@
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Symexing alloca {:?}&quot;</span>, <span class="ident">alloca</span>);
         <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">alloca</span>.<span class="ident">num_elements</span> {
             <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">value</span>: <span class="ident">num_elements</span>, .. }) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">allocation_size</span> <span class="op">=</span> <span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">alloca</span>.<span class="ident">allocated_type</span>) <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">num_elements</span>;
+                <span class="kw">let</span> <span class="ident">allocation_size</span> <span class="op">=</span> <span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">alloca</span>.<span class="ident">allocated_type</span>, <span class="self">self</span>.<span class="ident">project</span>) <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">num_elements</span>;
                 <span class="kw">let</span> <span class="ident">allocated</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">allocate</span>(<span class="ident">allocation_size</span>);
                 <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">record_bv_result</span>(<span class="ident">alloca</span>, <span class="ident">allocated</span>)
             },
@@ -3330,12 +3401,9 @@
     <span class="kw">fn</span> <span class="ident">symex_call</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">instruction</span>::<span class="ident">Call</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Symexing call {:?}&quot;</span>, <span class="ident">call</span>);
         <span class="kw">match</span> <span class="self">self</span>.<span class="ident">resolve_function</span>(<span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">function</span>)<span class="question-mark">?</span> {
-            <span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>, <span class="ident">hooked_funcname</span> } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">pretty_funcname</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">hooked_funcname</span> {
-                    <span class="prelude-val">Some</span>(<span class="ident">funcname</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;function {:?}&quot;</span>, <span class="ident">funcname</span>),
-                    <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="string">&quot;a function pointer&quot;</span>.<span class="ident">to_owned</span>(),
-                };
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">symex_hook</span>(<span class="ident">call</span>, <span class="kw-2">&amp;</span><span class="ident">hook</span>, <span class="kw-2">&amp;</span><span class="ident">pretty_funcname</span>)<span class="question-mark">?</span> {
+            <span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>, <span class="ident">hooked_thing</span> } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">pretty_hookedthing</span> <span class="op">=</span> <span class="ident">hooked_thing</span>.<span class="ident">to_string</span>();
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">symex_hook</span>(<span class="ident">call</span>, <span class="kw-2">&amp;</span><span class="ident">hook</span>, <span class="kw-2">&amp;</span><span class="ident">pretty_hookedthing</span>)<span class="question-mark">?</span> {
                     <span class="comment">// Assume that `symex_hook()` has taken care of validating the hook return value as necessary</span>
                     <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">retval</span>) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="comment">// can&#39;t quite use `state.record_bv_result(call, retval)?` because Call is not HasResult</span>
@@ -3348,8 +3416,8 @@
                     },
                     <span class="ident">ReturnValue</span>::<span class="ident">Abort</span> <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">ReturnValue</span>::<span class="ident">Abort</span>)),
                 }
-                <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}&quot;</span>, <span class="ident">pretty_funcname</span>, <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">bbname</span>), <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">name</span>);
-                <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+                <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}&quot;</span>, <span class="ident">pretty_hookedthing</span>, <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">bbname</span>), <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">name</span>);
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
             },
             <span class="ident">ResolvedFunction</span>::<span class="ident">NoHookActive</span> { <span class="ident">called_funcname</span> } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">callee</span>, <span class="ident">callee_mod</span>)) <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>.<span class="ident">get_func_by_name</span>(<span class="ident">called_funcname</span>) {
@@ -3396,12 +3464,13 @@
                         <span class="prelude-val">Some</span>(<span class="ident">callsite</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Received unexpected callsite {:?}&quot;</span>, <span class="ident">callsite</span>),
                     }
                 } <span class="kw">else</span> {
-                    <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">FunctionNotFound</span>(<span class="ident">called_funcname</span>.<span class="ident">to_owned</span>()))
+                    <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">FunctionNotFound</span>(<span class="self">self</span>.<span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">demangling</span>.<span class="ident">maybe_demangle</span>(<span class="ident">called_funcname</span>)))
                 }
             },
         }
     }
 
+    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy</span>::<span class="ident">if_same_then_else</span>)]</span>  <span class="comment">// in this case, having some identical `if` blocks actually improves readability, I think</span>
     <span class="kw">fn</span> <span class="ident">resolve_function</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">function</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Either</span><span class="op">&lt;</span><span class="ident">InlineAssembly</span>, <span class="ident">Operand</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ResolvedFunction</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">global_allocations</span>::<span class="ident">Callable</span>;
         <span class="kw">let</span> <span class="ident">funcname_or_hook</span>: <span class="ident">Either</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span>, <span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">function</span> {
@@ -3418,11 +3487,17 @@
                     }
                 }
             },
-            <span class="ident">Either</span>::<span class="ident">Left</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;inline assembly&quot;</span>.<span class="ident">to_owned</span>())),
+            <span class="ident">Either</span>::<span class="ident">Left</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">function_hooks</span>.<span class="ident">get_inline_asm_hook</span>() {
+                <span class="prelude-val">Some</span>(<span class="ident">hook</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> {
+                    <span class="ident">hook</span>: <span class="ident">hook</span>.<span class="ident">clone</span>(),
+                    <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">InlineAsm</span>,
+                }),
+                <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="string">&quot;Encountered a call to inline assembly, but we have no inline assembly hook. Perhaps you want to add an inline assembly hook (see the documentation on FunctionHooks)?&quot;</span>.<span class="ident">to_owned</span>())),
+            },
         };
         <span class="kw">match</span> <span class="ident">funcname_or_hook</span> {
             <span class="ident">Either</span>::<span class="ident">Left</span>(<span class="ident">funcname</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">function_hooks</span>.<span class="ident">get_hook_for</span>(<span class="ident">funcname</span>) {
-                <span class="prelude-val">Some</span>(<span class="ident">hook</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>: <span class="ident">hook</span>.<span class="ident">clone</span>(), <span class="ident">hooked_funcname</span>: <span class="prelude-val">Some</span>(<span class="ident">funcname</span>) }),
+                <span class="prelude-val">Some</span>(<span class="ident">hook</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>: <span class="ident">hook</span>.<span class="ident">clone</span>(), <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>) }),
                 <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
                     <span class="comment">// No hook currently defined for this function, check if any intrinsic hooks apply</span>
                     <span class="comment">// (see notes on function resolution in function_hooks.rs)</span>
@@ -3431,7 +3506,7 @@
                     {
                         <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> {
                             <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">intrinsic_hooks</span>.<span class="ident">get_hook_for</span>(<span class="string">&quot;intrinsic: llvm.memset&quot;</span>).<span class="ident">cloned</span>().<span class="ident">expect</span>(<span class="string">&quot;Failed to find LLVM intrinsic memset hook&quot;</span>),
-                            <span class="ident">hooked_funcname</span>: <span class="prelude-val">Some</span>(<span class="ident">funcname</span>),
+                            <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>),
                         })
                     } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.memcpy&quot;</span>)
                         <span class="op">|</span><span class="op">|</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.memmove&quot;</span>)
@@ -3440,12 +3515,17 @@
                         <span class="comment">// Our memcpy implementation also works for memmove</span>
                         <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> {
                             <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">intrinsic_hooks</span>.<span class="ident">get_hook_for</span>(<span class="string">&quot;intrinsic: llvm.memcpy/memmove&quot;</span>).<span class="ident">cloned</span>().<span class="ident">expect</span>(<span class="string">&quot;Failed to find LLVM intrinsic memcpy/memmove hook&quot;</span>),
-                            <span class="ident">hooked_funcname</span>: <span class="prelude-val">Some</span>(<span class="ident">funcname</span>),
+                            <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>),
+                        })
+                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.bswap&quot;</span>) {
+                        <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> {
+                            <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">intrinsic_hooks</span>.<span class="ident">get_hook_for</span>(<span class="string">&quot;intrinsic: llvm.bswap&quot;</span>).<span class="ident">cloned</span>().<span class="ident">expect</span>(<span class="string">&quot;Failed to find LLVM intrinsic bswap hook&quot;</span>),
+                            <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>),
                         })
                     } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.objectsize&quot;</span>) {
                         <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> {
                             <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">intrinsic_hooks</span>.<span class="ident">get_hook_for</span>(<span class="string">&quot;intrinsic: llvm.objectsize&quot;</span>).<span class="ident">cloned</span>().<span class="ident">expect</span>(<span class="string">&quot;Failed to find LLVM intrinsic objectsize hook&quot;</span>),
-                            <span class="ident">hooked_funcname</span>: <span class="prelude-val">Some</span>(<span class="ident">funcname</span>),
+                            <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>),
                         })
                     } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.read_register&quot;</span>)
                         <span class="op">|</span><span class="op">|</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.write_register&quot;</span>)
@@ -3453,7 +3533,7 @@
                         <span class="comment">// These can just ignore their arguments and return unconstrained data, as appropriate</span>
                         <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> {
                             <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">intrinsic_hooks</span>.<span class="ident">get_hook_for</span>(<span class="string">&quot;intrinsic: generic_stub_hook&quot;</span>).<span class="ident">cloned</span>().<span class="ident">expect</span>(<span class="string">&quot;Failed to find intrinsic generic stub hook&quot;</span>),
-                            <span class="ident">hooked_funcname</span>: <span class="prelude-val">Some</span>(<span class="ident">funcname</span>),
+                            <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>),
                         })
                     } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.lifetime&quot;</span>)
                         <span class="op">|</span><span class="op">|</span> <span class="ident">funcname</span>.<span class="ident">starts_with</span>(<span class="string">&quot;llvm.invariant&quot;</span>)
@@ -3464,7 +3544,7 @@
                         <span class="comment">// these are all safe to ignore</span>
                         <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> {
                             <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">intrinsic_hooks</span>.<span class="ident">get_hook_for</span>(<span class="string">&quot;intrinsic: generic_stub_hook&quot;</span>).<span class="ident">cloned</span>().<span class="ident">expect</span>(<span class="string">&quot;Failed to find intrinsic generic stub hook&quot;</span>),
-                            <span class="ident">hooked_funcname</span>: <span class="prelude-val">Some</span>(<span class="ident">funcname</span>),
+                            <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>),
                         })
                     } <span class="kw">else</span> {
                         <span class="comment">// No hook currently defined for this function, and none of our intrinsic hooks apply</span>
@@ -3472,7 +3552,7 @@
                     }
                 },
             },
-            <span class="ident">Either</span>::<span class="ident">Right</span>(<span class="ident">hook</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>, <span class="ident">hooked_funcname</span>: <span class="prelude-val">None</span> }),
+            <span class="ident">Either</span>::<span class="ident">Right</span>(<span class="ident">hook</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>, <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span>::<span class="ident">FunctionPtr</span> }),
         }
     }
 
@@ -3620,19 +3700,16 @@
     <span class="kw">fn</span> <span class="ident">symex_invoke</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">invoke</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">terminator</span>::<span class="ident">Invoke</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Symexing invoke {:?}&quot;</span>, <span class="ident">invoke</span>);
         <span class="kw">match</span> <span class="self">self</span>.<span class="ident">resolve_function</span>(<span class="kw-2">&amp;</span><span class="ident">invoke</span>.<span class="ident">function</span>)<span class="question-mark">?</span> {
-            <span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>, <span class="ident">hooked_funcname</span> } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">pretty_funcname</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">hooked_funcname</span> {
-                    <span class="prelude-val">Some</span>(<span class="ident">funcname</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;function {:?}&quot;</span>, <span class="ident">funcname</span>),
-                    <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="string">&quot;a function pointer&quot;</span>.<span class="ident">to_owned</span>(),
-                };
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">symex_hook</span>(<span class="ident">invoke</span>, <span class="kw-2">&amp;</span><span class="ident">hook</span>, <span class="kw-2">&amp;</span><span class="ident">pretty_funcname</span>)<span class="question-mark">?</span> {
+            <span class="ident">ResolvedFunction</span>::<span class="ident">HookActive</span> { <span class="ident">hook</span>, <span class="ident">hooked_thing</span> } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">pretty_hookedthing</span> <span class="op">=</span> <span class="ident">hooked_thing</span>.<span class="ident">to_string</span>();
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">symex_hook</span>(<span class="ident">invoke</span>, <span class="kw-2">&amp;</span><span class="ident">hook</span>, <span class="kw-2">&amp;</span><span class="ident">pretty_hookedthing</span>)<span class="question-mark">?</span> {
                     <span class="comment">// Assume that `symex_hook()` has taken care of validating the hook return value as necessary</span>
                     <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">retval</span>) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">assign_bv_to_name</span>(<span class="ident">invoke</span>.<span class="ident">result</span>.<span class="ident">clone</span>(), <span class="ident">retval</span>)<span class="question-mark">?</span>;
                     },
                     <span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span> <span class="op">=</span><span class="op">&gt;</span> {},
                     <span class="ident">ReturnValue</span>::<span class="ident">Throw</span>(<span class="ident">bvptr</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                        <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}&quot;</span>, <span class="ident">pretty_funcname</span>, <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="ident">invoke</span>.<span class="ident">exception_label</span>), <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">name</span>);
+                        <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}&quot;</span>, <span class="ident">pretty_hookedthing</span>, <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="ident">invoke</span>.<span class="ident">exception_label</span>), <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">name</span>);
                         <span class="kw">return</span> <span class="self">self</span>.<span class="ident">catch_at_exception_label</span>(<span class="kw-2">&amp;</span><span class="ident">bvptr</span>, <span class="kw-2">&amp;</span><span class="ident">invoke</span>.<span class="ident">exception_label</span>);
                     },
                     <span class="ident">ReturnValue</span>::<span class="ident">Abort</span> <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">ReturnValue</span>::<span class="ident">Abort</span>)),
@@ -3641,7 +3718,7 @@
                 <span class="comment">// We had a normal return, so continue at the `return_label`</span>
                 <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">bbname</span> <span class="op">=</span> <span class="ident">invoke</span>.<span class="ident">return_label</span>.<span class="ident">clone</span>();
                 <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">instr</span> <span class="op">=</span> <span class="number">0</span>;
-                <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}&quot;</span>, <span class="ident">pretty_funcname</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="ident">old_bb_name</span>), <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">bbname</span>), <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">name</span>);
+                <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}&quot;</span>, <span class="ident">pretty_hookedthing</span>, <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="ident">old_bb_name</span>), <span class="ident">pretty_bb_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">bbname</span>), <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">name</span>);
                 <span class="self">self</span>.<span class="ident">symex_from_cur_loc_through_end_of_function</span>()
             },
             <span class="ident">ResolvedFunction</span>::<span class="ident">NoHookActive</span> { <span class="ident">called_funcname</span> } <span class="op">=</span><span class="op">&gt;</span> {
@@ -3690,7 +3767,7 @@
                         <span class="prelude-val">Some</span>(<span class="ident">callsite</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Received unexpected callsite {:?}&quot;</span>, <span class="ident">callsite</span>),
                     }
                 } <span class="kw">else</span> {
-                    <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">FunctionNotFound</span>(<span class="ident">called_funcname</span>.<span class="ident">to_owned</span>()))
+                    <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">FunctionNotFound</span>(<span class="self">self</span>.<span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">demangling</span>.<span class="ident">maybe_demangle</span>(<span class="ident">called_funcname</span>)))
                 }
             },
         }
@@ -3883,11 +3960,30 @@
 <span class="kw">enum</span> <span class="ident">ResolvedFunction</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> {
     <span class="ident">HookActive</span> {
         <span class="ident">hook</span>: <span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
-        <span class="ident">hooked_funcname</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">str</span><span class="op">&gt;</span>,  <span class="comment">// if this is `None`, we are hooking a function pointer rather than a call of a named function</span>
+        <span class="ident">hooked_thing</span>: <span class="ident">HookedThing</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>,
     },
     <span class="ident">NoHookActive</span> {
         <span class="ident">called_funcname</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">str</span>,
     },
+}
+
+<span class="kw">enum</span> <span class="ident">HookedThing</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// We are hooking the call of a function with this name</span>
+    <span class="ident">Function</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">str</span>),
+    <span class="doccomment">/// We are hooking the call of a function pointer</span>
+    <span class="ident">FunctionPtr</span>,
+    <span class="doccomment">/// We are hooking a call to inline assembly</span>
+    <span class="ident">InlineAsm</span>,
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="ident">Display</span> <span class="kw">for</span> <span class="ident">HookedThing</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">fmt</span>::<span class="ident">Formatter</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="prelude-ty">Result</span> {
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="ident">HookedThing</span>::<span class="ident">Function</span>(<span class="ident">funcname</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;function {:?}&quot;</span>, <span class="ident">funcname</span>),
+            <span class="ident">HookedThing</span>::<span class="ident">FunctionPtr</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;a function pointer&quot;</span>),
+            <span class="ident">HookedThing</span>::<span class="ident">InlineAsm</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;inline assembly&quot;</span>),
+        }
+    }
 }
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>

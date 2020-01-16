@@ -123,18 +123,47 @@
 <span id="123">123</span>
 <span id="124">124</span>
 <span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Functions related to the in-memory layout of data types.</span>
 
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">types</span>::{<span class="ident">Type</span>, <span class="ident">FPType</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::{<span class="ident">Arc</span>, <span class="ident">RwLock</span>};
 
 <span class="doccomment">/// our convention is that pointers are 64 bits</span>
 <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">POINTER_SIZE_BITS</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">64</span>;
 
-<span class="doccomment">/// Get the size of the `Type`, in bits</span>
+<span class="doccomment">/// Get the size of the `Type`, in bits.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Will panic if given an opaque struct type.</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size</span>(<span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
     <span class="kw">match</span> <span class="ident">ty</span> {
         <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="ident">bits</span> <span class="kw">as</span> <span class="ident">usize</span>,
@@ -151,6 +180,29 @@
         ),
         <span class="ident">Type</span>::<span class="ident">FPType</span>(<span class="ident">fpt</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">fp_size</span>(<span class="kw-2">*</span><span class="ident">fpt</span>),
         <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Not sure how to get the size of {:?}&quot;</span>, <span class="ident">ty</span>),
+    }
+}
+
+<span class="doccomment">/// Get the size of the `Type`, in bits.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Differs from the basic `size` method above in how it handles opaque struct</span>
+<span class="doccomment">/// types.</span>
+<span class="doccomment">/// While `size` will simply panic, this will search the given `Project` for a</span>
+<span class="doccomment">/// definition of the struct and use that, only panicking if the struct has no</span>
+<span class="doccomment">/// definition in the entire `Project`.</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size_opaque_aware</span>(<span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>, <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="ident">Project</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+    <span class="kw">match</span> <span class="ident">ty</span> {
+        <span class="ident">ty</span>@<span class="ident">Type</span>::<span class="ident">NamedStructType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">size_opaque_aware</span>(
+            <span class="kw-2">&amp;</span><span class="ident">proj</span>.<span class="ident">get_inner_struct_type_from_named</span>(<span class="ident">ty</span>)
+                .<span class="ident">expect</span>(<span class="string">&quot;Can&#39;t get size of struct type: it is opaque in the entire Project&quot;</span>)
+                .<span class="ident">read</span>()
+                .<span class="ident">unwrap</span>(),
+            <span class="ident">proj</span>
+        ),
+        <span class="ident">Type</span>::<span class="ident">ArrayType</span> { <span class="ident">element_type</span>, <span class="ident">num_elements</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">num_elements</span> <span class="op">*</span> <span class="ident">size_opaque_aware</span>(<span class="ident">element_type</span>, <span class="ident">proj</span>),
+        <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">element_type</span>, <span class="ident">num_elements</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">num_elements</span> <span class="op">*</span> <span class="ident">size_opaque_aware</span>(<span class="ident">element_type</span>, <span class="ident">proj</span>),
+        <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">element_types</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">ty</span><span class="op">|</span> <span class="ident">size_opaque_aware</span>(<span class="ident">ty</span>, <span class="ident">proj</span>)).<span class="ident">sum</span>(),
+        <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">size</span>(<span class="ident">ty</span>),  <span class="comment">// for all other cases, just fall back on the basic size()</span>
     }
 }
 

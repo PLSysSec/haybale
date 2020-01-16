@@ -302,6 +302,12 @@
 <span id="302">302</span>
 <span id="303">303</span>
 <span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Structures for defining and processing memory watchpoints</span>
 
@@ -311,6 +317,7 @@
 <span class="kw">use</span> <span class="ident">log</span>::<span class="ident">info</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashMap</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">FromIterator</span>;
 
 <span class="doccomment">/// A `Watchpoint` describes a segment of memory to watch.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Hash</span>)]</span>
@@ -349,19 +356,24 @@
 <span class="comment">//</span>
 <span class="comment">// Maps watchpoint name to `Watchpoint` object and a `bool` indicating whether</span>
 <span class="comment">// that `Watchpoint` is currently enabled.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Default</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Watchpoints</span>(<span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, (<span class="ident">Watchpoint</span>, <span class="ident">bool</span>)<span class="op">&gt;</span>);
 
+<span class="kw">impl</span> <span class="ident">FromIterator</span><span class="op">&lt;</span>(<span class="ident">String</span>, <span class="ident">Watchpoint</span>)<span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Watchpoints</span> {
+    <span class="kw">fn</span> <span class="ident">from_iter</span><span class="op">&lt;</span><span class="ident">I</span>: <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="ident">String</span>, <span class="ident">Watchpoint</span>)<span class="op">&gt;</span><span class="op">&gt;</span>(<span class="ident">iter</span>: <span class="ident">I</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="self">Self</span>(<span class="ident">iter</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">name</span>, <span class="ident">w</span>)<span class="op">|</span> (<span class="ident">name</span>, (<span class="ident">w</span>, <span class="bool-val">true</span>))).<span class="ident">collect</span>())
+    }
+}
+
 <span class="kw">impl</span> <span class="ident">Watchpoints</span> {
-    <span class="doccomment">/// Construct a new `Watchpoints` instance with no watchpoints</span>
+    <span class="doccomment">/// Construct a new `Watchpoints` instance with no watchpoints.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// To construct a new `Watchpoints` instance that contains some initial</span>
+    <span class="doccomment">/// watchpoints, note that `Watchpoints` implements `FromIterator&lt;(String, Watchpoint)&gt;`,</span>
+    <span class="doccomment">/// so you can for instance use `collect()` with an iterator over (watchpoint</span>
+    <span class="doccomment">/// name, watchpoint) pairs.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span>(<span class="ident">HashMap</span>::<span class="ident">new</span>())
-    }
-
-    <span class="doccomment">/// Construct a new `Watchpoints` instance from an iterator over (watchpoint</span>
-    <span class="doccomment">/// name, watchpoint) pairs</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">from_iter</span>(<span class="ident">iter</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="ident">String</span>, <span class="ident">Watchpoint</span>)<span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span>(<span class="ident">iter</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">name</span>, <span class="ident">w</span>)<span class="op">|</span> (<span class="ident">name</span>, (<span class="ident">w</span>, <span class="bool-val">true</span>))).<span class="ident">collect</span>())
     }
 
     <span class="doccomment">/// Add a memory watchpoint. It will be enabled unless/until</span>

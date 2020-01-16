@@ -109,8 +109,16 @@
 <span id="109">109</span>
 <span id="110">110</span>
 <span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="ident">Backend</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">demangling</span>::<span class="ident">Demangling</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">FunctionHooks</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">watchpoints</span>::<span class="ident">Watchpoint</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashMap</span>;
@@ -142,6 +150,10 @@
     <span class="doccomment">/// More watchpoints may be added or removed at any time with</span>
     <span class="doccomment">/// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.</span>
     <span class="kw">pub</span> <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">Watchpoint</span><span class="op">&gt;</span>,
+
+    <span class="doccomment">/// Controls the (attempted) demangling of function names in error messages</span>
+    <span class="doccomment">/// and backtraces.</span>
+    <span class="kw">pub</span> <span class="ident">demangling</span>: <span class="ident">Demangling</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
@@ -196,6 +208,7 @@
             <span class="ident">concretize_memcpy_lengths</span>,
             <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span>::<span class="ident">new</span>(),
             <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
+            <span class="ident">demangling</span>: <span class="ident">Demangling</span>::<span class="prelude-val">None</span>,
         }
     }
 }
@@ -218,6 +231,7 @@
             <span class="ident">concretize_memcpy_lengths</span>: <span class="ident">Concretize</span>::<span class="ident">Symbolic</span>,
             <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span>::<span class="ident">default</span>(),
             <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
+            <span class="ident">demangling</span>: <span class="ident">Demangling</span>::<span class="prelude-val">None</span>,
         }
     }
 }

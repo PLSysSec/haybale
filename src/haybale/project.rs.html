@@ -336,11 +336,19 @@
 <span id="336">336</span>
 <span id="337">337</span>
 <span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
 </pre><div class="example-wrap"><pre class="rust ">
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">cpp_demangle</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">demangling</span>::<span class="ident">try_cpp_demangle</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">Function</span>, <span class="ident">Module</span>, <span class="ident">Type</span>};
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">module</span>::{<span class="ident">GlobalAlias</span>, <span class="ident">GlobalVariable</span>};
-<span class="kw">use</span> <span class="ident">log</span>::<span class="ident">info</span>;
+<span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">info</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">rustc_demangle</span>::<span class="ident">demangle</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fs</span>::<span class="ident">DirEntry</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">io</span>;
@@ -513,7 +521,7 @@
         <span class="comment">// if we get to this point, we still haven&#39;t found the function;</span>
         <span class="comment">// maybe we were given a C++ demangled name</span>
         <span class="kw">for</span> <span class="ident">module</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">modules</span> {
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">f</span>) <span class="op">=</span> <span class="ident">module</span>.<span class="ident">functions</span>.<span class="ident">iter</span>().<span class="ident">find</span>(<span class="op">|</span><span class="ident">func</span><span class="op">|</span> <span class="ident">cpp_demangle</span>(<span class="kw-2">&amp;</span><span class="ident">func</span>.<span class="ident">name</span>).<span class="ident">as_ref</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">s</span><span class="op">|</span> <span class="ident">s</span>.<span class="ident">as_str</span>()) <span class="op">=</span><span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">name</span>)) {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">f</span>) <span class="op">=</span> <span class="ident">module</span>.<span class="ident">functions</span>.<span class="ident">iter</span>().<span class="ident">find</span>(<span class="op">|</span><span class="ident">func</span><span class="op">|</span> <span class="ident">try_cpp_demangle</span>(<span class="kw-2">&amp;</span><span class="ident">func</span>.<span class="ident">name</span>).<span class="ident">as_ref</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">s</span><span class="op">|</span> <span class="ident">s</span>.<span class="ident">as_str</span>()) <span class="op">=</span><span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">name</span>)) {
                 <span class="kw">match</span> <span class="ident">retval</span> {
                     <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">retval</span> <span class="op">=</span> <span class="prelude-val">Some</span>((<span class="ident">f</span>, <span class="ident">module</span>)),
                     <span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="ident">retmod</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}&quot;</span>, <span class="ident">name</span>, <span class="ident">retmod</span>.<span class="ident">name</span>, <span class="ident">module</span>.<span class="ident">name</span>),
@@ -552,7 +560,15 @@
                         <span class="kw">let</span> <span class="ident">def1</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">arc1</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>();
                         <span class="kw">let</span> <span class="ident">def2</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">arc2</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>();
                         <span class="kw">if</span> <span class="ident">def1</span> <span class="op">!</span><span class="op">=</span> <span class="ident">def2</span> {
-                            <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n&quot;</span>, <span class="ident">name</span>, <span class="ident">retmod</span>.<span class="ident">name</span>, <span class="ident">module</span>.<span class="ident">name</span>, <span class="ident">def1</span>, <span class="ident">def2</span>);
+                            <span class="comment">// if they don&#39;t agree, we merely warn rather than panicking.</span>
+                            <span class="comment">// For instance, if the struct contains an anonymous union as one of its members,</span>
+                            <span class="comment">// duplicate definitions of the struct will appear to conflict due to the</span>
+                            <span class="comment">// anonymous union being numbered differently in the two modules, even if the</span>
+                            <span class="comment">// union has the same contents in both modules.</span>
+                            <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n  We will (arbitrarily) use the first one.&quot;</span>, <span class="ident">name</span>, <span class="ident">retmod</span>.<span class="ident">name</span>, <span class="ident">module</span>.<span class="ident">name</span>, <span class="ident">def1</span>, <span class="ident">def2</span>);
+                            <span class="comment">// then we&#39;ll do nothing, leaving (arbitrarily) the first definition we found</span>
+                        } <span class="kw">else</span> {
+                            <span class="comment">// do nothing, leaving (arbitrarily) the first definition we found</span>
                         }
                     },
                 };
