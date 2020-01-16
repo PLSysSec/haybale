@@ -1,5 +1,7 @@
+//! The `Config` structure for configuring `haybale`, and other associated definitions
+
 use crate::backend::Backend;
-use crate::demangling::Demangling;
+pub use crate::demangling::Demangling;
 use crate::function_hooks::FunctionHooks;
 use crate::watchpoints::Watchpoint;
 use std::collections::HashMap;

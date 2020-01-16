@@ -17,10 +17,9 @@ pub use symex::*;
 pub mod layout;
 use layout::*;
 
-mod config;
-pub use config::*;
+pub mod config;
+pub use config::Config;
 mod demangling;
-pub use demangling::Demangling;
 pub mod function_hooks;
 mod hooks;
 pub mod alloc_utils;
