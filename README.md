@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.2.0"
+haybale = "0.2.1"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
@@ -256,6 +256,21 @@ solver (via the Rust [`boolector`] crate).
 
 ## Changelog
 
+### Version 0.2.1 (Jan 15, 2020)
+
+- New `HAYBALE_DUMP_PATH` and `HAYBALE_DUMP_VARS` environment-variable options
+  - `HAYBALE_DUMP_PATH`: if set to `1`, then on error, `haybale` will print a
+  description of the path to the error: every LLVM basic block touched from
+  the top of the function until the error location, in order.
+  - `HAYBALE_DUMP_VARS`: if set to `1`, then on error, `haybale` will print the
+  latest value assigned to each variable in the function containing the error.
+- New setting `Config.demangling` allows you to apply C++ or Rust demangling
+to function names in error messages and backtraces
+- Support hooking calls to inline assembly, with some limitations inherited
+from [`llvm-ir`] (see comments on [`FunctionHooks::add_inline_asm_hook()`])
+- Built-in support for (the most common cases of) the `llvm.bswap` intrinsic
+- Other tiny tweaks - e.g., downgrade one panic to a warning
+
 ### Version 0.2.0 (Jan 8, 2020)
 
 - Support LLVM `extractvalue` and `insertvalue` instructions
@@ -349,6 +364,7 @@ Initial release!
 [`State::add_mem_watchpoint()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.add_mem_watchpoint
 [`FunctionHooks::add_cpp_demangled()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_cpp_demangled
 [`FunctionHooks::add_rust_demangled()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_rust_demangled
+[`FunctionHooks::add_inline_asm_hook()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_inline_asm_hook
 [`function_hooks`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/index.html
 [`generic_stub_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.generic_stub_hook.html
 [`abort_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.abort_hook.html
