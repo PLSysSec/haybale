@@ -80,7 +80,7 @@ pub struct LocationDescription<'p> {
 }
 
 /// Denotes either a particular instruction in a basic block, or its terminator.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Debug)]
 pub enum BBInstrIndex {
     /// Index of the instruction within the basic block. 0-indexed, so 0 means the first instruction of the basic block.
     Instr(usize),
@@ -209,7 +209,13 @@ impl<'p> Location<'p> {
     /// terminator, or this function will panic.
     pub(crate) fn inc(&mut self) {
         match self.instr {
-            BBInstrIndex::Instr(i) => self.instr = BBInstrIndex::Instr(i+1),
+            BBInstrIndex::Instr(i) => {
+                if i+1 >= self.bb.instrs.len() {
+                    self.instr = BBInstrIndex::Terminator;
+                } else {
+                    self.instr = BBInstrIndex::Instr(i+1);
+                }
+            },
             BBInstrIndex::Terminator => panic!("called inc() on a Location pointing to a terminator"),
         }
     }

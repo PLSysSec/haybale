@@ -152,31 +152,45 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
     fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        let inst = match self.state.cur_loc.instr {
-            BBInstrIndex::Instr(i) => i,
-            BBInstrIndex::Terminator => self.state.cur_loc.bb.instrs.len(),  // this will be too large, so `symex_from_inst_in_cur_bb_through_end_of_function()` will start with the terminator
-        };
-        self.symex_from_inst_in_cur_bb_through_end_of_function(inst)
+        self.symex_from_inst_in_cur_bb_through_end_of_function(self.state.cur_loc.instr)
     }
 
     /// Symex the current bb, through the rest of the function.
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
     fn symex_from_cur_bb_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        self.symex_from_inst_in_cur_bb_through_end_of_function(0)
+        self.symex_from_inst_in_cur_bb_through_end_of_function(BBInstrIndex::Instr(0))
     }
 
-    /// Symex starting from the given `inst` index in the current bb, through the
-    /// rest of the function.
+    /// Symex starting from the given index in the current bb, through the rest
+    /// of the function.
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
     ///
-    /// If `inst` is too large to be a valid instruction index for the current
-    /// bb, we will start at the current bb's terminator instead.
-    fn symex_from_inst_in_cur_bb_through_end_of_function(&mut self, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
+    /// `inst` must be a valid instruction index for the current bb, with the
+    /// exception that if the current bb contains no instructions (only a
+    /// terminator), `BBInstrIndex::Instr(0)` will still be considered valid, and
+    /// be treated equivalently to `BBInstrIndex::Terminator`.
+    fn symex_from_inst_in_cur_bb_through_end_of_function(&mut self, inst: BBInstrIndex) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing basic block {:?} in function {}", self.state.cur_loc.bb.name, self.state.cur_loc.func.name);
+        let num_insts = self.state.cur_loc.bb.instrs.len();
+        let insts_to_skip = match inst {
+            BBInstrIndex::Instr(0) if num_insts == 0 => 0,  // considered valid, see notes above
+            BBInstrIndex::Instr(i) => {
+                assert!(
+                    i < num_insts,
+                    "Invalid `inst` passed to symex_from_inst_in_cur_bb_through_end_of_function: asked for (0-indexed) instruction {}, but current bb ({} in function {:?}) has only {} instructions plus a terminator",
+                    i,
+                    self.state.cur_loc.bb.name,
+                    self.state.cur_loc.func.name,
+                    num_insts,
+                );
+                i
+            },
+            BBInstrIndex::Terminator => num_insts,  // skip all the instructions, go right to the terminator
+        };
         let mut first_iter = true;  // is it the first iteration of the for loop
-        for (instnum, inst) in self.state.cur_loc.bb.instrs.iter().enumerate().skip(inst) {
+        for (instnum, inst) in self.state.cur_loc.bb.instrs.iter().enumerate().skip(insts_to_skip) {
             self.state.cur_loc.instr = BBInstrIndex::Instr(instnum);
             self.state.cur_loc.source_loc = inst.get_debug_loc().as_ref();
             if first_iter {
@@ -267,23 +281,21 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
     fn symex_from_cur_loc(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        let inst = match self.state.cur_loc.instr {
-            BBInstrIndex::Instr(i) => i,
-            BBInstrIndex::Terminator => self.state.cur_loc.bb.instrs.len(),  // this will be too large, so `symex_from_inst_in_cur_bb()` will start with the terminator
-        };
-        self.symex_from_inst_in_cur_bb(inst)
+        self.symex_from_inst_in_cur_bb(self.state.cur_loc.instr)
     }
 
-    /// Symex starting from the given `inst` index in the current bb, returning
-    /// (using the saved callstack) all the way back to the end of the top-level
+    /// Symex starting from the given index in the current bb, returning (using
+    /// the saved callstack) all the way back to the end of the top-level
     /// function.
     ///
-    /// If `inst` is too large to be a valid instruction index for the bb, we
-    /// will start at the bb's terminator instead.
+    /// `inst` must be a valid instruction index for the current bb, with the
+    /// exception that if the current bb contains no instructions (only a
+    /// terminator), `BBInstrIndex::Instr(0)` will still be considered valid, and
+    /// be treated equivalently to `BBInstrIndex::Terminator`.
     ///
     /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_from_inst_in_cur_bb(&mut self, inst: usize) -> Result<Option<ReturnValue<B::BV>>> {
+    fn symex_from_inst_in_cur_bb(&mut self, inst: BBInstrIndex) -> Result<Option<ReturnValue<B::BV>>> {
         match self.symex_from_inst_in_cur_bb_through_end_of_function(inst)? {
             Some(ReturnValue::Throw(bvptr)) => {
                 // pop callsites until we find an `invoke` instruction that can direct us to a catch block
@@ -1319,7 +1331,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 Ok(()) => {
                     if found_landingpad {
                         // continue executing the block normally
-                        return self.symex_from_inst_in_cur_bb_through_end_of_function(instnum+1);
+                        self.state.cur_loc.inc();
+                        return self.symex_from_cur_loc_through_end_of_function();
                     } else {
                         // move on to the next instruction in our for loop
                         continue;
@@ -1847,7 +1860,7 @@ mod tests {
         assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
             ("simple_caller", 1, Instr(0)),
             ("simple_callee", 2, Instr(0)),
-            ("simple_caller", 1, Instr(1)),
+            ("simple_caller", 1, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1865,7 +1878,7 @@ mod tests {
         assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
             (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
             (callee_modname, "simple_callee", 2, Instr(0)),
-            (caller_modname, "cross_module_simple_caller", 1, Instr(1)),
+            (caller_modname, "cross_module_simple_caller", 1, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1883,7 +1896,7 @@ mod tests {
             ("conditional_caller", 2, Instr(0)),
             ("conditional_caller", 4, Instr(0)),
             ("simple_callee", 2, Instr(0)),
-            ("conditional_caller", 4, Instr(1)),
+            ("conditional_caller", 4, Terminator),
             ("conditional_caller", 8, Instr(0)),
         ]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 6, 8]));
@@ -1942,8 +1955,8 @@ mod tests {
             ("nested_caller", 2, Instr(0)),
             ("simple_caller", 1, Instr(0)),
             ("simple_callee", 2, Instr(0)),
-            ("simple_caller", 1, Instr(1)),
-            ("nested_caller", 2, Instr(2)),
+            ("simple_caller", 1, Terminator),
+            ("nested_caller", 2, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
     }
@@ -1962,8 +1975,8 @@ mod tests {
             (caller_modname, "cross_module_nested_near_caller", 2, Instr(0)),
             (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
             (callee_modname, "simple_callee", 2, Instr(0)),
-            (caller_modname, "cross_module_simple_caller", 1, Instr(1)),
-            (caller_modname, "cross_module_nested_near_caller", 2, Instr(2)),
+            (caller_modname, "cross_module_simple_caller", 1, Terminator),
+            (caller_modname, "cross_module_nested_near_caller", 2, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
@@ -1982,8 +1995,8 @@ mod tests {
             (caller_modname, "cross_module_nested_far_caller", 2, Instr(0)),
             (callee_modname, "simple_caller", 1, Instr(0)),
             (callee_modname, "simple_callee", 2, Instr(0)),
-            (callee_modname, "simple_caller", 1, Instr(1)),
-            (caller_modname, "cross_module_nested_far_caller", 2, Instr(2)),
+            (callee_modname, "simple_caller", 1, Terminator),
+            (caller_modname, "cross_module_nested_far_caller", 2, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
     }
