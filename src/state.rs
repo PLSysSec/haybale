@@ -107,6 +107,29 @@ pub fn pretty_var_name(name: &Name) -> String {
     name.to_string()  // use the `Display` trait
 }
 
+pub fn pretty_source_loc(source_loc: &DebugLoc) -> String {
+    let pretty_directory = match &source_loc.directory {
+        Some(dir) => dir,
+        None => "",
+    };
+    let need_slash = match &source_loc.directory {
+        Some(dir) => !dir.is_empty() && !dir.ends_with("/"),
+        None => false,
+    };
+    let pretty_filename = match &source_loc.filename as &str {
+        "" => "<no filename available>",
+        filename => &filename,
+    };
+    let pretty_column = match source_loc.col {
+        Some(col) => format!(", col {}", col),
+        None => String::new(),
+    };
+    format!("{}{}{}, line {}{}",
+        pretty_directory, if need_slash { "/" } else { "" }, pretty_filename,
+        source_loc.line, pretty_column,
+    )
+}
+
 impl<'p> fmt::Debug for LocationDescription<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{{}: {} {}, {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname), self.instr)
@@ -1117,26 +1140,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         locdescrs.into_iter().zip(1..).map(|(locdescr, framenum)| {
             match locdescr.source_loc {
                 Some(source_loc) if self.config.print_source_info => {
-                    let pretty_directory = match &source_loc.directory {
-                        Some(dir) => dir,
-                        None => "",
-                    };
-                    let need_slash = match &source_loc.directory {
-                        Some(dir) => !dir.is_empty() && !dir.ends_with("/"),
-                        None => false,
-                    };
-                    let pretty_filename = match &source_loc.filename as &str {
-                        "" => "<no filename available>",
-                        filename => &filename,
-                    };
-                    let pretty_column = match source_loc.col {
-                        Some(col) => format!(", col {}", col),
-                        None => String::new(),
-                    };
-                    format!("  #{}: {:?}\n         ({}{}{}, line {}{})\n",
-                        framenum, locdescr,
-                        pretty_directory, if need_slash { "/" } else { "" }, pretty_filename,
-                        source_loc.line, pretty_column,
+                    format!("  #{}: {:?}\n         ({})\n",
+                        framenum, locdescr, pretty_source_loc(source_loc)
                     )
                 },
                 _ => format!("  #{}: {:?}\n", framenum, locdescr),
