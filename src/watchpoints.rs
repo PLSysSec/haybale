@@ -199,6 +199,7 @@ mod tests {
             func,
             bbname: "test_bb".to_owned().into(),
             instr: BBInstrIndex::Instr(0),
+            source_loc: None,
         };
         State::new(project, start_loc, Config::default())
     }

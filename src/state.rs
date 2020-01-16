@@ -56,7 +56,7 @@ pub struct State<'p, B: Backend> {
     /// (efficiently, thanks to the incremental solving capabilities of Boolector).
     backtrack_points: Vec<BacktrackPoint<'p, B>>,
     /// Log of the basic blocks which have been executed to get to this point
-    path: Vec<PathEntry>,
+    path: Vec<PathEntry<'p>>,
     /// Memory watchpoints (segments of memory to log reads/writes of).
     ///
     /// These will persist across backtracking - i.e., backtracking will not
@@ -71,11 +71,12 @@ pub struct State<'p, B: Backend> {
 /// For a richer representation of a code location, see
 /// [`Location`](struct.Location.html).
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct LocationDescription {
+pub struct LocationDescription<'p> {
     pub modname: String,
     pub funcname: String,
     pub bbname: Name,
     pub instr: BBInstrIndex,
+    pub source_loc: Option<&'p DebugLoc>,
 }
 
 /// Denotes either a particular instruction in a basic block, or its terminator.
@@ -106,7 +107,7 @@ pub fn pretty_var_name(name: &Name) -> String {
     name.to_string()  // use the `Display` trait
 }
 
-impl fmt::Debug for LocationDescription {
+impl<'p> fmt::Debug for LocationDescription<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{{}: {} {}, {}}}", self.modname, self.funcname, pretty_bb_name(&self.bbname), self.instr)
     }
@@ -122,9 +123,9 @@ impl fmt::Debug for LocationDescription {
 /// Since the segment stays within a single basic block, the end of the segment
 /// must be somewhere within that basic block.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct PathEntry(pub LocationDescription);
+pub struct PathEntry<'p>(pub LocationDescription<'p>);
 
-impl fmt::Debug for PathEntry {
+impl<'p> fmt::Debug for PathEntry<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{{}: {} {}, starting at {}}}", self.0.modname, self.0.funcname, pretty_bb_name(&self.0.bbname), self.0.instr)
     }
@@ -137,6 +138,8 @@ pub struct Location<'p> {
     pub func: &'p Function,
     pub bbname: Name,
     pub instr: BBInstrIndex,
+    /// Source location which this IR location corresponds to, if available.
+    pub source_loc: Option<&'p DebugLoc>,
 }
 
 /// Implementation of `PartialEq` assumes that module and function names are unique
@@ -158,13 +161,14 @@ impl<'p> fmt::Debug for Location<'p> {
     }
 }
 
-impl<'p> From<Location<'p>> for LocationDescription {
+impl<'p> From<Location<'p>> for LocationDescription<'p> {
     fn from(loc: Location<'p>) -> LocationDescription {
         LocationDescription {
             modname: loc.module.name.clone(),
             funcname: loc.func.name.clone(),
             bbname: loc.bbname,
             instr: loc.instr,
+            source_loc: loc.source_loc,
         }
     }
 }
@@ -1067,6 +1071,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             func: self.cur_loc.func,
             bbname: bb_to_enter,
             instr: BBInstrIndex::Instr(0),
+            source_loc: None,
         };
         self.backtrack_points.push(BacktrackPoint {
             loc: backtrack_loc,
@@ -1110,7 +1115,32 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             self.maybe_demangle_locdescr(locdescr);
         }
         locdescrs.into_iter().zip(1..).map(|(locdescr, framenum)| {
-            format!("  #{}: {:?}\n", framenum, locdescr)
+            match locdescr.source_loc {
+                Some(source_loc) if self.config.print_source_info => {
+                    let pretty_directory = match &source_loc.directory {
+                        Some(dir) => dir,
+                        None => "",
+                    };
+                    let need_slash = match &source_loc.directory {
+                        Some(dir) => !dir.is_empty() && !dir.ends_with("/"),
+                        None => false,
+                    };
+                    let pretty_filename = match &source_loc.filename as &str {
+                        "" => "<no filename available>",
+                        filename => &filename,
+                    };
+                    let pretty_column = match source_loc.col {
+                        Some(col) => format!(", col {}", col),
+                        None => String::new(),
+                    };
+                    format!("  #{}: {:?}\n         ({}{}{}, line {}{})\n",
+                        framenum, locdescr,
+                        pretty_directory, if need_slash { "/" } else { "" }, pretty_filename,
+                        source_loc.line, pretty_column,
+                    )
+                },
+                _ => format!("  #{}: {:?}\n", framenum, locdescr),
+            }
         }).collect()
     }
 
@@ -1162,6 +1192,7 @@ mod tests {
             func,
             bbname: "test_bb".to_owned().into(),
             instr: BBInstrIndex::Instr(0),
+            source_loc: None,
         };
         State::new(project, start_loc, Config::default())
     }
@@ -1409,6 +1440,7 @@ mod tests {
             funcname: "test_func".into(),
             bbname: "test_bb".into(),  // the `blank_state` comes with this as the current bb name
             instr: BBInstrIndex::Instr(0),
+            source_loc: None,
         })]);
 
         // check that the constraint x < 8 was removed: we're sat again

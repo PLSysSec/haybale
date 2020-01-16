@@ -65,6 +65,12 @@ clang -S -emit-llvm source.c -o source.ll
 If the program or function you want to analyze is written in Rust, you can likewise
 use `rustc`'s `--emit=llvm-bc` and `--emit=llvm-ir` flags.
 
+Note that in order for `haybale` to print source-location information (e.g.,
+source filename and line number) in error messages and backtraces, the LLVM
+bitcode will need to include debuginfo.
+You can ensure debuginfo is included by passing the `-g` flag to `clang`,
+`clang++`, or `rustc` when generating bitcode.
+
 ### 3. Create a Project
 
 A `haybale` [`Project`] contains all of the code currently being analyzed, which

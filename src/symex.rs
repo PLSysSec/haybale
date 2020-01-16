@@ -39,6 +39,7 @@ pub fn symex_function<'p, B: Backend>(
         func,
         bbname: bb.name.clone(),
         instr: BBInstrIndex::Instr(0),
+        source_loc: None,  // this will be updated once we get there and begin symex of the instruction
     };
     let mut state = State::new(project, start_loc, config);
     let bvparams: Vec<_> = func.parameters.iter().map(|param| {
@@ -176,6 +177,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         self.state.record_path_entry();
         for (instnum, inst) in bb.instrs.iter().enumerate().skip(inst) {
             self.state.cur_loc.instr = BBInstrIndex::Instr(instnum);
+            self.state.cur_loc.source_loc = inst.get_debug_loc().as_ref();
             let result = if let Ok(binop) = inst.clone().try_into() {
                 self.symex_binop(&binop)
             } else {
@@ -218,6 +220,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             };
         }
         self.state.cur_loc.instr = BBInstrIndex::Terminator;
+        self.state.cur_loc.source_loc = bb.term.get_debug_loc().as_ref();
         match &bb.term {
             Terminator::Ret(ret) => self.symex_return(ret).map(Some),
             Terminator::Br(br) => self.symex_br(br),
@@ -912,6 +915,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         func: callee,
                         bbname: bb.name.clone(),
                         instr: BBInstrIndex::Instr(0),
+                        source_loc: None,  // this will be updated once we get there and begin symex of the instruction
                     };
                     for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
@@ -1207,6 +1211,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         func: callee,
                         bbname: bb.name.clone(),
                         instr: BBInstrIndex::Instr(0),
+                        source_loc: None,  // this will be updated once we get there and begin symex of the instruction
                     };
                     for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
@@ -1289,6 +1294,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         let mut found_landingpad = false;
         for (instnum, inst) in bb.instrs.iter().enumerate() {
             self.state.cur_loc.instr = BBInstrIndex::Instr(instnum);
+            self.state.cur_loc.source_loc = inst.get_debug_loc().as_ref();
             let result = match inst {
                 Instruction::Phi(phi) => self.symex_phi(phi),  // phi instructions are allowed before the landingpad
                 Instruction::LandingPad(lp) => { found_landingpad = true; self.symex_landing_pad(lp, thrown_ptr, type_index) },
@@ -1472,9 +1478,27 @@ mod tests {
     }
 
     #[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
-    struct Path(Vec<PathEntry>);
+    struct Path<'p>(Vec<PathEntry<'p>>);
 
-    impl fmt::Debug for Path {
+    impl<'p> Path<'p> {
+        /// shouldn't be necessary, but to satisfy the borrow checker, this
+        /// function converts a `Path` over a particular lifetime to a `Path`
+        /// over any arbitrary desired lifetime by stripping out the
+        /// `source_loc`s
+        fn strip_source_locs<'a>(self) -> Path<'a> {
+            Path(self.0.into_iter().map(|pathentry|
+                PathEntry(LocationDescription {
+                    modname: pathentry.0.modname,
+                    funcname: pathentry.0.funcname,
+                    bbname: pathentry.0.bbname,
+                    instr: pathentry.0.instr,
+                    source_loc: None,
+                })
+            ).collect())
+        }
+    }
+
+    impl<'p> fmt::Debug for Path<'p> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if self.0.is_empty() {
                 write!(f, "<empty path>")?;
@@ -1492,7 +1516,7 @@ mod tests {
     }
 
     /// Build a path from bbnames, that stays in a single function in the given module
-    fn path_from_bbnames(modname: &str, funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path {
+    fn path_from_bbnames<'p>(modname: &str, funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path<'p> {
         let mut vec = vec![];
         for bbname in bbnames {
             vec.push(PathEntry(LocationDescription {
@@ -1500,18 +1524,19 @@ mod tests {
                 funcname: funcname.to_owned(),
                 bbname,
                 instr: BBInstrIndex::Instr(0),
+                source_loc: None,
             }));
         }
         Path(vec)
     }
 
     /// Like `path_from_bbnames`, but allows you to specify bbs by number rather than `Name`
-    fn path_from_bbnums(modname: &str, funcname: &str, bbnums: impl IntoIterator<Item = usize>) -> Path {
+    fn path_from_bbnums<'p>(modname: &str, funcname: &str, bbnums: impl IntoIterator<Item = usize>) -> Path<'p> {
         path_from_bbnames(modname, funcname, bbnums.into_iter().map(Name::from))
     }
 
     /// Build a path from (bbnum, instr) pairs, that stays in a single function in the given module
-    fn path_from_bbnum_instr_pairs(modname: &str, funcname: &str, pairs: impl IntoIterator<Item = (usize, usize)>) -> Path {
+    fn path_from_bbnum_instr_pairs<'p>(modname: &str, funcname: &str, pairs: impl IntoIterator<Item = (usize, usize)>) -> Path<'p> {
         let mut vec = vec![];
         for (bbnum, instr) in pairs {
             vec.push(PathEntry(LocationDescription {
@@ -1519,13 +1544,14 @@ mod tests {
                 funcname: funcname.to_owned(),
                 bbname: Name::from(bbnum),
                 instr: BBInstrIndex::Instr(instr),
+                source_loc: None,
             }));
         }
         Path(vec)
     }
 
     /// Build a path from (funcname, bbname, instr) tuples, that stays in the module with the given modname
-    fn path_from_tuples_with_bbnames<'a>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, Name, usize)>) -> Path {
+    fn path_from_tuples_with_bbnames<'a, 'p>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, Name, usize)>) -> Path<'p> {
         let mut vec = vec![];
         for (funcname, bbname, instr) in tuples {
             vec.push(PathEntry(LocationDescription {
@@ -1533,18 +1559,19 @@ mod tests {
                 funcname: funcname.to_owned(),
                 bbname,
                 instr: BBInstrIndex::Instr(instr),
+                source_loc: None,
             }));
         }
         Path(vec)
     }
 
     /// Build a path from (funcname, bbnum, instr) tuples, that stays in the module with the given modname
-    fn path_from_tuples_with_bbnums<'a>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, usize, usize)>) -> Path {
+    fn path_from_tuples_with_bbnums<'a, 'p>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, usize, usize)>) -> Path<'p> {
         path_from_tuples_with_bbnames(modname, tuples.into_iter().map(|(f, bbnum, instr)| (f, Name::from(bbnum), instr)))
     }
 
     /// Build a path from (modname, funcname, bbnum, instr) tuples
-    fn path_from_tuples_varying_modules<'a>(tuples: impl IntoIterator<Item = (&'a str, &'a str, usize, usize)>) -> Path {
+    fn path_from_tuples_varying_modules<'a, 'p>(tuples: impl IntoIterator<Item = (&'a str, &'a str, usize, usize)>) -> Path<'p> {
         let mut vec = vec![];
         for (modname, funcname, bbnum, instr) in tuples {
             vec.push(PathEntry(LocationDescription {
@@ -1552,6 +1579,7 @@ mod tests {
                 funcname: funcname.to_owned(),
                 bbname: Name::from(bbnum),
                 instr: BBInstrIndex::Instr(instr),
+                source_loc: None,
             }));
         }
         Path(vec)
@@ -1574,10 +1602,12 @@ mod tests {
     }
 
     impl<'p, B: Backend> Iterator for PathIterator<'p, B> where B: 'p {
-        type Item = Path;
+        type Item = Path<'p>;
 
         fn next(&mut self) -> Option<Self::Item> {
-            self.em.next().map(|_| Path(self.em.state().get_path().clone()))
+            self.em.next().map(|_|
+                Path(self.em.state().get_path().clone()).strip_source_locs()
+            )
         }
     }
 

@@ -5,6 +5,10 @@ use crate::watchpoints::Watchpoint;
 use std::collections::HashMap;
 
 /// Various settings which affect how the symbolic execution is performed.
+///
+/// You should not depend on this being an exhaustive list of settings: new
+/// settings may be added even in a point release (that is, without incrementing
+/// the major or minor version).
 #[derive(Clone)]
 pub struct Config<'p, B> where B: Backend {
     /// Maximum number of times to execute any given line of LLVM IR.
@@ -35,6 +39,19 @@ pub struct Config<'p, B> where B: Backend {
     /// Controls the (attempted) demangling of function names in error messages
     /// and backtraces.
     pub demangling: Demangling,
+
+    /// If `true`, then `haybale` will attempt to print source location info
+    /// (e.g., filename, line number, column number) along with the LLVM location
+    /// info in error messages and backtraces.
+    ///
+    /// For this to work, the LLVM bitcode must contain debuginfo. For example,
+    /// C/C++ or Rust sources must be compiled with the `-g` flag to `clang`,
+    /// `clang++`, or `rustc`.
+    ///
+    /// In addition, some LLVM instructions simply don't correspond to a
+    /// particular source location; e.g., they may be just setting up the stack
+    /// frame for a function.
+    pub print_source_info: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -90,6 +107,7 @@ impl<'p, B: Backend> Config<'p, B> {
             function_hooks: FunctionHooks::new(),
             initial_mem_watchpoints: HashMap::new(),
             demangling: Demangling::None,
+            print_source_info: true,
         }
     }
 }
@@ -113,6 +131,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             function_hooks: FunctionHooks::default(),
             initial_mem_watchpoints: HashMap::new(),
             demangling: Demangling::None,
+            print_source_info: true,
         }
     }
 }
