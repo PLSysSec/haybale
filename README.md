@@ -52,8 +52,11 @@ You can find it on [crates.io](https://crates.io/crates/haybale) as `haybale`.
 
 As one final note, the [official documentation](https://PLSysSec.github.io/haybale),
 including many of the links scattered throughout the rest of this README, is
-for the `master` branch. It should mostly also apply to this branch (at least
-as of this writing), but there is no guarantee that the two will perfectly line up.
+for the (latest stable release of the) `master` branch.
+There will be some differences between the official docs and the `llvm-8`
+branch of `haybale`.
+You can always generate local documentation for your exact version of
+`haybale` with `cargo doc --open`.
 
 ### 2. Acquire bitcode to analyze
 
@@ -248,19 +251,21 @@ println!("Parameter values for which foo returns 0: a = {}, b = {}", a, b);
 ## Documentation
 
 Full documentation for the `master` branch of `haybale` can be found
-[here](https://PLSysSec.github.io/haybale), and should mostly also apply to
-this branch (at least as of this writing), but there is no guarantee that the
-two will perfectly line up. In any case, you can always generate local
-documentation for your exact version of `haybale` with `cargo doc --open`.
+[here](https://PLSysSec.github.io/haybale), but there will be some
+differences between those docs and the `llvm-8` branch (see "Compatibility"
+below).
+Instead, you can always generate local documentation for your exact version
+of `haybale` with `cargo doc --open`.
 
 ## Compatibility
 
 You're looking at the `llvm-8` branch of `haybale`, which only supports LLVM 8.
 The `master` branch of `haybale` currently only supports LLVM 9.
-This `llvm-8` branch is approximately at feature parity with `haybale` version
-0.2.0, as of this writing.
-However, there is no promise that future `haybale` features will be backported
-to the `llvm-8` branch.
+This `llvm-8` branch is approximately at feature parity with `haybale`
+version 0.2.1, and will likely be stuck at that point indefinitely unless
+there is demand for additional features.
+If there is a particular feature you would like backported to the `llvm-8`
+branch, please open an issue to discuss!
 
 `haybale` works on stable Rust, and requires Rust 1.36+.
 
