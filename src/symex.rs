@@ -151,28 +151,21 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Symex from the current `Location` through the rest of the function.
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
-    fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        self.symex_from_inst_in_cur_bb_through_end_of_function(self.state.cur_loc.instr)
-    }
-
-    /// Symex starting from the given index in the current bb, through the rest
-    /// of the function.
-    /// Returns the `ReturnValue` representing the return value of the function,
-    /// or `Ok(None)` if no possible paths were found.
     ///
-    /// `inst` must be a valid instruction index for the current bb, with the
-    /// exception that if the current bb contains no instructions (only a
-    /// terminator), `BBInstrIndex::Instr(0)` will still be considered valid, and
-    /// be treated equivalently to `BBInstrIndex::Terminator`.
-    fn symex_from_inst_in_cur_bb_through_end_of_function(&mut self, inst: BBInstrIndex) -> Result<Option<ReturnValue<B::BV>>> {
+    /// The current instruction index (`self.state.cur_loc.instr`) must be a
+    /// valid instruction index for the current bb, with the exception that if
+    /// the current bb contains no instructions (only a terminator),
+    /// `BBInstrIndex::Instr(0)` will still be considered valid, and be treated
+    /// equivalently to `BBInstrIndex::Terminator`.
+    fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing basic block {:?} in function {}", self.state.cur_loc.bb.name, self.state.cur_loc.func.name);
         let num_insts = self.state.cur_loc.bb.instrs.len();
-        let insts_to_skip = match inst {
+        let insts_to_skip = match self.state.cur_loc.instr {
             BBInstrIndex::Instr(0) if num_insts == 0 => 0,  // considered valid, see notes above
             BBInstrIndex::Instr(i) => {
                 assert!(
                     i < num_insts,
-                    "Invalid `inst` passed to symex_from_inst_in_cur_bb_through_end_of_function: asked for (0-indexed) instruction {}, but current bb ({} in function {:?}) has only {} instructions plus a terminator",
+                    "Invalid current instruction index: got (0-indexed) instruction {}, but current bb ({} in function {:?}) has only {} instructions plus a terminator",
                     i,
                     self.state.cur_loc.bb.name,
                     self.state.cur_loc.func.name,
@@ -280,7 +273,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Returns the `ReturnValue` representing the final return value, or
     /// `Ok(None)` if no possible paths were found.
     fn symex_from_cur_loc(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        match self.symex_from_inst_in_cur_bb_through_end_of_function(self.state.cur_loc.instr)? {
+        match self.symex_from_cur_loc_through_end_of_function()? {
             Some(ReturnValue::Throw(bvptr)) => {
                 // pop callsites until we find an `invoke` instruction that can direct us to a catch block
                 loop {
