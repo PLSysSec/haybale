@@ -91,8 +91,8 @@ pub enum BBInstrIndex {
 impl fmt::Display for BBInstrIndex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Instr(i) => write!(f, "instr {}", i),
-            Self::Terminator => write!(f, "terminator"),
+            BBInstrIndex::Instr(i) => write!(f, "instr {}", i),
+            BBInstrIndex::Terminator => write!(f, "terminator"),
         }
     }
 }
