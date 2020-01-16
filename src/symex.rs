@@ -108,7 +108,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
         let retval = if self.fresh {
             self.fresh = false;
             info!("Beginning symex in function {:?}", self.state.cur_loc.func.name);
-            self.symex_from_cur_bb_through_end_of_function()
+            self.symex_from_cur_loc_through_end_of_function()
         } else {
             debug!("ExecutionManager: requesting next path");
             self.backtrack_and_continue()
@@ -153,13 +153,6 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// or `Ok(None)` if no possible paths were found.
     fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         self.symex_from_inst_in_cur_bb_through_end_of_function(self.state.cur_loc.instr)
-    }
-
-    /// Symex the current bb, through the rest of the function.
-    /// Returns the `ReturnValue` representing the return value of the function,
-    /// or `Ok(None)` if no possible paths were found.
-    fn symex_from_cur_bb_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        self.symex_from_inst_in_cur_bb_through_end_of_function(BBInstrIndex::Instr(0))
     }
 
     /// Symex starting from the given index in the current bb, through the rest
@@ -942,7 +935,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
                     info!("Entering function {:?} in module {:?}", called_funcname, &callee_mod.name);
-                    let returned_bv = self.symex_from_cur_bb_through_end_of_function()?.ok_or(Error::Unsat)?;  // if symex_from_bb_through_end_of_function() returns `None`, this path is unsat
+                    let returned_bv = self.symex_from_cur_loc_through_end_of_function()?.ok_or(Error::Unsat)?;  // if symex_from_cur_loc_through_end_of_function() returns `None`, this path is unsat
                     match self.state.pop_callsite() {
                         None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
                         Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_left() => {
@@ -1240,7 +1233,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
                     info!("Entering function {:?} in module {:?}", called_funcname, &callee_mod.name);
-                    let returned_bv = self.symex_from_cur_bb_through_end_of_function()?.ok_or(Error::Unsat)?;  // if symex_from_cur_bb_through_end_of_function() returns `None`, this path is unsat
+                    let returned_bv = self.symex_from_cur_loc_through_end_of_function()?.ok_or(Error::Unsat)?;  // if symex_from_cur_loc_through_end_of_function() returns `None`, this path is unsat
                     match self.state.pop_callsite() {
                         None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
                         Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_right() => {
