@@ -122,7 +122,17 @@ pub fn pretty_source_loc(source_loc: &DebugLoc) -> String {
 
 impl<'p> fmt::Debug for LocationDescription<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{}: {} {}, {}}}", self.modname, self.funcname, self.bbname, self.instr)
+        write!(f, "{}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
+    }
+}
+
+impl<'p> LocationDescription<'p> {
+    pub(crate) fn to_string_with_module(&self) -> String {
+        format!("{{{}: {} {}, {}}}", self.modname, self.funcname, self.bbname, self.instr)
+    }
+
+    pub(crate) fn to_string_no_module(&self) -> String {
+        format!("{{{} {}, {}}}", self.funcname, self.bbname, self.instr)
     }
 }
 
@@ -140,7 +150,17 @@ pub struct PathEntry<'p>(pub LocationDescription<'p>);
 
 impl<'p> fmt::Debug for PathEntry<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{}: {} {}, starting at {}}}", self.0.modname, self.0.funcname, self.0.bbname, self.0.instr)
+        write!(f, "{}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
+    }
+}
+
+impl<'p> PathEntry<'p> {
+    pub(crate) fn to_string_with_module(&self) -> String {
+        format!("{{{}: {} {}, starting at {}}}", self.0.modname, self.0.funcname, self.0.bbname, self.0.instr)
+    }
+
+    pub(crate) fn to_string_no_module(&self) -> String {
+        format!("{{{} {}, starting at {}}}", self.0.funcname, self.0.bbname, self.0.instr)
     }
 }
 
@@ -1147,14 +1167,19 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             self.maybe_demangle_locdescr(locdescr);
         }
         locdescrs.into_iter().zip(1..).map(|(locdescr, framenum)| {
+            let pretty_locdescr = if self.config.print_module_name {
+                locdescr.to_string_with_module()
+            } else {
+                locdescr.to_string_no_module()
+            };
+            let mut frame_string = format!("  #{}: {}\n", framenum, pretty_locdescr);
             match locdescr.source_loc {
                 Some(source_loc) if self.config.print_source_info => {
-                    format!("  #{}: {:?}\n         ({})\n",
-                        framenum, locdescr, pretty_source_loc(source_loc)
-                    )
+                    frame_string.push_str(&format!("         ({})\n", pretty_source_loc(source_loc)));
                 },
-                _ => format!("  #{}: {:?}\n", framenum, locdescr),
-            }
+                _ => {},
+            };
+            frame_string
         }).collect()
     }
 

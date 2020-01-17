@@ -119,7 +119,13 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
             if std::env::var("HAYBALE_DUMP_PATH") == Ok("1".to_owned()) {
                 err_msg.push_str("Path to error:\n");
                 for path_entry in self.state.get_path() {
-                    err_msg.push_str(&format!("  {:?}\n", path_entry));
+                    err_msg.push_str(&format!("  {}\n",
+                        if self.state.config.print_module_name {
+                            path_entry.to_string_with_module()
+                        } else {
+                            path_entry.to_string_no_module()
+                        },
+                    ));
                     if self.state.config.print_source_info {
                         err_msg.push_str(&format!("    ({})\n", match &path_entry.0.source_loc {
                             Some(source_loc) => pretty_source_loc(source_loc),
@@ -252,8 +258,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn backtrack_and_continue(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         if self.state.revert_to_backtracking_point()? {
             info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
-            info!("Continuing in bb {} in function {:?}, module {:?}",
-                self.state.cur_loc.bb.name, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+            info!("Continuing in bb {} in function {:?}{}",
+                self.state.cur_loc.bb.name,
+                self.state.cur_loc.func.name,
+                if self.state.config.print_module_name {
+                    format!(", module {:?}", self.state.cur_loc.module.name)
+                } else {
+                    String::new()
+                }
+            );
             self.symex_from_cur_loc()
         } else {
             // No backtrack points (and therefore no paths) remain
@@ -281,19 +294,27 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Some(callsite) => match callsite.instr {
                             Either::Left(_call) => {
                                 // a normal callsite, not an `invoke` instruction
-                                info!("Caller {:?} (bb {}) in module {:?} is not prepared to catch the exception, rethrowing",
+                                info!("Caller {:?} (bb {}){} is not prepared to catch the exception, rethrowing",
                                     callsite.loc.func.name,
                                     callsite.loc.bb.name,
-                                    callsite.loc.module.name,
+                                    if self.state.config.print_module_name {
+                                        format!(" in module {:?}", callsite.loc.module.name)
+                                    } else {
+                                        String::new()
+                                    },
                                 );
                                 continue;
                             },
                             Either::Right(invoke) => {
                                 // catch the thrown value
-                                info!("Caller {:?} (bb {}) in module {:?} catching the thrown value at bb {}",
+                                info!("Caller {:?} (bb {}){} catching the thrown value at bb {}",
                                     callsite.loc.func.name,
                                     callsite.loc.bb.name,
-                                    callsite.loc.module.name,
+                                    if self.state.config.print_module_name {
+                                        format!(" in module {:?}", callsite.loc.module.name)
+                                    } else {
+                                        String::new()
+                                    },
                                     invoke.exception_label,
                                 );
                                 self.state.cur_loc = callsite.loc.clone();
@@ -312,11 +333,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 Some(callsite) => match callsite.instr {
                     Either::Left(call) => {
                         // Return to normal callsite
-                        info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
+                        info!("Leaving function {:?}, continuing in caller {:?} (bb {}){}",
                             self.state.cur_loc.func.name,
                             callsite.loc.func.name,
                             callsite.loc.bb.name,
-                            callsite.loc.module.name,
+                            if self.state.config.print_module_name {
+                                format!(" in module {:?}", callsite.loc.module.name)
+                            } else {
+                                String::new()
+                            },
                         );
                         self.state.cur_loc = callsite.loc.clone();
                         // Assign the returned value as the result of the caller's call instruction
@@ -337,12 +362,16 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     },
                     Either::Right(invoke) => {
                         // Normal return to an `Invoke` instruction
-                        info!("Leaving function {:?}, continuing in caller {:?} (finished invoke in bb {}, now in bb {}) in module {:?}",
+                        info!("Leaving function {:?}, continuing in caller {:?}{} (finished invoke in bb {}, now in bb {})",
                             self.state.cur_loc.func.name,
                             callsite.loc.func.name,
+                            if self.state.config.print_module_name {
+                                format!(" in module {:?}", callsite.loc.module.name)
+                            } else {
+                                String::new()
+                            },
                             callsite.loc.bb.name,
                             invoke.return_label,
-                            callsite.loc.module.name,
                         );
                         self.state.cur_loc = callsite.loc.clone();
                         // Assign the returned value as the result of the `Invoke` instruction
@@ -896,8 +925,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     },
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 }
-                info!("Done processing hook for {}; continuing in bb {} in function {:?}, module {:?}",
-                    pretty_hookedthing, self.state.cur_loc.bb.name, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                info!("Done processing hook for {}; continuing in bb {} in function {:?}{}",
+                    pretty_hookedthing, self.state.cur_loc.bb.name, self.state.cur_loc.func.name,
+                    if self.state.config.print_module_name {
+                        format!(", module {:?}", self.state.cur_loc.module.name)
+                    } else {
+                        String::new()
+                    }
+                );
                 Ok(None)
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
@@ -939,8 +974,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             };
                             debug!("Completed ordinary return to caller");
-                            info!("Leaving function {:?}, continuing in caller {:?} (bb {}) in module {:?}",
-                                called_funcname, self.state.cur_loc.func.name, self.state.cur_loc.bb.name, self.state.cur_loc.module.name);
+                            info!("Leaving function {:?}, continuing in caller {:?} (bb {}){}",
+                                called_funcname, self.state.cur_loc.func.name, self.state.cur_loc.bb.name,
+                                if self.state.config.print_module_name {
+                                    format!(" in module {:?}", self.state.cur_loc.module.name)
+                                } else {
+                                    String::new()
+                                },
+                            );
                             Ok(None)
                         },
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
@@ -1185,8 +1226,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     },
                     ReturnValue::ReturnVoid => {},
                     ReturnValue::Throw(bvptr) => {
-                        info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}, module {:?}",
-                            pretty_hookedthing, invoke.exception_label, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                        info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}{}",
+                            pretty_hookedthing, invoke.exception_label, self.state.cur_loc.func.name,
+                            if self.state.config.print_module_name {
+                                format!(", module {:?}", self.state.cur_loc.module.name)
+                            } else {
+                                String::new()
+                            }
+                        );
                         return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                     },
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
@@ -1194,8 +1241,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let old_bb_name = &self.state.cur_loc.bb.name;
                 // We had a normal return, so continue at the `return_label`
                 self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
-                info!("Done processing hook for {}; continuing in function {:?} (hook was for the invoke in bb {}, now in bb {}) in module {:?}",
-                    pretty_hookedthing, self.state.cur_loc.func.name, old_bb_name, self.state.cur_loc.bb.name, self.state.cur_loc.module.name);
+                info!("Done processing hook for {}; continuing in function {:?}{} (hook was for the invoke in bb {}, now in bb {})",
+                    pretty_hookedthing,
+                    self.state.cur_loc.func.name,
+                    if self.state.config.print_module_name {
+                        format!(" in module {:?}", self.state.cur_loc.module.name)
+                    } else {
+                        String::new()
+                    },
+                    old_bb_name,
+                    self.state.cur_loc.bb.name,
+                );
                 self.symex_from_cur_loc_through_end_of_function()
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
@@ -1229,8 +1285,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 },
                                 ReturnValue::ReturnVoid => {},
                                 ReturnValue::Throw(bvptr) => {
-                                    info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}, module {:?}",
-                                        self.state.cur_loc.func.name, called_funcname, self.state.cur_loc.bb.name, self.state.cur_loc.func.name, self.state.cur_loc.module.name);
+                                    info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}{}",
+                                        self.state.cur_loc.func.name, called_funcname, self.state.cur_loc.bb.name, self.state.cur_loc.func.name,
+                                        if self.state.config.print_module_name {
+                                            format!(", module {:?}", self.state.cur_loc.module.name)
+                                        } else {
+                                            String::new()
+                                        },
+                                    );
                                     return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                                 },
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
@@ -1238,8 +1300,17 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             // Returned normally, so continue at the `return_label`
                             self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
                             debug!("Completed ordinary return from invoke");
-                            info!("Leaving function {:?}, continuing in caller {:?} (finished the invoke in bb {}, now in bb {}) in module {:?}",
-                                called_funcname, self.state.cur_loc.func.name, old_bb_name, self.state.cur_loc.bb.name, self.state.cur_loc.module.name);
+                            info!("Leaving function {:?}, continuing in caller {:?}{} (finished the invoke in bb {}, now in bb {})",
+                                called_funcname,
+                                self.state.cur_loc.func.name,
+                                if self.state.config.print_module_name {
+                                    format!(" in module {:?}", self.state.cur_loc.module.name)
+                                } else {
+                                    String::new()
+                                },
+                                old_bb_name,
+                                self.state.cur_loc.bb.name,
+                            );
                             self.symex_from_cur_loc_through_end_of_function()
                         },
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),

@@ -54,6 +54,13 @@ pub struct Config<'p, B> where B: Backend {
     /// particular source location; e.g., they may be just setting up the stack
     /// frame for a function.
     pub print_source_info: bool,
+
+    /// If `true`, then `haybale` will include the module name along with the
+    /// LLVM location info in error messages, backtraces, log messages, and
+    /// when dumping paths. If `false`, the module name will be omitted.
+    /// You may want to use `false` for `Project`s with only a single bitcode
+    /// file, or if the LLVM module is clear from the function name.
+    pub print_module_name: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -110,6 +117,7 @@ impl<'p, B: Backend> Config<'p, B> {
             initial_mem_watchpoints: HashMap::new(),
             demangling: Demangling::None,
             print_source_info: true,
+            print_module_name: true,
         }
     }
 }
@@ -134,6 +142,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             initial_mem_watchpoints: HashMap::new(),
             demangling: Demangling::None,
             print_source_info: true,
+            print_module_name: true,
         }
     }
 }
