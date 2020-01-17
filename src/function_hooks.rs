@@ -109,8 +109,9 @@ impl IsCall for llvm_ir::terminator::Invoke {
 impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Create a blank `FunctionHooks` instance with no function hooks.
     ///
-    /// You may want to consider `FunctionHooks::default()` which provides
-    /// predefined hooks for common functions.
+    /// You may want to consider
+    /// [`FunctionHooks::default()`](struct.FunctionHooks.html#method.default),
+    /// which provides predefined hooks for common functions.
     pub fn new() -> Self {
         Self {
             hooks: HashMap::new(),
@@ -208,21 +209,25 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     }
 
     /// Removes the function hook for the given function, which was added with
-    /// `add_cpp_demangled()`. That function will no longer be hooked.
+    /// [`add_cpp_demangled()`](struct.FunctionHooks.html#method.add_cpp_demangled).
+    /// That function will no longer be hooked.
     pub fn remove_cpp_demangled(&mut self, hooked_function: &str) {
         self.cpp_demangled_hooks.remove(hooked_function);
     }
 
     /// Removes the function hook for the given function, which was added with
-    /// `add_rust_demangled()`. That function will no longer be hooked.
+    /// [`add_rust_demangled()`](struct.FunctionHooks.html#method.add_rust_demangled).
+    /// That function will no longer be hooked.
     pub fn remove_rust_demangled(&mut self, hooked_function: &str) {
         self.rust_demangled_hooks.remove(hooked_function);
     }
 
     /// Removes the function hook used for calls to inline assembly, which was
-    /// added with `add_inline_asm_hook()`. Calls to inline assembly will no
+    /// added with [`add_inline_asm_hook()`]. Calls to inline assembly will no
     /// longer be hooked, and thus will result in errors, until the next call to
-    /// `add_inline_asm_hook()`.
+    /// [`add_inline_asm_hook()`].
+    ///
+    /// [`add_inline_asm_hook()`]: struct.FunctionHooks.html#method.add_inline_asm_hook
     pub fn remove_inline_asm_hook(&mut self) {
         self.inline_asm_hook = None;
     }
@@ -270,7 +275,8 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
     ///
     /// If you don't want these hooks, you can use
     /// [`FunctionHooks::remove_function_hook()`](struct.FunctionHooks.html#method.remove_function_hook)
-    /// to remove individual hooks, or you can use `FunctionHooks::new()`, which
+    /// to remove individual hooks, or you can use
+    /// [`FunctionHooks::new()`](struct.FunctionHooks.html#method.new), which
     /// comes with no predefined hooks.
     fn default() -> Self {
         let mut fhooks = Self::new();

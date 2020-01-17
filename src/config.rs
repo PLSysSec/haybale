@@ -16,19 +16,29 @@ pub struct Config<'p, B> where B: Backend {
     /// Maximum number of times to execute any given line of LLVM IR.
     /// This bounds both the number of iterations of loops, and also the depth of recursion.
     /// For inner loops, this bounds the number of total iterations across all invocations of the loop.
+    ///
+    /// Default is `10`.
     pub loop_bound: usize,
 
     /// If `true`, all memory accesses will be checked to ensure their addresses
-    /// cannot be NULL, throwing `Error::NullPointerDereference` if NULL is a
-    /// possible solution for the address
+    /// cannot be `NULL`, throwing `Error::NullPointerDereference` if `NULL` is a
+    /// possible solution for the address.
+    ///
+    /// Default is `true`.
     pub null_detection: bool,
 
     /// When encountering a `memcpy`, `memset`, or `memmove` with multiple
-    /// possible lengths, how (if at all) should we concretize?
+    /// possible lengths, how (if at all) should we concretize the length?
+    ///
+    /// Default is `Concretize::Symbolic` - that is, no concretization.
     pub concretize_memcpy_lengths: Concretize,
 
     /// The set of currently active function hooks; see
-    /// [`FunctionHooks`](struct.FunctionHooks.html) for more details
+    /// [`FunctionHooks`](../function_hooks/struct.FunctionHooks.html) for more details.
+    ///
+    /// Default is
+    /// [`FunctionHooks::default()`](../function_hooks/struct.FunctionHooks.html#method.default);
+    /// see docs there for more details.
     pub function_hooks: FunctionHooks<'p, B>,
 
     /// The initial memory watchpoints when a `State` is created (mapping from
@@ -36,6 +46,8 @@ pub struct Config<'p, B> where B: Backend {
     ///
     /// More watchpoints may be added or removed at any time with
     /// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.
+    ///
+    /// Default is no watchpoints.
     pub initial_mem_watchpoints: HashMap<String, Watchpoint>,
 
     /// Controls the (attempted) demangling of function names in error messages
@@ -49,6 +61,8 @@ pub struct Config<'p, B> where B: Backend {
     ///
     /// Any symbol that isn't valid for the chosen demangler will simply be left
     /// unchanged, regardless of this setting.
+    ///
+    /// Default is `None`.
     pub demangling: Option<Demangling>,
 
     /// If `true`, then `haybale` will attempt to print source location info
@@ -62,6 +76,8 @@ pub struct Config<'p, B> where B: Backend {
     /// In addition, some LLVM instructions simply don't correspond to a
     /// particular source location; e.g., they may be just setting up the stack
     /// frame for a function.
+    ///
+    /// Default is `true`.
     pub print_source_info: bool,
 
     /// If `true`, then `haybale` will include the module name along with the
@@ -69,6 +85,8 @@ pub struct Config<'p, B> where B: Backend {
     /// when dumping paths. If `false`, the module name will be omitted.
     /// You may want to use `false` for `Project`s with only a single bitcode
     /// file, or if the LLVM module is clear from the function name.
+    ///
+    /// Default is `true`.
     pub print_module_name: bool,
 }
 
@@ -112,11 +130,13 @@ pub enum Concretize {
 
 impl<'p, B: Backend> Config<'p, B> {
     /// Creates a new `Config` with the given `loop_bound`, `null_detection`, and
-    /// `concretize_memcpy_lengths()` options; no function hooks or memory
+    /// `concretize_memcpy_lengths` options; no function hooks or memory
     /// watchpoints; and defaults for the other options.
     ///
-    /// You may want to consider `Config::default()` which provides defaults for
-    /// all parameters and comes with predefined hooks for common functions.
+    /// You may want to consider
+    /// [`Config::default()`](struct.Config.html#method.default), which provides
+    /// defaults for all parameters and comes with predefined hooks for common
+    /// functions.
     pub fn new(loop_bound: usize, null_detection: bool, concretize_memcpy_lengths: Concretize) -> Self {
         Self {
             loop_bound,
@@ -135,11 +155,11 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     /// Default values for all configuration parameters.
     ///
     /// In particular, this uses
-    /// [`FunctionHooks::default()`](struct.FunctionHooks.html#method.default),
+    /// [`FunctionHooks::default()`](../function_hooks/struct.FunctionHooks.html#method.default),
     /// and therefore comes with a set of predefined hooks for common functions.
     ///
     /// For more information, see
-    /// [`FunctionHooks::default()`](struct.FunctionHooks.html#method.default).
+    /// [`FunctionHooks::default()`](../function_hooks/struct.FunctionHooks.html#method.default).
     fn default() -> Self {
         Self {
             loop_bound: 10,
