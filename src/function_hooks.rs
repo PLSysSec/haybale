@@ -271,7 +271,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
     /// writing, this includes malloc-related functions `malloc()`, `calloc()`,
     /// `realloc()`, and `free()`, as well as some C++ exception-handling
     /// functions such as `__cxa_throw()` and `__cxa_allocate_exception()`,
-    /// and a few other C standard library functions.)
+    /// and a few other C and Rust standard library functions.)
     ///
     /// If you don't want these hooks, you can use
     /// [`FunctionHooks::remove_function_hook()`](struct.FunctionHooks.html#method.remove_function_hook)
@@ -291,6 +291,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
         fhooks.add("llvm.eh.typeid.for", &hooks::exceptions::llvm_eh_typeid_for);
         fhooks.add("exit", &abort_hook);
         fhooks.add_rust_demangled("std::panicking::begin_panic", &abort_hook);
+        fhooks.add_rust_demangled("core::result::unwrap_failed", &abort_hook);
         fhooks
     }
 }
