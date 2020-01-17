@@ -912,7 +912,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         match self.resolve_function(&call.function)? {
             ResolvedFunction::HookActive { hook, hooked_thing } => {
                 let pretty_hookedthing = hooked_thing.to_string();
-                match self.symex_hook(call, &hook, &pretty_hookedthing)? {
+                let quiet = if let HookedThing::Intrinsic(_) = hooked_thing {
+                    true  // executing the built-in hook of an intrinsic is relatively unimportant from a logging standpoint
+                } else {
+                    false  // executing a hook for an actual function call is relatively important from a logging standpoint
+                };
+                match self.symex_hook(call, &hook, &pretty_hookedthing, quiet)? {
                     // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                     ReturnValue::Return(retval) => {
                         // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
@@ -925,7 +930,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     },
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 }
-                info!("Done processing hook for {}; continuing in bb {} in function {:?}{}",
+                let log_level = if quiet { log::Level::Debug } else { log::Level::Info };
+                log::log!(log_level, "Done processing hook for {}; continuing in bb {} in function {:?}{}",
                     pretty_hookedthing, self.state.cur_loc.bb.name, self.state.cur_loc.func.name,
                     if self.state.config.print_module_name {
                         format!(", module {:?}", self.state.cur_loc.module.name)
@@ -1043,12 +1049,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     } else if funcname.starts_with("llvm.bswap") {
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.bswap").cloned().expect("Failed to find LLVM intrinsic bswap hook"),
-                            hooked_thing: HookedThing::Function(funcname),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.objectsize") {
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM intrinsic objectsize hook"),
-                            hooked_thing: HookedThing::Function(funcname),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.read_register")
                         || funcname.starts_with("llvm.write_register")
@@ -1056,7 +1062,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // These can just ignore their arguments and return unconstrained data, as appropriate
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
-                            hooked_thing: HookedThing::Function(funcname),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.lifetime")
                         || funcname.starts_with("llvm.invariant")
@@ -1067,7 +1073,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // these are all safe to ignore
                         Ok(ResolvedFunction::HookActive {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
-                            hooked_thing: HookedThing::Function(funcname),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else {
                         // No hook currently defined for this function, and none of our intrinsic hooks apply
@@ -1082,8 +1088,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Execute the hook `hook` hooking the call `call`, returning the hook's `ReturnValue`.
     ///
     /// `hooked_funcname`: Name of the hooked function, used only for logging and error messages
-    fn symex_hook(&mut self, call: &'p impl IsCall, hook: &FunctionHook<'p, B>, hooked_funcname: &str) -> Result<ReturnValue<B::BV>> {
-        info!("Processing hook for {}", hooked_funcname);
+    ///
+    /// `quiet`: if `true`, then non-error log messages will be logged at `DEBUG`
+    /// level; if `false`, then at `INFO` level. Callers should decide how
+    /// important it is to point out to the user that a hook is being processed
+    /// in this case.
+    fn symex_hook(&mut self, call: &'p impl IsCall, hook: &FunctionHook<'p, B>, hooked_funcname: &str, quiet: bool) -> Result<ReturnValue<B::BV>> {
+        let log_level = if quiet { log::Level::Debug } else { log::Level::Info };
+        log::log!(log_level, "Processing hook for {}", hooked_funcname);
         match hook.call_hook(&self.project, &mut self.state, call)? {
             ReturnValue::ReturnVoid => {
                 if call.get_type() != Type::VoidType {
@@ -1219,7 +1231,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         match self.resolve_function(&invoke.function)? {
             ResolvedFunction::HookActive { hook, hooked_thing } => {
                 let pretty_hookedthing = hooked_thing.to_string();
-                match self.symex_hook(invoke, &hook, &pretty_hookedthing)? {
+                let quiet = if let HookedThing::Intrinsic(_) = hooked_thing {
+                    true  // executing the built-in hook of an intrinsic is relatively unimportant from a logging standpoint
+                } else {
+                    false  // executing a hook for an actual function call is relatively important from a logging standpoint
+                };
+                match self.symex_hook(invoke, &hook, &pretty_hookedthing, quiet)? {
                     // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                     ReturnValue::Return(retval) => {
                         self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
@@ -1241,7 +1258,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let old_bb_name = &self.state.cur_loc.bb.name;
                 // We had a normal return, so continue at the `return_label`
                 self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
-                info!("Done processing hook for {}; continuing in function {:?}{} (hook was for the invoke in bb {}, now in bb {})",
+                let log_level = if quiet { log::Level::Debug } else { log::Level::Info };
+                log::log!(log_level, "Done processing hook for {}; continuing in function {:?}{} (hook was for the invoke in bb {}, now in bb {})",
                     pretty_hookedthing,
                     self.state.cur_loc.func.name,
                     if self.state.config.print_module_name {
@@ -1509,6 +1527,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     }
 }
 
+#[derive(PartialEq, Eq, Clone)]
 enum ResolvedFunction<'p, B: Backend> {
     HookActive {
         hook: FunctionHook<'p, B>,
@@ -1519,9 +1538,18 @@ enum ResolvedFunction<'p, B: Backend> {
     },
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
 enum HookedThing<'p> {
     /// We are hooking the call of a function with this name
     Function(&'p str),
+    /// We are hooking the call of an LLVM intrinsic with this name.
+    ///
+    /// Note: for this purpose,
+    ///     (1) `memcpy`, `memset`, and `memmove` are considered functions rather than intrinsics; and
+    ///     (2) if the `Config` overrides the default intrinsic hook for any intrinsic, that will result
+    ///         in a `HookedThing::Function` as well.  That is, `HookedThing::Intrinsic` specifically
+    ///         implies we're using the built-in intrinsic hook as well.
+    Intrinsic(&'p str),
     /// We are hooking the call of a function pointer
     FunctionPtr,
     /// We are hooking a call to inline assembly
@@ -1532,6 +1560,7 @@ impl<'p> fmt::Display for HookedThing<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             HookedThing::Function(funcname) => write!(f, "function {:?}", funcname),
+            HookedThing::Intrinsic(funcname) => write!(f, "intrinsic {:?}", funcname),
             HookedThing::FunctionPtr => write!(f, "a function pointer"),
             HookedThing::InlineAsm => write!(f, "inline assembly"),
         }
