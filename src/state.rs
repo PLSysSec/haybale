@@ -13,6 +13,7 @@ use std::sync::{Arc, RwLock};
 use crate::alloc::Alloc;
 use crate::backend::*;
 use crate::config::Config;
+use crate::demangling::Demangling;
 use crate::error::*;
 use crate::extend::*;
 use crate::function_hooks::{self, FunctionHooks};
@@ -302,9 +303,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn new(
         project: &'p Project,
         start_loc: Location<'p>,
-        config: Config<'p, B>,
+        mut config: Config<'p, B>,
     ) -> Self {
         let solver = B::SolverRef::new();
+        if config.demangling.is_none() {
+            config.demangling = Some(Demangling::autodetect(project));
+        }
         let mut state = Self {
             cur_loc: start_loc.clone(),
             varmap: VarMap::new(solver.clone(), config.loop_bound),
@@ -1164,7 +1168,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             .chain(self.stack.iter().rev().map(|frame| LocationDescription::from(frame.callsite.loc.clone())))
             .collect::<Vec<LocationDescription>>();
         for locdescr in locdescrs.iter_mut() {
-            self.maybe_demangle_locdescr(locdescr);
+            self.demangle_locdescr(locdescr);
         }
         locdescrs.into_iter().zip(1..).map(|(locdescr, framenum)| {
             let pretty_locdescr = if self.config.print_module_name {
@@ -1183,10 +1187,22 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         }).collect()
     }
 
+    /// Attempt to demangle the given `funcname` as appropriate based on the
+    /// `Config`.
+    ///
+    /// If this fails to demangle `funcname`, it just returns a copy of
+    /// `funcname` unchanged.
+    pub fn demangle(&self, funcname: &str) -> String {
+        match self.config.demangling {
+            Some(demangling) => demangling.maybe_demangle(funcname),
+            None => panic!("Demangling shouldn't be None here"),  // we should resolve it to Some() in the State constructor
+        }
+    }
+
     /// Attempts to demangle the function name in the `LocationDescription`, as
     /// appropriate based on the `Config`.
-    fn maybe_demangle_locdescr(&self, locdescr: &mut LocationDescription) {
-        locdescr.funcname = self.config.demangling.maybe_demangle(&locdescr.funcname);
+    fn demangle_locdescr(&self, locdescr: &mut LocationDescription) {
+        locdescr.funcname = self.demangle(&locdescr.funcname);
     }
 
     /// Get the most recent `BV` created for each `Name` in the current function.

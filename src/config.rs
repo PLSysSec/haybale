@@ -40,7 +40,16 @@ pub struct Config<'p, B> where B: Backend {
 
     /// Controls the (attempted) demangling of function names in error messages
     /// and backtraces.
-    pub demangling: Demangling,
+    ///
+    /// If `None`, `haybale` will attempt to autodetect which mangling is
+    /// appropriate, based on the LLVM metadata.
+    ///
+    /// `Some` can be used to force `haybale` to attempt to demangle with a
+    /// particular demangler.
+    ///
+    /// Any symbol that isn't valid for the chosen demangler will simply be left
+    /// unchanged, regardless of this setting.
+    pub demangling: Option<Demangling>,
 
     /// If `true`, then `haybale` will attempt to print source location info
     /// (e.g., filename, line number, column number) along with the LLVM location
@@ -102,9 +111,9 @@ pub enum Concretize {
 }
 
 impl<'p, B: Backend> Config<'p, B> {
-    /// Creates a new `Config` with the given `loop_bound` and
-    /// `concretize_memcpy_lengths()` options, and no function hooks or memory
-    /// watchpoints.
+    /// Creates a new `Config` with the given `loop_bound`, `null_detection`, and
+    /// `concretize_memcpy_lengths()` options; no function hooks or memory
+    /// watchpoints; and defaults for the other options.
     ///
     /// You may want to consider `Config::default()` which provides defaults for
     /// all parameters and comes with predefined hooks for common functions.
@@ -115,7 +124,7 @@ impl<'p, B: Backend> Config<'p, B> {
             concretize_memcpy_lengths,
             function_hooks: FunctionHooks::new(),
             initial_mem_watchpoints: HashMap::new(),
-            demangling: Demangling::None,
+            demangling: None,
             print_source_info: true,
             print_module_name: true,
         }
@@ -128,8 +137,6 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     /// In particular, this uses
     /// [`FunctionHooks::default()`](struct.FunctionHooks.html#method.default),
     /// and therefore comes with a set of predefined hooks for common functions.
-    /// (At the time of this writing, only `malloc()`, `calloc()`, `realloc()`,
-    /// and `free()`.)
     ///
     /// For more information, see
     /// [`FunctionHooks::default()`](struct.FunctionHooks.html#method.default).
@@ -140,7 +147,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             concretize_memcpy_lengths: Concretize::Symbolic,
             function_hooks: FunctionHooks::default(),
             initial_mem_watchpoints: HashMap::new(),
-            demangling: Demangling::None,
+            demangling: None,
             print_source_info: true,
             print_module_name: true,
         }

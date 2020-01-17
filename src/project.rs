@@ -126,6 +126,10 @@ impl Project {
         self.modules.iter().map(|m| &m.name)
     }
 
+    pub(crate) fn module_source_file_names(&self) -> impl Iterator<Item = &String> {
+        self.modules.iter().map(|m| &m.source_file_name)
+    }
+
     /// Search the project for a function with the given name.
     /// If a matching function is found, return both it and the module it was
     /// found in.
