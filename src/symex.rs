@@ -144,7 +144,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
                 }
             } else {
                 err_msg.push_str("note: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n");
-                err_msg.push_str("note: to enable (much) more detailed logs, rerun with `RUST_LOG=haybale`.\n");
+                err_msg.push_str("note: to enable (much) more detailed logs, rerun with `RUST_LOG=haybale` in a non-release build.\n");
                 err_msg.push_str("  (For how to enable more granular logging options, see docs for the env_logger crate).\n");
             }
             err_msg.push_str("\n");
