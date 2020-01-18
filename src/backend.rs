@@ -79,7 +79,10 @@ impl SolverRef for Rc<Btor> {
     }
 }
 
-/// Trait for things which can act like bitvectors
+/// Trait for things which can act like bitvectors.
+///
+/// These methods mirror the methods available on `boolector::BV`;
+/// detailed docs are available there.
 pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     type SolverRef: SolverRef<BV=Self>;
 
@@ -158,6 +161,40 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     fn iff(&self, other: &Self) -> Self;
     fn implies(&self, other: &Self) -> Self;
     fn cond_bv(&self, truebv: &Self, falsebv: &Self) -> Self;
+
+    /// Zero-extend a `BV` to the specified number of bits.
+    /// The input `BV` can be already the desired size (in which case this function is a no-op)
+    /// or smaller (in which case this function will extend),
+    /// but not larger (in which case this function will panic).
+    ///
+    /// A default implementation is provided in terms of the other trait methods.
+    fn zero_extend_to_bits(&self, bits: u32) -> Self {
+        let cur_bits = self.get_width();
+        if cur_bits == bits {
+            self.clone()
+        } else if cur_bits < bits {
+            self.zext(bits - cur_bits)
+        } else {
+            panic!("tried to zero-extend to {} bits, but already had {} bits", bits, cur_bits)
+        }
+    }
+
+    /// Sign-extend a `BV` to the specified number of bits.
+    /// The input `BV` can be already the desired size (in which case this function is a no-op)
+    /// or smaller (in which case this function will extend),
+    /// but not larger (in which case this function will panic).
+    ///
+    /// A default implementation is provided in terms of the other trait methods.
+    fn sign_extend_to_bits(&self, bits: u32) -> Self {
+        let cur_bits = self.get_width();
+        if cur_bits == bits {
+            self.clone()
+        } else if cur_bits < bits {
+            self.sext(bits - cur_bits)
+        } else {
+            panic!("tried to sign-extend to {} bits, but already had {} bits", bits, cur_bits)
+        }
+    }
 }
 
 /// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)

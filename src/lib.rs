@@ -39,7 +39,6 @@ mod return_value;
 pub use return_value::ReturnValue;
 mod error;
 pub use error::*;
-mod extend;
 
 pub mod backend;
 use backend::*;

@@ -15,7 +15,6 @@ use crate::backend::*;
 use crate::config::Config;
 use crate::demangling::Demangling;
 use crate::error::*;
-use crate::extend::*;
 use crate::function_hooks::{self, FunctionHooks};
 use crate::global_allocations::*;
 use crate::hooks;
@@ -793,8 +792,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 Ok(bvbase.add(&offset))
             },
             Constant::Trunc(t) => self.const_to_bv(&t.operand).map(|bv| bv.slice(size(&t.to_type) as u32 - 1, 0)),
-            Constant::ZExt(z) => self.const_to_bv(&z.operand).map(|bv| zero_extend_to_bits(bv, size(&z.to_type) as u32)),
-            Constant::SExt(s) => self.const_to_bv(&s.operand).map(|bv| sign_extend_to_bits(bv, size(&s.to_type) as u32)),
+            Constant::ZExt(z) => self.const_to_bv(&z.operand).map(|bv| bv.zero_extend_to_bits(size(&z.to_type) as u32)),
+            Constant::SExt(s) => self.const_to_bv(&s.operand).map(|bv| bv.sign_extend_to_bits(size(&s.to_type) as u32)),
             Constant::PtrToInt(pti) => {
                 let bv = self.const_to_bv(&pti.operand)?;
                 assert_eq!(bv.get_width(), size(&pti.to_type) as u32);
@@ -883,7 +882,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             None => Ok(self.zero(result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
-                    let index = zero_extend_to_bits(self.const_to_bv(index)?, result_bits);
+                    let index = self.const_to_bv(index)?.zero_extend_to_bits(result_bits);
                     let (offset, nested_ty) = get_offset_bv_index(base_type, &index, self.solver.clone())?;
                     self.get_offset_recursive(indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))

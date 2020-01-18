@@ -12,7 +12,6 @@ use crate::state::pretty_source_loc;
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
-use crate::extend::*;
 use crate::function_hooks::*;
 use crate::layout::*;
 use crate::solver_utils::PossibleSolutions;
@@ -657,7 +656,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             None => Ok(state.zero(result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
-                    let index = zero_extend_to_bits(state.operand_to_bv(index)?, result_bits);
+                    let index = state.operand_to_bv(index)?.zero_extend_to_bits(result_bits);
                     let (offset, nested_ty) = get_offset_bv_index(base_type, &index, state.solver.clone())?;
                     Self::get_offset_recursive(state, indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
@@ -889,7 +888,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         };
 
         // mask_overwrite is the overwrite data in the appropriate bit positions, 0's elsewhere
-        let top = zero_extend_to_bits(overwrite_data, full_width - low_bitindex);
+        let top = overwrite_data.zero_extend_to_bits(full_width - low_bitindex);
         let mask_overwrite = if low_bitindex == 0 {
             top
         } else {
