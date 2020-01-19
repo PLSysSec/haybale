@@ -5,6 +5,7 @@ use either::Either;
 use reduce::Reduce;
 use std::convert::TryInto;
 use std::fmt;
+use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
 pub use crate::state::{State, BBInstrIndex, Location, LocationDescription, PathEntry};
@@ -100,6 +101,37 @@ impl<'p, B: Backend> ExecutionManager<'p, B> {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum PathDumpType {
+    /// Don't dump the path
+    None,
+    /// Dump just the LLVM path
+    LLVM,
+    /// Dump just the source path
+    Source,
+    /// Dump both LLVM and source path (interleaved)
+    Interleaved,
+}
+
+impl PathDumpType {
+    fn get_from_env_var() -> Self {
+        match std::env::var("HAYBALE_DUMP_PATH") {
+            Err(_) => Self::None,
+            Ok(mut val) => {
+                val.make_ascii_uppercase();
+                match val.deref() {
+                    "" => Self::None,
+                    "LLVM" => Self::LLVM,
+                    "SRC" => Self::Source,
+                    "BOTH" => Self::Interleaved,
+                    "1" => Self::Interleaved,  // previous versions of `haybale` used HAYBALE_DUMP_PATH=1, we now treat that equivalently to `BOTH`
+                    _ => Self::Interleaved,
+                }
+           },
+        }
+    }
+}
+
 impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
     type Item = std::result::Result<ReturnValue<B::BV>, String>;
 
@@ -113,27 +145,70 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
             self.backtrack_and_continue()
         };
         retval.transpose().map(|r| r.map_err(|e| {
-            let mut err_msg = format!("Received the following error:\n  {}\n", e);
-            err_msg.push_str(&format!("LLVM backtrace:\n{}", self.state.pretty_llvm_backtrace()));
-            if std::env::var("HAYBALE_DUMP_PATH") == Ok("1".to_owned()) {
-                err_msg.push_str("Path to error:\n");
-                for path_entry in self.state.get_path() {
-                    err_msg.push_str(&format!("  {}\n",
-                        if self.state.config.print_module_name {
-                            path_entry.to_string_with_module()
-                        } else {
-                            path_entry.to_string_no_module()
-                        },
-                    ));
-                    if self.state.config.print_source_info {
-                        err_msg.push_str(&format!("    ({})\n", match &path_entry.0.source_loc {
-                            Some(source_loc) => pretty_source_loc(source_loc),
-                            None => "no source location available".to_owned(),
-                        }))
+            let mut err_msg = format!("Received the following error:\n\n  {}\n\n", e);
+            err_msg.push_str(&format!("LLVM backtrace:\n{}\n", self.state.pretty_llvm_backtrace()));
+            match PathDumpType::get_from_env_var() {
+                PathDumpType::None => {
+                    err_msg.push_str("note: For a dump of the path that led to this error, rerun with the environment variable `HAYBALE_DUMP_PATH` set to:\n");
+                    err_msg.push_str("        `LLVM` for a list of the LLVM basic blocks in the path\n");
+                    err_msg.push_str("        `SRC` for a list of the source-language locations in the path\n");
+                    err_msg.push_str("        `BOTH` for both of the above\n");
+                    err_msg.push_str("      To get source-language locations, the LLVM bitcode must also contain\n");
+                    err_msg.push_str("      debuginfo. For example, C/C++ or Rust sources must be compiled with the\n");
+                    err_msg.push_str("      `-g` flag to `clang`, `clang++`, or `rustc`.\n");
+                },
+                PathDumpType::LLVM => {
+                    err_msg.push_str("LLVM path to error:\n");
+                    for path_entry in self.state.get_path() {
+                        err_msg.push_str(&format!("  {}\n",
+                            if self.state.config.print_module_name {
+                                path_entry.to_string_with_module()
+                            } else {
+                                path_entry.to_string_no_module()
+                            },
+                        ));
                     }
-                }
-            } else {
-                err_msg.push_str("note: For a dump of the path that led to this error, rerun with `HAYBALE_DUMP_PATH=1` environment variable.\n");
+                    err_msg.push_str("note: to also get a dump of the source-language locations in this path, rerun with `HAYBALE_DUMP_PATH=BOTH`.\n");
+                },
+                PathDumpType::Source => {
+                    err_msg.push_str("Source-language path to error:\n");
+                    let mut source_locs = self.state.get_path().iter().flat_map(|path_entry| path_entry.get_all_source_locs());
+                    // handle the first one special, so we can print this help message if necessary
+                    match source_locs.next() {
+                        None => {
+                            err_msg.push_str("  No source locations available in the path.\n");
+                            err_msg.push_str("  This may be because the LLVM bitcode was not compiled with debuginfo.\n");
+                            err_msg.push_str("  To compile C/C++ or Rust sources with debuginfo, pass the `-g` flag\n");
+                            err_msg.push_str("    to `clang`, `clang++`, or `rustc`.\n");
+                        },
+                        Some(first_source_loc) => err_msg.push_str(&format!("  {}\n", pretty_source_loc(first_source_loc))),
+                    }
+                    for source_loc in source_locs {
+                        err_msg.push_str(&format!("  {}\n", pretty_source_loc(source_loc)));
+                    }
+                    err_msg.push_str("note: to also get a dump of the LLVM basic blocks in this path, rerun with `HAYBALE_DUMP_PATH=BOTH`.\n");
+                },
+                PathDumpType::Interleaved => {
+                    err_msg.push_str("Full path to error:\n");
+                    for path_entry in self.state.get_path() {
+                        err_msg.push_str(&format!("  {}:\n",
+                            if self.state.config.print_module_name {
+                                path_entry.to_string_with_module()
+                            } else {
+                                path_entry.to_string_no_module()
+                            },
+                        ));
+                        let mut source_locs = path_entry.get_all_source_locs();
+                        // handle the first one special, so we can print this help message if necessary
+                        match source_locs.next() {
+                            None => err_msg.push_str(&format!("    (no source locations available)\n")),
+                            Some(first_source_loc) => err_msg.push_str(&format!("    {}\n", pretty_source_loc(first_source_loc))),
+                        }
+                        for source_loc in source_locs {
+                            err_msg.push_str(&format!("    {}\n", pretty_source_loc(source_loc)));
+                        }
+                    }
+                },
             }
             if std::env::var("HAYBALE_DUMP_VARS") == Ok("1".to_owned()) {
                 err_msg.push_str("\nLatest values of variables at time of error, in current function:\n");
@@ -142,10 +217,11 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
                     err_msg.push_str(&format!("  {}: {:?}\n", varname, value));
                 }
             } else {
-                err_msg.push_str("note: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n");
-                err_msg.push_str("note: to enable (much) more detailed logs, rerun with `RUST_LOG=haybale` in a non-release build.\n");
-                err_msg.push_str("  (For how to enable more granular logging options, see docs for the env_logger crate).\n");
+                err_msg.push_str("\nnote: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n");
             }
+            err_msg.push_str("\nnote: to enable detailed logs, ensure that debug-level logging messages are visible.\n");
+            err_msg.push_str("  This requires a non-release build, and also (for env_logger) `RUST_LOG=haybale` or similar.\n");
+            err_msg.push_str("  (For how to enable more granular logging options, see docs for the env_logger crate).\n");
             err_msg.push_str("\n");
             err_msg
         }))
@@ -1449,7 +1525,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         let path = self.state.get_path();
         let prev_bb = match path.len() {
             0|1 => panic!("not yet implemented: starting in a block with Phi instructions. or error: didn't expect a Phi in function entry block"),
-            len => &path[len - 2].0.bbname,  // the last entry is our current block, so we want the one before
+            len => &path[len - 2].0.bb.name,  // the last entry is our current block, so we want the one before
         };
         let chosen_value = phi.incoming_values.iter()
             .find(|&(_, bbname)| bbname == prev_bb)
@@ -1581,8 +1657,10 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
+    /// a path consisting of `LocationDescription`s describing the start of each
+    /// path entry, rather than rich `Location`s
     #[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
-    struct Path<'p>(Vec<PathEntry<'p>>);
+    struct Path<'p>(Vec<LocationDescription<'p>>);
 
     impl<'p> Path<'p> {
         /// shouldn't be necessary, but to satisfy the borrow checker, this
@@ -1590,14 +1668,14 @@ mod tests {
         /// over any arbitrary desired lifetime by stripping out the
         /// `source_loc`s
         fn strip_source_locs<'a>(self) -> Path<'a> {
-            Path(self.0.into_iter().map(|pathentry|
-                PathEntry(LocationDescription {
-                    modname: pathentry.0.modname,
-                    funcname: pathentry.0.funcname,
-                    bbname: pathentry.0.bbname,
-                    instr: pathentry.0.instr,
+            Path(self.0.into_iter().map(|locdescr|
+                LocationDescription {
+                    modname: locdescr.modname,
+                    funcname: locdescr.funcname,
+                    bbname: locdescr.bbname,
+                    instr: locdescr.instr,
                     source_loc: None,
-                })
+                }
             ).collect())
         }
     }
@@ -1623,13 +1701,13 @@ mod tests {
     fn path_from_bbnames<'p>(modname: &str, funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path<'p> {
         let mut vec = vec![];
         for bbname in bbnames {
-            vec.push(PathEntry(LocationDescription {
+            vec.push(LocationDescription {
                 modname: modname.to_owned(),
                 funcname: funcname.to_owned(),
                 bbname,
                 instr: BBInstrIndex::Instr(0),
                 source_loc: None,
-            }));
+            });
         }
         Path(vec)
     }
@@ -1643,13 +1721,13 @@ mod tests {
     fn path_from_bbnum_instr_pairs<'p>(modname: &str, funcname: &str, pairs: impl IntoIterator<Item = (usize, BBInstrIndex)>) -> Path<'p> {
         let mut vec = vec![];
         for (bbnum, instr) in pairs {
-            vec.push(PathEntry(LocationDescription {
+            vec.push(LocationDescription {
                 modname: modname.to_owned(),
                 funcname: funcname.to_owned(),
                 bbname: Name::from(bbnum),
                 instr,
                 source_loc: None,
-            }));
+            });
         }
         Path(vec)
     }
@@ -1658,13 +1736,13 @@ mod tests {
     fn path_from_tuples_with_bbnames<'a, 'p>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, Name, BBInstrIndex)>) -> Path<'p> {
         let mut vec = vec![];
         for (funcname, bbname, instr) in tuples {
-            vec.push(PathEntry(LocationDescription {
+            vec.push(LocationDescription {
                 modname: modname.to_owned(),
                 funcname: funcname.to_owned(),
                 bbname,
                 instr,
                 source_loc: None,
-            }));
+            });
         }
         Path(vec)
     }
@@ -1678,13 +1756,13 @@ mod tests {
     fn path_from_tuples_varying_modules<'a, 'p>(tuples: impl IntoIterator<Item = (&'a str, &'a str, usize, BBInstrIndex)>) -> Path<'p> {
         let mut vec = vec![];
         for (modname, funcname, bbnum, instr) in tuples {
-            vec.push(PathEntry(LocationDescription {
+            vec.push(LocationDescription {
                 modname: modname.to_owned(),
                 funcname: funcname.to_owned(),
                 bbname: Name::from(bbnum),
                 instr,
                 source_loc: None,
-            }));
+            });
         }
         Path(vec)
     }
@@ -1710,7 +1788,9 @@ mod tests {
 
         fn next(&mut self) -> Option<Self::Item> {
             self.em.next().map(|_|
-                Path(self.em.state().get_path().clone()).strip_source_locs()
+                Path(
+                    self.em.state().get_path().iter().map(|pathentry| LocationDescription::from(pathentry.0.clone())).collect()
+                ).strip_source_locs()
             )
         }
     }

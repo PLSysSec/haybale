@@ -67,7 +67,7 @@ pub struct Config<'p, B> where B: Backend {
 
     /// If `true`, then `haybale` will attempt to print source location info
     /// (e.g., filename, line number, column number) along with the LLVM location
-    /// info in error messages, backtraces, and when dumping paths.
+    /// info in error messages and backtraces.
     ///
     /// For this to work, the LLVM bitcode must contain debuginfo. For example,
     /// C/C++ or Rust sources must be compiled with the `-g` flag to `clang`,
@@ -76,6 +76,13 @@ pub struct Config<'p, B> where B: Backend {
     /// In addition, some LLVM instructions simply don't correspond to a
     /// particular source location; e.g., they may be just setting up the stack
     /// frame for a function.
+    ///
+    /// For path dumps in the case of error, the value of the environment
+    /// variable `HAYBALE_DUMP_PATH` has precedence over this setting.
+    /// `HAYBALE_DUMP_PATH` may be set to:
+    ///     `LLVM` for a list of the LLVM basic blocks in the path;
+    ///     `SRC` for a list of the source-language locations in the path;
+    ///     `BOTH` for both of the above.
     ///
     /// Default is `true`.
     pub print_source_info: bool,

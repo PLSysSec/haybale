@@ -1,6 +1,7 @@
 use boolector::BVSolution;
 use boolector::option::{BtorOption, ModelGen};
 use either::Either;
+use itertools::Itertools;
 use llvm_ir::*;
 use log::{debug, info};
 use reduce::Reduce;
@@ -66,7 +67,7 @@ pub struct State<'p, B: Backend> {
     mem_watchpoints: Watchpoints,
 }
 
-/// Describes a location in LLVM IR in a format suitable for recording - for
+/// Describes a location in LLVM IR in a format more suitable for printing - for
 /// instance, uses function names rather than references to `Function` objects.
 /// For a richer representation of a code location, see
 /// [`Location`](struct.Location.html).
@@ -139,14 +140,14 @@ impl<'p> LocationDescription<'p> {
 /// Describes one segment of a path through the LLVM IR. The "segment" will be
 /// one or more consecutive instructions in a single basic block.
 ///
-/// For now, it's just a wrapper around a `LocationDescription` describing where
-/// the path segment started.
+/// For now, it's just a wrapper around a `Location` describing where the path
+/// segment started.
 /// E.g., instr 0 within some basic block means we started at the beginning of
 /// that basic block.
 /// Since the segment stays within a single basic block, the end of the segment
 /// must be somewhere within that basic block.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct PathEntry<'p>(pub LocationDescription<'p>);
+#[derive(PartialEq, Eq, Clone)]
+pub struct PathEntry<'p>(pub Location<'p>);
 
 impl<'p> fmt::Debug for PathEntry<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -156,11 +157,21 @@ impl<'p> fmt::Debug for PathEntry<'p> {
 
 impl<'p> PathEntry<'p> {
     pub(crate) fn to_string_with_module(&self) -> String {
-        format!("{{{}: {} {}, starting at {}}}", self.0.modname, self.0.funcname, self.0.bbname, self.0.instr)
+        format!("{{{}: {} {}, starting at {}}}", self.0.module.name, self.0.func.name, self.0.bb.name, self.0.instr)
     }
 
     pub(crate) fn to_string_no_module(&self) -> String {
-        format!("{{{} {}, starting at {}}}", self.0.funcname, self.0.bbname, self.0.instr)
+        format!("{{{} {}, starting at {}}}", self.0.func.name, self.0.bb.name, self.0.instr)
+    }
+
+    /// Get all the source locations touched on this path segment.
+    /// Consecutive LLVM instructions with the same source location will be
+    /// collapsed, so no two consecutive items of the returned iterator will be
+    /// equal.
+    /// The returned iterator may also be empty, for instance if no debuginfo is
+    /// present.
+    pub(crate) fn get_all_source_locs(&self) -> impl Iterator<Item = &'p DebugLoc> {
+        self.0.bb.instrs.iter().filter_map(|instr| instr.get_debug_loc().as_ref()).dedup()
     }
 }
 
@@ -1064,7 +1075,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// Record the current location as a `PathEntry` in the current path.
     pub fn record_path_entry(&mut self) {
-        let entry = PathEntry(LocationDescription::from(self.cur_loc.clone()));
+        let entry = PathEntry(self.cur_loc.clone());
         debug!("Recording a path entry {:?}", entry);
         self.path.push(entry);
     }
@@ -1501,13 +1512,13 @@ mod tests {
         assert!(state.revert_to_backtracking_point().unwrap());
         assert_eq!(state.cur_loc.func, pre_rollback.func);
         assert_eq!(state.cur_loc.bb.name, bb.name);
-        assert_eq!(state.get_path(), &vec![PathEntry(LocationDescription {
-            modname: "test_mod".into(),
-            funcname: "test_func".into(),
-            bbname: "bb_start".into(),
-            instr: BBInstrIndex::Instr(0),
-            source_loc: None,
-        })]);
+        let path = state.get_path();
+        assert_eq!(path.len(), 1);
+        let path_entry = &path[0];
+        assert_eq!(path_entry.0.module.name, "test_mod");
+        assert_eq!(path_entry.0.func.name, "test_func");
+        assert_eq!(path_entry.0.bb.name, Name::from("bb_start"));
+        assert_eq!(path_entry.0.instr, BBInstrIndex::Instr(0));
 
         // check that the constraint x < 8 was removed: we're sat again
         assert_eq!(state.sat(), Ok(true));
