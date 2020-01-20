@@ -132,11 +132,11 @@ impl<'p> fmt::Debug for LocationDescription<'p> {
 
 impl<'p> LocationDescription<'p> {
     pub(crate) fn to_string_with_module(&self) -> String {
-        format!("{{{}: {} {}, {}}}", self.modname, self.funcname, self.bbname, self.instr)
+        format!("{{{}: {}, bb {}, {}}}", self.modname, self.funcname, self.bbname, self.instr)
     }
 
     pub(crate) fn to_string_no_module(&self) -> String {
-        format!("{{{} {}, {}}}", self.funcname, self.bbname, self.instr)
+        format!("{{{}, bb {}, {}}}", self.funcname, self.bbname, self.instr)
     }
 }
 
@@ -160,11 +160,11 @@ impl<'p> fmt::Debug for PathEntry<'p> {
 
 impl<'p> PathEntry<'p> {
     pub(crate) fn to_string_with_module(&self) -> String {
-        format!("{{{}: {} {}, starting at {}}}", self.0.module.name, self.0.func.name, self.0.bb.name, self.0.instr)
+        format!("{{{}: {}, bb {}, starting at {}}}", self.0.module.name, self.0.func.name, self.0.bb.name, self.0.instr)
     }
 
     pub(crate) fn to_string_no_module(&self) -> String {
-        format!("{{{} {}, starting at {}}}", self.0.func.name, self.0.bb.name, self.0.instr)
+        format!("{{{}, bb {}, starting at {}}}", self.0.func.name, self.0.bb.name, self.0.instr)
     }
 
     /// Get all the source locations touched on this path segment.
@@ -206,7 +206,17 @@ impl<'p> Eq for Location<'p> {}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Location: module {:?}, func {:?}, bb {}, {}>", self.module.name, self.func.name, self.bb.name, self.instr)
+        write!(f, "{}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
+    }
+}
+
+impl<'p> Location<'p> {
+    pub(crate) fn to_string_with_module(&self) -> String {
+        format!("{{{}: {}, bb {}, {}}}", self.module.name, self.func.name, self.bb.name, self.instr)
+    }
+
+    pub(crate) fn to_string_no_module(&self) -> String {
+        format!("{{{}, bb {}, {}}}", self.func.name, self.bb.name, self.instr)
     }
 }
 
@@ -997,14 +1007,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Read a value `bits` bits long from memory at `addr`.
     /// Note that `bits` can be arbitrarily large.
     pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
-        self.mem_watchpoints.process_watchpoint_triggers(self, addr, bits, false)?;
+        self.mem_watchpoints.process_watchpoint_triggers(self, addr, bits, None)?;
         self.mem.borrow().read(addr, bits)
     }
 
     /// Write a value into memory at `addr`.
     /// Note that `val` can be an arbitrarily large bitvector.
     pub fn write(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
-        self.mem_watchpoints.process_watchpoint_triggers(self, addr, val.get_width(), true)?;
+        self.mem_watchpoints.process_watchpoint_triggers(self, addr, val.get_width(), Some(&val))?;
         self.mem.borrow_mut().write(addr, val)
     }
 

@@ -115,14 +115,15 @@ impl Watchpoints {
     ///
     /// Returns `true` if any watchpoints were triggered, `false` if not.
     ///
-    /// `is_write`: whether the operation is a read (`false`) or write (`true`),
-    /// used only for composing the log message.
+    /// `write_data`: if the operation is a read, then `None`; else (if the
+    /// data is a write) then the data being written.
+    /// This is used only for the log message.
     pub(crate) fn process_watchpoint_triggers<B: Backend>(
         &self,
         state: &State<B>,
         addr: &B::BV,
         bits: u32,
-        is_write: bool,
+        write_data: Option<&B::BV>,
     ) -> Result<bool> {
         let mut retval = false;
         if !self.0.is_empty() {
@@ -133,7 +134,15 @@ impl Watchpoints {
             for (name, (watchpoint, enabled)) in self.0.iter() {
                 if *enabled && self.is_watchpoint_triggered(state, watchpoint, op_lower, &op_upper)? {
                     retval = true;
-                    info!("Memory watchpoint {:?} {} {} by {:?}", name, watchpoint, if is_write { "written" } else { "read" }, state.cur_loc);
+                    let pretty_loc = if state.config.print_module_name {
+                        state.cur_loc.to_string_with_module()
+                    } else {
+                        state.cur_loc.to_string_no_module()
+                    };
+                    match write_data {
+                        None => info!("Memory watchpoint {:?} {} read by {}", name, watchpoint, pretty_loc),
+                        Some(write_data) => info!("Memory watchpoint {:?} {} written by {}; new value is {:?}", name, watchpoint, pretty_loc, write_data),
+                    }
                 }
             }
         }
@@ -241,38 +250,38 @@ mod tests {
         // Experiments on the first watchpoint
         let addr = state.bv_from_u32(0x1000, 64);
 
-        // check that we can trigger it with a 1-byte write to 0x1000
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        // check that we can trigger it with a 1-byte read from 0x1000
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
-        // check that we can trigger it with an 8-byte write to 0x1000
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 64, true)?);
+        // check that we can trigger it with an 8-byte read from 0x1000
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 64, None)?);
 
-        // check that we can trigger it with a 1-byte write to 0x1002
+        // check that we can trigger it with a 1-byte read from 0x1002
         let addr = state.bv_from_u32(0x1002, 64);
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
-        // check that we can trigger it with a 8-byte write to 0x1002
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 64, true)?);
+        // check that we can trigger it with a 8-byte read from 0x1002
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 64, None)?);
 
-        // check that we don't trigger it with a 1-byte write to 0x0fff
+        // check that we don't trigger it with a 1-byte read from 0x0fff
         let addr = state.bv_from_u32(0x0fff, 64);
-        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
-        // check that we can trigger it with an 8-byte write to 0x0fff
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 64, true)?);
+        // check that we can trigger it with an 8-byte read from 0x0fff
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 64, None)?);
 
-        // check that we don't trigger it with a 1-byte write to 0x1008
+        // check that we don't trigger it with a 1-byte read from 0x1008
         let addr = state.bv_from_u32(0x1008, 64);
-        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
-        // check that we do trigger it with a 0x100-byte write to 0x0ff0
+        // check that we do trigger it with a 0x100-byte read from 0x0ff0
         let addr = state.bv_from_u32(0x0ff0, 64);
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 0x100 * 8, true)?);
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 0x100 * 8, None)?);
 
         // disable it and check that we no longer trigger it
         assert!(watchpoints.disable("w1"));
         let addr = state.bv_from_u32(0x1002, 64);
-        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
         // re-enable it
         assert!(watchpoints.enable("w1"));
@@ -283,27 +292,27 @@ mod tests {
         // Experiments on the second watchpoint
         let addr = state.bv_from_u32(0x2000, 64);
 
-        // check that we can trigger it with a 1-byte write to 0x2000
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        // check that we can trigger it with a 1-byte read from 0x2000
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
-        // check that we can trigger it with a 1-byte write to 0x2010
+        // check that we can trigger it with a 1-byte read from 0x2010
         let addr = state.bv_from_u32(0x2010, 64);
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
-        // check that a write touching both watchpoints does trigger
+        // check that a read touching both watchpoints does trigger
         let addr = state.bv_from_u32(0x0ff0, 64);
-        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 0x10000, true)?);
+        assert!(watchpoints.process_watchpoint_triggers(&state, &addr, 0x10000, None)?);
 
-        // check that a write in between the two watchpoints doesn't trigger
+        // check that a read in between the two watchpoints doesn't trigger
         let addr = state.bv_from_u32(0x1f00, 64);
-        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 16, true)?);
+        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 16, None)?);
 
         // fully remove the second watchpoint
         assert!(watchpoints.remove("w2"));
 
         // check that it is no longer triggered
         let addr = state.bv_from_u32(0x2000, 64);
-        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, true)?);
+        assert!(!watchpoints.process_watchpoint_triggers(&state, &addr, 8, None)?);
 
         // check that trying to re-enable it now returns false
         assert!(!watchpoints.enable("w2"));
