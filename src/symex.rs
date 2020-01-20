@@ -146,7 +146,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
         };
         retval.transpose().map(|r| r.map_err(|e| {
             let mut err_msg = format!("Received the following error:\n\n  {}\n\n", e);
-            err_msg.push_str(&format!("LLVM backtrace:\n{}\n", self.state.pretty_llvm_backtrace()));
+            err_msg.push_str(&format!("LLVM backtrace:\n{}\n", self.state.pretty_backtrace()));
             match PathDumpType::get_from_env_var() {
                 PathDumpType::None => {
                     err_msg.push_str("note: For a dump of the path that led to this error, rerun with the environment variable `HAYBALE_DUMP_PATH` set to:\n");

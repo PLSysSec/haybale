@@ -1176,8 +1176,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         self.backtrack_points.len()
     }
 
-    /// returns a `String` containing a formatted view of the current LLVM backtrace
-    pub fn pretty_llvm_backtrace(&self) -> String {
+    /// returns a `String` containing a formatted view of the current backtrace
+    /// (in terms of LLVM locations, and possibly also source locations depending
+    /// on the `Config`)
+    pub fn pretty_backtrace(&self) -> String {
         let mut locdescrs = std::iter::once(LocationDescription::from(self.cur_loc.clone()))
             .chain(self.stack.iter().rev().map(|frame| LocationDescription::from(frame.callsite.loc.clone())))
             .collect::<Vec<LocationDescription>>();
