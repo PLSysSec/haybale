@@ -1131,6 +1131,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM intrinsic objectsize hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
+                    } else if funcname == "llvm.assume" {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.assume").cloned().expect("Failed to find LLVM intrinsic assume hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
                     } else if funcname.starts_with("llvm.read_register")
                         || funcname.starts_with("llvm.write_register")
                     {

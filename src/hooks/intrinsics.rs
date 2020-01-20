@@ -221,3 +221,20 @@ pub fn symex_objectsize<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p
     let minusone = state.ones(width as u32);
     Ok(ReturnValue::Return(arg1.cond_bv(&zero, &minusone)))
 }
+
+pub fn symex_assume<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 1);
+    let arg = &call.get_arguments()[0].0;
+    match arg.get_type() {
+        Type::IntegerType { bits: 1 } => {},
+        ty => return Err(Error::OtherError(format!("symex_assume: expected arg to be of type i1, got type {:?}", ty))),
+    }
+
+    if state.config.trust_llvm_assumes {
+        state.operand_to_bv(arg)?.assert()?;
+    } else {
+        // just ignore the assume
+    }
+
+    Ok(ReturnValue::ReturnVoid)
+}

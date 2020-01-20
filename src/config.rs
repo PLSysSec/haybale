@@ -33,6 +33,17 @@ pub struct Config<'p, B> where B: Backend {
     /// Default is `Concretize::Symbolic` - that is, no concretization.
     pub concretize_memcpy_lengths: Concretize,
 
+    /// When encountering the `llvm.assume()` intrinsic, should we only consider
+    /// paths where the assumption holds (`true`), or should we also consider
+    /// paths where the assumption does not hold, if that is possible (`false`)?
+    ///
+    /// Note that you may also provide a custom hook for `llvm.assume()` in
+    /// [`function_hooks`](struct.Config.html#structfield.function_hooks).
+    /// If you do, that overrides this setting.
+    ///
+    /// Default is `true`.
+    pub trust_llvm_assumes: bool,
+
     /// The set of currently active function hooks; see
     /// [`FunctionHooks`](../function_hooks/struct.FunctionHooks.html) for more details.
     ///
@@ -136,19 +147,25 @@ pub enum Concretize {
 }
 
 impl<'p, B: Backend> Config<'p, B> {
-    /// Creates a new `Config` with the given `loop_bound`, `null_detection`, and
-    /// `concretize_memcpy_lengths` options; no function hooks or memory
-    /// watchpoints; and defaults for the other options.
+    /// Creates a new `Config` with the given `loop_bound`, `null_detection`,
+    /// `concretize_memcpy_lengths`, and `trust_llvm_assumes` options; no
+    /// function hooks or memory watchpoints; and defaults for the other options.
     ///
     /// You may want to consider
     /// [`Config::default()`](struct.Config.html#method.default), which provides
     /// defaults for all parameters and comes with predefined hooks for common
     /// functions.
-    pub fn new(loop_bound: usize, null_detection: bool, concretize_memcpy_lengths: Concretize) -> Self {
+    pub fn new(
+        loop_bound: usize,
+        null_detection: bool,
+        concretize_memcpy_lengths: Concretize,
+        trust_llvm_assumes: bool,
+    ) -> Self {
         Self {
             loop_bound,
             null_detection,
             concretize_memcpy_lengths,
+            trust_llvm_assumes,
             function_hooks: FunctionHooks::new(),
             initial_mem_watchpoints: HashMap::new(),
             demangling: None,
@@ -172,6 +189,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             loop_bound: 10,
             null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,
+            trust_llvm_assumes: true,
             function_hooks: FunctionHooks::default(),
             initial_mem_watchpoints: HashMap::new(),
             demangling: None,
