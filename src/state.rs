@@ -109,6 +109,9 @@ pub fn pretty_source_loc(source_loc: &DebugLoc) -> String {
     };
     let pretty_filename = match &source_loc.filename as &str {
         "" => "<no filename available>",
+        filename if !pretty_directory.is_empty() => {
+            filename.trim_start_matches(pretty_directory)
+        },
         filename => &filename,
     };
     let pretty_column = match source_loc.col {
