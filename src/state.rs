@@ -104,7 +104,7 @@ pub fn pretty_source_loc(source_loc: &DebugLoc) -> String {
         None => "",
     };
     let need_slash = match &source_loc.directory {
-        Some(dir) => !dir.is_empty() && !dir.ends_with("/"),
+        Some(dir) => !dir.is_empty() && !dir.ends_with("/") && !source_loc.filename.starts_with("/"),
         None => false,
     };
     let pretty_filename = match &source_loc.filename as &str {
