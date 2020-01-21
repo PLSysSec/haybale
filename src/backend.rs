@@ -2,7 +2,6 @@
 //! etc) being used.
 
 use boolector::{Btor, BVSolution};
-use boolector::option::BtorOption;
 use crate::error::Result;
 use std::fmt;
 use std::ops::Deref;
@@ -61,8 +60,11 @@ impl SolverRef for Rc<Btor> {
         // on when needed (profiling shows that a sat check with model gen enabled is
         // much, much more expensive than a sat check without model gen enabled, at
         // least for our frequent incremental sat checks)
+        use boolector::option::*;
         let btor = Btor::new();
         btor.set_opt(BtorOption::Incremental(true));
+        btor.set_opt(BtorOption::PrettyPrint(true));
+        btor.set_opt(BtorOption::OutputNumberFormat(NumberFormat::Hexadecimal));
         Rc::new(btor)
     }
 
