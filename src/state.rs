@@ -1007,14 +1007,27 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Read a value `bits` bits long from memory at `addr`.
     /// Note that `bits` can be arbitrarily large.
     pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
-        self.mem_watchpoints.process_watchpoint_triggers(self, addr, bits, None)?;
-        self.mem.borrow().read(addr, bits)
+        let retval = self.read_without_triggering_watchpoints(addr, bits)?;
+        self.mem_watchpoints.process_watchpoint_triggers(self, addr, bits, false)?;
+        Ok(retval)
     }
 
     /// Write a value into memory at `addr`.
     /// Note that `val` can be an arbitrarily large bitvector.
     pub fn write(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
-        self.mem_watchpoints.process_watchpoint_triggers(self, addr, val.get_width(), Some(&val))?;
+        let write_width = val.get_width();
+        self.write_without_triggering_watchpoints(addr, val)?;
+        self.mem_watchpoints.process_watchpoint_triggers(self, addr, write_width, true)?;
+        Ok(())
+    }
+
+    /// For internal use: perform a memory read without triggering watchpoints
+    pub(crate) fn read_without_triggering_watchpoints(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
+        self.mem.borrow().read(addr, bits)
+    }
+
+    /// For internal use: perform a memory write without triggering watchpoints
+    pub(crate) fn write_without_triggering_watchpoints(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
         self.mem.borrow_mut().write(addr, val)
     }
 
