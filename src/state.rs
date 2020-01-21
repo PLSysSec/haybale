@@ -762,7 +762,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                         debug!("Initializing {:?} with initializer {:?}", name, &ga.initializer);
                         ga.initialized.set(true);
                         let write_val = self.const_to_bv(&ga.initializer)?;
-                        self.mem.borrow_mut().write(&ga.addr, write_val)?;
+                        self.write_without_mut(&ga.addr, write_val)?;
                     }
                     Ok(ga.addr.clone())
                 } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
@@ -1015,10 +1015,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Write a value into memory at `addr`.
     /// Note that `val` can be an arbitrarily large bitvector.
     pub fn write(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
-        let write_width = val.get_width();
-        self.write_without_triggering_watchpoints(addr, val)?;
-        self.mem_watchpoints.process_watchpoint_triggers(self, addr, write_width, true)?;
-        Ok(())
+        self.write_without_mut(addr, val)
     }
 
     /// For internal use: perform a memory read without triggering watchpoints
@@ -1027,7 +1024,27 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     }
 
     /// For internal use: perform a memory write without triggering watchpoints
+    #[allow(dead_code)] // this method is not currently used, but it's here for symmetry with `read_without_triggering_watchpoints()`
     pub(crate) fn write_without_triggering_watchpoints(&mut self, addr: &B::BV, val: B::BV) -> Result<()> {
+        self.write_without_mut_or_triggering_watchpoints(addr, val)
+    }
+
+    /// For internal use: since `self.mem` is a `RefCell`, we can write even
+    /// without having a `&mut self` reference. This is necessary to support,
+    /// for instance, lazy global initialization. But, we don't want to skip
+    /// watchpoint checks by calling `self.mem.borrow_mut()` directly, so we
+    /// have this
+    fn write_without_mut(&self, addr: &B::BV, val: B::BV) -> Result<()> {
+        let write_width = val.get_width();
+        self.write_without_mut_or_triggering_watchpoints(addr, val)?;
+        self.mem_watchpoints.process_watchpoint_triggers(self, addr, write_width, true)?;
+        Ok(())
+    }
+
+    /// For internal use: the underlying `write()` method without the watchpoint
+    /// calls or needing a `&mut self`. Used in both `write_without_mut()` and
+    /// `write_without_triggering_watchpoints()`.
+    fn write_without_mut_or_triggering_watchpoints(&self, addr: &B::BV, val: B::BV) -> Result<()> {
         self.mem.borrow_mut().write(addr, val)
     }
 
