@@ -774,8 +774,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         debug!("Symexing alloca {:?}", alloca);
         match &alloca.num_elements {
             Operand::ConstantOperand(Constant::Int { value: num_elements, .. }) => {
-                let allocation_size = size_opaque_aware(&alloca.allocated_type, self.project) as u64 * num_elements;
-                let allocated = self.state.allocate(allocation_size);
+                let allocation_size_bits = size_opaque_aware(&alloca.allocated_type, self.project) as u64 * num_elements;
+                let allocation_size_bits = if allocation_size_bits == 0 {
+                    debug!("Alloca is for something of size 0 bits; we'll give it 8 bits anyway");
+                    8
+                } else {
+                    allocation_size_bits
+                };
+                let allocated = self.state.allocate(allocation_size_bits);
                 self.state.record_bv_result(alloca, allocated)
             },
             op => Err(Error::UnsupportedInstruction(format!("Alloca with num_elements not a constant int: {:?}", op))),

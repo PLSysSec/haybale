@@ -388,7 +388,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             // definitions, since each global variable must have exactly one
             // definition. Hence the `filter()` above.
             if let Type::PointerType { pointee_type, .. } = &var.ty {
-                let addr = state.allocate(size_opaque_aware(&*pointee_type, project) as u64);
+                let size_bits = size_opaque_aware(&*pointee_type, project);
+                let size_bits = if size_bits == 0 {
+                    debug!("Global {:?} has size 0 bits; allocating 8 bits for it anyway", var.name);
+                    8
+                } else {
+                    size_bits
+                };
+                let addr = state.allocate(size_bits as u64);
                 debug!("Allocated {:?} at {:?}", var.name, addr);
                 state.global_allocations.allocate_global_var(var, module, addr);
             } else {
