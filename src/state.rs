@@ -1251,6 +1251,69 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         }).collect()
     }
 
+    /// returns a `String` containing a formatted view of the full path which led
+    /// to this point, in terms of LLVM locations
+    pub fn pretty_path_llvm(&self) -> String {
+        let mut path_str = String::new();
+        for path_entry in self.get_path() {
+            path_str.push_str(&format!("  {}\n",
+                if self.config.print_module_name {
+                    path_entry.to_string_with_module()
+                } else {
+                    path_entry.to_string_no_module()
+                },
+            ));
+        }
+        path_str
+    }
+
+    /// returns a `String` containing a formatted view of the full path which led
+    /// to this point, in terms of source locations
+    pub fn pretty_path_source(&self) -> String {
+        let mut path_str = String::new();
+        let mut source_locs = self.get_path().iter().flat_map(|path_entry| path_entry.get_all_source_locs());
+            // handle the first one special, so we can print this help message if necessary
+        match source_locs.next() {
+            None => {
+                path_str.push_str("  No source locations available in the path.\n");
+                path_str.push_str("  This may be because the LLVM bitcode was not compiled with debuginfo.\n");
+                path_str.push_str("  To compile C/C++ or Rust sources with debuginfo, pass the `-g` flag\n");
+                path_str.push_str("    to `clang`, `clang++`, or `rustc`.\n");
+            },
+            Some(first_source_loc) => path_str.push_str(&format!("  {}\n", pretty_source_loc(first_source_loc))),
+        }
+        for source_loc in source_locs {
+            path_str.push_str(&format!("  {}\n", pretty_source_loc(source_loc)));
+        }
+        path_str
+    }
+
+    /// returns a `String` containing a formatted view of the full path which led
+    /// to this point, in terms of both LLVM and source locations (interleaved
+    /// appropriately)
+    pub fn pretty_path_interleaved(&self) -> String {
+        let mut path_str = String::new();
+        for path_entry in self.get_path() {
+            path_str.push_str(&format!("  {}:\n",
+                if self.config.print_module_name {
+                    path_entry.to_string_with_module()
+                } else {
+                    path_entry.to_string_no_module()
+                },
+            ));
+            let mut source_locs = path_entry.get_all_source_locs();
+            // handle the first one special, so we can print this help message if necessary
+            match source_locs.next() {
+                None => path_str.push_str(&format!("    (no source locations available)\n")),
+                Some(first_source_loc) => path_str.push_str(&format!("    {}\n", pretty_source_loc(first_source_loc))),
+            }
+            for source_loc in source_locs {
+                path_str.push_str(&format!("    {}\n", pretty_source_loc(source_loc)));
+            }
+        }
+        path_str
+    }
+
     /// Attempt to demangle the given `funcname` as appropriate based on the
     /// `Config`.
     ///
@@ -1306,55 +1369,17 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             },
             PathDumpType::LLVM => {
                 err_msg.push_str("LLVM path to error:\n");
-                for path_entry in self.get_path() {
-                    err_msg.push_str(&format!("  {}\n",
-                        if self.config.print_module_name {
-                            path_entry.to_string_with_module()
-                        } else {
-                            path_entry.to_string_no_module()
-                        },
-                    ));
-                }
+                err_msg.push_str(&self.pretty_path_llvm());
                 err_msg.push_str("note: to also get a dump of the source-language locations in this path, rerun with `HAYBALE_DUMP_PATH=BOTH`.\n");
             },
             PathDumpType::Source => {
                 err_msg.push_str("Source-language path to error:\n");
-                let mut source_locs = self.get_path().iter().flat_map(|path_entry| path_entry.get_all_source_locs());
-                // handle the first one special, so we can print this help message if necessary
-                match source_locs.next() {
-                    None => {
-                        err_msg.push_str("  No source locations available in the path.\n");
-                        err_msg.push_str("  This may be because the LLVM bitcode was not compiled with debuginfo.\n");
-                        err_msg.push_str("  To compile C/C++ or Rust sources with debuginfo, pass the `-g` flag\n");
-                        err_msg.push_str("    to `clang`, `clang++`, or `rustc`.\n");
-                    },
-                    Some(first_source_loc) => err_msg.push_str(&format!("  {}\n", pretty_source_loc(first_source_loc))),
-                }
-                for source_loc in source_locs {
-                    err_msg.push_str(&format!("  {}\n", pretty_source_loc(source_loc)));
-                }
+                err_msg.push_str(&self.pretty_path_source());
                 err_msg.push_str("note: to also get a dump of the LLVM basic blocks in this path, rerun with `HAYBALE_DUMP_PATH=BOTH`.\n");
             },
             PathDumpType::Interleaved => {
                 err_msg.push_str("Full path to error:\n");
-                for path_entry in self.get_path() {
-                    err_msg.push_str(&format!("  {}:\n",
-                        if self.config.print_module_name {
-                            path_entry.to_string_with_module()
-                        } else {
-                            path_entry.to_string_no_module()
-                        },
-                    ));
-                    let mut source_locs = path_entry.get_all_source_locs();
-                    // handle the first one special, so we can print this help message if necessary
-                    match source_locs.next() {
-                        None => err_msg.push_str(&format!("    (no source locations available)\n")),
-                        Some(first_source_loc) => err_msg.push_str(&format!("    {}\n", pretty_source_loc(first_source_loc))),
-                    }
-                    for source_loc in source_locs {
-                        err_msg.push_str(&format!("    {}\n", pretty_source_loc(source_loc)));
-                    }
-                }
+                err_msg.push_str(&self.pretty_path_interleaved());
             },
         }
         if std::env::var("HAYBALE_DUMP_VARS") == Ok("1".to_owned()) {
