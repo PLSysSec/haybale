@@ -145,7 +145,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
             self.backtrack_and_continue()
         };
         retval.transpose().map(|r| r.map_err(|e| {
-            let mut err_msg = format!("Received the following error:\n\n  {}\n\n", e);
+            let mut err_msg = format!("{}\n\n", e);
             err_msg.push_str(&format!("Backtrace:\n{}\n", self.state.pretty_backtrace()));
             match PathDumpType::get_from_env_var() {
                 PathDumpType::None => {
