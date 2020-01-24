@@ -5,11 +5,9 @@ use either::Either;
 use reduce::Reduce;
 use std::convert::TryInto;
 use std::fmt;
-use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
 pub use crate::state::{State, BBInstrIndex, Location, LocationDescription, PathEntry};
-use crate::state::pretty_source_loc;
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
@@ -101,37 +99,6 @@ impl<'p, B: Backend> ExecutionManager<'p, B> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum PathDumpType {
-    /// Don't dump the path
-    None,
-    /// Dump just the LLVM path
-    LLVM,
-    /// Dump just the source path
-    Source,
-    /// Dump both LLVM and source path (interleaved)
-    Interleaved,
-}
-
-impl PathDumpType {
-    fn get_from_env_var() -> Self {
-        match std::env::var("HAYBALE_DUMP_PATH") {
-            Err(_) => Self::None,
-            Ok(mut val) => {
-                val.make_ascii_uppercase();
-                match val.deref() {
-                    "" => Self::None,
-                    "LLVM" => Self::LLVM,
-                    "SRC" => Self::Source,
-                    "BOTH" => Self::Interleaved,
-                    "1" => Self::Interleaved,  // previous versions of `haybale` used HAYBALE_DUMP_PATH=1, we now treat that equivalently to `BOTH`
-                    _ => Self::Interleaved,
-                }
-           },
-        }
-    }
-}
-
 impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
     type Item = std::result::Result<ReturnValue<B::BV>, String>;
 
@@ -144,87 +111,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
             debug!("ExecutionManager: requesting next path");
             self.backtrack_and_continue()
         };
-        retval.transpose().map(|r| r.map_err(|e| {
-            let mut err_msg = format!("{}\n\n", e);
-            err_msg.push_str(&format!("Backtrace:\n{}\n", self.state.pretty_backtrace()));
-            match PathDumpType::get_from_env_var() {
-                PathDumpType::None => {
-                    err_msg.push_str("note: For a dump of the path that led to this error, rerun with the environment variable `HAYBALE_DUMP_PATH` set to:\n");
-                    err_msg.push_str("        `LLVM` for a list of the LLVM basic blocks in the path\n");
-                    err_msg.push_str("        `SRC` for a list of the source-language locations in the path\n");
-                    err_msg.push_str("        `BOTH` for both of the above\n");
-                    err_msg.push_str("      To get source-language locations, the LLVM bitcode must also contain\n");
-                    err_msg.push_str("      debuginfo. For example, C/C++ or Rust sources must be compiled with the\n");
-                    err_msg.push_str("      `-g` flag to `clang`, `clang++`, or `rustc`.\n");
-                },
-                PathDumpType::LLVM => {
-                    err_msg.push_str("LLVM path to error:\n");
-                    for path_entry in self.state.get_path() {
-                        err_msg.push_str(&format!("  {}\n",
-                            if self.state.config.print_module_name {
-                                path_entry.to_string_with_module()
-                            } else {
-                                path_entry.to_string_no_module()
-                            },
-                        ));
-                    }
-                    err_msg.push_str("note: to also get a dump of the source-language locations in this path, rerun with `HAYBALE_DUMP_PATH=BOTH`.\n");
-                },
-                PathDumpType::Source => {
-                    err_msg.push_str("Source-language path to error:\n");
-                    let mut source_locs = self.state.get_path().iter().flat_map(|path_entry| path_entry.get_all_source_locs());
-                    // handle the first one special, so we can print this help message if necessary
-                    match source_locs.next() {
-                        None => {
-                            err_msg.push_str("  No source locations available in the path.\n");
-                            err_msg.push_str("  This may be because the LLVM bitcode was not compiled with debuginfo.\n");
-                            err_msg.push_str("  To compile C/C++ or Rust sources with debuginfo, pass the `-g` flag\n");
-                            err_msg.push_str("    to `clang`, `clang++`, or `rustc`.\n");
-                        },
-                        Some(first_source_loc) => err_msg.push_str(&format!("  {}\n", pretty_source_loc(first_source_loc))),
-                    }
-                    for source_loc in source_locs {
-                        err_msg.push_str(&format!("  {}\n", pretty_source_loc(source_loc)));
-                    }
-                    err_msg.push_str("note: to also get a dump of the LLVM basic blocks in this path, rerun with `HAYBALE_DUMP_PATH=BOTH`.\n");
-                },
-                PathDumpType::Interleaved => {
-                    err_msg.push_str("Full path to error:\n");
-                    for path_entry in self.state.get_path() {
-                        err_msg.push_str(&format!("  {}:\n",
-                            if self.state.config.print_module_name {
-                                path_entry.to_string_with_module()
-                            } else {
-                                path_entry.to_string_no_module()
-                            },
-                        ));
-                        let mut source_locs = path_entry.get_all_source_locs();
-                        // handle the first one special, so we can print this help message if necessary
-                        match source_locs.next() {
-                            None => err_msg.push_str(&format!("    (no source locations available)\n")),
-                            Some(first_source_loc) => err_msg.push_str(&format!("    {}\n", pretty_source_loc(first_source_loc))),
-                        }
-                        for source_loc in source_locs {
-                            err_msg.push_str(&format!("    {}\n", pretty_source_loc(source_loc)));
-                        }
-                    }
-                },
-            }
-            if std::env::var("HAYBALE_DUMP_VARS") == Ok("1".to_owned()) {
-                err_msg.push_str("\nLatest values of variables at time of error, in current function:\n");
-                err_msg.push_str("(Ignore any values from past the point of error, they may be from other paths)\n\n");
-                for (varname, value) in self.state.all_vars_in_cur_fn() {
-                    err_msg.push_str(&format!("  {}: {:?}\n", varname, value));
-                }
-            } else {
-                err_msg.push_str("\nnote: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n");
-            }
-            err_msg.push_str("\nnote: to enable detailed logs, ensure that debug-level logging messages are visible.\n");
-            err_msg.push_str("  This requires a non-release build, and also (for env_logger) `RUST_LOG=haybale` or similar.\n");
-            err_msg.push_str("  (For how to enable more granular logging options, see docs for the env_logger crate).\n");
-            err_msg.push_str("\n");
-            err_msg
-        }))
+        retval.transpose().map(|r| r.map_err(|e| self.state.format_error_with_rich_info(e)))
     }
 }
 
