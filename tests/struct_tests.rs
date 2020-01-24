@@ -18,7 +18,9 @@ fn one_int() {
     let funcname = "one_int";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -28,7 +30,9 @@ fn two_ints_first() {
     let funcname = "two_ints_first";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -38,7 +42,9 @@ fn two_ints_second() {
     let funcname = "two_ints_second";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -48,7 +54,9 @@ fn two_ints_both() {
     let funcname = "two_ints_both";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -65,7 +73,9 @@ fn three_ints() {
     let funcname = "three_ints";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -84,7 +94,9 @@ fn zero_initialize() {
     let funcname = "zero_initialize";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     let a = Wrapping(2);
@@ -100,7 +112,9 @@ fn nonzero_initialize() {
     let funcname = "nonzero_initialize";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(103));
 }
@@ -110,7 +124,9 @@ fn mismatched_first() {
     let funcname = "mismatched_first";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I8(3));
 }
@@ -120,7 +136,9 @@ fn mismatched_second() {
     let funcname = "mismatched_second";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -130,7 +148,9 @@ fn mismatched_third() {
     let funcname = "mismatched_third";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I8(3));
 }
@@ -140,7 +160,9 @@ fn mismatched_all() {
     let funcname = "mismatched_all";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -163,7 +185,9 @@ fn nested_first() {
     let funcname = "nested_first";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -173,7 +197,9 @@ fn nested_second() {
     let funcname = "nested_second";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -183,7 +209,9 @@ fn nested_all() {
     let funcname = "nested_all";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i8() as u8);
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -204,7 +232,9 @@ fn with_array() {
     let funcname = "with_array";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -214,7 +244,9 @@ fn with_array_all() {
     let funcname = "with_array_all";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -231,7 +263,9 @@ fn structptr() {
     let funcname = "structptr";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);
@@ -247,7 +281,9 @@ fn structelptr() {
     let funcname = "structelptr";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -257,7 +293,9 @@ fn changeptr() {
     let funcname = "changeptr";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x);

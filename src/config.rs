@@ -5,6 +5,7 @@ pub use crate::demangling::Demangling;
 use crate::function_hooks::FunctionHooks;
 use crate::watchpoints::Watchpoint;
 use std::collections::HashMap;
+use std::time::Duration;
 
 /// Various settings which affect how the symbolic execution is performed.
 ///
@@ -19,6 +20,14 @@ pub struct Config<'p, B> where B: Backend {
     ///
     /// Default is `10`.
     pub loop_bound: usize,
+
+    /// Maximum amount of time to allow for any single solver query.
+    ///
+    /// If `Some`, any solver query lasting longer than the given limit will
+    /// be killed.  This will result in an `Error::SolverError` for that path.
+    ///
+    /// If `None`, there will be no time limit for solver queries.
+    pub solver_query_timeout: Option<Duration>,
 
     /// If `true`, all memory accesses will be checked to ensure their addresses
     /// cannot be `NULL`, throwing `Error::NullPointerDereference` if `NULL` is a
@@ -147,9 +156,10 @@ pub enum Concretize {
 }
 
 impl<'p, B: Backend> Config<'p, B> {
-    /// Creates a new `Config` with the given `loop_bound`, `null_detection`,
-    /// `concretize_memcpy_lengths`, and `trust_llvm_assumes` options; no
-    /// function hooks or memory watchpoints; and defaults for the other options.
+    /// Creates a new `Config` with the given `loop_bound`,
+    /// `solver_query_timeout`, `null_detection`, `concretize_memcpy_lengths`,
+    /// and `trust_llvm_assumes` options; no function hooks or memory
+    /// watchpoints; and defaults for the other options.
     ///
     /// You may want to consider
     /// [`Config::default()`](struct.Config.html#method.default), which provides
@@ -157,12 +167,14 @@ impl<'p, B: Backend> Config<'p, B> {
     /// functions.
     pub fn new(
         loop_bound: usize,
+        solver_query_timeout: Option<Duration>,
         null_detection: bool,
         concretize_memcpy_lengths: Concretize,
         trust_llvm_assumes: bool,
     ) -> Self {
         Self {
             loop_bound,
+            solver_query_timeout,
             null_detection,
             concretize_memcpy_lengths,
             trust_llvm_assumes,
@@ -187,6 +199,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     fn default() -> Self {
         Self {
             loop_bound: 10,
+            solver_query_timeout: Some(Duration::from_secs(300)),
             null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,
             trust_llvm_assumes: true,

@@ -330,6 +330,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         mut config: Config<'p, B>,
     ) -> Self {
         let solver = B::SolverRef::new();
+        solver.set_opt(BtorOption::SolverTimeout(config.solver_query_timeout));
         if config.demangling.is_none() {
             config.demangling = Some(Demangling::autodetect(project));
         }

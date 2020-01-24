@@ -17,7 +17,9 @@ fn load_and_store() {
     let funcname = "load_and_store";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -27,7 +29,9 @@ fn local_ptr() {
     let funcname = "local_ptr";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -37,7 +41,9 @@ fn overwrite() {
     let funcname = "overwrite";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -47,7 +53,9 @@ fn load_and_store_mult() {
     let funcname = "load_and_store_mult";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -59,7 +67,9 @@ fn array() {
     let proj = get_project();
     let mut config = Config::default();
     config.null_detection = false;  // otherwise this test fails, as ptr[10] could be NULL for the correct value of ptr
-    let args = find_zero_of_func(funcname, &proj, config).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, config)
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -71,7 +81,9 @@ fn pointer_arith() {
     let proj = get_project();
     let mut config = Config::default();
     config.null_detection = false;  // otherwise this test fails, as e.g. ptr[2] or ptr[5] or something could be NULL, for the correct value of ptr
-    let args = find_zero_of_func(funcname, &proj, config).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, config)
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -81,7 +93,9 @@ fn pointer_compare() {
     let funcname = "pointer_compare";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default()).expect("Failed to find zero of the function");
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+            .unwrap_or_else(|r| panic!("{}", r))
+            .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }

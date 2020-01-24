@@ -14,7 +14,8 @@ pub enum Error {
     FunctionNotFound(String),
     /// An operation attempted to coerce a `BV` more than one bit long into a `Bool`. The `String` is a text description of the `BV`, and the `u32` is its size
     BoolCoercionError(String, u32),
-    /// The solver returned this processing error while evaluating a query
+    /// The solver returned this processing error while evaluating a query.
+    /// Often, this is a timeout; see [`Config.solver_query_timeout`](../struct.Config.html#structfield.solver_query_timeout)
     SolverError(String),
     /// Encountered an LLVM instruction which is not currently supported
     UnsupportedInstruction(String),
@@ -46,6 +47,12 @@ impl fmt::Display for Error {
             Error::OtherError(details) =>
                 write!(f, "`OtherError`: {}", details),
         }
+    }
+}
+
+impl From<Error> for String {
+    fn from(e: Error) -> String {
+        e.to_string()  // use the Display impl
     }
 }
 

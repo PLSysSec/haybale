@@ -1546,9 +1546,10 @@ mod tests {
     //! functions. In contrast, the integration tests in the tests/ folder test for
     //! specific solutions for function parameters and return values.
 
-    use llvm_ir::*;
     use super::*;
     use std::fmt;
+
+    type Result<T> = std::result::Result<T, String>;
 
     fn init_logging() {
         // capture log messages with test harness
@@ -1682,71 +1683,88 @@ mod tests {
     }
 
     impl<'p, B: Backend> Iterator for PathIterator<'p, B> where B: 'p {
-        type Item = Path<'p>;
+        type Item = Result<Path<'p>>;
 
         fn next(&mut self) -> Option<Self::Item> {
-            self.em.next().map(|_|
-                Path(
-                    self.em.state().get_path().iter().map(|pathentry| LocationDescription::from(pathentry.0.clone())).collect()
-                ).strip_source_locs()
-            )
+            self.em.next().map(|res| match res {
+                Err(e) => Err(e),
+                Ok(_) => Ok(
+                    Path(
+                        self.em.state().get_path().iter().map(|pathentry| LocationDescription::from(pathentry.0.clone())).collect()
+                    ).strip_source_locs()
+                ),
+            })
         }
     }
 
     use BBInstrIndex::{Instr, Terminator};
 
     #[test]
-    fn one_block() {
+    fn one_block() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "one_arg";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn two_paths() {
+    fn two_paths() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "conditional_true";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 12]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 8, 12]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn four_paths() {
+    fn four_paths() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "conditional_nozero";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 6, 14]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14]));
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![2, 14]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn switch() {
+    fn switch() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "has_switch";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
             (2, Instr(0)),
             (4, Terminator),
@@ -1783,34 +1801,41 @@ mod tests {
         ]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
 
+        Ok(())
     }
 
     #[test]
-    fn while_loop() {
+    fn while_loop() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "while_loop";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12]));
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 6, 6, 12]));
         assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 12]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn for_loop() {
+    fn for_loop() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "for_loop";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 9, 6]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 9, 9, 6]));
@@ -1818,17 +1843,21 @@ mod tests {
         assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 6]));
         assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 9, 6]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn loop_more_blocks() {
+    fn loop_more_blocks() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "loop_zero_iterations";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 8, 18]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18]));
         assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18]));
@@ -1837,17 +1866,21 @@ mod tests {
         assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
         assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 18]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn loop_more_blocks_in_body() {
+    fn loop_more_blocks_in_body() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "loop_with_cond";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
                                                                          6, 10, 16,
                                                                          6, 10, 16,
@@ -1864,31 +1897,39 @@ mod tests {
                                                                          6, 10, 16, 20]));
         assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 20]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn two_loops() {
+    fn two_loops() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "sum_of_array";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
                                                                          11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn nested_loop() {
+    fn nested_loop() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "nested_loop";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 30, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                      10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
                                                                      10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
@@ -1900,27 +1941,33 @@ mod tests {
                                                                      10, 7]));
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 7]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn simple_call() {
+    fn simple_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "simple_caller";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
             ("simple_caller", 1, Instr(0)),
             ("simple_callee", 2, Instr(0)),
             ("simple_caller", 1, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn cross_module_simple_call() {
+    fn cross_module_simple_call() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_simple_caller";
@@ -1928,24 +1975,30 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
             (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
             (callee_modname, "simple_callee", 2, Instr(0)),
             (caller_modname, "cross_module_simple_caller", 1, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn conditional_call() {
+    fn conditional_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "conditional_caller";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
             ("conditional_caller", 2, Instr(0)),
             ("conditional_caller", 4, Instr(0)),
@@ -1955,17 +2008,21 @@ mod tests {
         ]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 6, 8]));
         assert_eq!(paths.len(), 2);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn call_twice() {
+    fn call_twice() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "twice_caller";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
             ("twice_caller", 1, Instr(0)),
             ("simple_callee", 2, Instr(0)),
@@ -1974,10 +2031,12 @@ mod tests {
             ("twice_caller", 1, Instr(2)),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn cross_module_call_twice() {
+    fn cross_module_call_twice() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_twice_caller";
@@ -1985,7 +2044,9 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
             (caller_modname, "cross_module_twice_caller", 1, Instr(0)),
             (callee_modname, "simple_callee", 2, Instr(0)),
@@ -1994,17 +2055,21 @@ mod tests {
             (caller_modname, "cross_module_twice_caller", 1, Instr(2)),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn nested_call() {
+    fn nested_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "nested_caller";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
             ("nested_caller", 2, Instr(0)),
             ("simple_caller", 1, Instr(0)),
@@ -2013,10 +2078,12 @@ mod tests {
             ("nested_caller", 2, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn cross_module_nested_near_call() {
+    fn cross_module_nested_near_call() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_nested_near_caller";
@@ -2024,7 +2091,9 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
             (caller_modname, "cross_module_nested_near_caller", 2, Instr(0)),
             (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
@@ -2033,10 +2102,12 @@ mod tests {
             (caller_modname, "cross_module_nested_near_caller", 2, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn cross_module_nested_far_call() {
+    fn cross_module_nested_far_call() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_nested_far_caller";
@@ -2044,7 +2115,9 @@ mod tests {
         let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
             .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
             (caller_modname, "cross_module_nested_far_caller", 2, Instr(0)),
             (callee_modname, "simple_caller", 1, Instr(0)),
@@ -2053,17 +2126,21 @@ mod tests {
             (caller_modname, "cross_module_nested_far_caller", 2, Terminator),
         ]));
         assert_eq!(paths.len(), 1);  // enusre there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn call_of_loop() {
+    fn call_of_loop() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "caller_of_loop";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
             ("caller_of_loop", 1, Instr(0)),
             ("callee_with_loop", 2, Instr(0)),
@@ -2116,17 +2193,21 @@ mod tests {
             ("caller_of_loop", 1, Terminator),
         ]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn call_in_loop() {
+    fn call_in_loop() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "caller_with_loop";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
             ("caller_with_loop", 1, Instr(0)),
             ("caller_with_loop", 8, Instr(0)),
@@ -2165,17 +2246,21 @@ mod tests {
             ("caller_with_loop", 8, Instr(0)),
         ]));
         assert_eq!(paths.len(), 4);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn recursive_simple() {
+    fn recursive_simple() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_simple";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 5, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
             (1, Instr(0)),
             (4, Instr(0)),
@@ -2302,17 +2387,21 @@ mod tests {
             (9, Instr(0)),
         ]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn recursive_double() {
+    fn recursive_double() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_double";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 4, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
             (1, Instr(0)),
             (4, Instr(0)),
@@ -2438,17 +2527,21 @@ mod tests {
             (20, Instr(0)),
         ]));
         assert_eq!(paths.len(), 10);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn recursive_not_tail() {
+    fn recursive_not_tail() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_not_tail";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
             (1, Instr(0)),
             (3, Instr(0)),
@@ -2535,17 +2628,21 @@ mod tests {
             (15, Instr(0)),
         ]));
         assert_eq!(paths.len(), 7);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn recursive_and_normal_call() {
+    fn recursive_and_normal_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_and_normal_caller";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
             ("recursive_and_normal_caller", 1, Instr(0)),
             ("recursive_and_normal_caller", 3, Instr(0)),
@@ -2600,17 +2697,21 @@ mod tests {
             ("recursive_and_normal_caller", 10, Instr(0)),
         ]));
         assert_eq!(paths.len(), 5);  // ensure there are no more paths
+
+        Ok(())
     }
 
     #[test]
-    fn mutually_recursive_functions() {
+    fn mutually_recursive_functions() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "mutually_recursive_a";
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config { loop_bound: 3, ..Config::default() };
-        let paths: Vec<Path> = itertools::sorted(PathIterator::<BtorBackend>::new(funcname, &proj, config)).collect();
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
         assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
             ("mutually_recursive_a", 1, Instr(0)),
             ("mutually_recursive_a", 3, Instr(0)),
@@ -2696,5 +2797,7 @@ mod tests {
             ("mutually_recursive_a", 7, Instr(0)),
         ]));
         assert_eq!(paths.len(), 6);  // ensure there are no more paths
+
+        Ok(())
     }
 }

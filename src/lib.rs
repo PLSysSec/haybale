@@ -100,11 +100,16 @@ impl SolutionValue {
 /// [`Config`](struct.Config.html)), we will try to enter calls to any functions
 /// defined in the `Project`.
 ///
-/// Returns `None` if there are no values of the inputs such that the function returns zero.
+/// Returns `Ok(None)` if there are no values of the inputs such that the
+/// function returns zero.
 ///
 /// Note: `find_zero_of_func()` may be of some use itself, but also serves as an
 /// example of how you can use the other public functions in the crate.
-pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Config<'p, BtorBackend>) -> Option<Vec<SolutionValue>> {
+pub fn find_zero_of_func<'p>(
+    funcname: &str,
+    project: &'p Project,
+    config: Config<'p, BtorBackend>
+) -> std::result::Result<Option<Vec<SolutionValue>>, String> {
     let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
 
     // constrain pointer arguments to be not-null
@@ -119,14 +124,14 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
     let zero = em.state().zero(returnwidth as u32);
     let mut found = false;
     while let Some(bvretval) = em.next() {
-        match bvretval.unwrap() {
+        match bvretval? {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
             ReturnValue::Throw(_) => continue,  // we're looking for values that result in _returning_ zero, not _throwing_ zero
             ReturnValue::Abort => continue,
             ReturnValue::Return(bvretval) => {
                 let state = em.mut_state();
                 bvretval._eq(&zero).assert();
-                if state.sat().unwrap() {
+                if state.sat()? {
                     found = true;
                     break;
                 }
@@ -138,22 +143,22 @@ pub fn find_zero_of_func<'p>(funcname: &str, project: &'p Project, config: Confi
     let state = em.mut_state();
     if found {
         // in this case state.sat() must have passed
-        Some(func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
-            let param_as_u64 = state.get_a_solution_for_bv(bv).unwrap()
+        Ok(Some(func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
+            let param_as_u64 = state.get_a_solution_for_bv(bv)?
                 .expect("since state.sat() passed, expected a solution for each var")
                 .as_u64()
                 .expect("parameter more than 64 bits wide");
-            match &p.ty {
+            Ok(match &p.ty {
                 Type::IntegerType { bits: 8 } => SolutionValue::I8(param_as_u64 as i8),
                 Type::IntegerType { bits: 16 } => SolutionValue::I16(param_as_u64 as i16),
                 Type::IntegerType { bits: 32 } => SolutionValue::I32(param_as_u64 as i32),
                 Type::IntegerType { bits: 64 } => SolutionValue::I64(param_as_u64 as i64),
                 Type::PointerType { .. } => SolutionValue::Ptr(param_as_u64),
                 ty => unimplemented!("Function parameter with type {:?}", ty)
-            }
-        }).collect())
+            })
+        }).collect::<Result<_>>()?))
     } else {
-        None
+        Ok(None)
     }
 }
 
