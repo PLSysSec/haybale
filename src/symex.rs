@@ -111,7 +111,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
             debug!("ExecutionManager: requesting next path");
             self.backtrack_and_continue()
         };
-        retval.transpose().map(|r| r.map_err(|e| self.state.format_error_with_rich_info(e)))
+        retval.transpose().map(|r| r.map_err(|e| self.state.full_error_message_with_context(e)))
     }
 }
 

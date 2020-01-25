@@ -1,11 +1,16 @@
 use std::fmt;
 
-/// Error types used throughout this crate
+/// Error types used throughout this crate.
+///
+/// The `Display` impl for `Error` will provide information about the error
+/// itself. For more detailed information about the error, including the program
+/// context in which it occurred, see
+/// [`State.full_error_message_with_context()`](struct.State.html#method.full_error_message_with_context).
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Error {
     /// While performing an operation, we discovered the current path is unsat
     Unsat,
-    /// The current path has exceeded the configured `loop_bound` (see [`Config`](struct.Config.html))
+    /// The current path has exceeded the configured `loop_bound` (see [`Config`](config/struct.Config.html))
     LoopBoundExceeded,
     /// The current path has attempted to dereference a null pointer (or
     /// more precisely, a pointer for which `NULL` is a possible value)
@@ -15,7 +20,7 @@ pub enum Error {
     /// An operation attempted to coerce a `BV` more than one bit long into a `Bool`. The `String` is a text description of the `BV`, and the `u32` is its size
     BoolCoercionError(String, u32),
     /// The solver returned this processing error while evaluating a query.
-    /// Often, this is a timeout; see [`Config.solver_query_timeout`](../struct.Config.html#structfield.solver_query_timeout)
+    /// Often, this is a timeout; see [`Config.solver_query_timeout`](config/struct.Config.html#structfield.solver_query_timeout)
     SolverError(String),
     /// Encountered an LLVM instruction which is not currently supported
     UnsupportedInstruction(String),

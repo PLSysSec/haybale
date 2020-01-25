@@ -1355,7 +1355,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         Ok(string)
     }
 
-    pub fn format_error_with_rich_info(&self, e: Error) -> String {
+    /// Returns a `String` describing both the error and the context in which it
+    /// occurred (backtrace, full path to error, variable values at the point of
+    /// error, etc). Exactly which information is included is partially dependent
+    /// on the environment variables `HAYBALE_DUMP_PATH` and `HAYBALE_DUMP_VARS`,
+    /// as explained in the message.
+    pub fn full_error_message_with_context(&self, e: Error) -> String {
         let mut err_msg = format!("{}\n\n", e);
         err_msg.push_str(&format!("Backtrace:\n{}\n", self.pretty_backtrace()));
         match PathDumpType::get_from_env_var() {
