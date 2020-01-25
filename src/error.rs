@@ -39,7 +39,7 @@ impl fmt::Display for Error {
             Error::BoolCoercionError(bv, size) =>
                 write!(f, "`BoolCoercionError`: can't coerce a BV {} bits long into a Bool; the BV was {}", size, bv),
             Error::SolverError(details) =>
-                write!(f, "`SolverError`: the solver returned this processing error while evaluating a query: {}", details),
+                write!(f, "`SolverError`: the solver returned this error while evaluating a query: {}", details),
             Error::UnsupportedInstruction(details) =>
                 write!(f, "`UnsupportedInstruction`: encountered an LLVM instruction which is not currently supported: {}", details),
             Error::MalformedInstruction(details) =>
