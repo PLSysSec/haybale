@@ -189,9 +189,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             };
             match result {
                 Ok(_) => {},  // no error, we can continue
-                Err(Error::Unsat) | Err(Error::LoopBoundExceeded) => {
+                Err(Error::Unsat) => {
                     // we can't continue down this path anymore
-                    info!("Path is either unsat or exceeds the loop bound");
+                    info!("Path is unsat");
                     return self.backtrack_and_continue();
                 }
                 Err(e) => return Err(e),  // propagate any other errors
@@ -1691,14 +1691,26 @@ mod tests {
         type Item = Result<Path<'p>>;
 
         fn next(&mut self) -> Option<Self::Item> {
-            self.em.next().map(|res| match res {
-                Err(e) => Err(self.em.state().full_error_message_with_context(e)),
-                Ok(_) => Ok(
-                    Path(
-                        self.em.state().get_path().iter().map(|pathentry| LocationDescription::from(pathentry.0.clone())).collect()
-                    ).strip_source_locs()
-                ),
-            })
+            loop {
+                match self.em.next() {
+                    Some(Err(Error::LoopBoundExceeded)) => {
+                        // for the purposes of the PathIterator for these tests,
+                        // we silently ignore paths which exceeded the loop bound
+                        continue;
+                    },
+                    res => return res.map(|res| match res {
+                        Err(e) => {
+                            // format the error nicely and propagate it
+                            Err(self.em.state().full_error_message_with_context(e))
+                        },
+                        Ok(_) => {
+                            Ok(Path(
+                                self.em.state().get_path().iter().map(|pathentry| LocationDescription::from(pathentry.0.clone())).collect()
+                            ).strip_source_locs())
+                        },
+                    }),
+                }
+            }
         }
     }
 

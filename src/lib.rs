@@ -124,11 +124,11 @@ pub fn find_zero_of_func<'p>(
     let zero = em.state().zero(returnwidth as u32);
     let mut found = false;
     while let Some(bvretval) = em.next() {
-        match bvretval.map_err(|e| em.state().full_error_message_with_context(e))? {
-            ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
-            ReturnValue::Throw(_) => continue,  // we're looking for values that result in _returning_ zero, not _throwing_ zero
-            ReturnValue::Abort => continue,
-            ReturnValue::Return(bvretval) => {
+        match bvretval {
+            Ok(ReturnValue::ReturnVoid) => panic!("Function shouldn't return void"),
+            Ok(ReturnValue::Throw(_)) => continue,  // we're looking for values that result in _returning_ zero, not _throwing_ zero
+            Ok(ReturnValue::Abort) => continue,
+            Ok(ReturnValue::Return(bvretval)) => {
                 let state = em.mut_state();
                 bvretval._eq(&zero).assert();
                 if state.sat()? {
@@ -136,6 +136,8 @@ pub fn find_zero_of_func<'p>(
                     break;
                 }
             },
+            Err(Error::LoopBoundExceeded) => continue,  // ignore paths that exceed the loop bound, keep looking
+            Err(e) => return Err(em.state().full_error_message_with_context(e)),
         }
     }
 
