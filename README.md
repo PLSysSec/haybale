@@ -109,8 +109,9 @@ We can use `find_zero_of_func()` to find inputs such that `foo` will return `0`:
 
 ```rust
 match find_zero_of_func("foo", &project, Config::default()) {
-    None => println!("foo can never return 0"),
-    Some(inputs) => println!("Inputs for which foo returns 0: {:?}", inputs),
+    Ok(None) => println!("foo can never return 0"),
+    Ok(Some(inputs)) => println!("Inputs for which foo returns 0: {:?}", inputs),
+    Err(e) => panic!("{}", e),  // use the pretty Display impl for errors
 }
 ```
 
@@ -152,29 +153,46 @@ one following the "false" branch of the `if`.
 Let's examine the first path through the function:
 
 ```rust
-let retval = em.next().expect("Expected at least one path")?;
+let result = em.next().expect("Expected at least one path");
 ```
 
-We're given the function return value, `retval`, as a Boolector [`BV`] (bitvector)
-wrapped in the [`ReturnValue`] enum.
+In the common case, `result` contains the function return value on this path,
+as a Boolector [`BV`] (bitvector) wrapped in the [`ReturnValue`] enum.
 Since we know that `foo` isn't a void-typed function (and won't throw an
 exception or abort), we can simply unwrap the `ReturnValue` to get the `BV`:
 
 ```rust
-let retval = match retval {
-    ReturnValue::Return(r) => r,
-    ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
-    ReturnValue::Throw(_) => panic!("Function shouldn't throw an exception"),
-    ReturnValue::Abort => panic!("Function shouldn't panic or exit()"),
+let retval = match result {
+    Ok(ReturnValue::Return(r)) => r,
+    Ok(ReturnValue::ReturnVoid) => panic!("Function shouldn't return void"),
+    Ok(ReturnValue::Throw(_)) => panic!("Function shouldn't throw an exception"),
+    Ok(ReturnValue::Abort) => panic!("Function shouldn't panic or exit()"),
+    ...
+```
+
+`result` could also be an `Err` describing an [`Error`] which was encountered
+while processing the path. In this case, we could just ignore the error and
+keep calling `next()` to try to find paths which didn't have errors. Or we
+could get information about the error like this:
+
+```rust
+    ...
+    Err(e) => panic!("{}", em.state().full_error_message_with_context(e)),
 };
 ```
 
+This gets information about the error from the program `State`, which we'll
+discuss next. But for the rest of this tutorial, we'll assume that we got the
+`Ok` result, and at this point `retval` is a `BV` representing the function
+return value on the first path.
+
 ### States
 
-Importantly, the `ExecutionManager` provides not only the final return value of
-the path as a `BV`, but also the final program [`State`] at the end of that path,
-either immutably with `state()` or mutably with `mut_state()`. (See the
-[`ExecutionManager` documentation] for more.)
+For each path, the [`ExecutionManager`] provides not only the final result of
+the path (either a`ReturnValue` or an `Error`), but also the final program
+[`State`] at the end of that path.
+We can get immutable access to the `State` with `state()`, or mutable access
+with `mut_state()`.
 
 ```rust
 let state = em.mut_state();  // the final program state along this path
@@ -363,8 +381,9 @@ Initial release!
 [`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
 [`symex_function()`]: https://PLSysSec.github.io/haybale/haybale/fn.symex_function.html
 [`Config`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html
-[`BV`]: https://docs.rs/boolector/0.1.2/boolector/struct.BV.html
+[`BV`]: https://docs.rs/boolector/0.2.0/boolector/struct.BV.html
 [`ReturnValue`]: https://PLSysSec.github.io/haybale/haybale/enum.ReturnValue.html
+[`Error`]: https://PLSysSec.github.io/haybale/haybale/enum.Error.html
 [`State`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html
 [`Project::get_inner_struct_type_from_named()`]: https://PLSysSec.github.io/haybale/haybale/struct.Project.html#method.get_inner_struct_type_from_named
 [`State::add_mem_watchpoint()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.add_mem_watchpoint

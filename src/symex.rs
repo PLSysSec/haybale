@@ -49,11 +49,16 @@ pub fn symex_function<'p, B: Backend>(
 /// An `ExecutionManager` allows you to symbolically explore executions of a
 /// function. Conceptually, it is an `Iterator` over possible paths through the
 /// function. Calling `next()` on an `ExecutionManager` explores another possible
-/// path, returning a [`ReturnValue`](enum.ReturnValue.html) representing the
-/// function's symbolic return value at the end of that path.
+/// path, returning either an `Ok` with a [`ReturnValue`](enum.ReturnValue.html)
+/// representing the function's symbolic return value at the end of that path, or
+/// an `Err` if an error was encountered while processing the path.
 ///
-/// Importantly, after any call to `next()`, you can access the `State` resulting
-/// from the end of that path using the `state()` or `mut_state()` methods.
+/// Importantly, after any call to `next()` (whether it results in an `Ok` or an
+/// `Err`), you can access the `State` resulting from the end of that path using
+/// the `state()` or `mut_state()` methods.
+///
+/// To get detailed information about an `Err` returned from a path, you can use
+/// `state().full_error_message_with_context()`.
 ///
 /// When `next()` returns `None`, there are no more possible paths through the
 /// function.
@@ -100,7 +105,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> {
 }
 
 impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
-    type Item = std::result::Result<ReturnValue<B::BV>, String>;
+    type Item = Result<ReturnValue<B::BV>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let retval = if self.fresh {
@@ -111,7 +116,7 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
             debug!("ExecutionManager: requesting next path");
             self.backtrack_and_continue()
         };
-        retval.transpose().map(|r| r.map_err(|e| self.state.full_error_message_with_context(e)))
+        retval.transpose()
     }
 }
 
@@ -1687,7 +1692,7 @@ mod tests {
 
         fn next(&mut self) -> Option<Self::Item> {
             self.em.next().map(|res| match res {
-                Err(e) => Err(e),
+                Err(e) => Err(self.em.state().full_error_message_with_context(e)),
                 Ok(_) => Ok(
                     Path(
                         self.em.state().get_path().iter().map(|pathentry| LocationDescription::from(pathentry.0.clone())).collect()

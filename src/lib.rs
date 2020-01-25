@@ -124,7 +124,7 @@ pub fn find_zero_of_func<'p>(
     let zero = em.state().zero(returnwidth as u32);
     let mut found = false;
     while let Some(bvretval) = em.next() {
-        match bvretval? {
+        match bvretval.map_err(|e| em.state().full_error_message_with_context(e))? {
             ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
             ReturnValue::Throw(_) => continue,  // we're looking for values that result in _returning_ zero, not _throwing_ zero
             ReturnValue::Abort => continue,
@@ -213,20 +213,21 @@ pub fn get_possible_return_values_of_func<'p>(
     let mut candidate_values = HashSet::<ReturnValue<u64>>::new();
     let mut have_throw = false;  // is there at least one `ReturnValue::Throw` in the `candidate_values`
     while let Some(bvretval) = em.next() {
-        match bvretval.unwrap() {
-            ReturnValue::ReturnVoid => {
+        match bvretval {
+            Err(e) => panic!("{}", em.state().full_error_message_with_context(e)),
+            Ok(ReturnValue::ReturnVoid) => {
                 candidate_values.insert(ReturnValue::ReturnVoid);
                 if candidate_values.len() > n {
                     break;
                 }
             },
-            ReturnValue::Abort => {
+            Ok(ReturnValue::Abort) => {
                 candidate_values.insert(ReturnValue::Abort);
                 if candidate_values.len() > n {
                     break;
                 }
             }
-            ReturnValue::Return(bvretval) => {
+            Ok(ReturnValue::Return(bvretval)) => {
                 let state = em.mut_state();
                 // rule out all the returned values we already have - we're interested in new values
                 for candidate in candidate_values.iter() {
@@ -247,7 +248,7 @@ pub fn get_possible_return_values_of_func<'p>(
                     },
                 };
             },
-            ReturnValue::Throw(bvptr) => {
+            Ok(ReturnValue::Throw(bvptr)) => {
                 let state = em.mut_state();
                 match thrown_size {
                     None => if !have_throw {
