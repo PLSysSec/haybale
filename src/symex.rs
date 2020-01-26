@@ -39,11 +39,12 @@ pub fn symex_function<'p, B: Backend>(
         instr: BBInstrIndex::Instr(0),
         source_loc: None,  // this will be updated once we get there and begin symex of the instruction
     };
+    let squash_unsats = config.squash_unsats;
     let mut state = State::new(project, start_loc, config);
     let bvparams: Vec<_> = func.parameters.iter().map(|param| {
         state.new_bv_with_name(param.name.clone(), size_opaque_aware(&param.ty, project) as u32).unwrap()
     }).collect();
-    ExecutionManager::new(state, project, bvparams)
+    ExecutionManager::new(state, project, bvparams, squash_unsats)
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a
@@ -70,15 +71,18 @@ pub struct ExecutionManager<'p, B: Backend> {
     /// has not yet produced its first path, i.e., `next()` has not been called
     /// on it yet.
     fresh: bool,
+    /// The `squash_unsats` setting from `Config`
+    squash_unsats: bool,
 }
 
 impl<'p, B: Backend> ExecutionManager<'p, B> {
-    fn new(state: State<'p, B>, project: &'p Project, bvparams: Vec<B::BV>) -> Self {
+    fn new(state: State<'p, B>, project: &'p Project, bvparams: Vec<B::BV>, squash_unsats: bool) -> Self {
         Self {
             state,
             project,
             bvparams,
             fresh: true,
+            squash_unsats,
         }
     }
 
@@ -189,8 +193,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             };
             match result {
                 Ok(_) => {},  // no error, we can continue
-                Err(Error::Unsat) => {
-                    // we can't continue down this path anymore
+                Err(Error::Unsat) if self.squash_unsats => {
+                    // we can't continue down this path anymore; try another
                     info!("Path is unsat");
                     return self.backtrack_and_continue();
                 }

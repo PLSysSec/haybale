@@ -42,6 +42,30 @@ pub struct Config<'p, B> where B: Backend {
     /// Default is `Concretize::Symbolic` - that is, no concretization.
     pub concretize_memcpy_lengths: Concretize,
 
+    /// `Error::Unsat` is an error type which is used internally, but may not be
+    /// useful for `ExecutionManager.next()` to return to consumers. In most
+    /// cases, consumers probably don't care about paths which were partially
+    /// explored and resulted in an unsat error; they are probably interested in
+    /// only those paths that are actually feasible, or ended in one of the other
+    /// error types.
+    ///
+    /// If this setting is `false`, the `ExecutionManager` will return an
+    /// `Error::Unsat` to the consumer whenever one is encountered, just as it
+    /// does for other error types.
+    /// If this setting is `true`, paths ending in `Error::Unsat` will be
+    /// silently ignored by the `ExecutionManager`, and it will move on to the
+    /// next path, as if a filter were applied to the iterator.
+    ///
+    /// Note that many unsat paths are never even started processing, so they
+    /// never actually result in an unsat error. In fact, many executions may
+    /// never encounter an unsat error, despite having unsat paths. Furthermore,
+    /// `haybale`'s behavior regarding which unsat paths actually result in an
+    /// unsat error is not guaranteed to be stable, and may change even in point
+    /// releases (that is, without incrementing the major or minor version).
+    ///
+    /// Default is `true`.
+    pub squash_unsats: bool,
+
     /// When encountering the `llvm.assume()` intrinsic, should we only consider
     /// paths where the assumption holds (`true`), or should we also consider
     /// paths where the assumption does not hold, if that is possible (`false`)?
@@ -160,8 +184,8 @@ pub enum Concretize {
 impl<'p, B: Backend> Config<'p, B> {
     /// Creates a new `Config` with the given `loop_bound`,
     /// `solver_query_timeout`, `null_detection`, `concretize_memcpy_lengths`,
-    /// and `trust_llvm_assumes` options; no function hooks or memory
-    /// watchpoints; and defaults for the other options.
+    /// `squash_unsats`, and `trust_llvm_assumes` options; no function hooks or
+    /// memory watchpoints; and defaults for the other options.
     ///
     /// You may want to consider
     /// [`Config::default()`](struct.Config.html#method.default), which provides
@@ -172,6 +196,7 @@ impl<'p, B: Backend> Config<'p, B> {
         solver_query_timeout: Option<Duration>,
         null_detection: bool,
         concretize_memcpy_lengths: Concretize,
+        squash_unsats: bool,
         trust_llvm_assumes: bool,
     ) -> Self {
         Self {
@@ -179,6 +204,7 @@ impl<'p, B: Backend> Config<'p, B> {
             solver_query_timeout,
             null_detection,
             concretize_memcpy_lengths,
+            squash_unsats,
             trust_llvm_assumes,
             function_hooks: FunctionHooks::new(),
             initial_mem_watchpoints: HashMap::new(),
@@ -204,6 +230,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             solver_query_timeout: Some(Duration::from_secs(300)),
             null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,
+            squash_unsats: true,
             trust_llvm_assumes: true,
             function_hooks: FunctionHooks::default(),
             initial_mem_watchpoints: HashMap::new(),

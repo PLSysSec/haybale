@@ -8,7 +8,10 @@ use std::fmt;
 /// [`State.full_error_message_with_context()`](struct.State.html#method.full_error_message_with_context).
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Error {
-    /// While performing an operation, we discovered the current path is unsat
+    /// While performing an operation, we discovered the current path is unsat.
+    ///
+    /// This error type is used internally, but (by default) isn't exposed to consumers of `ExecutionManager`;
+    /// see [`Config.squash_unsats`](config/struct.Config.html#structfield.squash_unsats).
     Unsat,
     /// The current path has exceeded the configured `loop_bound` (see [`Config`](config/struct.Config.html))
     LoopBoundExceeded,
