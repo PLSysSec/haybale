@@ -113,7 +113,8 @@ fn nested_loop() {
     let funcname = "nested_loop";
     init_logging();
     let proj = get_project();
-    let config = Config { loop_bound: 50, ..Config::default() };
+    let mut config = Config::default();
+    config.loop_bound = 50;
     let args = find_zero_of_func(funcname, &proj, config)
             .unwrap_or_else(|r| panic!("{}", r))
             .expect("Failed to find zero of the function");

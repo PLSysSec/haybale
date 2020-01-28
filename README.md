@@ -271,7 +271,7 @@ LLVM 8 is available on the `llvm-8` branch of this repo; it is approximately
 at feature parity with `haybale` 0.2.1, and will likely be stuck at that
 point indefinitely unless there is demand for additional backported features.
 
-`haybale` works on stable Rust, and requires Rust 1.36+.
+`haybale` works on stable Rust, and requires Rust 1.40+.
 
 ## Under the hood
 

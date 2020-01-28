@@ -9,9 +9,14 @@ use std::time::Duration;
 
 /// Various settings which affect how the symbolic execution is performed.
 ///
-/// You should not depend on this being an exhaustive list of settings: new
-/// settings may be added even in a point release (that is, without incrementing
-/// the major or minor version).
+/// `Config` uses the (new-to-Rust-1.40) `#[non_exhaustive]` attribute to
+/// indicate that fields may be added even in a point release (that is, without
+/// incrementing the major or minor version). See
+/// https://blog.rust-lang.org/2019/12/19/Rust-1.40.0.html#[non_exhaustive]-structs,-enums,-and-variants.
+/// In general, you'll want to start with `Config.default()` and then change the
+/// settings you want to change; `#[non_exhaustive]` will prevent users from
+/// constructing a `Config` directly.
+#[non_exhaustive]
 #[derive(Clone)]
 pub struct Config<'p, B> where B: Backend {
     /// Maximum number of times to execute any given line of LLVM IR.
