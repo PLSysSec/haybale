@@ -41,8 +41,8 @@ pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
         PossibleSolutions::AtLeast(v) => {
             let num_bytes_concrete: Option<_> = match state.config.concretize_memcpy_lengths {
                 Concretize::Arbitrary => Some(v.iter().next().unwrap().as_u64().unwrap()),
-                Concretize::Minimum => Some(state.min_possible_solution_for_bv(&num_bytes)?.unwrap()),
-                Concretize::Maximum => Some(state.max_possible_solution_for_bv(&num_bytes)?.unwrap()),
+                Concretize::Minimum => Some(state.min_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap()),
+                Concretize::Maximum => Some(state.max_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap()),
                 Concretize::Prefer(val, _) => {
                     let val_as_bv = state.bv_from_u64(val, num_bytes.get_width());
                     if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
@@ -55,7 +55,7 @@ pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
                 },
                 Concretize::Symbolic => {
                     // In this case we just do the entire write here
-                    let max_num_bytes = state.max_possible_solution_for_bv(&num_bytes)?.unwrap();
+                    let max_num_bytes = state.max_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap();
                     let mut addr = addr.clone();
                     let mut bytes_written = state.zero(num_bytes.get_width());
                     for _ in 0 ..= max_num_bytes {
@@ -124,8 +124,8 @@ pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
         PossibleSolutions::AtLeast(v) => {
             let num_bytes_concrete: Option<_> = match state.config.concretize_memcpy_lengths {
                 Concretize::Arbitrary => Some(v.iter().next().unwrap().as_u64().unwrap()),
-                Concretize::Minimum => Some(state.min_possible_solution_for_bv(&num_bytes)?.unwrap()),
-                Concretize::Maximum => Some(state.max_possible_solution_for_bv(&num_bytes)?.unwrap()),
+                Concretize::Minimum => Some(state.min_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap()),
+                Concretize::Maximum => Some(state.max_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap()),
                 Concretize::Prefer(val, _) => {
                     let val_as_bv = state.bv_from_u64(val, num_bytes.get_width());
                     if state.bvs_can_be_equal(&num_bytes, &val_as_bv)? {
@@ -138,7 +138,7 @@ pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
                 },
                 Concretize::Symbolic => {
                     // In this case we just do the entire write here
-                    let max_num_bytes = state.max_possible_solution_for_bv(&num_bytes)?.unwrap();
+                    let max_num_bytes = state.max_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap();
                     debug!("Processing a memcpy with symbolic num_bytes, up to {}", max_num_bytes);
                     let mut src_addr = src.clone();
                     let mut dest_addr = dest.clone();

@@ -550,9 +550,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
-    /// query itself fails.
-    pub fn max_possible_solution_for_bv(&self, bv: &B::BV) -> Result<Option<u64>> {
-        solver_utils::max_possible_solution_for_bv(self.solver.clone(), bv)
+    /// query itself fails. Panics if the `BV` is wider than 64 bits.
+    pub fn max_possible_solution_for_bv_as_u64(&self, bv: &B::BV) -> Result<Option<u64>> {
+        solver_utils::max_possible_solution_for_bv_as_u64(self.solver.clone(), bv)
     }
 
     /// Get the maximum possible solution for the given IR `Name` (from the given
@@ -562,11 +562,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
-    /// query itself fails.
+    /// query itself fails. Panics if the `BV` is wider than 64 bits.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn max_possible_solution_for_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+    pub fn max_possible_solution_for_irname_as_u64(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
-        solver_utils::max_possible_solution_for_bv(self.solver.clone(), bv)
+        solver_utils::max_possible_solution_for_bv_as_u64(self.solver.clone(), bv)
     }
 
     /// Get the minimum possible solution for the `BV`: that is, the lowest value
@@ -575,9 +575,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
-    /// query itself fails.
-    pub fn min_possible_solution_for_bv(&self, bv: &B::BV) -> Result<Option<u64>> {
-        solver_utils::min_possible_solution_for_bv(self.solver.clone(), bv)
+    /// query itself fails. Panics if the `BV` is wider than 64 bits.
+    pub fn min_possible_solution_for_bv_as_u64(&self, bv: &B::BV) -> Result<Option<u64>> {
+        solver_utils::min_possible_solution_for_bv_as_u64(self.solver.clone(), bv)
     }
 
     /// Get the minimum possible solution for the given IR `Name` (from the given
@@ -587,11 +587,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
-    /// query itself fails.
+    /// query itself fails. Panics if the `BV` is wider than 64 bits.
     #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn min_possible_solution_for_irname(&self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+    pub fn min_possible_solution_for_irname_as_u64(&self, funcname: &String, name: &Name) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
-        solver_utils::min_possible_solution_for_bv(self.solver.clone(), bv)
+        solver_utils::min_possible_solution_for_bv_as_u64(self.solver.clone(), bv)
     }
 
     /// Create a `BV` constant representing the given `bool` (either constant

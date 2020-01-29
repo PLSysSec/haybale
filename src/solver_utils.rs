@@ -248,11 +248,11 @@ fn check_for_common_solutions<V: BV>(solver: V::SolverRef, bv: &V, n: usize, sol
 ///
 /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
 /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
-/// query itself fails.
-pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<u64>> {
+/// query itself fails. Panics if the `BV` is wider than 64 bits.
+pub fn max_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<u64>> {
     let width = bv.get_width();
     if width > 64 {
-        unimplemented!("max_possible_solution_for_bv on a BV with width > 64");
+        panic!("max_possible_solution_for_bv_as_u64 on a BV with width > 64");
     }
     if !sat(&solver)? {
         return Ok(None);
@@ -300,11 +300,11 @@ pub fn max_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
 ///
 /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
 /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
-/// query itself fails.
-pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<u64>> {
+/// query itself fails. Panics if the `BV` is wider than 64 bits.
+pub fn min_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<u64>> {
     let width = bv.get_width();
     if width > 64 {
-        unimplemented!("min_possible_solution_for_bv on a BV with width > 64");
+        panic!("min_possible_solution_for_bv_as_u64 on a BV with width > 64");
     }
     if !sat(&solver)? {
         return Ok(None);
@@ -340,6 +340,98 @@ pub fn min_possible_solution_for_bv<V: BV>(solver: V::SolverRef, bv: &V) -> Resu
     // Recall that min is exclusive, max is inclusive. So `max` is actually the
     // min possible solution here.
     Ok(Some(max))
+}
+
+/// Get the maximum possible solution for the `BV`: that is, the highest value
+/// for which the current set of constraints is still satisfiable.
+/// "Maximum" will be interpreted in an unsigned fashion.
+///
+/// Allows `BV`s of arbitrary width, and returns a `String` with as many
+/// characters as the `BV` has bits; each character will be either `0` or `1`.
+/// The string's first (`[0]`) character corresponds to the `BV`'s leftmost
+/// (most-significant) bit.
+///
+/// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
+/// current set of constraints is unsatisfiable. Only returns `Err` if a solver
+/// query itself fails.
+pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<String>> {
+    let mut bv = bv.clone();
+    let total_width = bv.get_width();
+    let mut retval = String::with_capacity(total_width as usize);
+    solver.push(1);
+    loop {
+        let width = bv.get_width();
+        if width <= 64 {
+            let max_for_remaining_bits = match max_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
+                Some(max) => max,
+                None => return Ok(None),
+            };
+            retval.push_str(&format!("{val:0width$b}", val = max_for_remaining_bits, width = width as usize));
+            break;
+        } else {
+            let top_bit = bv.get_width() - 1;
+            let high_bits = bv.slice(top_bit, top_bit - 63);
+            assert_eq!(high_bits.get_width(), 64);
+            bv = bv.slice(top_bit - 64, 0);
+            let max_for_high_bits = match max_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
+                Some(max) => max,
+                None => return Ok(None),
+            };
+            retval.push_str(&format!("{:064b}", max_for_high_bits));
+            // now (temporarily, thanks to the push() above) constrain that
+            // these bits are that max value, to ensure the future calculations
+            // return values consistent with that
+            high_bits._eq(&V::from_u64(solver.clone(), max_for_high_bits, 64)).assert()?;
+        }
+    }
+    solver.pop(1);
+    assert_eq!(retval.len(), total_width as usize, "Should have a string of {} characters, but have one of {} characters: {:?}", total_width, retval.len(), retval);
+    Ok(Some(retval))
+}
+
+/// Get the minimum possible solution for the `BV`: that is, the lowest value
+/// for which the current set of constraints is still satisfiable.
+/// "Minimum" will be interpreted in an unsigned fashion.
+///
+/// Allows `BV`s of arbitrary width, and returns a `String` with as many
+/// characters as the `BV` has bits; each character will be either `0` or `1`.
+/// The string's first (`[0]`) character corresponds to the `BV`'s leftmost
+/// (most-significant) bit.
+///
+/// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
+/// current set of constraints is unsatisfiable. Only returns `Err` if a solver
+/// query itself fails.
+pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<String>> {
+    let mut bv = bv.clone();
+    let total_width = bv.get_width();
+    let mut retval = String::with_capacity(total_width as usize);
+    loop {
+        let width = bv.get_width();
+        if width <= 64 {
+            let min_for_remaining_bits = match min_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
+                Some(max) => max,
+                None => return Ok(None),
+            };
+            retval.push_str(&format!("{val:0width$b}", val = min_for_remaining_bits, width = width as usize));
+            break;
+        } else {
+            let top_bit = bv.get_width() - 1;
+            let high_bits = bv.slice(top_bit, top_bit - 63);
+            assert_eq!(high_bits.get_width(), 64);
+            bv = bv.slice(top_bit - 64, 0);
+            let min_for_high_bits = match min_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
+                Some(min) => min,
+                None => return Ok(None),
+            };
+            retval.push_str(&format!("{:064b}", min_for_high_bits));
+            // now (temporarily, thanks to the push() above) constrain that
+            // these bits are that min value, to ensure the future calculations
+            // return values consistent with that
+            high_bits._eq(&V::from_u64(solver.clone(), min_for_high_bits, 64)).assert()?;
+        }
+    }
+    assert_eq!(retval.len(), total_width as usize, "Should have a string of {} characters, but have one of {} characters: {:?}", total_width, retval.len(), retval);
+    Ok(Some(retval))
 }
 
 #[cfg(test)]
@@ -467,19 +559,19 @@ mod tests {
         x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // min possible solution should be 4
-        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(4)));
+        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(4)));
 
         // add x < 6 constraint
         x.ult(&BV::from_u64(btor.clone(), 6, 64)).assert();
 
         // min possible solution should still be 4
-        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(4)));
+        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(4)));
 
         // add x < 3 constraint
         x.ult(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
-        // min_possible_solution_for_bv should now return None
-        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(None));
+        // min_possible_solution_for_bv_as_u64 should now return None
+        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(None));
     }
 
     #[test]
@@ -491,25 +583,50 @@ mod tests {
         x.ult(&BV::from_u64(btor.clone(), 7, 64)).assert();
 
         // max possible solution should be 6
-        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(Some(6)));
+        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(6)));
 
         // but min possible solution should be 0
-        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(0)));
+        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(0)));
 
         // add x > 3 constraint
         x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // max possible solution should still be 6
-        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(Some(6)));
+        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(6)));
 
         // and min possible solution should now be 4
-        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some(4)));
+        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(4)));
 
         // add x > 7 constraint
         x.ugt(&BV::from_u64(btor.clone(), 7, 64)).assert();
 
         // max_possible_solution_for_bv should now return None
-        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(None));
+        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(None));
+    }
+
+    #[test]
+    fn min_possible_solution_str() {
+        let btor = <Rc<Btor> as SolverRef>::new();
+
+        // add x > 3 constraint (16-bit x)
+        let x: BV = BV::new(btor.clone(), 16, Some("x"));
+        x.ugt(&BV::from_u64(btor.clone(), 3, 16)).assert();
+
+        // min possible solution should be 4, and its string should have 16 characters
+        assert_eq!(
+            min_possible_solution_for_bv_as_binary_str(btor.clone(), &x),
+            Ok(Some("0000000000000100".into())),
+        );
+
+        // add constraint on y (96-bit y)
+        let y: BV = BV::new(btor.clone(), 96, Some("y"));
+        y.ugt(&BV::from_binary_str(btor.clone(), "000100001010000010100001010000010100001010000000100011010000011100001010000000000101000010100010")).assert();
+
+        // min possible solution should be one more than the string above, and have 96 characters
+        assert_eq!(
+            min_possible_solution_for_bv_as_binary_str(btor.clone(), &y),
+            Ok(Some("000100001010000010100001010000010100001010000000100011010000011100001010000000000101000010100011".into())),
+        );
     }
 
     #[test]
@@ -526,7 +643,7 @@ mod tests {
         x.sgte(&minustwo).assert();
 
         // The min possible (unsigned) solution should be -2
-        assert_eq!(min_possible_solution_for_bv(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
+        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
     }
 
     #[test]
@@ -540,6 +657,6 @@ mod tests {
         x.slte(&minustwo).assert();
 
         // The max possible (unsigned) solution should be -2
-        assert_eq!(max_possible_solution_for_bv(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
+        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
     }
 }
