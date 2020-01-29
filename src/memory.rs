@@ -66,7 +66,7 @@ impl Memory {
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES;  // 2 to this number gives the number of memory cells
         let default_name = "mem_initialized";
         Self {
-            mem: Array::new_initialized(btor.clone(), log_num_cells, Self::CELL_BITS, name.or(Some(default_name)), &BV::zero(btor.clone(), Self::CELL_BITS)),
+            mem: Array::new_initialized(btor.clone(), log_num_cells, Self::CELL_BITS, &BV::zero(btor.clone(), Self::CELL_BITS)),
             name: name.unwrap_or(default_name).into(),
             null_detection,
             cell_bytes_as_bv: BV::from_u64(btor.clone(), u64::from(Self::CELL_BYTES), Self::INDEX_BITS),

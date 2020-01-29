@@ -56,7 +56,7 @@ impl Memory {
     pub fn new_zero_initialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
         let default_name = "mem_initialized";
         Self {
-            mem: Array::new_initialized(btor.clone(), Self::INDEX_BITS, Self::CELL_BITS, name.or(Some(default_name)), &BV::zero(btor.clone(), Self::CELL_BITS)),
+            mem: Array::new_initialized(btor.clone(), Self::INDEX_BITS, Self::CELL_BITS, &BV::zero(btor.clone(), Self::CELL_BITS)),
             name: name.unwrap_or(default_name).into(),
             null_detection,
             btor,  // out of order so it can be used above but moved in here
