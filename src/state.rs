@@ -348,6 +348,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 intrinsic_hooks.add("intrinsic: llvm.bswap", &hooks::intrinsics::symex_bswap);
                 intrinsic_hooks.add("intrinsic: llvm.objectsize", &hooks::intrinsics::symex_objectsize);
                 intrinsic_hooks.add("intrinsic: llvm.assume", &hooks::intrinsics::symex_assume);
+                intrinsic_hooks.add("intrinsic: llvm.uadd.with.overflow", &hooks::intrinsics::symex_uadd_with_overflow);
+                intrinsic_hooks.add("intrinsic: llvm.sadd.with.overflow", &hooks::intrinsics::symex_sadd_with_overflow);
+                intrinsic_hooks.add("intrinsic: llvm.usub.with.overflow", &hooks::intrinsics::symex_usub_with_overflow);
+                intrinsic_hooks.add("intrinsic: llvm.ssub.with.overflow", &hooks::intrinsics::symex_ssub_with_overflow);
+                intrinsic_hooks.add("intrinsic: llvm.umul.with.overflow", &hooks::intrinsics::symex_umul_with_overflow);
+                intrinsic_hooks.add("intrinsic: llvm.smul.with.overflow", &hooks::intrinsics::symex_smul_with_overflow);
                 intrinsic_hooks.add("intrinsic: generic_stub_hook", &function_hooks::generic_stub_hook);
                 intrinsic_hooks.add("intrinsic: abort_hook", &function_hooks::abort_hook);
                 intrinsic_hooks
@@ -1440,55 +1446,12 @@ impl PathDumpType {
 mod tests {
     use super::*;
     use crate::solver_utils::SolutionCount;
-    use std::collections::HashMap;
+    use crate::test_utils::*;
 
     // we don't include tests here for Memory, Alloc, VarMap, or Watchpoints; those are tested in their own modules.
     // Instead, here we just test the nontrivial functionality that `State` has itself.
     // We do repeat many of the tests from the `solver_utils` module, making sure that they also pass when
     // we use the `State` interfaces.
-
-    /// utility to initialize a `State` out of a `Project` and a function name
-    fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, BtorBackend> {
-        let (func, module) = project.get_func_by_name(funcname).expect("Failed to find function");
-        let start_loc = Location {
-            module,
-            func,
-            bb: func.basic_blocks.get(0).expect("Function must contain at least one basic block"),
-            instr: BBInstrIndex::Instr(0),
-            source_loc: None,
-        };
-        State::new(project, start_loc, Config::default())
-    }
-
-    /// Utility that creates a simple `Project` for testing.
-    /// The `Project` will contain a single `Module` (with the given name) which contains
-    /// a single function (given).
-    fn blank_project(modname: impl Into<String>, func: Function) -> Project {
-        Project::from_module(Module {
-            name: modname.into(),
-            source_file_name: String::new(),
-            data_layout: String::new(),
-            target_triple: None,
-            functions: vec![func],
-            global_vars: vec![],
-            global_aliases: vec![],
-            named_struct_types: HashMap::new(),
-            inline_assembly: String::new(),
-        })
-    }
-
-    /// utility that creates a technically valid (but functionally useless)
-    /// `Function` for testing
-    ///
-    /// the `Function` will contain technically valid (but functionally useless)
-    /// `BasicBlock`s, one per name provided in `bbnames`
-    fn blank_function(name: impl Into<String>, bbnames: Vec<Name>) -> Function {
-        let mut func = Function::new(name);
-        for bbname in bbnames {
-            func.basic_blocks.push(BasicBlock::new(bbname));
-        }
-        func
-    }
 
     #[test]
     fn sat() -> Result<()> {

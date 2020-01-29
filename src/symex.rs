@@ -1038,6 +1038,36 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.assume").cloned().expect("Failed to find LLVM intrinsic assume hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
+                    } else if funcname.starts_with("llvm.uadd.with.overflow") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.uadd.with.overflow").cloned().expect("Failed to find LLVM intrinsic uadd.with.overflow hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                    } else if funcname.starts_with("llvm.sadd.with.overflow") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.sadd.with.overflow").cloned().expect("Failed to find LLVM intrinsic sadd.with.overflow hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                     } else if funcname.starts_with("llvm.usub.with.overflow") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.usub.with.overflow").cloned().expect("Failed to find LLVM intrinsic usub.with.overflow hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                    } else if funcname.starts_with("llvm.ssub.with.overflow") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.ssub.with.overflow").cloned().expect("Failed to find LLVM intrinsic ssub.with.overflow hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                     } else if funcname.starts_with("llvm.umul.with.overflow") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.umul.with.overflow").cloned().expect("Failed to find LLVM intrinsic umul.with.overflow hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                    } else if funcname.starts_with("llvm.smul_with_overflow") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.smul.with.overflow").cloned().expect("Failed to find LLVM intrinsic smul.with.overflow hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
                     } else if funcname.starts_with("llvm.read_register")
                         || funcname.starts_with("llvm.write_register")
                     {

@@ -43,6 +43,9 @@ pub use error::*;
 pub mod backend;
 use backend::*;
 
+#[cfg(test)]
+mod test_utils;
+
 /// A simple enum describing either an integer value or a pointer
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum SolutionValue {

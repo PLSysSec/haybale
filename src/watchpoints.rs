@@ -201,54 +201,12 @@ impl Watchpoints {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::BtorBackend;
-    use crate::config::Config;
-    use crate::state::{BBInstrIndex, Location};
-    use crate::project::Project;
-    use llvm_ir::*;
-
-    /// First some utilities copy-pasted from the unit tests for `State`
-
-    /// utility to initialize a `State` out of a `Project` and a function name
-    fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, BtorBackend> {
-        let (func, module) = project.get_func_by_name(funcname).expect("Failed to find function");
-        let start_loc = Location {
-            module,
-            func,
-            bb: func.basic_blocks.get(0).expect("Function must contain at least one basic block"),
-            instr: BBInstrIndex::Instr(0),
-            source_loc: None,
-        };
-        State::new(project, start_loc, Config::default())
-    }
-
-    /// Utility that creates a simple `Project` for testing.
-    /// The `Project` will contain a single `Module` (with the given name) which contains
-    /// a single function (given).
-    fn blank_project(modname: impl Into<String>, func: Function) -> Project {
-        Project::from_module(Module {
-            name: modname.into(),
-            source_file_name: String::new(),
-            data_layout: String::new(),
-            target_triple: None,
-            functions: vec![func],
-            global_vars: vec![],
-            global_aliases: vec![],
-            named_struct_types: HashMap::new(),
-            inline_assembly: String::new(),
-        })
-    }
-
-    /// utility that creates a technically valid (but functionally useless) `Function` for testing
-    fn blank_function(name: impl Into<String>) -> Function {
-        let mut func = Function::new(name);
-        func.basic_blocks.push(BasicBlock::new(Name::from("test_bb")));
-        func
-    }
+    use crate::test_utils::*;
+    use llvm_ir::Name;
 
     #[test]
     fn watchpoints() -> Result<()> {
-        let func = blank_function("test_func");
+        let func = blank_function("test_func", vec![Name::from("test_bb")]);
         let project = blank_project("test_mod", func);
         let state = blank_state(&project, "test_func");
 

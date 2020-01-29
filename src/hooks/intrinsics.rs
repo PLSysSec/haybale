@@ -238,3 +238,218 @@ pub fn symex_assume<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
 
     Ok(ReturnValue::ReturnVoid)
 }
+
+pub fn symex_uadd_with_overflow<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
+    let arg0 = &call.get_arguments()[0].0;
+    let arg1 = &call.get_arguments()[1].0;
+    if arg0.get_type() != arg1.get_type() {
+        return Err(Error::OtherError(format!("symex_uadd_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    }
+
+    let arg0 = state.operand_to_bv(arg0)?;
+    let arg1 = state.operand_to_bv(arg1)?;
+    let product = arg0.add(&arg1);
+    let overflow = arg0.uaddo(&arg1);
+    assert_eq!(overflow.get_width(), 1);
+
+    Ok(ReturnValue::Return(overflow.concat(&product)))
+}
+
+pub fn symex_sadd_with_overflow<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
+    let arg0 = &call.get_arguments()[0].0;
+    let arg1 = &call.get_arguments()[1].0;
+    if arg0.get_type() != arg1.get_type() {
+        return Err(Error::OtherError(format!("symex_sadd_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    }
+
+    let arg0 = state.operand_to_bv(arg0)?;
+    let arg1 = state.operand_to_bv(arg1)?;
+    let product = arg0.add(&arg1);
+    let overflow = arg0.saddo(&arg1);
+    assert_eq!(overflow.get_width(), 1);
+
+    Ok(ReturnValue::Return(overflow.concat(&product)))
+}
+
+pub fn symex_usub_with_overflow<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
+    let arg0 = &call.get_arguments()[0].0;
+    let arg1 = &call.get_arguments()[1].0;
+    if arg0.get_type() != arg1.get_type() {
+        return Err(Error::OtherError(format!("symex_usub_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    }
+
+    let arg0 = state.operand_to_bv(arg0)?;
+    let arg1 = state.operand_to_bv(arg1)?;
+    let product = arg0.sub(&arg1);
+    let overflow = arg0.usubo(&arg1);
+    assert_eq!(overflow.get_width(), 1);
+
+    Ok(ReturnValue::Return(overflow.concat(&product)))
+}
+
+pub fn symex_ssub_with_overflow<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
+    let arg0 = &call.get_arguments()[0].0;
+    let arg1 = &call.get_arguments()[1].0;
+    if arg0.get_type() != arg1.get_type() {
+        return Err(Error::OtherError(format!("symex_ssub_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    }
+
+    let arg0 = state.operand_to_bv(arg0)?;
+    let arg1 = state.operand_to_bv(arg1)?;
+    let product = arg0.sub(&arg1);
+    let overflow = arg0.ssubo(&arg1);
+    assert_eq!(overflow.get_width(), 1);
+
+    Ok(ReturnValue::Return(overflow.concat(&product)))
+}
+
+pub fn symex_umul_with_overflow<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
+    let arg0 = &call.get_arguments()[0].0;
+    let arg1 = &call.get_arguments()[1].0;
+    if arg0.get_type() != arg1.get_type() {
+        return Err(Error::OtherError(format!("symex_umul_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    }
+
+    let arg0 = state.operand_to_bv(arg0)?;
+    let arg1 = state.operand_to_bv(arg1)?;
+    let product = arg0.mul(&arg1);
+    let overflow = arg0.umulo(&arg1);
+    assert_eq!(overflow.get_width(), 1);
+
+    Ok(ReturnValue::Return(overflow.concat(&product)))
+}
+
+pub fn symex_smul_with_overflow<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>, call: &dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    assert_eq!(call.get_arguments().len(), 2);
+    let arg0 = &call.get_arguments()[0].0;
+    let arg1 = &call.get_arguments()[1].0;
+    if arg0.get_type() != arg1.get_type() {
+        return Err(Error::OtherError(format!("symex_smul_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    }
+
+    let arg0 = state.operand_to_bv(arg0)?;
+    let arg1 = state.operand_to_bv(arg1)?;
+    let product = arg0.mul(&arg1);
+    let overflow = arg0.smulo(&arg1);
+    assert_eq!(overflow.get_width(), 1);
+
+    Ok(ReturnValue::Return(overflow.concat(&product)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::function_hooks::Argument;
+    use crate::test_utils::*;
+    use either::Either;
+    use llvm_ir::*;
+
+    /// just something to implement `IsCall`
+    struct DummyCall {
+        args: Vec<Argument>,
+    }
+
+    impl DummyCall {
+        fn new_twoarg_call(arg0: Operand, arg1: Operand) -> Self {
+            Self {
+                args: vec![
+                    (arg0, vec![]),
+                    (arg1, vec![]),
+                ]
+            }
+        }
+    }
+
+    impl Typed for DummyCall {
+        fn get_type(&self) -> Type {
+            unimplemented!()
+        }
+    }
+
+    impl IsCall for DummyCall {
+        fn get_called_func(&self) -> &Either<instruction::InlineAssembly, Operand> { unimplemented!() }
+        fn get_arguments(&self) -> &Vec<Argument> {
+            &self.args
+        }
+        fn get_return_attrs(&self) -> &Vec<function::ParameterAttribute> { unimplemented!() }
+        fn get_fn_attrs(&self) -> &Vec<function::FunctionAttribute> { unimplemented!() }
+        fn get_calling_convention(&self) -> function::CallingConvention { unimplemented!() }
+    }
+
+    #[test]
+    fn sadd_with_overflow() {
+        let project = blank_project("test_mod", blank_function("test_func", vec![Name::from("test_bb")]));
+        let mut state = blank_state(&project, "test_func");
+
+        let four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 4 });
+        let sixty_four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 64 });
+        let one_hundred = Operand::ConstantOperand(Constant::Int { bits: 8, value: 100 });
+
+        {
+            let call = DummyCall::new_twoarg_call(four.clone(), one_hundred.clone());
+            match symex_sadd_with_overflow(&project, &mut state, &call).unwrap() {
+                ReturnValue::Return(bv) => {
+                    let result = bv.slice(7, 0).as_u64().unwrap();
+                    let overflow = bv.slice(8, 8).as_u64().unwrap();
+                    assert_eq!(result, 104);
+                    assert_eq!(overflow, 0);
+                },
+                ret => panic!("Unexpected return value: {:?}", ret),
+            }
+        }
+
+        {
+            let call = DummyCall::new_twoarg_call(sixty_four.clone(), one_hundred.clone());
+            match symex_sadd_with_overflow(&project, &mut state, &call).unwrap() {
+                ReturnValue::Return(bv) => {
+                    let result = bv.slice(7, 0).as_u64().unwrap();
+                    let overflow = bv.slice(8, 8).as_u64().unwrap();
+                    assert_eq!(result, 164);  // 164 unsigned, which is a negative value for 8-bit signed
+                    assert_eq!(overflow, 1);
+                },
+                ret => panic!("Unexpected return value: {:?}", ret),
+            }
+        }
+    }
+
+    #[test]
+    fn umul_with_overflow() {
+        let project = blank_project("test_mod", blank_function("test_func", vec![Name::from("test_bb")]));
+        let mut state = blank_state(&project, "test_func");
+
+        let four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 4 });
+        let eight = Operand::ConstantOperand(Constant::Int { bits: 8, value: 8 });
+        let sixty_four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 64 });
+
+        {
+            let call = DummyCall::new_twoarg_call(four.clone(), eight.clone());
+            match symex_umul_with_overflow(&project, &mut state, &call).unwrap() {
+                ReturnValue::Return(bv) => {
+                    let result = bv.slice(7, 0).as_u64().unwrap();
+                    let overflow = bv.slice(8, 8).as_u64().unwrap();
+                    assert_eq!(result, 32);
+                    assert_eq!(overflow, 0);
+                },
+                ret => panic!("Unexpected return value: {:?}", ret),
+            }
+        }
+
+        {
+            let call = DummyCall::new_twoarg_call(eight.clone(), sixty_four.clone());
+            match symex_umul_with_overflow(&project, &mut state, &call).unwrap() {
+                ReturnValue::Return(bv) => {
+                    let result = bv.slice(7, 0).as_u64().unwrap();
+                    let overflow = bv.slice(8, 8).as_u64().unwrap();
+                    assert_eq!(result, 0);
+                    assert_eq!(overflow, 1);
+                },
+                ret => panic!("Unexpected return value: {:?}", ret),
+            }
+        }
+    }
+}
