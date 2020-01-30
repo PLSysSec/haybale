@@ -194,17 +194,45 @@ pub fn symex_bswap<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>,
     let arg = state.operand_to_bv(arg)?;
     match argty {
         Type::IntegerType { bits: 16 } => {
+            assert_eq!(arg.get_width(), 16);
             let high_byte = arg.slice(15, 8);
             let low_byte = arg.slice(7, 0);
             Ok(ReturnValue::Return(low_byte.concat(&high_byte)))
         },
         Type::IntegerType { bits: 32 } => {
+            assert_eq!(arg.get_width(), 32);
             let byte_0 = arg.slice(7, 0);
             let byte_1 = arg.slice(15, 8);
             let byte_2 = arg.slice(23, 16);
             let byte_3 = arg.slice(31, 24);
             Ok(ReturnValue::Return(
                 byte_0.concat(&byte_1).concat(&byte_2).concat(&byte_3)
+            ))
+        },
+        Type::IntegerType { bits: 48 } => {
+            assert_eq!(arg.get_width(), 48);
+            let byte_0 = arg.slice(7, 0);
+            let byte_1 = arg.slice(15, 8);
+            let byte_2 = arg.slice(23, 16);
+            let byte_3 = arg.slice(31, 24);
+            let byte_4 = arg.slice(39, 32);
+            let byte_5 = arg.slice(47, 40);
+            Ok(ReturnValue::Return(
+                byte_0.concat(&byte_1).concat(&byte_2).concat(&byte_3).concat(&byte_4).concat(&byte_5)
+            ))
+        },
+        Type::IntegerType { bits: 64 } => {
+            assert_eq!(arg.get_width(), 64);
+            let byte_0 = arg.slice(7, 0);
+            let byte_1 = arg.slice(15, 8);
+            let byte_2 = arg.slice(23, 16);
+            let byte_3 = arg.slice(31, 24);
+            let byte_4 = arg.slice(39, 32);
+            let byte_5 = arg.slice(47, 40);
+            let byte_6 = arg.slice(55, 48);
+            let byte_7 = arg.slice(63, 56);
+            Ok(ReturnValue::Return(
+                byte_0.concat(&byte_1).concat(&byte_2).concat(&byte_3).concat(&byte_4).concat(&byte_5).concat(&byte_6).concat(&byte_7)
             ))
         },
         _ => Err(Error::UnsupportedInstruction(format!("llvm.bswap with argument type {:?}", argty))),
