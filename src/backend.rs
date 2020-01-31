@@ -104,6 +104,7 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     fn as_u64(&self) -> Option<u64>;
     fn as_bool(&self) -> Option<bool>;
     fn get_a_solution(&self) -> Result<BVSolution>;
+    fn get_solver(&self) -> Self::SolverRef;
     fn get_id(&self) -> i32;
     fn get_width(&self) -> u32;
     fn get_symbol(&self) -> Option<&str>;
@@ -196,6 +197,106 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
         } else {
             panic!("tried to sign-extend to {} bits, but already had {} bits", bits, cur_bits)
         }
+    }
+
+    /// Saturating addition, unsigned.
+    /// The result will be the same as normal addition, except that if the
+    /// operation would (unsigned) overflow, the maximum value (for that
+    /// bitwidth) is returned instead.
+    ///
+    /// A default implementation is provided in terms of the other trait methods.
+    fn uadds(&self, other: &Self) -> Self {
+        let width = {
+            let width = self.get_width();
+            assert_eq!(width, other.get_width());
+            width
+        };
+        assert!(width > 0);
+
+        // unsigned saturating addition:
+        //   if there was overflow, we saturate; return the max value
+        let result = self.add(other);
+        let overflow = self.uaddo(other);
+        let max_value = Self::ones(self.get_solver(), width);
+
+        overflow.cond_bv(
+            &max_value,  // overflow: return the max value
+            &result,  // no overflow: return the ordinary result
+        )
+    }
+
+    /// Saturating addition, signed.
+    /// The result will be the same as normal addition, except that if the
+    /// operation would (signed) overflow for being too positive / too negative,
+    /// the largest / smallest signed value respectively (for that bitwidth) is
+    /// returned instead.
+    ///
+    /// A default implementation is provided in terms of the other trait methods.
+    fn sadds(&self, other: &Self) -> Self {
+        let width = {
+            let width = self.get_width();
+            assert_eq!(width, other.get_width());
+            width
+        };
+        assert!(width > 0);
+
+        // signed saturating addition:
+        //   adding a positive and negative value can never saturate or overflow
+        //   adding two positive values: if there was overflow, we saturate; return the max positive value
+        //   adding two negative values: if there was overflow, we saturate; return the max negative value
+        let result = self.add(other);
+        let overflow = self.saddo(other);
+        let max_positive = Self::zero(self.get_solver(), 1).concat(&Self::ones(self.get_solver(), width - 1));
+        assert_eq!(max_positive.get_width(), width);
+        let max_negative = Self::one(self.get_solver(), 1).concat(&Self::zero(self.get_solver(), width - 1));
+        assert_eq!(max_negative.get_width(), width);
+        let self_negative = self.slice(width-1, width-1);  // `true` if the sign bit of `self` is set, meaning `self` is negative
+
+        overflow.cond_bv(
+            &self_negative.cond_bv(
+                &max_negative,  // overflow, and `self` was negative, so `other` must also have been negative, so return the max negative value
+                &max_positive,  // overflow, and `self` was positive, so `other` must also have been positive, so return the max positive value
+            ),
+            &result,  // no overflow: just return the ordinary result
+        )
+    }
+
+    /// Saturating subtraction, unsigned.
+    /// The result will be the same as normal subtraction, except that if the
+    /// operation would overflow (result in a negative number), zero is returned
+    /// instead.
+    ///
+    /// A default implementation is provided in terms of the other trait methods.
+    fn usubs(&self, other: &Self) -> Self {
+        let width = {
+            let width = self.get_width();
+            assert_eq!(width, other.get_width());
+            width
+        };
+        assert!(width > 0);
+
+        // unsigned saturating subtraction:
+        //   if there was overflow, we saturate; return zero
+        let result = self.sub(other);
+        let overflow = self.usubo(other);
+        let zero = Self::zero(self.get_solver(), width);
+
+        overflow.cond_bv(
+            &zero,  // overflow: return zero
+            &result,  // no overflow: return the ordinary result
+        )
+    }
+
+    /// Saturating subtraction, signed.
+    /// The result will be the same as normal subtraction, except that if the
+    /// operation would (signed) overflow for being too positive / too negative,
+    /// the largest / smallest signed value respectively (for that bitwidth) is
+    /// returned instead.
+    ///
+    /// A default implementation is provided in terms of the other trait methods.
+    fn ssubs(&self, other: &Self) -> Self {
+        // we just negate `other` and then perform saturating addition (signed)
+        self.sadds(&other.neg())
     }
 }
 
@@ -296,6 +397,9 @@ impl BV for boolector::BV<Rc<Btor>> {
     }
     fn get_a_solution(&self) -> Result<BVSolution> {
         Ok(self.get_a_solution())
+    }
+    fn get_solver(&self) -> Self::SolverRef {
+        self.get_btor()
     }
     fn get_id(&self) -> i32 {
         self.get_id()

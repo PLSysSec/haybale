@@ -1068,6 +1068,26 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.smul.with.overflow").cloned().expect("Failed to find LLVM intrinsic smul.with.overflow hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
+                    } else if funcname.starts_with("llvm.uadd.sat") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.uadd.sat").cloned().expect("Failed to find LLVM intrinsic uadd.sat hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                    } else if funcname.starts_with("llvm.sadd.sat") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.sadd.sat").cloned().expect("Failed to find LLVM intrinsic sadd.sat hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                    } else if funcname.starts_with("llvm.usub.sat") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.usub.sat").cloned().expect("Failed to find LLVM intrinsic usub.sat hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                    } else if funcname.starts_with("llvm.ssub.sat") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.ssub.sat").cloned().expect("Failed to find LLVM intrinsic ssub.sat hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
                     } else if funcname.starts_with("llvm.read_register")
                         || funcname.starts_with("llvm.write_register")
                     {

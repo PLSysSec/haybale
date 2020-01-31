@@ -354,6 +354,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 intrinsic_hooks.add("intrinsic: llvm.ssub.with.overflow", &hooks::intrinsics::symex_ssub_with_overflow);
                 intrinsic_hooks.add("intrinsic: llvm.umul.with.overflow", &hooks::intrinsics::symex_umul_with_overflow);
                 intrinsic_hooks.add("intrinsic: llvm.smul.with.overflow", &hooks::intrinsics::symex_smul_with_overflow);
+                intrinsic_hooks.add("intrinsic: llvm.uadd.sat", &hooks::intrinsics::symex_uadd_sat);
+                intrinsic_hooks.add("intrinsic: llvm.sadd.sat", &hooks::intrinsics::symex_sadd_sat);
+                intrinsic_hooks.add("intrinsic: llvm.usub.sat", &hooks::intrinsics::symex_usub_sat);
+                intrinsic_hooks.add("intrinsic: llvm.ssub.sat", &hooks::intrinsics::symex_ssub_sat);
                 intrinsic_hooks.add("intrinsic: generic_stub_hook", &function_hooks::generic_stub_hook);
                 intrinsic_hooks.add("intrinsic: abort_hook", &function_hooks::abort_hook);
                 intrinsic_hooks
