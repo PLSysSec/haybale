@@ -10,7 +10,7 @@ use crate::return_value::ReturnValue;
 use crate::solver_utils::PossibleSolutions;
 use crate::state::State;
 use llvm_ir::{Type, Typed};
-use log::debug;
+use log::{debug, warn};
 use reduce::Reduce;
 use std::convert::TryFrom;
 
@@ -50,12 +50,17 @@ pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
                     } else if !state.sat()? {
                         return Err(Error::Unsat);
                     } else {
-                        return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        return Err(Error::UnsupportedInstruction("not implemented yet: memset with non-constant size in bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }
                 },
                 Concretize::Symbolic => {
                     // In this case we just do the entire write here
                     let max_num_bytes = state.max_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap();
+                    if max_num_bytes > 0x4000 {
+                        warn!("Encountered a memset with symbolic size, up to {} bytes. This may be slow.", max_num_bytes);
+                    } else {
+                        debug!("Processing a memset of symbolic size, up to {} bytes", max_num_bytes);
+                    }
                     let mut addr = addr.clone();
                     let mut bytes_written = state.zero(num_bytes.get_width());
                     for _ in 0 ..= max_num_bytes {
@@ -78,9 +83,9 @@ pub fn symex_memset<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
     if let Some(num_bytes) = num_bytes {
         // we picked a single concrete value for num_bytes: perform the operation with that value
         if num_bytes == 0 {
-            debug!("Ignoring a memset of 0 num_bytes");
+            debug!("Ignoring a memset of size 0 bytes");
         } else {
-            debug!("Processing a memset of {} bytes", num_bytes);
+            debug!("Processing a memset of size {} bytes", num_bytes);
             // Do the operation as just one large write; let the memory choose the most efficient way to implement that.
             assert_eq!(val.get_width(), 8);
             let big_val = if state.bvs_must_be_equal(&val, &state.zero(8))? {
@@ -133,13 +138,17 @@ pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
                     } else if !state.sat()? {
                         return Err(Error::Unsat);
                     } else {
-                        return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant num_bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
+                        return Err(Error::UnsupportedInstruction("not implemented yet: memcpy or memmove with non-constant size in bytes, Concretize::Prefer, and needing to execute the fallback path".to_owned()));
                     }
                 },
                 Concretize::Symbolic => {
                     // In this case we just do the entire write here
                     let max_num_bytes = state.max_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap();
-                    debug!("Processing a memcpy with symbolic num_bytes, up to {}", max_num_bytes);
+                    if max_num_bytes > 0x4000 {
+                        warn!("Encountered a memcpy or memmove with symbolic size, up to {} bytes. This may be slow.", max_num_bytes);
+                    } else {
+                        debug!("Processing a memcpy or memmove of symbolic size, up to {} bytes", max_num_bytes);
+                    }
                     let mut src_addr = src.clone();
                     let mut dest_addr = dest.clone();
                     let mut bytes_written = state.zero(num_bytes.get_width());
@@ -165,9 +174,9 @@ pub fn symex_memcpy<'p, B: Backend>(_proj: &'p Project, state: &mut State<'p, B>
     if let Some(num_bytes) = num_bytes {
         // we picked a single concrete value for num_bytes: perform the operation with that value
         if num_bytes == 0 {
-            debug!("Ignoring a memcpy or memmove of 0 num_bytes");
+            debug!("Ignoring a memcpy or memmove of size 0 bytes");
         } else {
-            debug!("Processing memcpy of {} bytes", num_bytes);
+            debug!("Processing a memcpy or memmove of size {} bytes", num_bytes);
             // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
             let val = state.read(&src, num_bytes as u32 * 8)?;
             state.write(&dest, val)?;
