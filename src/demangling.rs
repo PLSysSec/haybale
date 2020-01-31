@@ -15,7 +15,9 @@ pub enum Demangling {
 impl Demangling {
     /// Attempts to demangle the given function name, as appropriate based on the
     /// `Demangling` setting.
-    pub fn maybe_demangle(&self, funcname: &str) -> String {
+    //
+    // (takes `self` by value because `self` is `Copy`)
+    pub fn maybe_demangle(self, funcname: &str) -> String {
         match self {
             Demangling::NoDemangling => funcname.to_owned(),
             Demangling::CPP => cpp_demangle_or_id(funcname),

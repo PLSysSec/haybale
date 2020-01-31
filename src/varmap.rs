@@ -125,7 +125,7 @@ impl<V: BV> VarMap<V> {
     /// Returns pairs of the `Name` and the `BV` assigned to that `Name`.
     ///
     /// Returned pairs will be sorted by `Name`.
-    pub fn get_all_vars_in_fn(&self, funcname: &String) -> impl Iterator<Item = (&Name, &V)> {
+    pub fn get_all_vars_in_fn(&self, funcname: &str) -> impl Iterator<Item = (&Name, &V)> {
         self.active_version.iter()
             .filter(|&(fname, _, _)| funcname == fname)
             .map(|(_, name, bv)| (name, bv))

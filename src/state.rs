@@ -105,7 +105,7 @@ fn pretty_source_loc(source_loc: &DebugLoc) -> String {
         None => "",
     };
     let need_slash = match &source_loc.directory {
-        Some(dir) => !dir.is_empty() && !dir.ends_with("/") && !source_loc.filename.starts_with("/"),
+        Some(dir) => !dir.is_empty() && !dir.ends_with('/') && !source_loc.filename.starts_with('/'),
         None => false,
     };
     let pretty_filename = match &source_loc.filename as &str {
@@ -1315,7 +1315,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             let mut source_locs = path_entry.get_all_source_locs();
             // handle the first one special, so we can print this help message if necessary
             match source_locs.next() {
-                None => path_str.push_str(&format!("    (no source locations available)\n")),
+                None => path_str.push_str("    (no source locations available)\n"),
                 Some(first_source_loc) => path_str.push_str(&format!("    {}\n", pretty_source_loc(first_source_loc))),
             }
             for source_loc in source_locs {
