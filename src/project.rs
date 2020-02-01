@@ -136,6 +136,10 @@ impl Project {
     ///
     /// For projects containing C++ or Rust code, you can pass either the mangled
     /// or demangled function name.
+    ///
+    /// If you have a `State` handy, you may want to use
+    /// `state.get_func_by_name()` instead, which will get the appopriate
+    /// (potentially module-private) definition based on the current LLVM module.
     pub fn get_func_by_name<'p>(&'p self, name: &str) -> Option<(&'p Function, &'p Module)> {
         let mut retval = None;
         for module in &self.modules {
@@ -178,7 +182,7 @@ impl Project {
         // if we get to this point, we still haven't found the function;
         // maybe we were given a C++ demangled name
         for module in &self.modules {
-            if let Some(f) = module.functions.iter().find(|func| try_cpp_demangle(&func.name).as_ref().map(|s| s.as_str()) == Some(name)) {
+            if let Some(f) = module.functions.iter().find(|func| try_cpp_demangle(&func.name).as_deref() == Some(name)) {
                 match retval {
                     None => retval = Some((f, module)),
                     Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),

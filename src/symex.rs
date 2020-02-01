@@ -919,7 +919,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 Ok(None)
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
-                if let Some((callee, callee_mod)) = self.project.get_func_by_name(called_funcname) {
+                if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
                     assert_eq!(call.arguments.len(), callee.parameters.len());
                     let bvargs: Vec<B::BV> = call.arguments.iter()
                         .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
@@ -1305,7 +1305,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 self.symex_from_cur_loc_through_end_of_function()
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
-                if let Some((callee, callee_mod)) = self.project.get_func_by_name(called_funcname) {
+                if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
                     assert_eq!(invoke.arguments.len(), callee.parameters.len());
                     let bvargs: Vec<B::BV> = invoke.arguments.iter()
                         .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function

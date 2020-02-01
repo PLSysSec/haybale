@@ -746,44 +746,49 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                     .reduce(|a,b| Ok(b?.concat(&a?)))  // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
                     .unwrap(),  // unwrap the Option<> produced by reduce(), leaving the final return type Result<B::BV>
             Constant::GlobalReference { name, .. } => {
-                if let Some(ga) = self.global_allocations.get_global_address(name, self.cur_loc.module) {
-                    // First, initialize the global if it hasn't been already.
-                    // As mentioned in comments in `State::new()`, we lazily
-                    // initialize globals upon first reference to them.
-                    //
-                    // We assume that global-variable initializers can only refer to the
-                    // *addresses* of other globals, and not the *values* of other
-                    // global constants, so that it's fine that any referred-to globals
-                    // may have been allocated but not initialized at this point.
-                    // This assumption seems to hold empirically: in my tests,
-                    // (1) clang performs constant-folding, even at -O0, on global
-                    //     variable initializers so that these initializers do not refer to
-                    //     the values of other global constants at the LLVM level. For
-                    //     instance, the C code
-                    //       `const int a = 1; const int b = a + 3;`
-                    //     is translated into the LLVM equivalent of
-                    //       `const int a = 1; const int b = 4;`
-                    // (2) clang rejects programs where global variable initializers refer
-                    //     to the value of externally-defined global constants, in which
-                    //     case the constant-folding described above would be impossible.
-                    //     Note, however, that clang does allow referring to the *addresses*
-                    //     of externally-defined global variables.
-                    // Therefore, we can go ahead and set our `.initialized` flag early,
-                    // because even if `const_to_bv` on our initializer references other
-                    // globals (possibly causing their lazy initialization as well),
-                    // those globals can't refer to our contents, so won't know that we
-                    // are lying about being initialized.
-                    // Setting the flag early prevents an infinite loop where I try to
-                    // initialize, but my initializer refers to your address so you try
-                    // to initialize, but your initializer refers to my address so I try
-                    // to initialize, etc.
-                    if !ga.initialized.get() {
-                        debug!("Initializing {:?} with initializer {:?}", name, &ga.initializer);
-                        ga.initialized.set(true);
-                        let write_val = self.const_to_bv(&ga.initializer)?;
-                        self.write_without_mut(&ga.addr, write_val)?;
+                if let Some(ga) = self.global_allocations.get_global_allocation(name, self.cur_loc.module) {
+                    match ga {
+                        GlobalAllocation::Function { addr, .. } => Ok(addr.clone()),
+                        GlobalAllocation::GlobalVariable { addr, initializer, initialized } => {
+                            // First, initialize the global if it hasn't been already.
+                            // As mentioned in comments in `State::new()`, we lazily
+                            // initialize globals upon first reference to them.
+                            //
+                            // We assume that global-variable initializers can only refer to the
+                            // *addresses* of other globals, and not the *values* of other
+                            // global constants, so that it's fine that any referred-to globals
+                            // may have been allocated but not initialized at this point.
+                            // This assumption seems to hold empirically: in my tests,
+                            // (1) clang performs constant-folding, even at -O0, on global
+                            //     variable initializers so that these initializers do not refer to
+                            //     the values of other global constants at the LLVM level. For
+                            //     instance, the C code
+                            //       `const int a = 1; const int b = a + 3;`
+                            //     is translated into the LLVM equivalent of
+                            //       `const int a = 1; const int b = 4;`
+                            // (2) clang rejects programs where global variable initializers refer
+                            //     to the value of externally-defined global constants, in which
+                            //     case the constant-folding described above would be impossible.
+                            //     Note, however, that clang does allow referring to the *addresses*
+                            //     of externally-defined global variables.
+                            // Therefore, we can go ahead and set our `.initialized` flag early,
+                            // because even if `const_to_bv` on our initializer references other
+                            // globals (possibly causing their lazy initialization as well),
+                            // those globals can't refer to our contents, so won't know that we
+                            // are lying about being initialized.
+                            // Setting the flag early prevents an infinite loop where I try to
+                            // initialize, but my initializer refers to your address so you try
+                            // to initialize, but your initializer refers to my address so I try
+                            // to initialize, etc.
+                            if !initialized.get() {
+                                debug!("Initializing {:?} with initializer {:?}", name, &initializer);
+                                initialized.set(true);
+                                let write_val = self.const_to_bv(initializer)?;
+                                self.write_without_mut(addr, write_val)?;
+                            }
+                            Ok(addr.clone())
+                        },
                     }
-                    Ok(ga.addr.clone())
                 } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
                     self.const_to_bv(&alias.aliasee)
                 } else {
@@ -1008,11 +1013,17 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         }
     }
 
-    /// Get a pointer to the given function name. The name will be resolved in the current module.
+    /// Get a pointer to the given function name. The name must be the
+    /// fully-mangled function name, as it appears in the LLVM. The name will be
+    /// resolved in the current module; this means that it will first look for a
+    /// module-private (e.g., C `static`) definition in the current module, then
+    /// search for a public definition in the same or different module. It will
+    /// never return a module-private definition from a different module.
     ///
     /// Returns `None` if no function was found with that name.
     pub fn get_pointer_to_function(&self, funcname: impl Into<String>) -> Option<&B::BV> {
-        self.global_allocations.get_global_address(&Name::Name(funcname.into()), self.cur_loc.module).map(|ga| &ga.addr)
+        self.global_allocations.get_global_allocation(&Name::from(funcname.into()), self.cur_loc.module)
+            .map(|ga| ga.get_addr())
     }
 
     /// Get a pointer to the currently active _hook_ for the given function name.
@@ -1021,6 +1032,25 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// active hook for that function.
     pub fn get_pointer_to_function_hook(&self, funcname: &str) -> Option<&B::BV> {
         self.global_allocations.get_function_hook_address(self.config.function_hooks.get_hook_for(funcname)?)
+    }
+
+    /// Get a `Function` by name. The name must be the fully-mangled function
+    /// name, as it appears in the LLVM. The name will be resolved in the current
+    /// module; this means that it will first look for a module-private (e.g., C
+    /// `static`) definition in the current module, then search for a public
+    /// definition in the same or different module. It will never return a
+    /// module-private definition from a different module.
+    ///
+    /// Also returns the `Module` in which the prevailing definition of the `Function` was found.
+    ///
+    /// Returns `None` if no function was found with that name.
+    pub fn get_func_by_name(&self, funcname: impl Into<String>) -> Option<(&'p Function, &'p Module)> {
+        let funcname = funcname.into();
+        self.global_allocations.get_global_allocation(&Name::from(funcname.clone()), self.cur_loc.module)
+            .and_then(|ga| match ga {
+                GlobalAllocation::Function { func, module, .. } => Some((*func, *module)),
+                GlobalAllocation::GlobalVariable { .. } => panic!("get_func_by_name: {} refers to a global variable, not a function", funcname),
+            })
     }
 
     /// Read a value `bits` bits long from memory at `addr`.
@@ -1144,7 +1174,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     }
 
     /// Get the `PathEntry`s that have been recorded, in order
-    pub fn get_path(&self) -> &Vec<PathEntry> {
+    pub fn get_path(&self) -> &Vec<PathEntry<'p>> {
         &self.path
     }
 
