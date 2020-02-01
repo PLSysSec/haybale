@@ -152,12 +152,12 @@ impl Project {
         // if we get to this point, we haven't found the function normally; maybe we were
         // given a Rust demangled name
         for module in &self.modules {
-           if let Some(f) = module.functions.iter().find(|func| demangle(&func.name).to_string() == name) {
-               match retval {
-                   None => retval = Some((f, module)),
-                   Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
-               };
-           }
+            if let Some(f) = module.functions.iter().find(|func| demangle(&func.name).to_string() == name) {
+                match retval {
+                    None => retval = Some((f, module)),
+                    Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
+                };
+            }
         }
         if retval.is_some() {
             return retval;
@@ -165,12 +165,12 @@ impl Project {
         // if we get to this point, we still haven't found the function; try
         // stripping the trailing hash value from the Rust mangled name
         for module in &self.modules {
-           if let Some(f) = module.functions.iter().find(|func| format!("{:#}", demangle(&func.name)) == name) {
-               match retval {
-                   None => retval = Some((f, module)),
-                   Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
-               };
-           }
+            if let Some(f) = module.functions.iter().find(|func| format!("{:#}", demangle(&func.name)) == name) {
+                match retval {
+                    None => retval = Some((f, module)),
+                    Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
+                };
+            }
         }
         if retval.is_some() {
             return retval;
