@@ -32,6 +32,8 @@ pub struct Config<'p, B> where B: Backend {
     /// be killed.  This will result in an `Error::SolverError` for that path.
     ///
     /// If `None`, there will be no time limit for solver queries.
+    ///
+    /// Default is 300 seconds (5 minutes).
     pub solver_query_timeout: Option<Duration>,
 
     /// If `true`, all memory accesses will be checked to ensure their addresses
