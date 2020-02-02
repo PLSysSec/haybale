@@ -23,6 +23,7 @@ mod demangling;
 pub mod function_hooks;
 mod hooks;
 pub mod alloc_utils;
+pub mod hook_utils;
 
 mod state;
 pub mod memory;
