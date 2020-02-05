@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.3.0"
+haybale = "0.3.1"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
@@ -279,6 +279,10 @@ point indefinitely unless there is demand for additional backported features.
 solver (via the Rust [`boolector`] crate).
 
 ## Changelog
+
+### Version 0.3.1 (Feb 5, 2020)
+
+- Fix some broken links in the README and docs. No functional changes.
 
 ### Version 0.3.0 (Feb 5, 2020)
 
