@@ -458,7 +458,7 @@ Initial release!
 [`ExecutionManager`]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
 [`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
 [`symex_function()`]: https://PLSysSec.github.io/haybale/haybale/fn.symex_function.html
-[`Config`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html
+[`Config`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html
 [`BV`]: https://docs.rs/boolector/0.3.0/boolector/struct.BV.html
 [`ReturnValue`]: https://PLSysSec.github.io/haybale/haybale/enum.ReturnValue.html
 [`Error`]: https://PLSysSec.github.io/haybale/haybale/enum.Error.html
@@ -471,12 +471,12 @@ Initial release!
 [`function_hooks`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/index.html
 [`generic_stub_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.generic_stub_hook.html
 [`abort_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.abort_hook.html
-[`Config.initial_mem_watchpoints`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.initial_mem_watchpoints
-[`Config.demangling`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.demangling
-[`Config.print_source_info`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.print_source_info
-[`Config.print_module_name`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.print_module_name
-[`Config.trust_llvm_assumes`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.trust_llvm_assumes
-[`Config.solver_query_timeout`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.solver_query_timeout
-[`Config.squash_unsats`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.squash_unsats
+[`Config.initial_mem_watchpoints`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.initial_mem_watchpoints
+[`Config.demangling`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.demangling
+[`Config.print_source_info`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.print_source_info
+[`Config.print_module_name`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.print_module_name
+[`Config.trust_llvm_assumes`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.trust_llvm_assumes
+[`Config.solver_query_timeout`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.solver_query_timeout
+[`Config.squash_unsats`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.squash_unsats
 [`backend::BV`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.BV.html
 [`State.full_error_message_with_context()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.full_error_message_with_context
