@@ -367,6 +367,23 @@
 <span id="367">367</span>
 <span id="368">368</span>
 <span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::{<span class="ident">Backend</span>, <span class="ident">SolverRef</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">FunctionHook</span>;
@@ -389,7 +406,7 @@
     <span class="doccomment">/// Map from `Name`s of global variables and `Function`s, to either</span>
     <span class="doccomment">/// &quot;strong&quot; or &quot;weak&quot; `GlobalAllocation`s.</span>
     <span class="doccomment">/// See notes on [`Definition`](enum.Definition.html).</span>
-    <span class="ident">allocated_globals</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Name</span>, <span class="ident">Definition</span><span class="op">&lt;</span><span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">allocated_globals</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Name</span>, <span class="ident">Definition</span><span class="op">&lt;</span><span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="doccomment">/// Map from `FunctionHook`s to addresses at which they are allocated.</span>
     <span class="doccomment">/// Currently, `FunctionHook` definitions are always &quot;strong&quot;.</span>
     <span class="ident">allocated_hooks</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span>,
@@ -400,21 +417,46 @@
     <span class="doccomment">/// this is a similar map for module-private globals.</span>
     <span class="doccomment">/// It maps module names to maps of global names to `GlobalAllocation`s.</span>
     <span class="doccomment">/// Module-private definitions are always strong; they can never be weak.</span>
-    <span class="ident">module_private_allocated_globals</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Name</span>, <span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">module_private_allocated_globals</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Name</span>, <span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="doccomment">/// This is to `module_private_allocated_globals` as `addr_to_function` is</span>
     <span class="doccomment">/// to `allocated_globals`</span>
     <span class="ident">module_private_addr_to_function</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">u64</span>, <span class="ident">Callable</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="ident">V</span><span class="op">&gt;</span> {
-    <span class="doccomment">/// The address at which the global variable or `Function` is allocated.</span>
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">addr</span>: <span class="ident">V</span>,
-    <span class="doccomment">/// The initializer associated with the global variable (this is unused for functions)</span>
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">initializer</span>: <span class="ident">Constant</span>,
-    <span class="doccomment">/// Whether the global variable has been initialized yet.  Functions are</span>
-    <span class="doccomment">/// always considered initialized.</span>
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">initialized</span>: <span class="ident">Cell</span><span class="op">&lt;</span><span class="ident">bool</span><span class="op">&gt;</span>,
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum</span> <span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">V</span><span class="op">&gt;</span> {
+    <span class="ident">GlobalVariable</span> {
+        <span class="doccomment">/// The address at which the global variable is allocated</span>
+        <span class="ident">addr</span>: <span class="ident">V</span>,
+        <span class="doccomment">/// The initializer associated with the global variable</span>
+        <span class="ident">initializer</span>: <span class="ident">Constant</span>,
+        <span class="doccomment">/// Whether the global variable has been initialized yet</span>
+        <span class="ident">initialized</span>: <span class="ident">Cell</span><span class="op">&lt;</span><span class="ident">bool</span><span class="op">&gt;</span>,
+    },
+    <span class="ident">Function</span> {
+        <span class="doccomment">/// The prevailing definition of the `Function`</span>
+        <span class="ident">func</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Function</span>,
+        <span class="doccomment">/// The `Module` in which the prevailing definition of the `Function` was found</span>
+        <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>,
+        <span class="doccomment">/// The address at which the `Function` is allocated</span>
+        <span class="ident">addr</span>: <span class="ident">V</span>,
+    },
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">V</span><span class="op">&gt;</span> <span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">V</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_addr</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">V</span> {
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="self">Self</span>::<span class="ident">GlobalVariable</span> { <span class="ident">addr</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">addr</span>,
+            <span class="self">Self</span>::<span class="ident">Function</span> { <span class="ident">addr</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">addr</span>,
+        }
+    }
+
+    <span class="kw">fn</span> <span class="ident">set_addr</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">new_addr</span>: <span class="ident">V</span>) {
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="self">Self</span>::<span class="ident">GlobalVariable</span> { <span class="ident">addr</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="ident">addr</span> <span class="op">=</span> <span class="ident">new_addr</span>,
+            <span class="self">Self</span>::<span class="ident">Function</span> { <span class="ident">addr</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="ident">addr</span> <span class="op">=</span> <span class="ident">new_addr</span>,
+        }
+    }
 }
 
 <span class="doccomment">/// Strong and weak definitions.</span>
@@ -499,7 +541,6 @@
 <span class="kw">trait</span> <span class="ident">Global</span> {
     <span class="kw">fn</span> <span class="ident">get_linkage</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Linkage</span>;
     <span class="kw">fn</span> <span class="ident">get_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Name</span>;
-    <span class="kw">fn</span> <span class="ident">get_initializer</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Constant</span>;
 }
 
 <span class="kw">impl</span> <span class="ident">Global</span> <span class="kw">for</span> <span class="ident">GlobalVariable</span> {
@@ -509,9 +550,6 @@
     <span class="kw">fn</span> <span class="ident">get_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Name</span> {
         <span class="self">self</span>.<span class="ident">name</span>.<span class="ident">clone</span>()
     }
-    <span class="kw">fn</span> <span class="ident">get_initializer</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Constant</span> {
-        <span class="self">self</span>.<span class="ident">initializer</span>.<span class="ident">clone</span>().<span class="ident">expect</span>(<span class="string">&quot;Expected a global variable definition, not merely a declaration&quot;</span>)
-    }
 }
 
 <span class="kw">impl</span> <span class="ident">Global</span> <span class="kw">for</span> <span class="ident">Function</span> {
@@ -520,10 +558,6 @@
     }
     <span class="kw">fn</span> <span class="ident">get_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Name</span> {
         <span class="ident">Name</span>::<span class="ident">from</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="self">self</span>.<span class="ident">name</span>)
-    }
-    <span class="kw">fn</span> <span class="ident">get_initializer</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Constant</span> {
-        <span class="comment">// Unused for functions, so we don&#39;t care what goes here</span>
-        <span class="ident">Constant</span>::<span class="ident">TokenNone</span>
     }
 }
 
@@ -555,12 +589,11 @@
     <span class="doccomment">/// `addr`: Address at which the global variable should be allocated</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// The global variable will be assumed not-yet-initialized;</span>
-    <span class="doccomment">/// see notes on `get_global_address`.</span>
+    <span class="doccomment">/// see notes on `get_global_allocation()`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">allocate_global_var</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">var</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">GlobalVariable</span>, <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>, <span class="ident">addr</span>: <span class="ident">B</span>::<span class="ident">BV</span>) {
-        <span class="kw">if</span> <span class="ident">var</span>.<span class="ident">initializer</span>.<span class="ident">is_none</span>() {
-            <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Can&#39;t call allocate_global() with a global declaration, only a definition&quot;</span>);
-        }
-        <span class="self">self</span>.<span class="ident">allocate_global</span>(<span class="ident">var</span>, <span class="ident">module</span>, <span class="ident">addr</span>, <span class="bool-val">false</span>);
+        <span class="kw">let</span> <span class="ident">initializer</span> <span class="op">=</span> <span class="ident">var</span>.<span class="ident">initializer</span>.<span class="ident">as_ref</span>().<span class="ident">expect</span>(<span class="string">&quot;Can&#39;t call allocate_global_var() with a global declaration, only a definition&quot;</span>).<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">allocation</span> <span class="op">=</span> <span class="ident">GlobalAllocation</span>::<span class="ident">GlobalVariable</span> { <span class="ident">addr</span>, <span class="ident">initializer</span>, <span class="ident">initialized</span>: <span class="ident">Cell</span>::<span class="ident">new</span>(<span class="bool-val">false</span>) };
+        <span class="self">self</span>.<span class="ident">allocate_global</span>(<span class="ident">var</span>, <span class="ident">module</span>, <span class="ident">allocation</span>);
     }
 
     <span class="doccomment">/// `func`: a function definition</span>
@@ -573,7 +606,8 @@
     <span class="doccomment">/// pointers to them. (As of this writing, we actually only allocate 64 bits</span>
     <span class="doccomment">/// for every `Function`)</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">allocate_function</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">func</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Function</span>, <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>, <span class="ident">addr</span>: <span class="ident">u64</span>, <span class="ident">addr_bv</span>: <span class="ident">B</span>::<span class="ident">BV</span>) {
-        <span class="kw">match</span> <span class="self">self</span>.<span class="ident">allocate_global</span>(<span class="ident">func</span>, <span class="ident">module</span>, <span class="ident">addr_bv</span>, <span class="bool-val">true</span>) {
+        <span class="kw">let</span> <span class="ident">allocation</span> <span class="op">=</span> <span class="ident">GlobalAllocation</span>::<span class="ident">Function</span> { <span class="ident">func</span>, <span class="ident">module</span>, <span class="ident">addr</span>: <span class="ident">addr_bv</span> };
+        <span class="kw">match</span> <span class="self">self</span>.<span class="ident">allocate_global</span>(<span class="ident">func</span>, <span class="ident">module</span>, <span class="ident">allocation</span>) {
             <span class="ident">AllocationResult</span>::<span class="ident">Public</span> <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="self">self</span>.<span class="ident">addr_to_function</span>.<span class="ident">insert</span>(<span class="ident">addr</span>, <span class="ident">Callable</span>::<span class="ident">LLVMFunction</span>(<span class="ident">func</span>));
             },
@@ -603,34 +637,34 @@
 
     <span class="doccomment">/// `initialized`: whether the `Global` has been initialized.</span>
     <span class="doccomment">/// Currently, this is always `false` for global variables, and always `true` for functions.</span>
-    <span class="kw">fn</span> <span class="ident">allocate_global</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">global</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">impl</span> <span class="ident">Global</span>, <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>, <span class="ident">addr</span>: <span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">initialized</span>: <span class="ident">bool</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">AllocationResult</span> {
+    <span class="kw">fn</span> <span class="ident">allocate_global</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">global</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">impl</span> <span class="ident">Global</span>, <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>, <span class="ident">allocation</span>: <span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">AllocationResult</span> {
         <span class="kw">match</span> <span class="ident">global</span>.<span class="ident">get_linkage</span>() {
             <span class="ident">Linkage</span>::<span class="ident">Private</span> <span class="op">|</span> <span class="ident">Linkage</span>::<span class="ident">Internal</span> <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="comment">// Module-private global, strong definition</span>
-                <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating {:?} (module-private to {:?}) at {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>(), <span class="kw-2">&amp;</span><span class="ident">module</span>.<span class="ident">name</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>);
+                <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating {:?} (module-private to {:?}) at {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>(), <span class="kw-2">&amp;</span><span class="ident">module</span>.<span class="ident">name</span>, <span class="ident">allocation</span>.<span class="ident">get_addr</span>());
                 <span class="kw">match</span> <span class="self">self</span>.<span class="ident">module_private_allocated_globals</span>
                     .<span class="ident">entry</span>(<span class="ident">module</span>.<span class="ident">name</span>.<span class="ident">clone</span>())
                     .<span class="ident">or_default</span>()
                     .<span class="ident">entry</span>(<span class="ident">global</span>.<span class="ident">get_name</span>())
                 {
-                    <span class="ident">Entry</span>::<span class="ident">Vacant</span>(<span class="ident">entry</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">entry</span>.<span class="ident">insert</span>(<span class="ident">GlobalAllocation</span> { <span class="ident">addr</span>, <span class="ident">initializer</span>: <span class="ident">global</span>.<span class="ident">get_initializer</span>(), <span class="ident">initialized</span>: <span class="ident">Cell</span>::<span class="ident">new</span>(<span class="ident">initialized</span>) }),
+                    <span class="ident">Entry</span>::<span class="ident">Vacant</span>(<span class="ident">entry</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">entry</span>.<span class="ident">insert</span>(<span class="ident">allocation</span>),
                     <span class="ident">Entry</span>::<span class="ident">Occupied</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Duplicate definitions found for module-private global variable or function {:?} in module {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>(), <span class="kw-2">&amp;</span><span class="ident">module</span>.<span class="ident">name</span>),
                 };
                 <span class="ident">AllocationResult</span>::<span class="ident">ModulePrivate</span>
             },
             <span class="ident">Linkage</span>::<span class="ident">External</span> <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="comment">// Public global, strong definition</span>
-                <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating {:?} (public, strong) at {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>(), <span class="kw-2">&amp;</span><span class="ident">addr</span>);
+                <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating {:?} (public, strong) at {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>(), <span class="ident">allocation</span>.<span class="ident">get_addr</span>());
                 <span class="kw">match</span> <span class="self">self</span>.<span class="ident">allocated_globals</span>.<span class="ident">entry</span>(<span class="ident">global</span>.<span class="ident">get_name</span>()) {
                     <span class="ident">Entry</span>::<span class="ident">Vacant</span>(<span class="ident">entry</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                        <span class="ident">entry</span>.<span class="ident">insert</span>(<span class="ident">Definition</span>::<span class="ident">Strong</span>(<span class="ident">GlobalAllocation</span> { <span class="ident">addr</span>, <span class="ident">initializer</span>: <span class="ident">global</span>.<span class="ident">get_initializer</span>(), <span class="ident">initialized</span>: <span class="ident">Cell</span>::<span class="ident">new</span>(<span class="ident">initialized</span>) }));
+                        <span class="ident">entry</span>.<span class="ident">insert</span>(<span class="ident">Definition</span>::<span class="ident">Strong</span>(<span class="ident">allocation</span>));
                     },
                     <span class="ident">Entry</span>::<span class="ident">Occupied</span>(<span class="kw-2">mut</span> <span class="ident">entry</span>) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">match</span> <span class="ident">entry</span>.<span class="ident">get</span>() {
                             <span class="ident">Definition</span>::<span class="ident">Strong</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Duplicate strong definitions found for public global variable or function {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>()),
                             <span class="ident">Definition</span>::<span class="ident">Weak</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">entry</span>.<span class="ident">insert</span>(
                                 <span class="comment">// discard the weak definition in favor of this strong one</span>
-                                <span class="ident">Definition</span>::<span class="ident">Strong</span>(<span class="ident">GlobalAllocation</span> { <span class="ident">addr</span>, <span class="ident">initializer</span>: <span class="ident">global</span>.<span class="ident">get_initializer</span>(), <span class="ident">initialized</span>: <span class="ident">Cell</span>::<span class="ident">new</span>(<span class="ident">initialized</span>) })
+                                <span class="ident">Definition</span>::<span class="ident">Strong</span>(<span class="ident">allocation</span>)
                             ),
                         };
                     },
@@ -647,8 +681,8 @@
                 <span class="comment">// We treat all of these modes as &quot;Public global, weak definition&quot; under our semantics</span>
                 <span class="kw">match</span> <span class="self">self</span>.<span class="ident">allocated_globals</span>.<span class="ident">entry</span>(<span class="ident">global</span>.<span class="ident">get_name</span>()) {
                     <span class="ident">Entry</span>::<span class="ident">Vacant</span>(<span class="ident">entry</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                        <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating {:?} (public, weak) at {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>(), <span class="kw-2">&amp;</span><span class="ident">addr</span>);
-                        <span class="ident">entry</span>.<span class="ident">insert</span>(<span class="ident">Definition</span>::<span class="ident">Weak</span>(<span class="ident">GlobalAllocation</span> { <span class="ident">addr</span>, <span class="ident">initializer</span>: <span class="ident">global</span>.<span class="ident">get_initializer</span>(), <span class="ident">initialized</span>: <span class="ident">Cell</span>::<span class="ident">new</span>(<span class="ident">initialized</span>) }));
+                        <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating {:?} (public, weak) at {:?}&quot;</span>, <span class="ident">global</span>.<span class="ident">get_name</span>(), <span class="ident">allocation</span>.<span class="ident">get_addr</span>());
+                        <span class="ident">entry</span>.<span class="ident">insert</span>(<span class="ident">Definition</span>::<span class="ident">Weak</span>(<span class="ident">allocation</span>));
                         <span class="ident">AllocationResult</span>::<span class="ident">Public</span>
                     },
                     <span class="ident">Entry</span>::<span class="ident">Occupied</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> {
@@ -681,7 +715,7 @@
     <span class="doccomment">/// If the global variable hasn&#39;t been initialized, the caller probably wants</span>
     <span class="doccomment">/// to initialize it. If so, be sure to update the `.initialized` field of</span>
     <span class="doccomment">/// the `GlobalAllocation`.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_global_address</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">Name</span>, <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Module</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_global_allocation</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">Name</span>, <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Module</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="comment">// First look for a module-private definition. We allow this to have precedence over any public definition that may exist.</span>
         <span class="self">self</span>.<span class="ident">module_private_allocated_globals</span>
             .<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">module</span>.<span class="ident">name</span>)
@@ -724,15 +758,15 @@
     <span class="doccomment">/// the call to `SolverRef::duplicate()`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">change_solver</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">new_solver</span>: <span class="ident">B</span>::<span class="ident">SolverRef</span>) {
         <span class="kw">for</span> <span class="ident">def</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">allocated_globals</span>.<span class="ident">values_mut</span>() {
-            <span class="kw">let</span> <span class="ident">new_bv</span> <span class="op">=</span> <span class="ident">new_solver</span>.<span class="ident">match_bv</span>(<span class="kw-2">&amp;</span><span class="ident">def</span>.<span class="ident">get</span>().<span class="ident">addr</span>).<span class="ident">unwrap</span>();
-            <span class="ident">def</span>.<span class="ident">get_mut</span>().<span class="ident">addr</span> <span class="op">=</span> <span class="ident">new_bv</span>;
+            <span class="kw">let</span> <span class="ident">new_bv</span> <span class="op">=</span> <span class="ident">new_solver</span>.<span class="ident">match_bv</span>(<span class="kw-2">&amp;</span><span class="ident">def</span>.<span class="ident">get</span>().<span class="ident">get_addr</span>()).<span class="ident">unwrap</span>();
+            <span class="ident">def</span>.<span class="ident">get_mut</span>().<span class="ident">set_addr</span>(<span class="ident">new_bv</span>);
         }
         <span class="kw">for</span> <span class="ident">bv</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">allocated_hooks</span>.<span class="ident">values_mut</span>() {
             <span class="kw-2">*</span><span class="ident">bv</span> <span class="op">=</span> <span class="ident">new_solver</span>.<span class="ident">match_bv</span>(<span class="ident">bv</span>).<span class="ident">unwrap</span>();
         }
         <span class="kw">for</span> <span class="ident">hm</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">module_private_allocated_globals</span>.<span class="ident">values_mut</span>() {
             <span class="kw">for</span> <span class="ident">ga</span> <span class="kw">in</span> <span class="ident">hm</span>.<span class="ident">values_mut</span>() {
-                <span class="ident">ga</span>.<span class="ident">addr</span> <span class="op">=</span> <span class="ident">new_solver</span>.<span class="ident">match_bv</span>(<span class="kw-2">&amp;</span><span class="ident">ga</span>.<span class="ident">addr</span>).<span class="ident">unwrap</span>();
+                <span class="ident">ga</span>.<span class="ident">set_addr</span>(<span class="ident">new_solver</span>.<span class="ident">match_bv</span>(<span class="ident">ga</span>.<span class="ident">get_addr</span>()).<span class="ident">unwrap</span>());
             }
         }
     }

@@ -287,27 +287,6 @@
 <span id="287">287</span>
 <span id="288">288</span>
 <span id="289">289</span>
-<span id="290">290</span>
-<span id="291">291</span>
-<span id="292">292</span>
-<span id="293">293</span>
-<span id="294">294</span>
-<span id="295">295</span>
-<span id="296">296</span>
-<span id="297">297</span>
-<span id="298">298</span>
-<span id="299">299</span>
-<span id="300">300</span>
-<span id="301">301</span>
-<span id="302">302</span>
-<span id="303">303</span>
-<span id="304">304</span>
-<span id="305">305</span>
-<span id="306">306</span>
-<span id="307">307</span>
-<span id="308">308</span>
-<span id="309">309</span>
-<span id="310">310</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Structures for defining and processing memory watchpoints</span>
 
@@ -424,6 +403,9 @@
     <span class="doccomment">/// If it does, then generate the appropriate log messages for watchpoints</span>
     <span class="doccomment">/// being triggered.</span>
     <span class="doccomment">///</span>
+    <span class="doccomment">/// Assumes that the operation itself has already been performed, before</span>
+    <span class="doccomment">/// the call to process_watchpoint_triggers().</span>
+    <span class="doccomment">///</span>
     <span class="doccomment">/// Returns `true` if any watchpoints were triggered, `false` if not.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// `is_write`: whether the operation is a read (`false`) or write (`true`),</span>
@@ -444,7 +426,22 @@
             <span class="kw">for</span> (<span class="ident">name</span>, (<span class="ident">watchpoint</span>, <span class="ident">enabled</span>)) <span class="kw">in</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">iter</span>() {
                 <span class="kw">if</span> <span class="kw-2">*</span><span class="ident">enabled</span> <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="self">self</span>.<span class="ident">is_watchpoint_triggered</span>(<span class="ident">state</span>, <span class="ident">watchpoint</span>, <span class="ident">op_lower</span>, <span class="kw-2">&amp;</span><span class="ident">op_upper</span>)<span class="question-mark">?</span> {
                     <span class="ident">retval</span> <span class="op">=</span> <span class="bool-val">true</span>;
-                    <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} {} by {:?}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="kw">if</span> <span class="ident">is_write</span> { <span class="string">&quot;written&quot;</span> } <span class="kw">else</span> { <span class="string">&quot;read&quot;</span> }, <span class="ident">state</span>.<span class="ident">cur_loc</span>);
+                    <span class="kw">let</span> <span class="ident">pretty_loc</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">print_module_name</span> {
+                        <span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_with_module</span>()
+                    } <span class="kw">else</span> {
+                        <span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_no_module</span>()
+                    };
+                    <span class="kw">if</span> <span class="ident">is_write</span> {
+                        <span class="comment">// Log the new value of the watched location (regardless of which part of the watched location the write may have touched).</span>
+                        <span class="comment">// Note that, as stipulated in the docs on this function, we are assuming that the write operation</span>
+                        <span class="comment">// has already been performed.</span>
+                        <span class="kw">let</span> <span class="ident">watchpoint_low</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">watchpoint</span>.<span class="ident">low</span>, <span class="kw">crate</span>::<span class="ident">layout</span>::<span class="ident">POINTER_SIZE_BITS</span> <span class="kw">as</span> <span class="ident">u32</span>);
+                        <span class="kw">let</span> <span class="ident">watchpoint_size_bits</span> <span class="op">=</span> (<span class="ident">watchpoint</span>.<span class="ident">high</span> <span class="op">-</span> <span class="ident">watchpoint</span>.<span class="ident">low</span> <span class="op">+</span> <span class="number">1</span>) <span class="op">*</span> <span class="number">8</span>;
+                        <span class="kw">let</span> <span class="ident">new_value</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">read_without_triggering_watchpoints</span>(<span class="kw-2">&amp;</span><span class="ident">watchpoint_low</span>, <span class="ident">watchpoint_size_bits</span> <span class="kw">as</span> <span class="ident">u32</span>);
+                        <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} written by {}; new value is {:?}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>, <span class="ident">new_value</span>);
+                    } <span class="kw">else</span> {
+                        <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} read by {}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>);
+                    }
                 }
             }
         }
@@ -494,51 +491,12 @@
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
 <span class="kw">mod</span> <span class="ident">tests</span> {
     <span class="kw">use</span> <span class="kw">super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="ident">BtorBackend</span>;
-    <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">config</span>::<span class="ident">Config</span>;
-    <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::<span class="ident">Location</span>;
-    <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
-    <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="kw-2">*</span>;
-
-    <span class="doccomment">/// First some utilities copy-pasted from the unit tests for `State`</span>
-
-    <span class="doccomment">/// utility to initialize a `State` out of a `Project` and a function name</span>
-    <span class="kw">fn</span> <span class="ident">blank_state</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(<span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">BtorBackend</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> (<span class="ident">func</span>, <span class="ident">module</span>) <span class="op">=</span> <span class="ident">project</span>.<span class="ident">get_func_by_name</span>(<span class="ident">funcname</span>).<span class="ident">expect</span>(<span class="string">&quot;Failed to find function&quot;</span>);
-        <span class="kw">let</span> <span class="ident">start_loc</span> <span class="op">=</span> <span class="ident">Location</span> {
-            <span class="ident">module</span>,
-            <span class="ident">func</span>,
-            <span class="ident">bbname</span>: <span class="string">&quot;test_bb&quot;</span>.<span class="ident">to_owned</span>().<span class="ident">into</span>(),
-            <span class="ident">instr</span>: <span class="number">0</span>,
-        };
-        <span class="ident">State</span>::<span class="ident">new</span>(<span class="ident">project</span>, <span class="ident">start_loc</span>, <span class="ident">Config</span>::<span class="ident">default</span>())
-    }
-
-    <span class="doccomment">/// Utility that creates a simple `Project` for testing.</span>
-    <span class="doccomment">/// The `Project` will contain a single `Module` (with the given name) which contains</span>
-    <span class="doccomment">/// a single function (given).</span>
-    <span class="kw">fn</span> <span class="ident">blank_project</span>(<span class="ident">modname</span>: <span class="kw">impl</span> <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span>, <span class="ident">func</span>: <span class="ident">Function</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Project</span> {
-        <span class="ident">Project</span>::<span class="ident">from_module</span>(<span class="ident">Module</span> {
-            <span class="ident">name</span>: <span class="ident">modname</span>.<span class="ident">into</span>(),
-            <span class="ident">source_file_name</span>: <span class="ident">String</span>::<span class="ident">new</span>(),
-            <span class="ident">data_layout</span>: <span class="ident">String</span>::<span class="ident">new</span>(),
-            <span class="ident">target_triple</span>: <span class="prelude-val">None</span>,
-            <span class="ident">functions</span>: <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">func</span>],
-            <span class="ident">global_vars</span>: <span class="macro">vec</span><span class="macro">!</span>[],
-            <span class="ident">global_aliases</span>: <span class="macro">vec</span><span class="macro">!</span>[],
-            <span class="ident">named_struct_types</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
-            <span class="ident">inline_assembly</span>: <span class="ident">String</span>::<span class="ident">new</span>(),
-        })
-    }
-
-    <span class="doccomment">/// utility that creates a technically valid (but functionally useless) `Function` for testing</span>
-    <span class="kw">fn</span> <span class="ident">blank_function</span>(<span class="ident">name</span>: <span class="kw">impl</span> <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Function</span> {
-        <span class="ident">Function</span>::<span class="ident">new</span>(<span class="ident">name</span>)
-    }
+    <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">test_utils</span>::<span class="kw-2">*</span>;
+    <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">Name</span>;
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">watchpoints</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">func</span> <span class="op">=</span> <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>);
+        <span class="kw">let</span> <span class="ident">func</span> <span class="op">=</span> <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]);
         <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(<span class="string">&quot;test_mod&quot;</span>, <span class="ident">func</span>);
         <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">blank_state</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="string">&quot;test_func&quot;</span>);
 
@@ -549,38 +507,38 @@
         <span class="comment">// Experiments on the first watchpoint</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x1000</span>, <span class="number">64</span>);
 
-        <span class="comment">// check that we can trigger it with a 1-byte write to 0x1000</span>
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="comment">// check that we can trigger it with a 1-byte read from 0x1000</span>
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we can trigger it with an 8-byte write to 0x1000</span>
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">64</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="comment">// check that we can trigger it with an 8-byte read from 0x1000</span>
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">64</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we can trigger it with a 1-byte write to 0x1002</span>
+        <span class="comment">// check that we can trigger it with a 1-byte read from 0x1002</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x1002</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we can trigger it with a 8-byte write to 0x1002</span>
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">64</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="comment">// check that we can trigger it with a 8-byte read from 0x1002</span>
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">64</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we don&#39;t trigger it with a 1-byte write to 0x0fff</span>
+        <span class="comment">// check that we don&#39;t trigger it with a 1-byte read from 0x0fff</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x0fff</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we can trigger it with an 8-byte write to 0x0fff</span>
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">64</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="comment">// check that we can trigger it with an 8-byte read from 0x0fff</span>
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">64</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we don&#39;t trigger it with a 1-byte write to 0x1008</span>
+        <span class="comment">// check that we don&#39;t trigger it with a 1-byte read from 0x1008</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x1008</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we do trigger it with a 0x100-byte write to 0x0ff0</span>
+        <span class="comment">// check that we do trigger it with a 0x100-byte read from 0x0ff0</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x0ff0</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">0x100</span> <span class="op">*</span> <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">0x100</span> <span class="op">*</span> <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
         <span class="comment">// disable it and check that we no longer trigger it</span>
         <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">disable</span>(<span class="string">&quot;w1&quot;</span>));
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x1002</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
         <span class="comment">// re-enable it</span>
         <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">enable</span>(<span class="string">&quot;w1&quot;</span>));
@@ -591,27 +549,27 @@
         <span class="comment">// Experiments on the second watchpoint</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x2000</span>, <span class="number">64</span>);
 
-        <span class="comment">// check that we can trigger it with a 1-byte write to 0x2000</span>
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="comment">// check that we can trigger it with a 1-byte read from 0x2000</span>
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that we can trigger it with a 1-byte write to 0x2010</span>
+        <span class="comment">// check that we can trigger it with a 1-byte read from 0x2010</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x2010</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that a write touching both watchpoints does trigger</span>
+        <span class="comment">// check that a read touching both watchpoints does trigger</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x0ff0</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">0x10000</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">0x10000</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
-        <span class="comment">// check that a write in between the two watchpoints doesn&#39;t trigger</span>
+        <span class="comment">// check that a read in between the two watchpoints doesn&#39;t trigger</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x1f00</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">16</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">16</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
         <span class="comment">// fully remove the second watchpoint</span>
         <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">watchpoints</span>.<span class="ident">remove</span>(<span class="string">&quot;w2&quot;</span>));
 
         <span class="comment">// check that it is no longer triggered</span>
         <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u32</span>(<span class="number">0x2000</span>, <span class="number">64</span>);
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>);
+        <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">addr</span>, <span class="number">8</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>);
 
         <span class="comment">// check that trying to re-enable it now returns false</span>
         <span class="macro">assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">watchpoints</span>.<span class="ident">enable</span>(<span class="string">&quot;w2&quot;</span>));

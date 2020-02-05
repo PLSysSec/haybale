@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["memcpy","Copies `num_bytes` bytes of memory from address `src` to address `dest`. `src` and `dest` may overlap."],["memset","Set `num_bytes` bytes of memory at address `addr` each to the value `val`. Each individual byte will be set to `val`, so only the lowest 8 bits of `val` will be used."]]});

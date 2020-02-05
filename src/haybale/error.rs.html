@@ -51,24 +51,42 @@
 <span id="51">51</span>
 <span id="52">52</span>
 <span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
 
-<span class="doccomment">/// Error types used throughout this crate</span>
+<span class="doccomment">/// Error types used throughout this crate.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// The `Display` impl for `Error` will provide information about the error</span>
+<span class="doccomment">/// itself. For more detailed information about the error, including the program</span>
+<span class="doccomment">/// context in which it occurred, see</span>
+<span class="doccomment">/// [`State.full_error_message_with_context()`](struct.State.html#method.full_error_message_with_context).</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Error</span> {
-    <span class="doccomment">/// While performing an operation, we discovered the current path is unsat</span>
+    <span class="doccomment">/// While performing an operation, we discovered the current path is unsat.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// This error type is used internally, but (by default) isn&#39;t exposed to consumers of `ExecutionManager`;</span>
+    <span class="doccomment">/// see [`Config.squash_unsats`](config/struct.Config.html#structfield.squash_unsats).</span>
     <span class="ident">Unsat</span>,
-    <span class="doccomment">/// The current path has exceeded the configured `loop_bound` (see [`Config`](struct.Config.html))</span>
+    <span class="doccomment">/// The current path has exceeded the configured `loop_bound` (see [`Config`](config/struct.Config.html))</span>
     <span class="ident">LoopBoundExceeded</span>,
     <span class="doccomment">/// The current path has attempted to dereference a null pointer (or</span>
     <span class="doccomment">/// more precisely, a pointer for which `NULL` is a possible value)</span>
     <span class="ident">NullPointerDereference</span>,
     <span class="doccomment">/// Processing a call of a function with the given name, but failed to find an LLVM definition, a function hook, or a built-in handler for it</span>
     <span class="ident">FunctionNotFound</span>(<span class="ident">String</span>),
-    <span class="doccomment">/// An operation attempted to coerce a `BV` more than one bit long into a `Bool`. The `String` is a text description of the `BV`, and the `u32` is its size</span>
-    <span class="ident">BoolCoercionError</span>(<span class="ident">String</span>, <span class="ident">u32</span>),
-    <span class="doccomment">/// The solver returned this processing error while evaluating a query</span>
+    <span class="doccomment">/// The solver returned this processing error while evaluating a query.</span>
+    <span class="doccomment">/// Often, this is a timeout; see [`Config.solver_query_timeout`](config/struct.Config.html#structfield.solver_query_timeout)</span>
     <span class="ident">SolverError</span>(<span class="ident">String</span>),
     <span class="doccomment">/// Encountered an LLVM instruction which is not currently supported</span>
     <span class="ident">UnsupportedInstruction</span>(<span class="ident">String</span>),
@@ -89,10 +107,8 @@
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`NullPointerDereference`: the current path has attempted to dereference a null pointer&quot;</span>),
             <span class="ident">Error</span>::<span class="ident">FunctionNotFound</span>(<span class="ident">funcname</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`FunctionNotFound`: encountered a call of a function named {:?}, but failed to find an LLVM definition, a function hook, or a built-in handler for it&quot;</span>, <span class="ident">funcname</span>),
-            <span class="ident">Error</span>::<span class="ident">BoolCoercionError</span>(<span class="ident">bv</span>, <span class="ident">size</span>) <span class="op">=</span><span class="op">&gt;</span>
-                <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`BoolCoercionError`: can&#39;t coerce a BV {} bits long into a Bool; the BV was {}&quot;</span>, <span class="ident">size</span>, <span class="ident">bv</span>),
             <span class="ident">Error</span>::<span class="ident">SolverError</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
-                <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`SolverError`: the solver returned this processing error while evaluating a query: {}&quot;</span>, <span class="ident">details</span>),
+                <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`SolverError`: the solver returned this error while evaluating a query: {}&quot;</span>, <span class="ident">details</span>),
             <span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`UnsupportedInstruction`: encountered an LLVM instruction which is not currently supported: {}&quot;</span>, <span class="ident">details</span>),
             <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
@@ -100,6 +116,12 @@
             <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="ident">details</span>) <span class="op">=</span><span class="op">&gt;</span>
                 <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;`OtherError`: {}&quot;</span>, <span class="ident">details</span>),
         }
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">Error</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">String</span> {
+    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">Error</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
+        <span class="ident">e</span>.<span class="ident">to_string</span>()  <span class="comment">// use the Display impl</span>
     }
 }
 
