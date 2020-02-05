@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.2.1"
+haybale = "0.3.0"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
@@ -280,6 +280,84 @@ solver (via the Rust [`boolector`] crate).
 
 ## Changelog
 
+### Version 0.3.0 (Feb 5, 2020)
+
+Solver timeouts:
+- New setting [`Config.solver_query_timeout`] controls the maximum amount of
+time `haybale` will spend on a single solver query before returning
+`Error::SolverError`. This setting defaults to 300 seconds (5 minutes).
+The setting can also be disabled entirely, which results in the same behavior
+as previous versions of `haybale` (no time limit on solver queries).
+
+Error handling:
+- The errors returned by `ExecutionManager.next()` are now `haybale::Error`s
+instead of `String`s, allowing callers to more easily handle different kinds
+of errors different ways. To get a string representation of the `Error`,
+`.to_string()` gives the short description, while
+[`State.full_error_message_with_context()`] gives the full description which
+previously was returned by `ExecutionManager.next()`. The usage example in
+the README has been updated accordingly.
+- The toplevel function [`find_zero_of_func()`] now returns a
+`Result`, with the error type being `String`.
+- New setting [`Config.squash_unsats`] controls whether `Error::Unsat`s are
+silently squashed (the default behavior, and the behavior of previous
+versions of `haybale`), or returned to the user. For more details, see the
+docs on that setting.
+
+Logging, error messages, backtraces, etc:
+- `haybale` now prints source-location information (e.g., source filename and
+line number) in error messages and backtraces when it is available.
+Similarly, the `HAYBALE_DUMP_PATH` environment variable now has the options
+`LLVM`, `SRC`, and `BOTH`. For more details on all of this, see
+[`Config.print_source_info`].
+- You can also now _disable_ printing the LLVM module name along with LLVM
+location info in error messages, backtraces, path dumps, and log messages.
+For more details, see [`Config.print_module_name`].
+- `haybale` will now by default autodetect when C++ or Rust demangling is
+appropriate for the `Project`, unless a different setting is chosen in
+[`Config.demangling`].
+- Numeric constants representing `BV` values in log messages,
+`HAYBALE_DUMP_VARS` dumps, etc are now all printed in hexadecimal (previously
+binary, or an inconsistent mix of binary and hexadecimal).
+
+Function hooks and intrinsics:
+- Built-in support for LLVM arithmetic-with-overflow intrinsics.
+- Built-in support for LLVM saturating-arithmetic intrinsics.
+- Built-in support for the `llvm.assume` intrinsic, with an associated
+setting [`Config.trust_llvm_assumes`].
+- Built-in support for the `llvm.bswap` intrinsic with argument sizes 48
+or 64 bits (previously only supported 16 or 32 bits).
+- Default hooks for a number of Rust standard-library functions which
+always panic, such as `core::result::unwrap_failed()`.
+- New module `hook_utils` contains the implementations of `memset` and
+`memcpy` used by the corresponding built-in hooks. These are now publically
+available for use in custom hooks for other functions.
+
+Changes to data structures and traits:
+- The `Location` and `PathEntry` structs have been refactored to include
+source-location information when it is available, to be capable of indicating
+basic block terminators in addition to normal instructions, and to support
+some internal refactoring.
+- The [`backend::BV`] trait has a new required method, `get_solver()`, which
+returns a `SolverRef` of the appropriate type. (This is similar to the same
+method on the `backend::Memory` trait.)
+- Saturating-arithmetic methods (signed and unsigned addition and subtraction)
+are now available on [`backend::BV`], with default implementations in terms
+of the other trait methods. That means that these come "for free" once the
+required trait methods are implemented.
+- `zero_extend_to_bits()` and `sign_extend_to_bits()` are also now available
+as trait methods on [`backend::BV`], with default implementations in terms of
+the other trait methods. Previously they were private utility functions in
+`haybale`.
+- Many other structures have had minor changes and improvements, including
+some small breaking changes.
+
+Compatibility:
+- Updated `boolector` dependency to crate version 0.3.0, which requires
+Boolector version 3.1.0 (up from 3.0.0).
+- This version of `haybale` now requires Rust 1.40+, up from 1.36+ for
+previous versions of `haybale`.
+
 ### Version 0.2.1 (Jan 15, 2020)
 
 - New `HAYBALE_DUMP_PATH` and `HAYBALE_DUMP_VARS` environment-variable options
@@ -308,7 +386,7 @@ paths should be found and explored correctly.
 also with the LLVM `invoke` instruction, function hooks now receive a
 `&dyn IsCall` object which may represent either a `call` or `invoke` instruction.
 - `haybale` now uses LLVM 9 rather than LLVM 8. See the "Compatibility"
-section above.
+section in the README.
 - Improvements for `Project`s containing C++ and/or Rust code:
   - For the function-name arguments to [`symex_function()`],
     [`get_possible_return_values_of_func()`], [`find_zero_of_func()`], and
@@ -381,7 +459,7 @@ Initial release!
 [`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
 [`symex_function()`]: https://PLSysSec.github.io/haybale/haybale/fn.symex_function.html
 [`Config`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html
-[`BV`]: https://docs.rs/boolector/0.2.0/boolector/struct.BV.html
+[`BV`]: https://docs.rs/boolector/0.3.0/boolector/struct.BV.html
 [`ReturnValue`]: https://PLSysSec.github.io/haybale/haybale/enum.ReturnValue.html
 [`Error`]: https://PLSysSec.github.io/haybale/haybale/enum.Error.html
 [`State`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html
@@ -394,3 +472,11 @@ Initial release!
 [`generic_stub_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.generic_stub_hook.html
 [`abort_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.abort_hook.html
 [`Config.initial_mem_watchpoints`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.initial_mem_watchpoints
+[`Config.demangling`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.demangling
+[`Config.print_source_info`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.print_source_info
+[`Config.print_module_name`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.print_module_name
+[`Config.trust_llvm_assumes`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.trust_llvm_assumes
+[`Config.solver_query_timeout`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.solver_query_timeout
+[`Config.squash_unsats`]: https://PLSysSec.github.io/haybale/haybale/struct.Config.html#structfield.squash_unsats
+[`backend::BV`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.BV.html
+[`State.full_error_message_with_context()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.full_error_message_with_context
