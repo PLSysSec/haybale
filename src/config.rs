@@ -120,7 +120,7 @@ pub struct Config<'p, B> where B: Backend {
     /// (e.g., filename, line number, column number) along with the LLVM location
     /// info in error messages and backtraces. (This applies to error messages
     /// returned by
-    /// [`State.full_error_message_with_context()`](struct.State.html#method.full_error_message_with_context).)
+    /// [`State.full_error_message_with_context()`](../struct.State.html#method.full_error_message_with_context).)
     ///
     /// For this to work, the LLVM bitcode must contain debuginfo. For example,
     /// C/C++ or Rust sources must be compiled with the `-g` flag to `clang`,
