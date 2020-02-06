@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 /// A `Project` is a collection of LLVM code to be explored,
-/// consisting of one or more LLVM modules
+/// consisting of one or more LLVM modules.
 pub struct Project {
     modules: Vec<Module>,
 }
