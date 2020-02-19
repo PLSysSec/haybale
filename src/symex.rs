@@ -970,7 +970,28 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
                     }
                 } else {
-                    Err(Error::FunctionNotFound(self.state.demangle(called_funcname)))
+                    match self.state.config.function_hooks.get_default_hook() {
+                        None => Err(Error::FunctionNotFound(self.state.demangle(called_funcname))),
+                        Some(hook) => {
+                            let hook = hook.clone();  // end the implicit borrow of `self` that arose from `get_default_hook()`. The `clone` is just an `Rc` and a `usize`, as of this writing
+                            let pretty_funcname = self.state.demangle(called_funcname);
+                            info!("Using default hook for a function named {:?}", pretty_funcname);
+                            match self.symex_hook(call, &hook.clone(), &pretty_funcname, true)? {
+                                // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
+                                ReturnValue::Return(retval) => {
+                                    // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
+                                    self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
+                                },
+                                ReturnValue::ReturnVoid => {},
+                                ReturnValue::Throw(bvptr) => {
+                                    debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
+                                    return Ok(Some(ReturnValue::Throw(bvptr)));
+                                },
+                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                            }
+                            Ok(None)
+                        }
+                    }
                 }
             },
         }
@@ -1366,7 +1387,35 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
                     }
                 } else {
-                    Err(Error::FunctionNotFound(self.state.demangle(called_funcname)))
+                    match self.state.config.function_hooks.get_default_hook() {
+                        None => Err(Error::FunctionNotFound(self.state.demangle(called_funcname))),
+                        Some(hook) => {
+                            let hook = hook.clone();  // end the implicit borrow of `self` that arose from `get_default_hook()`. The `clone` is just an `Rc` and a `usize`, as of this writing
+                            let pretty_funcname = self.state.demangle(called_funcname);
+                            info!("Using default hook for a function named {:?}", pretty_funcname);
+                            match self.symex_hook(invoke, &hook.clone(), &pretty_funcname, true)? {
+                                // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
+                                ReturnValue::Return(retval) => {
+                                    self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
+                                },
+                                ReturnValue::ReturnVoid => {},
+                                ReturnValue::Throw(bvptr) => {
+                                    info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}{}",
+                                        pretty_funcname, invoke.exception_label, self.state.cur_loc.func.name,
+                                        if self.state.config.print_module_name {
+                                            format!(", module {:?}", self.state.cur_loc.module.name)
+                                        } else {
+                                            String::new()
+                                        }
+                                    );
+                                    return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
+                                },
+                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                            }
+                            Ok(None)
+                        }
+                    }
+
                 }
             },
         }

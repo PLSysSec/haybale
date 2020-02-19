@@ -18,6 +18,30 @@ use std::rc::Rc;
 /// A set of function hooks, which will be executed instead of their respective
 /// hooked functions if/when the symbolic execution engine encounters a call to
 /// one of those hooked functions.
+///
+/// You can hook internal functions (which are defined in some available LLVM
+/// `Module`), external functions (e.g., calls to external libraries), LLVM
+/// intrinsics, or any other kind of function.
+///
+/// The function resolution process is as follows:
+///
+/// (1) If the function is hooked, then the hook will be used instead of any
+/// other option. That is, the hook has the highest precedence.
+///
+/// (2) Haybale provides default hooks for certain LLVM intrinsics like
+/// `memcpy`, which have specially reserved names; it will apply these hooks
+/// unless a different hook was defined for the intrinsic in (1).
+///
+/// (3) Else, if the function is not hooked but is defined in an available
+/// LLVM `Module`, the function will be symbolically executed (called).
+///
+/// (4) Else, if a default function hook was supplied with `add_default_hook()`,
+/// that hook will be used.
+///
+/// (5) If none of the above options apply, an error will be raised.
+/// Note that this means that calls to external functions will always
+/// error unless a hook for them is provided, either by name or via the default
+/// hook.
 #[derive(Clone)]
 pub struct FunctionHooks<'p, B: Backend + 'p> {
     /// `hooks`, `cpp_demangled_hooks`, and `rust_demangled_hooks` are each maps
@@ -51,6 +75,13 @@ pub struct FunctionHooks<'p, B: Backend + 'p> {
     /// If no hook is provided here, then all calls to inline assembly will
     /// result in errors.
     inline_asm_hook: Option<FunctionHook<'p, B>>,
+
+    /// Hook (if any) to use for functions which are neither defined in the LLVM
+    /// IR nor specifically hooked by name.
+    ///
+    /// If no hook is provided here, then calls to functions which are neither
+    /// defined nor hooked will result in `Error::FunctionNotFound` errors.
+    default_hook: Option<FunctionHook<'p, B>>,
 
     /// For internal use in creating unique `id`s for `FunctionHook`s
     cur_id: usize,
@@ -118,32 +149,13 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
             cpp_demangled_hooks: HashMap::new(),
             rust_demangled_hooks: HashMap::new(),
             inline_asm_hook: None,
+            default_hook: None,
             cur_id: 0,
         }
     }
 
     /// Adds a function hook. The `hook` will be executed instead of the body of
     /// the `hooked_function`.
-    ///
-    /// You can hook internal functions (which are defined in some available LLVM
-    /// `Module`), external functions (e.g., calls to external libraries), LLVM
-    /// intrinsics, or any other kind of function.
-    ///
-    /// The function resolution process is as follows:
-    ///
-    /// (1) If the function is hooked, then the hook will be used instead of any
-    /// other option. That is, the hook has the highest precedence.
-    ///
-    /// (2) Haybale provides default hooks for certain LLVM intrinsics like
-    /// `memcpy`, which have specially reserved names; it will apply these hooks
-    /// unless a different hook was defined for the intrinsic in (1).
-    ///
-    /// (3) Else, if the function is not hooked but is defined in an available
-    /// LLVM `Module`, the function will be symbolically executed (called).
-    ///
-    /// (4) If none of the above options apply, an error will be raised.
-    /// Note that this means that calls to external functions will always
-    /// error unless a hook for them is provided here.
     pub fn add<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
         where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
     {
@@ -202,6 +214,30 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
         }
     }
 
+    /// Add a hook to be used if no other definition or hook is found for the
+    /// call.
+    /// If another default hook is added, it will replace any default hook which
+    /// was previously present.
+    ///
+    /// Returns `true` if a default hook was previously present, or `false` if no
+    /// default hook was present.
+    pub fn add_default_hook<H>(&mut self, hook: &'p H) -> bool
+        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    {
+        match &mut self.default_hook {
+            h@Some(_) => {
+                *h = Some(FunctionHook::new(self.cur_id, hook));
+                self.cur_id += 1;
+                true
+            },
+            h@None => {
+                *h = Some(FunctionHook::new(self.cur_id, hook));
+                self.cur_id += 1;
+                false
+            },
+        }
+    }
+
     /// Removes the function hook for the given function, which was added with
     /// `add()`. That function will no longer be hooked.
     pub fn remove(&mut self, hooked_function: &str) {
@@ -232,6 +268,17 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
         self.inline_asm_hook = None;
     }
 
+    /// Removes the default function hook which was added with
+    /// [`add_default_hook()`]. Calls to functions which are neither defined in
+    /// the `Project` nor specifically hooked will thus result in
+    /// `Error::FunctionNotFound` errors, until the next call to
+    /// [`add_default_hook()`].
+    ///
+    /// [`add_default_hook()`]: struct.FunctionHooks.html#method.add_default_hook
+    pub fn remove_default_hook(&mut self) {
+        self.default_hook = None;
+    }
+
     /// Iterate over all function hooks, as (function name, hook) pairs.
     /// Function names may include both mangled and demangled names.
     pub(crate) fn get_all_hooks(&self) -> impl Iterator<Item = (&String, &FunctionHook<'p, B>)> {
@@ -260,9 +307,29 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
         self.inline_asm_hook.as_ref()
     }
 
+    /// Get the default `FunctionHook` (used when no LLVM definition or hook is
+    /// found), if there is one.
+    ///
+    /// See docs on `add_default_hook()` above
+    pub(crate) fn get_default_hook(&self) -> Option<&FunctionHook<'p, B>> {
+        self.default_hook.as_ref()
+    }
+
     /// Determine whether there is an active hook for the given `funcname`
     pub fn is_hooked(&self, funcname: &str) -> bool {
         self.get_hook_for(funcname).is_some()
+    }
+
+    /// Is there currently an inline asm hook active?
+    /// (See `add_inline_asm_hook()` for more info)
+    pub fn has_inline_asm_hook(&self) -> bool {
+        self.inline_asm_hook.is_some()
+    }
+
+    /// Is there currently a default hook active?
+    /// (See `add_default_hook()` for more info)
+    pub fn has_default_hook(&self) -> bool {
+        self.default_hook.is_some()
     }
 }
 

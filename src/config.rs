@@ -13,7 +13,7 @@ use std::time::Duration;
 /// indicate that fields may be added even in a point release (that is, without
 /// incrementing the major or minor version). See
 /// https://blog.rust-lang.org/2019/12/19/Rust-1.40.0.html#[non_exhaustive]-structs,-enums,-and-variants.
-/// In general, you'll want to start with `Config.default()` and then change the
+/// In general, you'll want to start with `Config::default()` and then change the
 /// settings you want to change; `#[non_exhaustive]` will prevent users from
 /// constructing a `Config` directly.
 #[non_exhaustive]
@@ -150,6 +150,7 @@ pub struct Config<'p, B> where B: Backend {
     pub print_module_name: bool,
 }
 
+/// Enum used for the `concretize_memcpy_lengths` option in `Config`.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Concretize {
     /// Handle everything fully symbolically - that is, have the solver fully
