@@ -762,7 +762,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 };
                 let op0 = self.state.operand_to_bv(&sv.operand0)?;
                 let op1 = self.state.operand_to_bv(&sv.operand1)?;
-                assert_eq!(op0.get_width(), op1.get_width());
+                if op0.get_width() != op1.get_width() {
+                    return Err(Error::OtherError(format!("ShuffleVector operands are the same type, but somehow we got two different sizes: {} bits and {} bits", op0.get_width(), op1.get_width())));
+                }
                 let el_size = size(&element_type) as u32;
                 let num_elements = num_elements as u32;
                 assert_eq!(op0.get_width(), el_size * num_elements);
@@ -920,7 +922,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
                 if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
-                    assert_eq!(call.arguments.len(), callee.parameters.len());
+                    if call.arguments.len() != callee.parameters.len() {
+                        return Err(Error::MalformedInstruction(format!("Call of a function named {:?} which has {} parameters, but only {} arguments were given", callee.name, callee.parameters.len(), call.arguments.len())));
+                    }
                     let bvargs: Vec<B::BV> = call.arguments.iter()
                         .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                         .collect::<Result<Vec<B::BV>>>()?;
@@ -1327,7 +1331,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
                 if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
-                    assert_eq!(invoke.arguments.len(), callee.parameters.len());
+                    if invoke.arguments.len() != callee.parameters.len() {
+                        return Err(Error::MalformedInstruction(format!("Call of a function named {:?} which has {} parameters, but only {} arguments were given", callee.name, callee.parameters.len(), invoke.arguments.len())));
+                    }
                     let bvargs: Vec<B::BV> = invoke.arguments.iter()
                         .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                         .collect::<Result<Vec<B::BV>>>()?;
