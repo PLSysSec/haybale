@@ -426,7 +426,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             // definitions, since each global variable must have exactly one
             // definition. Hence the `filter()` above.
             if let Type::PointerType { pointee_type, .. } = &var.ty {
-                let size_bits = size_opaque_aware(&*pointee_type, project);
+                let size_bits = size_opaque_aware(&*pointee_type, project)
+                    .expect("Global variable has a struct type which is opaque in the entire Project");
                 let size_bits = if size_bits == 0 {
                     debug!("Global {:?} has size 0 bits; allocating 8 bits for it anyway", var.name);
                     8

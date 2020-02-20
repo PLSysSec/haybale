@@ -42,7 +42,8 @@ pub fn symex_function<'p, B: Backend>(
     let squash_unsats = config.squash_unsats;
     let mut state = State::new(project, start_loc, config);
     let bvparams: Vec<_> = func.parameters.iter().map(|param| {
-        state.new_bv_with_name(param.name.clone(), size_opaque_aware(&param.ty, project) as u32).unwrap()
+        let param_size = size_opaque_aware(&param.ty, project).expect("Parameter type is a struct opaque in the entire Project");
+        state.new_bv_with_name(param.name.clone(), param_size as u32).unwrap()
     }).collect();
     ExecutionManager::new(state, project, bvparams, squash_unsats)
 }
@@ -670,7 +671,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         debug!("Symexing alloca {:?}", alloca);
         match &alloca.num_elements {
             Operand::ConstantOperand(Constant::Int { value: num_elements, .. }) => {
-                let allocation_size_bits = size_opaque_aware(&alloca.allocated_type, self.project) as u64 * num_elements;
+                let allocation_size_bits = {
+                    let element_size_bits = size_opaque_aware(&alloca.allocated_type, self.project)
+                        .expect("Alloca with type which is opaque in the entire Project");
+                    element_size_bits as u64 * num_elements
+                };
                 let allocation_size_bits = if allocation_size_bits == 0 {
                     debug!("Alloca is for something of size 0 bits; we'll give it 8 bits anyway");
                     8

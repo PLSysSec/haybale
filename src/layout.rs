@@ -36,21 +36,23 @@ pub fn size(ty: &Type) -> usize {
 /// Differs from the basic `size` method above in how it handles opaque struct
 /// types.
 /// While `size` will simply panic, this will search the given `Project` for a
-/// definition of the struct and use that, only panicking if the struct has no
+/// definition of the struct and use that.
+///
+/// Returns `None` for structs which have no definition in the entire `Project`,
+/// or for structs/arrays/vectors where one of the elements is a struct with no
 /// definition in the entire `Project`.
-pub fn size_opaque_aware(ty: &Type, proj: &Project) -> usize {
+pub fn size_opaque_aware(ty: &Type, proj: &Project) -> Option<usize> {
     match ty {
         ty@Type::NamedStructType { .. } => size_opaque_aware(
-            &proj.get_inner_struct_type_from_named(ty)
-                .expect("Can't get size of struct type: it is opaque in the entire Project")
+            &proj.get_inner_struct_type_from_named(ty)?
                 .read()
                 .unwrap(),
             proj
         ),
-        Type::ArrayType { element_type, num_elements } => num_elements * size_opaque_aware(element_type, proj),
-        Type::VectorType { element_type, num_elements } => num_elements * size_opaque_aware(element_type, proj),
+        Type::ArrayType { element_type, num_elements } => size_opaque_aware(element_type, proj).map(|s| s * num_elements),
+        Type::VectorType { element_type, num_elements } => size_opaque_aware(element_type, proj).map(|s| s * num_elements),
         Type::StructType { element_types, .. } => element_types.iter().map(|ty| size_opaque_aware(ty, proj)).sum(),
-        _ => size(ty),  // for all other cases, just fall back on the basic size()
+        _ => Some(size(ty)),  // for all other cases, just fall back on the basic size()
     }
 }
 
