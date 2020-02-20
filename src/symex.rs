@@ -738,12 +738,14 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
 
     fn symex_shufflevector(&mut self, sv: &'p instruction::ShuffleVector) -> Result<()> {
         debug!("Symexing shufflevector {:?}", sv);
-        let op0_type = sv.operand0.get_type();
-        let op1_type = sv.operand1.get_type();
-        if op0_type != op1_type {
-            return Err(Error::MalformedInstruction(format!("Expected ShuffleVector operands to be exactly the same type, but they are {:?} and {:?}", op0_type, op1_type)));
-        }
-        let op_type = op0_type;
+        let op_type = {
+            let op0_type = sv.operand0.get_type();
+            let op1_type = sv.operand1.get_type();
+            if op0_type != op1_type {
+                return Err(Error::MalformedInstruction(format!("Expected ShuffleVector operands to be exactly the same type, but they are {:?} and {:?}", op0_type, op1_type)));
+            }
+            op0_type
+        };
         match op_type {
             Type::VectorType { element_type, num_elements } => {
                 let mask: Vec<u32> = match &sv.mask {
