@@ -6,9 +6,9 @@ use llvm_ir::*;
 use log::{debug, info};
 use reduce::Reduce;
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::iter::FromIterator;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
@@ -66,6 +66,22 @@ pub struct State<'p, B: Backend> {
     /// backtracking will not touch the set of mem_watchpoints or their
     /// enabled statuses.
     mem_watchpoints: Watchpoints,
+    /// Empirically, solving with model-gen enabled can be very slow.
+    /// In particular, given a `BV` representing a function pointer, solving for
+    /// the concrete function pointer it represents can be slow.
+    /// However, if we have a guess for the concrete value, checking whether that
+    /// guess is correct may be much faster than blindly solving for the value.
+    ///
+    /// This cache keeps track of the most recent concrete function pointer value
+    /// we resolved at each `Location` where we call a function pointer.
+    /// Hopefully, this means we can do the model-gen solve the first time, and
+    /// then subsequent times just check that the same solution still holds.
+    ///
+    /// This cache persists across backtracking - there's no reason to reset it,
+    /// as its contents are still treated as "guesses" and checked each time
+    /// anyway, and function pointers _probably_ resolve to the same value on
+    /// multiple paths.
+    function_ptr_cache: HashMap<Location<'p>, u64>,
 }
 
 /// Describes a location in LLVM IR in a format more suitable for printing - for
@@ -204,6 +220,15 @@ impl<'p> PartialEq for Location<'p> {
 
 /// Our implementation of `PartialEq` satisfies the requirements of `Eq`
 impl<'p> Eq for Location<'p> {}
+
+impl<'p> Hash for Location<'p> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.module.name.hash(state);
+        self.func.name.hash(state);
+        self.bb.name.hash(state);
+        self.instr.hash(state);
+    }
+}
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -366,6 +391,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             backtrack_points: Vec::new(),
             path: Vec::new(),
             mem_watchpoints: config.initial_mem_watchpoints.clone().into_iter().collect(),
+            function_ptr_cache: HashMap::new(),
 
             // listed last (out-of-order) so that they can be used above but moved in now
             solver,
@@ -971,9 +997,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Given a `BV`, interpret it as a function pointer, and return a
     /// description of the possible `Function`s which it would point to.
     ///
-    /// `n`: Maximum number of distinct `Function`s to check for.
-    /// If there are more than `n` possible `Function`s, this returns a
-    /// `PossibleSolutions::AtLeast` with `n+1` `Function`s.
+    /// `n`: Maximum number of distinct `Callable`s to check for.
+    /// If there are more than `n` possible `Callable`s, this returns a
+    /// `PossibleSolutions::AtLeast` with `n+1` `Callable`s.
     ///
     /// Possible errors:
     ///   - `Error::SolverError` if the solver query fails
@@ -983,33 +1009,39 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         if n == 0 {
             unimplemented!("n == 0 in interpret_as_function_ptr")
         }
+
         // First try to interpret without a full solve (i.e., with `as_u64()`)
-        match bv.as_u64().and_then(|addr| self.global_allocations.get_func_for_address(addr, self.cur_loc.module)) {
-            Some(f) => Ok(PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(f)))),  // there is only one possible solution, and it's this `f`
+        let addrs: Vec<u64> = match bv.as_u64() {
+            Some(addr) => vec![addr],  // there is only one possible solution, and it's this `addr`
             None => {
-                match self.get_possible_solutions_for_bv(&bv, n)? {
-                    PossibleSolutions::Exactly(v) => {
-                        v.into_iter()
-                            .map(|addr| {
-                                let addr = addr.as_u64().unwrap();
-                                self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
-                                    .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
-                            })
-                            .collect::<Result<HashSet<_>>>()
-                            .map(PossibleSolutions::Exactly)
+                // Check if whatever solution we used last time for this `Location` still applies
+                // (see notes on the `function_ptr_cache` field of `State`)
+                match self.function_ptr_cache.get(&self.cur_loc) {
+                    Some(addr) if self.bvs_must_be_equal(&bv, &self.bv_from_u64(*addr, bv.get_width()))? => vec![*addr],
+                    _ => {
+                        // Ok, use `get_possible_solutions_for_bv()`
+                        match self.get_possible_solutions_for_bv(&bv, n)?.as_u64_solutions().unwrap() {
+                            PossibleSolutions::Exactly(v) => v.into_iter().collect(),
+                            PossibleSolutions::AtLeast(v) => v.into_iter().collect(),
+                        }
                     },
-                    PossibleSolutions::AtLeast(v) => {
-                        v.into_iter()
-                            .map(|addr| {
-                                let addr = addr.as_u64().unwrap();
-                                self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
-                                    .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution 0x{:?} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
-                            })
-                            .collect::<Result<HashSet<_>>>()
-                            .map(PossibleSolutions::AtLeast)
-                    }
                 }
             }
+        };
+
+        // save the value we found into the cache for next time
+        if addrs.len() == 1 {
+            self.function_ptr_cache.insert(self.cur_loc.clone(), addrs[0]);
+        }
+
+        let callables = addrs.into_iter().map(|addr| {
+            self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
+                .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution {:?} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
+        }).collect::<Result<HashSet<_>>>()?;
+        if callables.len() > n {
+            Ok(PossibleSolutions::AtLeast(callables))
+        } else {
+            Ok(PossibleSolutions::Exactly(callables))
         }
     }
 
@@ -1578,14 +1610,14 @@ mod tests {
 
         // check that there are now exactly two solutions
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::from_iter(vec![4,5].into_iter()))));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly(vec![4,5].into_iter().collect())));
 
         // add x < 5 constraint
         x.ult(&state.bv_from_u64(5, 64)).assert();
 
         // check that there is now exactly one solution
         let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(4)))));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly(std::iter::once(4).collect())));
 
         // add x < 3 constraint
         x.ult(&state.bv_from_u64(3, 64)).assert();
