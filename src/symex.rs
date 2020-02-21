@@ -925,7 +925,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             ResolvedFunction::NoHookActive { called_funcname } => {
                 if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
                     if call.arguments.len() != callee.parameters.len() {
-                        return Err(Error::MalformedInstruction(format!("Call of a function named {:?} which has {} parameters, but only {} arguments were given", callee.name, callee.parameters.len(), call.arguments.len())));
+                        return Err(Error::MalformedInstruction(format!("Call of a function named {:?} which has {} parameters, but {} arguments were given", callee.name, callee.parameters.len(), call.arguments.len())));
                     }
                     let bvargs: Vec<B::BV> = call.arguments.iter()
                         .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
