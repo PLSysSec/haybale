@@ -235,38 +235,16 @@ pub enum Concretize {
 }
 
 impl<'p, B: Backend> Config<'p, B> {
-    /// Creates a new `Config` with the given `loop_bound`,
-    /// `solver_query_timeout`, `null_detection`, `concretize_memcpy_lengths`,
-    /// `squash_unsats`, and `trust_llvm_assumes` options; no function hooks or
-    /// memory watchpoints; and defaults for the other options.
+    /// Creates a new `Config` with defaults for all the options, except with
+    /// no function hooks.
     ///
     /// You may want to consider
-    /// [`Config::default()`](struct.Config.html#method.default), which provides
-    /// defaults for all parameters and comes with predefined hooks for common
-    /// functions.
-    pub fn new(
-        loop_bound: usize,
-        solver_query_timeout: Option<Duration>,
-        null_detection: bool,
-        concretize_memcpy_lengths: Concretize,
-        squash_unsats: bool,
-        trust_llvm_assumes: bool,
-    ) -> Self {
-        Self {
-            loop_bound,
-            max_callstack_depth: None,
-            solver_query_timeout,
-            null_detection,
-            concretize_memcpy_lengths,
-            max_memcpy_length: None,
-            squash_unsats,
-            trust_llvm_assumes,
-            function_hooks: FunctionHooks::new(),
-            initial_mem_watchpoints: HashMap::new(),
-            demangling: None,
-            print_source_info: true,
-            print_module_name: true,
-        }
+    /// [`Config::default()`](struct.Config.html#method.default), which comes
+    /// with predefined hooks for common functions.
+    pub fn new() -> Self {
+        let mut config = Self::default();
+        config.function_hooks = FunctionHooks::new();
+        config
     }
 }
 
