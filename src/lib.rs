@@ -140,7 +140,7 @@ pub fn find_zero_of_func<'p>(
                     break;
                 }
             },
-            Err(Error::LoopBoundExceeded) => continue,  // ignore paths that exceed the loop bound, keep looking
+            Err(Error::LoopBoundExceeded(_)) => continue,  // ignore paths that exceed the loop bound, keep looking
             Err(e) => return Err(em.state().full_error_message_with_context(e)),
         }
     }

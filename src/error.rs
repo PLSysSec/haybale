@@ -13,8 +13,9 @@ pub enum Error {
     /// This error type is used internally, but (by default) isn't exposed to consumers of `ExecutionManager`;
     /// see [`Config.squash_unsats`](config/struct.Config.html#structfield.squash_unsats).
     Unsat,
-    /// The current path has exceeded the configured `loop_bound` (see [`Config`](config/struct.Config.html))
-    LoopBoundExceeded,
+    /// The current path has exceeded the configured `loop_bound` (see [`Config`](config/struct.Config.html)).
+    /// (The `usize` here indicates the value of the configured `loop_bound`.)
+    LoopBoundExceeded(usize),
     /// The current path has attempted to dereference a null pointer (or
     /// more precisely, a pointer for which `NULL` is a possible value)
     NullPointerDereference,
@@ -36,8 +37,8 @@ impl fmt::Display for Error {
         match self {
             Error::Unsat =>
                 write!(f, "`Unsat`: the current state or path is unsat"),
-            Error::LoopBoundExceeded =>
-                write!(f, "`LoopBoundExceeded`: the current path has exceeded the configured `loop_bound`"),
+            Error::LoopBoundExceeded(bound) =>
+                write!(f, "`LoopBoundExceeded`: the current path has exceeded the configured `loop_bound`, which was {}", bound),
             Error::NullPointerDereference =>
                 write!(f, "`NullPointerDereference`: the current path has attempted to dereference a null pointer"),
             Error::FunctionNotFound(funcname) =>

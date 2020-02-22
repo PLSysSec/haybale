@@ -92,7 +92,7 @@ impl<V: BV> VarMap<V> {
             .and_modify(|v| *v += 1)  // increment if it already exists in map
             .or_insert(0);  // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
-            Err(Error::LoopBoundExceeded)
+            Err(Error::LoopBoundExceeded(self.max_version_num))
         } else {
             // We don't actually use the new_version_num except for the above check,
             // since we aren't creating a new BV that needs a versioned name
@@ -140,7 +140,7 @@ impl<V: BV> VarMap<V> {
             .and_modify(|v| *v += 1)  // increment if it already exists in map
             .or_insert(0);  // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
-            Err(Error::LoopBoundExceeded)
+            Err(Error::LoopBoundExceeded(self.max_version_num))
         } else {
             Ok(Self::build_versioned_name(funcname, name, *new_version_num))
         }

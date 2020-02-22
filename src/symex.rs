@@ -1537,7 +1537,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         continue;
                     }
                 },
-                Err(Error::Unsat) | Err(Error::LoopBoundExceeded) => {
+                Err(Error::Unsat) | Err(Error::LoopBoundExceeded(_)) => {
                     // we can't continue down this path anymore
                     info!("Path is either unsat or exceeds the loop bound");
                     return self.backtrack_and_continue();
@@ -1848,7 +1848,7 @@ mod tests {
         fn next(&mut self) -> Option<Self::Item> {
             loop {
                 match self.em.next() {
-                    Some(Err(Error::LoopBoundExceeded)) => {
+                    Some(Err(Error::LoopBoundExceeded(_))) => {
                         // for the purposes of the PathIterator for these tests,
                         // we silently ignore paths which exceeded the loop bound
                         continue;
