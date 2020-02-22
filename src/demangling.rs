@@ -1,5 +1,6 @@
 use crate::project::Project;
 
+/// Enum used for the `demangling` option in `Config`.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Demangling {
     /// Don't try to demangle

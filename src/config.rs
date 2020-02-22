@@ -12,7 +12,9 @@ use std::time::Duration;
 /// `Config` uses the (new-to-Rust-1.40) `#[non_exhaustive]` attribute to
 /// indicate that fields may be added even in a point release (that is, without
 /// incrementing the major or minor version). See
-/// https://blog.rust-lang.org/2019/12/19/Rust-1.40.0.html#[non_exhaustive]-structs,-enums,-and-variants.
+/// [here](https://blog.rust-lang.org/2019/12/19/Rust-1.40.0.html#[non_exhaustive]-structs,-enums,-and-variants)
+/// for more details.
+///
 /// In general, you'll want to start with `Config::default()` and then change the
 /// settings you want to change; `#[non_exhaustive]` will prevent users from
 /// constructing a `Config` directly.
@@ -31,8 +33,8 @@ pub struct Config<'p, B> where B: Backend {
     /// stack depth exceeding this number, and the call is not hooked (see
     /// [`function_hooks`](struct.Config.html#structfield.function_hooks)), then
     /// the call will simply be ignored - as if
-    /// [`generic_stub_hook`](../function_hooks/fn.generic_stub) were applied to
-    /// that call.
+    /// [`generic_stub_hook`](../function_hooks/fn.generic_stub_hook.html) were
+    /// applied to that call.
     ///
     /// For example, if this setting is set to `Some(1)`, and we're executing a
     /// function `foo()` which calls `bar()` which calls `baz()`, then the call
