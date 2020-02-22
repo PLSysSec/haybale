@@ -127,7 +127,7 @@ pub struct Config<'p, B> where B: Backend {
     /// watchpoint name to the actual watchpoint).
     ///
     /// More watchpoints may be added or removed at any time with
-    /// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint`.
+    /// `state.add_mem_watchpoint()` and `state.rm_mem_watchpoint()`.
     ///
     /// Default is no watchpoints.
     pub initial_mem_watchpoints: HashMap<String, Watchpoint>,
