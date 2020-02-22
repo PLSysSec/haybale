@@ -26,6 +26,35 @@ pub struct Config<'p, B> where B: Backend {
     /// Default is `10`.
     pub loop_bound: usize,
 
+    /// Maximum callstack depth to allow when symbolically executing.
+    /// If symbolic execution encounters a call which would result in a
+    /// stack depth exceeding this number, and the call is not hooked (see
+    /// [`function_hooks`](struct.Config.html#structfield.function_hooks)), then
+    /// the call will simply be ignored - as if
+    /// [`generic_stub_hook`](../function_hooks/fn.generic_stub) were applied to
+    /// that call.
+    ///
+    /// For example, if this setting is set to `Some(1)`, and we're executing a
+    /// function `foo()` which calls `bar()` which calls `baz()`, then the call
+    /// to `bar()` will be fully analyzed, but fully calling `baz()` would result
+    /// in a stack depth of `2`, so instead, `bar()`'s call to `baz()` will be
+    /// ignored.
+    ///
+    /// As another example, the setting `Some(0)` means that all calls will be
+    /// ignored, unless they are hooked in `function_hooks`.
+    ///
+    /// Note that this considers the LLVM callstack depth.
+    /// If calls have been inlined in the LLVM bitcode, `haybale` sees this as
+    /// a single function, and "entering" an inlined function doesn't affect
+    /// the callstack depth.
+    ///
+    /// A value of `None` for this setting indicates no limit to the callstack depth;
+    /// all calls will be fully analyzed, to the extent possible and unless
+    /// overridden by `function_hooks`.
+    ///
+    /// Default is `None`.
+    pub max_callstack_depth: Option<usize>,
+
     /// Maximum amount of time to allow for any single solver query.
     ///
     /// If `Some`, any solver query lasting longer than the given limit will
@@ -209,6 +238,7 @@ impl<'p, B: Backend> Config<'p, B> {
     ) -> Self {
         Self {
             loop_bound,
+            max_callstack_depth: None,
             solver_query_timeout,
             null_detection,
             concretize_memcpy_lengths,
@@ -235,6 +265,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
     fn default() -> Self {
         Self {
             loop_bound: 10,
+            max_callstack_depth: None,
             solver_query_timeout: Some(Duration::from_secs(300)),
             null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,

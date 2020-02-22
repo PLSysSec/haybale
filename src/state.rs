@@ -1249,6 +1249,13 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         }
     }
 
+    /// Returns the current callstack depth. `0` indicates we're in the toplevel
+    /// function, `1` indicates we're in a function directly called by the
+    /// toplevel function, etc.
+    pub fn current_callstack_depth(&self) -> usize {
+        self.stack.len()
+    }
+
     /// Save the current state, about to enter the `BasicBlock` with the given `Name` (which must be
     /// in the same `Module` and `Function` as `state.cur_loc`), as a backtracking point.
     /// The constraint will be added only if we end up backtracking to this point, and only then.

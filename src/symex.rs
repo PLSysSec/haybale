@@ -923,7 +923,22 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 Ok(None)
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
-                if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
+                let at_max_callstack_depth = match self.state.config.max_callstack_depth {
+                    Some(max_depth) => self.state.current_callstack_depth() >= max_depth,
+                    None => false,
+                };
+                if at_max_callstack_depth {
+                    info!("Ignoring a call to function {:?} due to max_callstack_len setting (current callstack depth is {}, max is {})", called_funcname, self.state.current_callstack_depth(), self.state.config.max_callstack_depth.unwrap());
+                    match call.get_type() {
+                        Type::VoidType => {},
+                        ty => {
+                            let width = size(&ty);
+                            let bv = self.state.new_bv_with_name(Name::from(format!("{}_retval", called_funcname)), width as u32)?;
+                            self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
+                        },
+                    }
+                    Ok(None)
+                } else if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
                     if call.arguments.len() != callee.parameters.len() {
                         if callee.is_var_arg {
                             return Err(Error::UnsupportedInstruction(format!("Call of a function named {:?} which is variadic", callee.name)));
@@ -1336,7 +1351,23 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 self.symex_from_cur_loc_through_end_of_function()
             },
             ResolvedFunction::NoHookActive { called_funcname } => {
-                if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
+                let at_max_callstack_depth = match self.state.config.max_callstack_depth {
+                    Some(max_depth) => self.state.current_callstack_depth() >= max_depth,
+                    None => false,
+                };
+                if at_max_callstack_depth {
+                    info!("Ignoring a call to function {:?} due to max_callstack_len setting (current callstack depth is {}, max is {})", called_funcname, self.state.current_callstack_depth(), self.state.config.max_callstack_depth.unwrap());
+                    match invoke.get_type() {
+                        Type::VoidType => {},
+                        ty => {
+                            let width = size(&ty);
+                            let bv = self.state.new_bv_with_name(Name::from(format!("{}_retval", called_funcname)), width as u32)?;
+                            self.state.assign_bv_to_name(invoke.result.clone(), bv)?;
+                        },
+                    }
+                    self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
+                    self.symex_from_cur_loc_through_end_of_function()
+                } else if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
                     if invoke.arguments.len() != callee.parameters.len() {
                         if callee.is_var_arg {
                             return Err(Error::UnsupportedInstruction(format!("Call of a function named {:?} which is variadic", callee.name)));
@@ -2103,6 +2134,26 @@ mod tests {
     }
 
     #[test]
+    fn simple_call_maxdepth0() -> Result<()> {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "simple_caller";
+        init_logging();
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
+        let config = Config { loop_bound: 5, max_callstack_depth: Some(0), ..Config::default() };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
+            ("simple_caller", 1, Instr(0)),
+            // shouldn't enter the call, due to `max_callstack_depth` setting
+        ]));
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
+    }
+
+    #[test]
     fn cross_module_simple_call() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
@@ -2212,6 +2263,27 @@ mod tests {
             ("simple_callee", 2, Instr(0)),
             ("simple_caller", 1, Terminator),
             ("nested_caller", 2, Terminator),
+        ]));
+        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+
+        Ok(())
+    }
+
+    #[test]
+    fn nested_call_maxdepth1() -> Result<()> {
+        let modname = "tests/bcfiles/call.bc";
+        let funcname = "nested_caller";
+        init_logging();
+        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+            .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
+        let config = Config { loop_bound: 5, max_callstack_depth: Some(1), ..Config::default() };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+            .unwrap_or_else(|r| panic!("{}", r));
+        paths.sort();
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("nested_caller", 2, Instr(0)),
+            ("simple_caller", 1, Instr(0)),
+            ("nested_caller", 2, Terminator),  // shouldn't enter `simple_callee` due to the `max_callstack_depth` setting
         ]));
         assert_eq!(paths.len(), 1);  // ensure there are no more paths
 
