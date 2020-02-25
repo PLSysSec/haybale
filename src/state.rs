@@ -1089,7 +1089,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Note that `bits` can be arbitrarily large.
     pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
         let retval = self.mem.borrow().read(addr, bits)?;
-        for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(self, addr, bits)? {
+        for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(addr, bits)? {
             let pretty_loc = if self.config.print_module_name {
                 self.cur_loc.to_string_with_module()
             } else {
@@ -1114,7 +1114,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     fn write_without_mut(&self, addr: &B::BV, val: B::BV) -> Result<()> {
         let write_width = val.get_width();
         self.mem.borrow_mut().write(addr, val)?;
-        for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(self, addr, write_width)? {
+        for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(addr, write_width)? {
             let pretty_loc = if self.config.print_module_name {
                 self.cur_loc.to_string_with_module()
             } else {

@@ -1,8 +1,8 @@
 //! Structures for defining and processing memory watchpoints
 
-use crate::backend::{Backend, BV};
+use crate::backend::BV;
 use crate::error::Result;
-use crate::state::State;
+use crate::solver_utils;
 use std::collections::HashMap;
 use std::fmt;
 use std::iter::FromIterator;
@@ -119,19 +119,19 @@ impl Watchpoints {
     /// For a memory operation on the given address with the given bitwidth, get
     /// `(name, watchpoint)` pairs corresponding to the active watchpoints which
     /// are triggered by the operation.
-    pub(crate) fn get_triggered_watchpoints<B: Backend>(
+    pub(crate) fn get_triggered_watchpoints<V: BV>(
         &self,
-        state: &State<B>,
-        addr: &B::BV,
+        addr: &V,
         bits: u32,
     ) -> Result<impl Iterator<Item = (&String, &Watchpoint)>> {
+        let btor = addr.get_solver();
         let addr_width = addr.get_width();
         let op_lower = addr;
         let bytes = if bits < 8 { 1 } else { bits / 8 };
-        let op_upper = addr.add(&state.bv_from_u32(bytes - 1, addr_width));
+        let op_upper = addr.add(&V::from_u32(btor.clone(), bytes - 1, addr_width));
         let results = self.0.iter().map(|(name, (watchpoint, enabled))| {
             if *enabled {
-                if self.is_watchpoint_triggered(state, watchpoint, op_lower, &op_upper)? {
+                if self.is_watchpoint_triggered(watchpoint, op_lower, &op_upper)? {
                     Ok(Some((name, watchpoint)))
                 } else {
                     Ok(None)
@@ -144,18 +144,18 @@ impl Watchpoints {
     }
 
     /// Is the given watchpoint triggered on any address in the given interval (with both endpoints inclusive)?
-    pub(crate) fn is_watchpoint_triggered<B: Backend>(
+    pub(crate) fn is_watchpoint_triggered<V: BV>(
         &self,
-        state: &State<B>,
         watchpoint: &Watchpoint,
-        interval_lower: &B::BV,
-        interval_upper: &B::BV,
+        interval_lower: &V,
+        interval_upper: &V,
     ) -> Result<bool> {
+        let btor = interval_lower.get_solver();
         let width = interval_lower.get_width();
         assert_eq!(width, interval_upper.get_width());
 
-        let watchpoint_lower = state.bv_from_u64(watchpoint.low, width);
-        let watchpoint_upper = state.bv_from_u64(watchpoint.high, width);
+        let watchpoint_lower = V::from_u64(btor.clone(), watchpoint.low, width);
+        let watchpoint_upper = V::from_u64(btor.clone(), watchpoint.high, width);
 
         // There are exactly 3 possibilities for how the watchpoint could be triggered:
         //
@@ -177,7 +177,7 @@ impl Watchpoints {
         let interval_upper_contained = interval_upper.ugte(&watchpoint_lower).and(&interval_upper.ulte(&watchpoint_upper));
         let contains_entire_watchpoint = interval_lower.ulte(&watchpoint_lower).and(&interval_upper.ugte(&watchpoint_upper));
 
-        state.sat_with_extra_constraints(std::iter::once(
+        solver_utils::sat_with_extra_constraints(&btor, std::iter::once(
             &interval_lower_contained.or(&interval_upper_contained).or(&contains_entire_watchpoint)
         ))
     }
@@ -203,37 +203,37 @@ mod tests {
         let addr = state.bv_from_u32(0x1000, 64);
 
         // check that we can trigger it with a 1-byte read from 0x1000
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_some());
 
         // check that we can trigger it with an 8-byte read from 0x1000
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 64)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 64)?.next().is_some());
 
         // check that we can trigger it with a 1-byte read from 0x1002
         let addr = state.bv_from_u32(0x1002, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_some());
 
         // check that we can trigger it with a 8-byte read from 0x1002
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 64)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 64)?.next().is_some());
 
         // check that we don't trigger it with a 1-byte read from 0x0fff
         let addr = state.bv_from_u32(0x0fff, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_none());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_none());
 
         // check that we can trigger it with an 8-byte read from 0x0fff
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 64)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 64)?.next().is_some());
 
         // check that we don't trigger it with a 1-byte read from 0x1008
         let addr = state.bv_from_u32(0x1008, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_none());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_none());
 
         // check that we do trigger it with a 0x100-byte read from 0x0ff0
         let addr = state.bv_from_u32(0x0ff0, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 0x100 * 8)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 0x100 * 8)?.next().is_some());
 
         // disable it and check that we no longer trigger it
         assert!(watchpoints.disable("w1"));
         let addr = state.bv_from_u32(0x1002, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_none());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_none());
 
         // re-enable it
         assert!(watchpoints.enable("w1"));
@@ -245,26 +245,26 @@ mod tests {
         let addr = state.bv_from_u32(0x2000, 64);
 
         // check that we can trigger it with a 1-byte read from 0x2000
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_some());
 
         // check that we can trigger it with a 1-byte read from 0x2010
         let addr = state.bv_from_u32(0x2010, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_some());
 
         // check that a read touching both watchpoints does trigger
         let addr = state.bv_from_u32(0x0ff0, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 0x10000)?.next().is_some());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 0x10000)?.next().is_some());
 
         // check that a read in between the two watchpoints doesn't trigger
         let addr = state.bv_from_u32(0x1f00, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 16)?.next().is_none());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 16)?.next().is_none());
 
         // fully remove the second watchpoint
         assert!(watchpoints.remove("w2"));
 
         // check that it is no longer triggered
         let addr = state.bv_from_u32(0x2000, 64);
-        assert!(watchpoints.get_triggered_watchpoints(&state, &addr, 8)?.next().is_none());
+        assert!(watchpoints.get_triggered_watchpoints(&addr, 8)?.next().is_none());
 
         // check that trying to re-enable it now returns false
         assert!(!watchpoints.enable("w2"));
