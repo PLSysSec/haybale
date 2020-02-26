@@ -3,7 +3,7 @@ use boolector::option::{BtorOption, ModelGen};
 use either::Either;
 use itertools::Itertools;
 use llvm_ir::*;
-use log::{debug, info};
+use log::{debug, info, warn};
 use reduce::Reduce;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -532,14 +532,21 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Get one possible concrete value for the `BV`.
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
     pub fn get_a_solution_for_bv(&self, bv: &B::BV) -> Result<Option<BVSolution>> {
-        self.solver.set_opt(BtorOption::ModelGen(ModelGen::All));
-        let solution = if self.sat()? {
-            Some(bv.get_a_solution()).transpose()
-        } else {
-            Ok(None)
-        };
-        self.solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
-        solution
+        // first check if the `bv` is a constant, if so, we can avoid a solve
+        match bv.as_binary_str() {
+            Some(bstr) => Ok(Some(BVSolution::from_01x_str(bstr))),
+            None => {
+                warn!("A call to get_a_solution_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}", bv);
+                self.solver.set_opt(BtorOption::ModelGen(ModelGen::All));
+                let solution = if self.sat()? {
+                    bv.get_a_solution().map(Some)
+                } else {
+                    Ok(None)
+                };
+                self.solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+                solution
+            },
+        }
     }
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name).

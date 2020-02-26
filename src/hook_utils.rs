@@ -7,7 +7,7 @@ use crate::error::*;
 use crate::solver_utils::PossibleSolutions;
 use crate::state::State;
 use llvm_ir::Operand;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use reduce::Reduce;
 use std::convert::TryFrom;
 
@@ -125,12 +125,43 @@ enum MemcpyLength {
 /// For a `memcpy`, `memset`, or `memmove` operation with the given `num_bytes`
 /// parameter, return a `MemcpyLength` describing the length of the operation
 /// that should be performed, considering the given `Concretize` option.
+///
+/// Also accounts for the `max_memcpy_length` option in `state.config`.
 fn get_memcpy_length<B: Backend>(state: &State<B>, num_bytes: &B::BV, concretize: &Concretize) -> Result<MemcpyLength> {
     match state.get_possible_solutions_for_bv(num_bytes, 1)? {
-        PossibleSolutions::Exactly(v) => Ok(MemcpyLength::Concrete(v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap())),
+        PossibleSolutions::Exactly(v) => {
+            let single_val = v.iter().next().ok_or(Error::Unsat)?.as_u64().unwrap();
+            match state.config.max_memcpy_length {
+                Some(max_memcpy_length) if single_val > max_memcpy_length => {
+                    Err(Error::OtherError(format!("Encountered a memcpy/memset/memmove of length exactly {} bytes, larger than max_memcpy_length {} bytes", single_val, max_memcpy_length)))
+                },
+                _ => Ok(MemcpyLength::Concrete(single_val)),
+            }
+        },
         PossibleSolutions::AtLeast(v) => {
+            if let Some(max_memcpy_length) = state.config.max_memcpy_length {
+                let max_memcpy_length_bv = state.bv_from_u64(max_memcpy_length, num_bytes.get_width());
+                if !state.sat_with_extra_constraints(std::iter::once(&num_bytes.ulte(&max_memcpy_length_bv)))? {
+                    let arbitrary_val = v.iter().next().unwrap().as_u64().unwrap();
+                    return Err(Error::OtherError(format!("Encountered a memcpy/memset/memmove with multiple possible lengths, but all of them are larger than max_memcpy_length {} bytes. One possible length is {} bytes.", max_memcpy_length, arbitrary_val)));
+                }
+                if state.sat_with_extra_constraints(std::iter::once(&num_bytes.ugt(&max_memcpy_length_bv)))? {
+                    warn!("Encountered a memcpy/memset/memmove with multiple possible lengths, some of which are larger than max_memcpy_length {} bytes. Constraining the length to be at most {} bytes.", max_memcpy_length, max_memcpy_length);
+                    num_bytes.ulte(&max_memcpy_length_bv).assert()?;
+                }
+            }
             let num_bytes_concrete = match concretize {
-                Concretize::Arbitrary => v.iter().next().unwrap().as_u64().unwrap(),
+                Concretize::Arbitrary => {
+                    match state.config.max_memcpy_length {
+                        None => v.iter().next().unwrap().as_u64().unwrap(),
+                        Some(max_memcpy_length) => {
+                            match v.iter().map(|val| val.as_u64().unwrap()).find(|val| *val <= max_memcpy_length) {
+                                Some(val) => val,
+                                None => state.get_a_solution_for_bv(num_bytes)?.unwrap().as_u64().unwrap()
+                            }
+                        },
+                    }
+                },
                 Concretize::Minimum => state.min_possible_solution_for_bv_as_u64(num_bytes)?.unwrap(),
                 Concretize::Maximum => state.max_possible_solution_for_bv_as_u64(num_bytes)?.unwrap(),
                 Concretize::Prefer(val, backup) => {
@@ -145,6 +176,7 @@ fn get_memcpy_length<B: Backend>(state: &State<B>, num_bytes: &B::BV, concretize
                 },
                 Concretize::Symbolic => return Ok(MemcpyLength::Symbolic),
             };
+            info!("Encountered a memcpy/memset/memmove with multiple possible lengths; according to the concretization policy {:?}, chose a length of {} bytes and will constrain the length argument to be {} going forward", concretize, num_bytes_concrete, num_bytes_concrete);
             // actually constrain that `num_bytes` has to now be equal to our chosen concrete value
             num_bytes._eq(&state.bv_from_u64(num_bytes_concrete, num_bytes.get_width())).assert()?;
             Ok(MemcpyLength::Concrete(num_bytes_concrete))

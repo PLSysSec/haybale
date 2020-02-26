@@ -80,6 +80,20 @@ pub struct Config<'p, B> where B: Backend {
     /// Default is `Concretize::Symbolic` - that is, no concretization.
     pub concretize_memcpy_lengths: Concretize,
 
+    /// Maximum supported length of a `memcpy`, `memset`, or `memmove` operation.
+    ///
+    /// Setting this to `Some(x)` means that if we encounter a `memcpy`,
+    /// `memset`, or `memmove` with length which may be greater than `x` bytes,
+    /// we will constrain the length to be at most `x` bytes. (`haybale` will
+    /// also emit a warning when doing this.) If the only possible values for the
+    /// length are greater than `x` bytes, we will raise an error.
+    ///
+    /// Setting this to `None` means that there is no limit to the size of these
+    /// operations.
+    ///
+    /// Default is `None` - that is, no limit.
+    pub max_memcpy_length: Option<u64>,
+
     /// `Error::Unsat` is an error type which is used internally, but may not be
     /// useful for `ExecutionManager.next()` to return to consumers. In most
     /// cases, consumers probably don't care about paths which were partially
@@ -244,6 +258,7 @@ impl<'p, B: Backend> Config<'p, B> {
             solver_query_timeout,
             null_detection,
             concretize_memcpy_lengths,
+            max_memcpy_length: None,
             squash_unsats,
             trust_llvm_assumes,
             function_hooks: FunctionHooks::new(),
@@ -271,6 +286,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             solver_query_timeout: Some(Duration::from_secs(300)),
             null_detection: true,
             concretize_memcpy_lengths: Concretize::Symbolic,
+            max_memcpy_length: None,
             squash_unsats: true,
             trust_llvm_assumes: true,
             function_hooks: FunctionHooks::default(),

@@ -190,6 +190,8 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
 
 /// Check whether some common values are solutions, and if so, add them.
 ///
+/// Adds solutions until `solutions` has `n+1` entries, or until it can't find any more.
+///
 /// Experimental data shows that calls to `sat()` with ModelGen enabled are _so slow_
 /// that it's worth doing this first to try to avoid them.
 fn check_for_common_solutions<V: BV>(solver: V::SolverRef, bv: &V, n: usize, solutions: &mut HashSet<BVSolution>) -> Result<()> {
