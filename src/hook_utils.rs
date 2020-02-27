@@ -95,7 +95,7 @@ pub fn memcpy<B: Backend>(state: &mut State<B>, dest: &Operand, src: &Operand, n
             if max_num_bytes > 0x4000 {
                 warn!("Encountered a memcpy or memmove with symbolic size, up to {} bytes. This may be slow.", max_num_bytes);
             } else {
-                debug!("Processing a memcpy or memmove of symbolic size, up to {} bytes", max_num_bytes);
+                info!("Processing a memcpy or memmove of symbolic size, up to {} bytes", max_num_bytes);
             }
             let mut src_addr = src.clone();
             let mut dest_addr = dest.clone();
