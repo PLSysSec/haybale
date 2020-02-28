@@ -1792,18 +1792,65 @@
 <span id="1792">1792</span>
 <span id="1793">1793</span>
 <span id="1794">1794</span>
+<span id="1795">1795</span>
+<span id="1796">1796</span>
+<span id="1797">1797</span>
+<span id="1798">1798</span>
+<span id="1799">1799</span>
+<span id="1800">1800</span>
+<span id="1801">1801</span>
+<span id="1802">1802</span>
+<span id="1803">1803</span>
+<span id="1804">1804</span>
+<span id="1805">1805</span>
+<span id="1806">1806</span>
+<span id="1807">1807</span>
+<span id="1808">1808</span>
+<span id="1809">1809</span>
+<span id="1810">1810</span>
+<span id="1811">1811</span>
+<span id="1812">1812</span>
+<span id="1813">1813</span>
+<span id="1814">1814</span>
+<span id="1815">1815</span>
+<span id="1816">1816</span>
+<span id="1817">1817</span>
+<span id="1818">1818</span>
+<span id="1819">1819</span>
+<span id="1820">1820</span>
+<span id="1821">1821</span>
+<span id="1822">1822</span>
+<span id="1823">1823</span>
+<span id="1824">1824</span>
+<span id="1825">1825</span>
+<span id="1826">1826</span>
+<span id="1827">1827</span>
+<span id="1828">1828</span>
+<span id="1829">1829</span>
+<span id="1830">1830</span>
+<span id="1831">1831</span>
+<span id="1832">1832</span>
+<span id="1833">1833</span>
+<span id="1834">1834</span>
+<span id="1835">1835</span>
+<span id="1836">1836</span>
+<span id="1837">1837</span>
+<span id="1838">1838</span>
+<span id="1839">1839</span>
+<span id="1840">1840</span>
+<span id="1841">1841</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">BVSolution</span>;
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">option</span>::{<span class="ident">BtorOption</span>, <span class="ident">ModelGen</span>};
 <span class="kw">use</span> <span class="ident">either</span>::<span class="ident">Either</span>;
 <span class="kw">use</span> <span class="ident">itertools</span>::<span class="ident">Itertools</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="kw-2">*</span>;
-<span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">debug</span>, <span class="ident">info</span>};
+<span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">debug</span>, <span class="ident">info</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">reduce</span>::<span class="ident">Reduce</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">cell</span>::<span class="ident">RefCell</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashSet</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">FromIterator</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">hash</span>::{<span class="ident">Hash</span>, <span class="ident">Hasher</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::<span class="ident">Deref</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::{<span class="ident">Arc</span>, <span class="ident">RwLock</span>};
 
@@ -1861,6 +1908,22 @@
     <span class="doccomment">/// backtracking will not touch the set of mem_watchpoints or their</span>
     <span class="doccomment">/// enabled statuses.</span>
     <span class="ident">mem_watchpoints</span>: <span class="ident">Watchpoints</span>,
+    <span class="doccomment">/// Empirically, solving with model-gen enabled can be very slow.</span>
+    <span class="doccomment">/// In particular, given a `BV` representing a function pointer, solving for</span>
+    <span class="doccomment">/// the concrete function pointer it represents can be slow.</span>
+    <span class="doccomment">/// However, if we have a guess for the concrete value, checking whether that</span>
+    <span class="doccomment">/// guess is correct may be much faster than blindly solving for the value.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// This cache keeps track of the most recent concrete function pointer value</span>
+    <span class="doccomment">/// we resolved at each `Location` where we call a function pointer.</span>
+    <span class="doccomment">/// Hopefully, this means we can do the model-gen solve the first time, and</span>
+    <span class="doccomment">/// then subsequent times just check that the same solution still holds.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// This cache persists across backtracking - there&#39;s no reason to reset it,</span>
+    <span class="doccomment">/// as its contents are still treated as &quot;guesses&quot; and checked each time</span>
+    <span class="doccomment">/// anyway, and function pointers _probably_ resolve to the same value on</span>
+    <span class="doccomment">/// multiple paths.</span>
+    <span class="ident">function_ptr_cache</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>, <span class="ident">u64</span><span class="op">&gt;</span>,
 }
 
 <span class="doccomment">/// Describes a location in LLVM IR in a format more suitable for printing - for</span>
@@ -1999,6 +2062,15 @@
 
 <span class="doccomment">/// Our implementation of `PartialEq` satisfies the requirements of `Eq`</span>
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> <span class="ident">Eq</span> <span class="kw">for</span> <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> <span class="ident">Hash</span> <span class="kw">for</span> <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">hash</span><span class="op">&lt;</span><span class="ident">H</span>: <span class="ident">Hasher</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">H</span>) {
+        <span class="self">self</span>.<span class="ident">module</span>.<span class="ident">name</span>.<span class="ident">hash</span>(<span class="ident">state</span>);
+        <span class="self">self</span>.<span class="ident">func</span>.<span class="ident">name</span>.<span class="ident">hash</span>(<span class="ident">state</span>);
+        <span class="self">self</span>.<span class="ident">bb</span>.<span class="ident">name</span>.<span class="ident">hash</span>(<span class="ident">state</span>);
+        <span class="self">self</span>.<span class="ident">instr</span>.<span class="ident">hash</span>(<span class="ident">state</span>);
+    }
+}
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="ident">Debug</span> <span class="kw">for</span> <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">fmt</span>::<span class="ident">Formatter</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="prelude-ty">Result</span> {
@@ -2161,6 +2233,7 @@
             <span class="ident">backtrack_points</span>: <span class="ident">Vec</span>::<span class="ident">new</span>(),
             <span class="ident">path</span>: <span class="ident">Vec</span>::<span class="ident">new</span>(),
             <span class="ident">mem_watchpoints</span>: <span class="ident">config</span>.<span class="ident">initial_mem_watchpoints</span>.<span class="ident">clone</span>().<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+            <span class="ident">function_ptr_cache</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
 
             <span class="comment">// listed last (out-of-order) so that they can be used above but moved in now</span>
             <span class="ident">solver</span>,
@@ -2301,14 +2374,21 @@
     <span class="doccomment">/// Get one possible concrete value for the `BV`.</span>
     <span class="doccomment">/// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_a_solution_for_bv</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bv</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">BVSolution</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">solver</span>.<span class="ident">set_opt</span>(<span class="ident">BtorOption</span>::<span class="ident">ModelGen</span>(<span class="ident">ModelGen</span>::<span class="ident">All</span>));
-        <span class="kw">let</span> <span class="ident">solution</span> <span class="op">=</span> <span class="kw">if</span> <span class="self">self</span>.<span class="ident">sat</span>()<span class="question-mark">?</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">bv</span>.<span class="ident">get_a_solution</span>()).<span class="ident">transpose</span>()
-        } <span class="kw">else</span> {
-            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
-        };
-        <span class="self">self</span>.<span class="ident">solver</span>.<span class="ident">set_opt</span>(<span class="ident">BtorOption</span>::<span class="ident">ModelGen</span>(<span class="ident">ModelGen</span>::<span class="ident">Disabled</span>));
-        <span class="ident">solution</span>
+        <span class="comment">// first check if the `bv` is a constant, if so, we can avoid a solve</span>
+        <span class="kw">match</span> <span class="ident">bv</span>.<span class="ident">as_binary_str</span>() {
+            <span class="prelude-val">Some</span>(<span class="ident">bstr</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">BVSolution</span>::<span class="ident">from_01x_str</span>(<span class="ident">bstr</span>))),
+            <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;A call to get_a_solution_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}&quot;</span>, <span class="ident">bv</span>);
+                <span class="self">self</span>.<span class="ident">solver</span>.<span class="ident">set_opt</span>(<span class="ident">BtorOption</span>::<span class="ident">ModelGen</span>(<span class="ident">ModelGen</span>::<span class="ident">All</span>));
+                <span class="kw">let</span> <span class="ident">solution</span> <span class="op">=</span> <span class="kw">if</span> <span class="self">self</span>.<span class="ident">sat</span>()<span class="question-mark">?</span> {
+                    <span class="ident">bv</span>.<span class="ident">get_a_solution</span>().<span class="ident">map</span>(<span class="prelude-val">Some</span>)
+                } <span class="kw">else</span> {
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+                };
+                <span class="self">self</span>.<span class="ident">solver</span>.<span class="ident">set_opt</span>(<span class="ident">BtorOption</span>::<span class="ident">ModelGen</span>(<span class="ident">ModelGen</span>::<span class="ident">Disabled</span>));
+                <span class="ident">solution</span>
+            },
+        }
     }
 
     <span class="doccomment">/// Get one possible concrete value for the given IR `Name` (from the given `Function` name).</span>
@@ -2766,9 +2846,9 @@
     <span class="doccomment">/// Given a `BV`, interpret it as a function pointer, and return a</span>
     <span class="doccomment">/// description of the possible `Function`s which it would point to.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// `n`: Maximum number of distinct `Function`s to check for.</span>
-    <span class="doccomment">/// If there are more than `n` possible `Function`s, this returns a</span>
-    <span class="doccomment">/// `PossibleSolutions::AtLeast` with `n+1` `Function`s.</span>
+    <span class="doccomment">/// `n`: Maximum number of distinct `Callable`s to check for.</span>
+    <span class="doccomment">/// If there are more than `n` possible `Callable`s, this returns a</span>
+    <span class="doccomment">/// `PossibleSolutions::AtLeast` with `n+1` `Callable`s.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// Possible errors:</span>
     <span class="doccomment">///   - `Error::SolverError` if the solver query fails</span>
@@ -2778,33 +2858,39 @@
         <span class="kw">if</span> <span class="ident">n</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
             <span class="macro">unimplemented</span><span class="macro">!</span>(<span class="string">&quot;n == 0 in interpret_as_function_ptr&quot;</span>)
         }
+
         <span class="comment">// First try to interpret without a full solve (i.e., with `as_u64()`)</span>
-        <span class="kw">match</span> <span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">addr</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">global_allocations</span>.<span class="ident">get_func_for_address</span>(<span class="ident">addr</span>, <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>)) {
-            <span class="prelude-val">Some</span>(<span class="ident">f</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">HashSet</span>::<span class="ident">from_iter</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(<span class="ident">f</span>)))),  <span class="comment">// there is only one possible solution, and it&#39;s this `f`</span>
+        <span class="kw">let</span> <span class="ident">addrs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">bv</span>.<span class="ident">as_u64</span>() {
+            <span class="prelude-val">Some</span>(<span class="ident">addr</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">addr</span>],  <span class="comment">// there is only one possible solution, and it&#39;s this `addr`</span>
             <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">get_possible_solutions_for_bv</span>(<span class="kw-2">&amp;</span><span class="ident">bv</span>, <span class="ident">n</span>)<span class="question-mark">?</span> {
-                    <span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                        <span class="ident">v</span>.<span class="ident">into_iter</span>()
-                            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">addr</span><span class="op">|</span> {
-                                <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">addr</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
-                                <span class="self">self</span>.<span class="ident">global_allocations</span>.<span class="ident">get_func_for_address</span>(<span class="ident">addr</span>, <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>)
-                                    .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;This BV can&#39;t be interpreted as a function pointer: it has a possible solution 0x{:x} which points to something that&#39;s not a function.\n  The BV was: {:?}&quot;</span>, <span class="ident">addr</span>, <span class="ident">bv</span>)))
-                            })
-                            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
-                            .<span class="ident">map</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>)
+                <span class="comment">// Check if whatever solution we used last time for this `Location` still applies</span>
+                <span class="comment">// (see notes on the `function_ptr_cache` field of `State`)</span>
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">function_ptr_cache</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cur_loc</span>) {
+                    <span class="prelude-val">Some</span>(<span class="ident">addr</span>) <span class="kw">if</span> <span class="self">self</span>.<span class="ident">bvs_must_be_equal</span>(<span class="kw-2">&amp;</span><span class="ident">bv</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">bv_from_u64</span>(<span class="kw-2">*</span><span class="ident">addr</span>, <span class="ident">bv</span>.<span class="ident">get_width</span>()))<span class="question-mark">?</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">vec</span><span class="macro">!</span>[<span class="kw-2">*</span><span class="ident">addr</span>],
+                    <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> {
+                        <span class="comment">// Ok, use `get_possible_solutions_for_bv()`</span>
+                        <span class="kw">match</span> <span class="self">self</span>.<span class="ident">get_possible_solutions_for_bv</span>(<span class="kw-2">&amp;</span><span class="ident">bv</span>, <span class="ident">n</span>)<span class="question-mark">?</span>.<span class="ident">as_u64_solutions</span>().<span class="ident">unwrap</span>() {
+                            <span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">v</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+                            <span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">v</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+                        }
                     },
-                    <span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                        <span class="ident">v</span>.<span class="ident">into_iter</span>()
-                            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">addr</span><span class="op">|</span> {
-                                <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">addr</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
-                                <span class="self">self</span>.<span class="ident">global_allocations</span>.<span class="ident">get_func_for_address</span>(<span class="ident">addr</span>, <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>)
-                                    .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;This BV can&#39;t be interpreted as a function pointer: it has a possible solution 0x{:?} which points to something that&#39;s not a function.\n  The BV was: {:?}&quot;</span>, <span class="ident">addr</span>, <span class="ident">bv</span>)))
-                            })
-                            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
-                            .<span class="ident">map</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>)
-                    }
                 }
             }
+        };
+
+        <span class="comment">// save the value we found into the cache for next time</span>
+        <span class="kw">if</span> <span class="ident">addrs</span>.<span class="ident">len</span>() <span class="op">=</span><span class="op">=</span> <span class="number">1</span> {
+            <span class="self">self</span>.<span class="ident">function_ptr_cache</span>.<span class="ident">insert</span>(<span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">clone</span>(), <span class="ident">addrs</span>[<span class="number">0</span>]);
+        }
+
+        <span class="kw">let</span> <span class="ident">callables</span> <span class="op">=</span> <span class="ident">addrs</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">addr</span><span class="op">|</span> {
+            <span class="self">self</span>.<span class="ident">global_allocations</span>.<span class="ident">get_func_for_address</span>(<span class="ident">addr</span>, <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>)
+                .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;This BV can&#39;t be interpreted as a function pointer: it has a possible solution {:?} which points to something that&#39;s not a function.\n  The BV was: {:?}&quot;</span>, <span class="ident">addr</span>, <span class="ident">bv</span>)))
+        }).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
+        <span class="kw">if</span> <span class="ident">callables</span>.<span class="ident">len</span>() <span class="op">&gt;</span> <span class="ident">n</span> {
+            <span class="prelude-val">Ok</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>(<span class="ident">callables</span>))
+        } <span class="kw">else</span> {
+            <span class="prelude-val">Ok</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">callables</span>))
         }
     }
 
@@ -2851,8 +2937,15 @@
     <span class="doccomment">/// Read a value `bits` bits long from memory at `addr`.</span>
     <span class="doccomment">/// Note that `bits` can be arbitrarily large.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">retval</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">read_without_triggering_watchpoints</span>(<span class="ident">addr</span>, <span class="ident">bits</span>)<span class="question-mark">?</span>;
-        <span class="self">self</span>.<span class="ident">mem_watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="self">self</span>, <span class="ident">addr</span>, <span class="ident">bits</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">retval</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow</span>().<span class="ident">read</span>(<span class="ident">addr</span>, <span class="ident">bits</span>)<span class="question-mark">?</span>;
+        <span class="kw">for</span> (<span class="ident">name</span>, <span class="ident">watchpoint</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">mem_watchpoints</span>.<span class="ident">get_triggered_watchpoints</span>(<span class="ident">addr</span>, <span class="ident">bits</span>)<span class="question-mark">?</span> {
+            <span class="kw">let</span> <span class="ident">pretty_loc</span> <span class="op">=</span> <span class="kw">if</span> <span class="self">self</span>.<span class="ident">config</span>.<span class="ident">print_module_name</span> {
+                <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_with_module</span>()
+            } <span class="kw">else</span> {
+                <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_no_module</span>()
+            };
+            <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} read by {}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>);
+        }
         <span class="prelude-val">Ok</span>(<span class="ident">retval</span>)
     }
 
@@ -2862,17 +2955,6 @@
         <span class="self">self</span>.<span class="ident">write_without_mut</span>(<span class="ident">addr</span>, <span class="ident">val</span>)
     }
 
-    <span class="doccomment">/// For internal use: perform a memory read without triggering watchpoints</span>
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">read_without_triggering_watchpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow</span>().<span class="ident">read</span>(<span class="ident">addr</span>, <span class="ident">bits</span>)
-    }
-
-    <span class="doccomment">/// For internal use: perform a memory write without triggering watchpoints</span>
-    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">dead_code</span>)]</span> <span class="comment">// this method is not currently used, but it&#39;s here for symmetry with `read_without_triggering_watchpoints()`</span>
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">write_without_triggering_watchpoints</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">val</span>: <span class="ident">B</span>::<span class="ident">BV</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">write_without_mut_or_triggering_watchpoints</span>(<span class="ident">addr</span>, <span class="ident">val</span>)
-    }
-
     <span class="doccomment">/// For internal use: since `self.mem` is a `RefCell`, we can write even</span>
     <span class="doccomment">/// without having a `&amp;mut self` reference. This is necessary to support,</span>
     <span class="doccomment">/// for instance, lazy global initialization. But, we don&#39;t want to skip</span>
@@ -2880,16 +2962,21 @@
     <span class="doccomment">/// have this</span>
     <span class="kw">fn</span> <span class="ident">write_without_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">val</span>: <span class="ident">B</span>::<span class="ident">BV</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">write_width</span> <span class="op">=</span> <span class="ident">val</span>.<span class="ident">get_width</span>();
-        <span class="self">self</span>.<span class="ident">write_without_mut_or_triggering_watchpoints</span>(<span class="ident">addr</span>, <span class="ident">val</span>)<span class="question-mark">?</span>;
-        <span class="self">self</span>.<span class="ident">mem_watchpoints</span>.<span class="ident">process_watchpoint_triggers</span>(<span class="self">self</span>, <span class="ident">addr</span>, <span class="ident">write_width</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+        <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow_mut</span>().<span class="ident">write</span>(<span class="ident">addr</span>, <span class="ident">val</span>)<span class="question-mark">?</span>;
+        <span class="kw">for</span> (<span class="ident">name</span>, <span class="ident">watchpoint</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">mem_watchpoints</span>.<span class="ident">get_triggered_watchpoints</span>(<span class="ident">addr</span>, <span class="ident">write_width</span>)<span class="question-mark">?</span> {
+            <span class="kw">let</span> <span class="ident">pretty_loc</span> <span class="op">=</span> <span class="kw">if</span> <span class="self">self</span>.<span class="ident">config</span>.<span class="ident">print_module_name</span> {
+                <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_with_module</span>()
+            } <span class="kw">else</span> {
+                <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_no_module</span>()
+            };
+            <span class="comment">// Log the new value of the watched location (regardless of which part of the watched location the write may have touched).</span>
+            <span class="comment">// Note that the write operation itself has already been performed, so we get the updated value with a `read()`.</span>
+            <span class="kw">let</span> <span class="ident">watchpoint_low</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">bv_from_u64</span>(<span class="ident">watchpoint</span>.<span class="ident">get_lower_bound</span>(), <span class="kw">crate</span>::<span class="ident">layout</span>::<span class="ident">POINTER_SIZE_BITS</span> <span class="kw">as</span> <span class="ident">u32</span>);
+            <span class="kw">let</span> <span class="ident">watchpoint_size_bits</span> <span class="op">=</span> (<span class="ident">watchpoint</span>.<span class="ident">get_upper_bound</span>() <span class="op">-</span> <span class="ident">watchpoint</span>.<span class="ident">get_lower_bound</span>() <span class="op">+</span> <span class="number">1</span>) <span class="op">*</span> <span class="number">8</span>;
+            <span class="kw">let</span> <span class="ident">new_value</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow</span>().<span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="ident">watchpoint_low</span>, <span class="ident">watchpoint_size_bits</span> <span class="kw">as</span> <span class="ident">u32</span>)<span class="question-mark">?</span>;  <span class="comment">// performs a read without using `state.read()` which would trigger watchpoints (we don&#39;t want to trigger watchpoints with this read)</span>
+            <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} written by {}; new value is {:?}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>, <span class="ident">new_value</span>);
+        }
         <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="doccomment">/// For internal use: the underlying `write()` method without the watchpoint</span>
-    <span class="doccomment">/// calls or needing a `&amp;mut self`. Used in both `write_without_mut()` and</span>
-    <span class="doccomment">/// `write_without_triggering_watchpoints()`.</span>
-    <span class="kw">fn</span> <span class="ident">write_without_mut_or_triggering_watchpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">val</span>: <span class="ident">B</span>::<span class="ident">BV</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow_mut</span>().<span class="ident">write</span>(<span class="ident">addr</span>, <span class="ident">val</span>)
     }
 
     <span class="doccomment">/// Add a memory watchpoint. It will be enabled unless/until</span>
@@ -3010,6 +3097,13 @@
         } <span class="kw">else</span> {
             <span class="prelude-val">None</span>
         }
+    }
+
+    <span class="doccomment">/// Returns the current callstack depth. `0` indicates we&#39;re in the toplevel</span>
+    <span class="doccomment">/// function, `1` indicates we&#39;re in a function directly called by the</span>
+    <span class="doccomment">/// toplevel function, etc.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">current_callstack_depth</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+        <span class="self">self</span>.<span class="ident">stack</span>.<span class="ident">len</span>()
     }
 
     <span class="doccomment">/// Save the current state, about to enter the `BasicBlock` with the given `Name` (which must be</span>
@@ -3373,14 +3467,14 @@
 
         <span class="comment">// check that there are now exactly two solutions</span>
         <span class="kw">let</span> <span class="ident">solutions</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">get_possible_solutions_for_bv</span>(<span class="kw-2">&amp;</span><span class="ident">x</span>, <span class="number">2</span>).<span class="ident">unwrap</span>().<span class="ident">as_u64_solutions</span>();
-        <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">solutions</span>, <span class="prelude-val">Some</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">HashSet</span>::<span class="ident">from_iter</span>(<span class="macro">vec</span><span class="macro">!</span>[<span class="number">4</span>,<span class="number">5</span>].<span class="ident">into_iter</span>()))));
+        <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">solutions</span>, <span class="prelude-val">Some</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="macro">vec</span><span class="macro">!</span>[<span class="number">4</span>,<span class="number">5</span>].<span class="ident">into_iter</span>().<span class="ident">collect</span>())));
 
         <span class="comment">// add x &lt; 5 constraint</span>
         <span class="ident">x</span>.<span class="ident">ult</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="number">5</span>, <span class="number">64</span>)).<span class="ident">assert</span>();
 
         <span class="comment">// check that there is now exactly one solution</span>
         <span class="kw">let</span> <span class="ident">solutions</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">get_possible_solutions_for_bv</span>(<span class="kw-2">&amp;</span><span class="ident">x</span>, <span class="number">2</span>).<span class="ident">unwrap</span>().<span class="ident">as_u64_solutions</span>();
-        <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">solutions</span>, <span class="prelude-val">Some</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">HashSet</span>::<span class="ident">from_iter</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(<span class="number">4</span>)))));
+        <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">solutions</span>, <span class="prelude-val">Some</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(<span class="number">4</span>).<span class="ident">collect</span>())));
 
         <span class="comment">// add x &lt; 3 constraint</span>
         <span class="ident">x</span>.<span class="ident">ult</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="number">3</span>, <span class="number">64</span>)).<span class="ident">assert</span>();

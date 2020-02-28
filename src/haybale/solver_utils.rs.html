@@ -660,6 +660,8 @@
 <span id="660">660</span>
 <span id="661">661</span>
 <span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Simple utilities for interacting with the solver</span>
 
@@ -852,6 +854,8 @@
 }
 
 <span class="doccomment">/// Check whether some common values are solutions, and if so, add them.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Adds solutions until `solutions` has `n+1` entries, or until it can&#39;t find any more.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Experimental data shows that calls to `sat()` with ModelGen enabled are _so slow_</span>
 <span class="doccomment">/// that it&#39;s worth doing this first to try to avoid them.</span>
