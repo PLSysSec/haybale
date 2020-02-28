@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.3.1"
+haybale = "0.3.2"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
@@ -280,6 +280,22 @@ solver (via the Rust [`boolector`] crate).
 
 ## Changelog
 
+### Version 0.3.2 (Feb 28, 2020)
+
+- New option [`Config.max_callstack_depth`] allows you to limit the callstack
+depth for an analysis - automatically ignoring calls of LLVM functions which
+would exceed that callstack depth. The default for this setting is no limit,
+matching the previous behavior of `haybale`.
+- New option [`Config.max_memcpy_length`] allows you to limit the maximum
+size of `memcpy`, `memset`, and `memmove` operations. The default for this
+setting is no limit, matching the previous behavior of `haybale`.
+- New method [`FunctionHooks::add_default_hook()`] allows you to supply a
+"default hook" which will be used when no other definition or hook is found
+for a function call. If no default hook is provided, this will result in a
+`FunctionNotFound` error, just as it did previously.
+- Performance improvements for analyzing calls of function pointers.
+- Improved a few error messages.
+
 ### Version 0.3.1 (Feb 5, 2020)
 
 - Fix some broken links in the README and docs. No functional changes.
@@ -472,6 +488,7 @@ Initial release!
 [`FunctionHooks::add_cpp_demangled()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_cpp_demangled
 [`FunctionHooks::add_rust_demangled()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_rust_demangled
 [`FunctionHooks::add_inline_asm_hook()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_inline_asm_hook
+[`FunctionHooks::add_default_hook()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_default_hook
 [`function_hooks`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/index.html
 [`generic_stub_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.generic_stub_hook.html
 [`abort_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.abort_hook.html
@@ -482,5 +499,7 @@ Initial release!
 [`Config.trust_llvm_assumes`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.trust_llvm_assumes
 [`Config.solver_query_timeout`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.solver_query_timeout
 [`Config.squash_unsats`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.squash_unsats
+[`Config.max_callstack_depth`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.max_callstack_depth
+[`Config.max_memcpy_length`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.max_memcpy_length
 [`backend::BV`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.BV.html
 [`State.full_error_message_with_context()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.full_error_message_with_context
