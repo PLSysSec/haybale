@@ -161,6 +161,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 first_iter = false;
                 self.state.record_path_entry();  // do this only on the first iteration
             }
+            for callback in &self.state.config.callbacks.instruction_callbacks {
+                callback(inst, &self.state)?;
+            }
             let result = if let Ok(binop) = inst.clone().try_into() {
                 self.symex_binop(&binop)
             } else {
@@ -208,6 +211,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         if first_iter {
             // in this case, we did 0 iterations of the for loop, and still need to record the path entry
             self.state.record_path_entry();
+        }
+        for callback in &self.state.config.callbacks.terminator_callbacks {
+            callback(term, &self.state)?;
         }
         match term {
             Terminator::Ret(ret) => self.symex_return(ret).map(Some),

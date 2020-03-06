@@ -1,6 +1,7 @@
 //! The `Config` structure for configuring `haybale`, and other associated definitions
 
 use crate::backend::Backend;
+use crate::callbacks::Callbacks;
 pub use crate::demangling::Demangling;
 use crate::function_hooks::FunctionHooks;
 use crate::watchpoints::Watchpoint;
@@ -137,6 +138,12 @@ pub struct Config<'p, B> where B: Backend {
     /// see docs there for more details.
     pub function_hooks: FunctionHooks<'p, B>,
 
+    /// The set of currently active callbacks; see
+    /// [`Callbacks`](../callbacks/struct.Callbacks.html) for more details.
+    ///
+    /// Default is no callbacks.
+    pub callbacks: Callbacks<'p, B>,
+
     /// The initial memory watchpoints when a `State` is created (mapping from
     /// watchpoint name to the actual watchpoint).
     ///
@@ -268,6 +275,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             squash_unsats: true,
             trust_llvm_assumes: true,
             function_hooks: FunctionHooks::default(),
+            callbacks: Callbacks::default(),
             initial_mem_watchpoints: HashMap::new(),
             demangling: None,
             print_source_info: true,

@@ -21,6 +21,7 @@ pub mod config;
 pub use config::Config;
 mod demangling;
 pub mod function_hooks;
+pub mod callbacks;
 mod hooks;
 pub mod alloc_utils;
 pub mod hook_utils;
