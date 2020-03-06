@@ -232,17 +232,27 @@ impl<'p> Hash for Location<'p> {
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
+        write!(f, "{{{}}}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
     }
 }
 
 impl<'p> Location<'p> {
-    pub(crate) fn to_string_with_module(&self) -> String {
-        format!("{{{}: {}, bb {}, {}}}", self.module.name, self.func.name, self.bb.name, self.instr)
+    /// Format this `Location` as a string, including the full module name
+    pub fn to_string_with_module(&self) -> String {
+        format!("{}: {}, bb {}, {}", self.module.name, self.func.name, self.bb.name, self.instr)
     }
 
-    pub(crate) fn to_string_no_module(&self) -> String {
-        format!("{{{}, bb {}, {}}}", self.func.name, self.bb.name, self.instr)
+    /// Format this `Location` as a string, omitting the module name
+    pub fn to_string_no_module(&self) -> String {
+        format!("{}, bb {}, {}", self.func.name, self.bb.name, self.instr)
+    }
+
+    /// Format this `Location` as a string, including the short module name. The
+    /// short module name is the part of the module name after the last `/`, if
+    /// any; or the full module name, if the module name does not contain a `/`.
+    pub fn to_string_short_module(&self) -> String {
+        let short_module_name = self.module.name.rsplit('/').next().unwrap_or(&self.module.name);
+        format!("{}: {}, bb {}, {}", short_module_name, self.func.name, self.bb.name, self.instr)
     }
 }
 
@@ -1103,7 +1113,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             } else {
                 self.cur_loc.to_string_no_module()
             };
-            info!("Memory watchpoint {:?} {} read by {}", name, watchpoint, pretty_loc);
+            info!("Memory watchpoint {:?} {} read by {{{}}}", name, watchpoint, pretty_loc);
         }
         Ok(retval)
     }
@@ -1133,7 +1143,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             let watchpoint_low = self.bv_from_u64(watchpoint.get_lower_bound(), crate::layout::POINTER_SIZE_BITS as u32);
             let watchpoint_size_bits = (watchpoint.get_upper_bound() - watchpoint.get_lower_bound() + 1) * 8;
             let new_value = self.mem.borrow().read(&watchpoint_low, watchpoint_size_bits as u32)?;  // performs a read without using `state.read()` which would trigger watchpoints (we don't want to trigger watchpoints with this read)
-            info!("Memory watchpoint {:?} {} written by {}; new value is {:?}", name, watchpoint, pretty_loc, new_value);
+            info!("Memory watchpoint {:?} {} written by {{{}}}; new value is {:?}", name, watchpoint, pretty_loc, new_value);
         }
         Ok(())
     }
