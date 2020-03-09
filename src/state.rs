@@ -116,29 +116,7 @@ impl fmt::Display for BBInstrIndex {
 }
 
 fn pretty_source_loc(source_loc: &DebugLoc) -> String {
-    let pretty_directory = match &source_loc.directory {
-        Some(dir) => dir,
-        None => "",
-    };
-    let need_slash = match &source_loc.directory {
-        Some(dir) => !dir.is_empty() && !dir.ends_with('/') && !source_loc.filename.starts_with('/'),
-        None => false,
-    };
-    let pretty_filename = match &source_loc.filename as &str {
-        "" => "<no filename available>",
-        filename if !pretty_directory.is_empty() => {
-            filename.trim_start_matches(pretty_directory)
-        },
-        filename => &filename,
-    };
-    let pretty_column = match source_loc.col {
-        Some(col) => format!(", col {}", col),
-        None => String::new(),
-    };
-    format!("{}{}{}, line {}{}",
-        pretty_directory, if need_slash { "/" } else { "" }, pretty_filename,
-        source_loc.line, pretty_column,
-    )
+    source_loc.to_string()
 }
 
 impl<'p> fmt::Debug for LocationDescription<'p> {
