@@ -18,7 +18,7 @@ itertools = "0.8.2"
 reduce = "0.1"
 cpp_demangle = "0.2"
 rustc-demangle = "0.1"
-log = { version = "0.4.8", features = ["max_level_debug", "release_max_level_info"] }
+log = "0.4.8"
 
 [dev-dependencies]
 env_logger = "0.6.2"

@@ -1474,9 +1474,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             err_msg.push_str("\nnote: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n");
         }
         err_msg.push_str("\nnote: to enable detailed logs, ensure that debug-level logging messages are visible.\n");
-        err_msg.push_str("  This requires a non-release build, and also appropriate configuration for your logging\n");
-        err_msg.push_str("  backend (e.g., env_logger, log4rs, etc).\n");
-        err_msg.push_str("  See the documentation for your chosen logging backend for help with configuration.\n");
+        err_msg.push_str("  See the documentation for your chosen logging backend (e.g., env_logger, log4rs, etc)\n");
+        err_msg.push_str("  for help with configuration.\n");
         err_msg.push_str("\n");
         err_msg
     }
