@@ -359,6 +359,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
         fhooks.add("exit", &abort_hook);
         fhooks.add_rust_demangled("std::panicking::begin_panic", &abort_hook);
         fhooks.add_rust_demangled("core::panicking::panic", &abort_hook);
+        fhooks.add_rust_demangled("core::panicking::panic_bounds_check", &abort_hook);
         fhooks.add_rust_demangled("core::result::unwrap_failed", &abort_hook);
         fhooks.add_rust_demangled("core::slice::slice_index_len_fail", &abort_hook);
         fhooks.add_rust_demangled("core::slice::slice_index_order_fail", &abort_hook);
