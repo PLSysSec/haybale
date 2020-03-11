@@ -17,7 +17,8 @@ use std::convert::TryFrom;
 ///
 /// Returns `addr` as a `BV`. Most callers probably won't need this.
 ///
-/// Respects the `state.config.concretize_memcpy_lengths` setting.
+/// Respects the `state.config.concretize_memcpy_lengths` and
+/// `state.config.max_memcpy_length` settings.
 pub fn memset<B: Backend>(state: &mut State<B>, addr: &Operand, val: &Operand, num_bytes: &Operand) -> Result<B::BV> {
     let addr = state.operand_to_bv(addr)?;
     let val = {
@@ -75,7 +76,8 @@ pub fn memset<B: Backend>(state: &mut State<B>, addr: &Operand, val: &Operand, n
 ///
 /// Returns `dest` as a `BV`. Most callers probably won't need this.
 ///
-/// Respects the `state.config.concretize_memcpy_lengths` setting.
+/// Respects the `state.config.concretize_memcpy_lengths` and
+/// `state.config.max_memcpy_length` settings.
 pub fn memcpy<B: Backend>(state: &mut State<B>, dest: &Operand, src: &Operand, num_bytes: &Operand) -> Result<B::BV> {
     let dest = state.operand_to_bv(&dest)?;
     let src = state.operand_to_bv(&src)?;
