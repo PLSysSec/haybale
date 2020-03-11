@@ -186,6 +186,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Instruction::BitCast(bitcast) => self.symex_cast_op(bitcast),
                     Instruction::Phi(phi) => self.symex_phi(phi),
                     Instruction::Select(select) => self.symex_select(select),
+                    Instruction::CmpXchg(cmpxchg) => self.symex_cmpxchg(cmpxchg),
                     Instruction::Call(call) => match self.symex_call(call) {
                         Err(e) => Err(e),
                         Ok(None) => Ok(()),
@@ -1663,6 +1664,43 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             }
             ty => Err(Error::MalformedInstruction(format!("Expected select condition to be i1 or vector of i1, but got {:?}", ty))),
         }
+    }
+
+    fn symex_cmpxchg(&mut self, cmpxchg: &'p instruction::CmpXchg) -> Result<()> {
+        debug!("Symexing cmpxchg {:?}", cmpxchg);
+        let main_ty = {
+            let expected_ty = cmpxchg.expected.get_type();
+            let replacement_ty = cmpxchg.replacement.get_type();
+            if expected_ty != replacement_ty {
+                return Err(Error::MalformedInstruction(format!("Expected cmpxchg 'expected' and 'replacement' to be the same type, but their types are {:?} and {:?}", expected_ty, replacement_ty)));
+            }
+            expected_ty
+        };
+        let result_ty = cmpxchg.get_type();
+        match result_ty {
+            Type::StructType { element_types, .. } => {
+                if element_types.len() != 2 {
+                    return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct of 2 elements, got a struct of {} elements: {:?}", element_types.len(), element_types)));
+                }
+                if element_types[0] != main_ty {
+                    return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct with first element equal to the expected/replacement type. Instead, first element of return type is {:?} while expected/replacement type is {:?}", element_types[0], main_ty)));
+                }
+                if element_types[1] != (Type::IntegerType { bits: 1 }) {
+                    return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct with second element an i1; got second element {:?}", element_types[1])));
+                }
+            },
+            _ => return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct, got {:?}", result_ty))),
+        }
+
+        let addr = self.state.operand_to_bv(&cmpxchg.address)?;
+        let expected = self.state.operand_to_bv(&cmpxchg.expected)?;
+        let replacement = self.state.operand_to_bv(&cmpxchg.replacement)?;
+
+        let read_value = self.state.read(&addr, expected.get_width())?;
+        let match_flag = read_value._eq(&expected);
+        self.state.write(&addr, match_flag.cond_bv(&replacement, &read_value))?;
+
+        self.state.record_bv_result(cmpxchg, match_flag.concat(&read_value))
     }
 }
 
