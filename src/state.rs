@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::alloc::Alloc;
 use crate::backend::*;
-use crate::config::Config;
+use crate::config::{Config, NullPointerChecking};
 use crate::demangling::Demangling;
 use crate::error::*;
 use crate::function_hooks::{self, FunctionHooks};
@@ -56,7 +56,7 @@ pub struct State<'p, B: Backend> {
     stack: Vec<StackFrame<'p, B::BV>>,
     /// These backtrack points are places where execution can be resumed later
     /// (efficiently, thanks to the incremental solving capabilities of Boolector).
-    backtrack_points: Vec<BacktrackPoint<'p, B>>,
+    backtrack_points: RefCell<Vec<BacktrackPoint<'p, B>>>,
     /// Log of the basic blocks which have been executed to get to this point
     path: Vec<PathEntry<'p>>,
     /// Memory watchpoints (segments of memory to log reads/writes of).
@@ -350,7 +350,15 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         let mut state = Self {
             cur_loc: start_loc.clone(),
             varmap: VarMap::new(solver.clone(), config.loop_bound),
-            mem: RefCell::new(Memory::new_uninitialized(solver.clone(), config.null_detection, None)),
+            mem: RefCell::new(Memory::new_uninitialized(
+                solver.clone(),
+                match config.null_pointer_checking {
+                    NullPointerChecking::Simple => true,
+                    NullPointerChecking::SplitPath => true,
+                    NullPointerChecking::None => false,
+                },
+                None)
+            ),
             alloc: Alloc::new(),
             global_allocations: GlobalAllocations::new(),
             intrinsic_hooks: {
@@ -376,7 +384,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 intrinsic_hooks
             },
             stack: Vec::new(),
-            backtrack_points: Vec::new(),
+            backtrack_points: RefCell::new(Vec::new()),
             path: Vec::new(),
             mem_watchpoints: config.initial_mem_watchpoints.clone().into_iter().collect(),
             function_ptr_cache: HashMap::new(),
@@ -1084,7 +1092,22 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Read a value `bits` bits long from memory at `addr`.
     /// Note that `bits` can be arbitrarily large.
     pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
-        let retval = self.mem.borrow().read(addr, bits)?;
+        let retval = match self.mem.borrow().read(addr, bits) {
+            Ok(val) => val,
+            e@Err(Error::NullPointerDereference) => {
+                if self.config.null_pointer_checking == NullPointerChecking::SplitPath {
+                    // save a backtracking point to re-execute the current
+                    // instruction with the address constrained to be non-null,
+                    // and continue from there
+                    self.save_backtracking_point_at_location(
+                        self.cur_loc.clone(),
+                        addr._ne(&self.zero(addr.get_width()))
+                    );
+                }
+                return e;  // report the null-pointer dereference
+            },
+            e@Err(_) => return e,  // propagate any other kind of error
+        };
         for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(addr, bits)? {
             let pretty_loc = if self.config.print_module_name {
                 self.cur_loc.to_string_with_module()
@@ -1109,7 +1132,22 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// have this
     fn write_without_mut(&self, addr: &B::BV, val: B::BV) -> Result<()> {
         let write_width = val.get_width();
-        self.mem.borrow_mut().write(addr, val)?;
+        match self.mem.borrow_mut().write(addr, val) {
+            Ok(()) => (),
+            e@Err(Error::NullPointerDereference) => {
+                if self.config.null_pointer_checking == NullPointerChecking::SplitPath {
+                    // save a backtracking point to re-execute the current
+                    // instruction with the address constrained to be non-null,
+                    // and continue from there
+                    self.save_backtracking_point_at_location(
+                        self.cur_loc.clone(),
+                        addr._ne(&self.zero(addr.get_width()))
+                    );
+                }
+                return e;  // report the null-pointer dereference
+            },
+            e@Err(_) => return e,  // propagate any other kind of error
+        };
         for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(addr, write_width)? {
             let pretty_loc = if self.config.print_module_name {
                 self.cur_loc.to_string_with_module()
@@ -1258,7 +1296,6 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// The constraint will be added only if we end up backtracking to this point, and only then.
     pub fn save_backtracking_point(&mut self, bb_to_enter: &Name, constraint: B::BV) {
         debug!("Saving a backtracking point, which would enter bb {:?} with constraint {:?}", bb_to_enter, constraint);
-        self.solver.push(1);
         let bb_to_enter = self.cur_loc.func.get_bb_by_name(&bb_to_enter)
             .unwrap_or_else(|| panic!("Failed to find bb named {} in function {:?}", bb_to_enter, self.cur_loc.func.name));
         let backtrack_loc = Location {
@@ -1268,8 +1305,18 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             instr: BBInstrIndex::Instr(0),
             source_loc: None,
         };
-        self.backtrack_points.push(BacktrackPoint {
-            loc: backtrack_loc,
+        self.save_backtracking_point_at_location(backtrack_loc, constraint);
+    }
+
+    /// Internal version of `save_backtracking_point()` which takes an arbitrary
+    /// `Location` instead of just the basic block to start at.
+    ///
+    /// Also it doesn't require `&mut self`. This allows us to save backtracking
+    /// points even when we're inside methods that only have `&self`.
+    fn save_backtracking_point_at_location(&self, loc_to_start_at: Location<'p>, constraint: B::BV) {
+        self.solver.push(1);
+        self.backtrack_points.borrow_mut().push(BacktrackPoint {
+            loc: loc_to_start_at,
             stack: self.stack.clone(),
             constraint,
             varmap: self.varmap.clone(),
@@ -1281,7 +1328,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// returns `Ok(true)` if the operation was successful, `Ok(false)` if there are
     /// no saved backtracking points, or `Err` for other errors
     pub fn revert_to_backtracking_point(&mut self) -> Result<bool> {
-        if let Some(bp) = self.backtrack_points.pop() {
+        if let Some(bp) = self.backtrack_points.borrow_mut().pop() {
             debug!("Reverting to backtracking point {}", bp);
             self.solver.pop(1);
             self.varmap = bp.varmap;
@@ -1298,7 +1345,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// returns the number of saved backtracking points
     pub fn count_backtracking_points(&self) -> usize {
-        self.backtrack_points.len()
+        self.backtrack_points.borrow().len()
     }
 
     /// returns a `String` containing a formatted view of the current backtrace

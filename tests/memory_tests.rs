@@ -1,4 +1,5 @@
 use haybale::*;
+use haybale::config::NullPointerChecking;
 use std::path::Path;
 
 fn init_logging() {
@@ -66,7 +67,7 @@ fn array() {
     init_logging();
     let proj = get_project();
     let mut config = Config::default();
-    config.null_detection = false;  // otherwise this test fails, as ptr[10] could be NULL for the correct value of ptr
+    config.null_pointer_checking = NullPointerChecking::None;  // otherwise this test fails, as ptr[10] could be NULL for the correct value of ptr
     let args = find_zero_of_func(funcname, &proj, config)
             .unwrap_or_else(|r| panic!("{}", r))
             .expect("Failed to find zero of the function");
@@ -80,7 +81,7 @@ fn pointer_arith() {
     init_logging();
     let proj = get_project();
     let mut config = Config::default();
-    config.null_detection = false;  // otherwise this test fails, as e.g. ptr[2] or ptr[5] or something could be NULL, for the correct value of ptr
+    config.null_pointer_checking = NullPointerChecking::None;  // otherwise this test fails, as e.g. ptr[2] or ptr[5] or something could be NULL, for the correct value of ptr
     let args = find_zero_of_func(funcname, &proj, config)
             .unwrap_or_else(|r| panic!("{}", r))
             .expect("Failed to find zero of the function");

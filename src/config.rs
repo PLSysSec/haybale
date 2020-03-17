@@ -68,12 +68,11 @@ pub struct Config<'p, B> where B: Backend {
     /// Default is 300 seconds (5 minutes).
     pub solver_query_timeout: Option<Duration>,
 
-    /// If `true`, all memory accesses will be checked to ensure their addresses
-    /// cannot be `NULL`, throwing `Error::NullPointerDereference` if `NULL` is a
-    /// possible solution for the address.
+    /// Should we check each memory access for possible `NULL` dereference,
+    /// and if so, how should we report any errors?
     ///
-    /// Default is `true`.
-    pub null_detection: bool,
+    /// Default is `NullPointerChecking::Simple`.
+    pub null_pointer_checking: NullPointerChecking,
 
     /// When encountering a `memcpy`, `memset`, or `memmove` with multiple
     /// possible lengths, how (if at all) should we concretize the length?
@@ -202,6 +201,27 @@ pub struct Config<'p, B> where B: Backend {
     pub print_module_name: bool,
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum NullPointerChecking {
+    /// All memory accesses will be checked to ensure their addresses cannot be
+    /// `NULL`. If `NULL` is a possible solution for the address of a memory
+    /// access, we will return `Error::NullPointerDereference` and not continue
+    /// along the path.
+    Simple,
+
+    /// All memory accesses will be checked to ensure their addresses cannot be
+    /// `NULL`. If `NULL` is a possible solution for the address of a memory
+    /// access, but not the only possible solution, we will split into two paths:
+    /// one in which the address is constrained to be `NULL`, and which returns
+    /// `Error::NullPointerDereference`; and another in which the address is
+    /// constrained to be non-`NULL`, and which will continue execution.
+    SplitPath,
+
+    /// Memory accesses will not be checked for `NULL` addresses. This may result
+    /// in fewer solver queries and thus improved performance for some workloads.
+    None,
+}
+
 /// Enum used for the `concretize_memcpy_lengths` option in `Config`.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Concretize {
@@ -269,7 +289,7 @@ impl<'p, B: Backend> Default for Config<'p, B> {
             loop_bound: 10,
             max_callstack_depth: None,
             solver_query_timeout: Some(Duration::from_secs(300)),
-            null_detection: true,
+            null_pointer_checking: NullPointerChecking::Simple,
             concretize_memcpy_lengths: Concretize::Symbolic,
             max_memcpy_length: None,
             squash_unsats: true,
