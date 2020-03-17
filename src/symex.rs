@@ -223,7 +223,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Terminator::Switch(switch) => self.symex_switch(switch),
             Terminator::Invoke(invoke) => self.symex_invoke(invoke),
             Terminator::Resume(resume) => self.symex_resume(resume),
-            Terminator::Unreachable(_) => Err(Error::OtherError("Reached an LLVM 'Unreachable' instruction".to_owned())),
+            Terminator::Unreachable(_) => Err(Error::UnreachableInstruction),
             _ => Err(Error::UnsupportedInstruction(format!("terminator {:?}", term))),
         }
     }

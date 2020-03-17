@@ -28,6 +28,8 @@ pub enum Error {
     UnsupportedInstruction(String),
     /// Encountered an LLVM instruction which was malformed, or at least didn't conform to our expected invariants
     MalformedInstruction(String),
+    /// Reached an LLVM `Unreachable` instruction
+    UnreachableInstruction,
     /// Some kind of error which doesn't fall into one of the above categories
     OtherError(String),
 }
@@ -49,6 +51,8 @@ impl fmt::Display for Error {
                 write!(f, "`UnsupportedInstruction`: encountered an LLVM instruction which is not currently supported: {}", details),
             Error::MalformedInstruction(details) =>
                 write!(f, "`MalformedInstruction`: encountered an LLVM instruction which was malformed, or at least didn't conform to our expected invariants: {}", details),
+            Error::UnreachableInstruction =>
+                write!(f, "`UnreachableInstruction`: Reached an LLVM 'Unreachable' instruction"),
             Error::OtherError(details) =>
                 write!(f, "`OtherError`: {}", details),
         }
