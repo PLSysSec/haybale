@@ -426,7 +426,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         let in_el_size = in_vector_size / num_elements;
         let in_scalars = (0 .. num_elements).map(|i| in_vector.slice((i+1)*in_el_size - 1, i*in_el_size));
         let out_scalars = in_scalars.map(|s| op(&s));
-        out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::OtherError("Vector operation with 0 elements".to_owned()))
+        out_scalars
+            .reduce(|a,b| b.concat(&a))
+            .ok_or_else(|| Error::MalformedInstruction("Vector operation with 0 elements".to_owned()))  // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
     }
 
     // Apply the given binary scalar operation to a vector
@@ -444,7 +446,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         let in_scalars_0 = (0 .. num_elements).map(|i| in_vector_0.slice((i+1)*in_el_size - 1, i*in_el_size));
         let in_scalars_1 = (0 .. num_elements).map(|i| in_vector_1.slice((i+1)*in_el_size - 1, i*in_el_size));
         let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0,s1)| op(&s0, &s1));
-        out_scalars.reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned()))
+        out_scalars
+            .reduce(|a,b| b.concat(&a))
+            .ok_or_else(|| Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned()))  // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
     }
 
     fn symex_binop(&mut self, bop: &instruction::groups::BinaryOp) -> Result<()> {
