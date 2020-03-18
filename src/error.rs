@@ -34,7 +34,12 @@ pub enum Error {
     /// because it has a possible solution (the `u64` here) which points to
     /// something that's not a function
     FailedToResolveFunctionPointer(u64),
-    /// Some kind of error which doesn't fall into one of the above categories
+    /// The hook for some function returned a value which didn't match the
+    /// function return type: for instance, a value of the wrong size.
+    /// The `String` here just describes the error
+    HookReturnValueMismatch(String),
+    /// Some kind of error which doesn't fall into one of the above categories.
+    /// The `String` here describes the error
     OtherError(String),
 }
 
@@ -59,6 +64,8 @@ impl fmt::Display for Error {
                 write!(f, "`UnreachableInstruction`: Reached an LLVM 'Unreachable' instruction"),
             Error::FailedToResolveFunctionPointer(solution) =>
                 write!(f, "`FailedToResolveFunctionPointer`: Can't resolve a symbolically-valued function pointer, because one possible solution for it ({:#x}) points to something that's not a function", solution),
+            Error::HookReturnValueMismatch(details) =>
+                write!(f, "`HookReturnValueMismatch`: {}", details),
             Error::OtherError(details) =>
                 write!(f, "`OtherError`: {}", details),
         }

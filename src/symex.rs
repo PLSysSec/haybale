@@ -1189,7 +1189,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         match hook.call_hook(&self.project, &mut self.state, call)? {
             ReturnValue::ReturnVoid => {
                 if call.get_type() != Type::VoidType {
-                    Err(Error::OtherError(format!("Hook for {:?} returned void but call needs a return value", hooked_funcname)))
+                    Err(Error::HookReturnValueMismatch(format!("Hook for {:?} returned void but call needs a return value", hooked_funcname)))
                 } else {
                     Ok(ReturnValue::ReturnVoid)
                 }
@@ -1197,11 +1197,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             ReturnValue::Return(retval) => {
                 let ret_type = call.get_type();
                 if ret_type == Type::VoidType {
-                    Err(Error::OtherError(format!("Hook for {:?} returned a value but call is void-typed", hooked_funcname)))
+                    Err(Error::HookReturnValueMismatch(format!("Hook for {:?} returned a value but call is void-typed", hooked_funcname)))
                 } else {
                     let retwidth = size(&ret_type);
                     if retval.get_width() != retwidth as u32 {
-                        Err(Error::OtherError(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", hooked_funcname, retval.get_width(), retwidth)))
+                        Err(Error::HookReturnValueMismatch(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", hooked_funcname, retval.get_width(), retwidth)))
                     } else {
                         Ok(ReturnValue::Return(retval))
                     }
