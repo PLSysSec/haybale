@@ -1007,8 +1007,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Possible errors:
     ///   - `Error::SolverError` if the solver query fails
-    ///   - `Error::OtherError` if it finds that it is possible that the `BV`
-    ///     points to something that's not a `Function` in the `Project`
+    ///   - `Error::FailedToResolveFunctionPointer` if it finds that it is possible
+    ///     that the `BV` points to something that's not a `Function` in the
+    ///     `Project`
     pub(crate) fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<Callable<'p, B>>> {
         if n == 0 {
             unimplemented!("n == 0 in interpret_as_function_ptr")
@@ -1040,7 +1041,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
         let callables = addrs.into_iter().map(|addr| {
             self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
-                .ok_or_else(|| Error::OtherError(format!("This BV can't be interpreted as a function pointer: it has a possible solution {:?} which points to something that's not a function.\n  The BV was: {:?}", addr, bv)))
+                .ok_or_else(|| Error::FailedToResolveFunctionPointer(addr))
         }).collect::<Result<HashSet<_>>>()?;
         if callables.len() > n {
             Ok(PossibleSolutions::AtLeast(callables))

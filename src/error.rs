@@ -30,6 +30,10 @@ pub enum Error {
     MalformedInstruction(String),
     /// Reached an LLVM `Unreachable` instruction
     UnreachableInstruction,
+    /// Failed to interpret some symbolic value (`BV`) as a function pointer,
+    /// because it has a possible solution (the `u64` here) which points to
+    /// something that's not a function
+    FailedToResolveFunctionPointer(u64),
     /// Some kind of error which doesn't fall into one of the above categories
     OtherError(String),
 }
@@ -53,6 +57,8 @@ impl fmt::Display for Error {
                 write!(f, "`MalformedInstruction`: encountered an LLVM instruction which was malformed, or at least didn't conform to our expected invariants: {}", details),
             Error::UnreachableInstruction =>
                 write!(f, "`UnreachableInstruction`: Reached an LLVM 'Unreachable' instruction"),
+            Error::FailedToResolveFunctionPointer(solution) =>
+                write!(f, "`FailedToResolveFunctionPointer`: Can't resolve a symbolically-valued function pointer, because one possible solution for it ({:#x}) points to something that's not a function", solution),
             Error::OtherError(details) =>
                 write!(f, "`OtherError`: {}", details),
         }
