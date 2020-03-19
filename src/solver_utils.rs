@@ -535,7 +535,7 @@ mod tests {
 
         // check that there are now exactly two solutions
         let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly([4,5].into_iter().copied().collect())));
+        assert_eq!(solutions, Some(PossibleSolutions::Exactly([4,5].iter().copied().collect())));
 
         // add x < 5 constraint
         x.ult(&BV::from_u64(btor.clone(), 5, 64)).assert();
