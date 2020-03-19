@@ -1133,7 +1133,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// have this
     fn write_without_mut(&self, addr: &B::BV, val: B::BV) -> Result<()> {
         let write_width = val.get_width();
-        match self.mem.borrow_mut().write(addr, val) {
+        let result = self.mem.borrow_mut().write(addr, val);
+        // we do this awkward `let result` / `match result` because it forces
+        // the mutable borrow of self.mem to end, which is necessary because
+        // save_backtracking_point_at_location requires a borrow of self.mem
+        match result {
             Ok(()) => (),
             e@Err(Error::NullPointerDereference) => {
                 if self.config.null_pointer_checking == NullPointerChecking::SplitPath {
