@@ -21,18 +21,22 @@ use std::convert::TryFrom;
 /// `state.config.max_memcpy_length` settings.
 pub fn memset<B: Backend>(state: &mut State<B>, addr: &Operand, val: &Operand, num_bytes: &Operand) -> Result<B::BV> {
     let addr = state.operand_to_bv(addr)?;
-    let val = {
-        let mut val = state.operand_to_bv(val)?;
-        if val.get_width() > 8 {
-            // some memset declarations have a larger type here, but it's still intended to be a byte value; we ignore any upper bits
-            val = val.slice(7, 0);
-        }
-        val
-    };
-
+    let val = state.operand_to_bv(val)?;
     let num_bytes = state.operand_to_bv(num_bytes)?;
 
-    match get_memcpy_length(state, &num_bytes, &state.config.concretize_memcpy_lengths)? {
+    memset_bv(state, &addr, &val, &num_bytes)
+}
+
+/// Just like `memset()` above, but takes `BV`s instead of `Operand`s for its arguments.
+pub fn memset_bv<B: Backend>(state: &mut State<B>, addr: &B::BV, val: &B::BV, num_bytes: &B::BV) -> Result<B::BV> {
+    let val = if val.get_width() > 8 {
+        // some memset declarations have a larger type here, but it's still intended to be a byte value; we ignore any upper bits
+        val.slice(7, 0)
+    } else {
+        val.clone()
+    };
+
+    match get_memcpy_length(state, num_bytes, &state.config.concretize_memcpy_lengths)? {
         MemcpyLength::Concrete(0) => debug!("Ignoring a memset of size 0 bytes"),
         MemcpyLength::Concrete(length_bytes) => {
             debug!("Processing a memset of size {} bytes", length_bytes);
@@ -47,10 +51,10 @@ pub fn memset<B: Backend>(state: &mut State<B>, addr: &Operand, val: &Operand, n
             } else {
                 std::iter::repeat(val).take(length_bytes as usize).reduce(|a,b| a.concat(&b)).unwrap()
             };
-            state.write(&addr, big_val)?;
+            state.write(addr, big_val)?;
         },
         MemcpyLength::Symbolic => {
-            let max_num_bytes = state.max_possible_solution_for_bv_as_u64(&num_bytes)?.unwrap();
+            let max_num_bytes = state.max_possible_solution_for_bv_as_u64(num_bytes)?.unwrap();
             if max_num_bytes > 0x4000 {
                 warn!("Encountered a memset with symbolic size, up to {} bytes. This may be slow.", max_num_bytes);
             } else {
@@ -68,7 +72,7 @@ pub fn memset<B: Backend>(state: &mut State<B>, addr: &Operand, val: &Operand, n
         },
     }
 
-    Ok(addr)
+    Ok(addr.clone())
 }
 
 /// Copies `num_bytes` bytes of memory from address `src` to address `dest`.
@@ -81,9 +85,13 @@ pub fn memset<B: Backend>(state: &mut State<B>, addr: &Operand, val: &Operand, n
 pub fn memcpy<B: Backend>(state: &mut State<B>, dest: &Operand, src: &Operand, num_bytes: &Operand) -> Result<B::BV> {
     let dest = state.operand_to_bv(&dest)?;
     let src = state.operand_to_bv(&src)?;
-
     let num_bytes = state.operand_to_bv(num_bytes)?;
 
+    memcpy_bv(state, &dest, &src, &num_bytes)
+}
+
+/// Just like `memcpy()` above, but takes `BV`s instead of `Operand`s for its arguments.
+pub fn memcpy_bv<B: Backend>(state: &mut State<B>, dest: &B::BV, src: &B::BV, num_bytes: &B::BV) -> Result<B::BV> {
     match get_memcpy_length(state, &num_bytes, &state.config.concretize_memcpy_lengths)? {
         MemcpyLength::Concrete(0) => debug!("Ignoring a memcpy or memmove of size 0 bytes"),
         MemcpyLength::Concrete(length_bytes) => {
@@ -114,7 +122,7 @@ pub fn memcpy<B: Backend>(state: &mut State<B>, dest: &Operand, src: &Operand, n
         },
     }
 
-    Ok(dest)
+    Ok(dest.clone())
 }
 
 enum MemcpyLength {
