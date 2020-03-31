@@ -1,3 +1,5 @@
+//! Functions and structures for defining and activating instruction callbacks
+
 use crate::backend::Backend;
 use crate::error::Result;
 use crate::state::State;
