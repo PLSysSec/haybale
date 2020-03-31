@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.3.2"
+haybale = "0.4.0"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
@@ -280,6 +280,41 @@ solver (via the Rust [`boolector`] crate).
 
 ## Changelog
 
+### Version 0.4.0 (Mar 31, 2020)
+
+New features:
+- Support LLVM `cmpxchg` instructions
+- Support for instruction callbacks - see [`Config.callbacks`]. This allows
+you to take arbitrary actions based on the instruction about to be processed.
+
+Config:
+- `Config.null_detection` has been renamed to
+[`Config.null_pointer_checking`], and its type has been changed to allow for
+additional options.
+- `Config::new()` now takes no parameters. It is now the same as
+`Config::default()` except that it comes with no function hooks.
+
+Other utility functions/methods:
+- The `hook_utils` module now includes two new functions [`memset_bv`] and
+[`memcpy_bv`].
+- [`layout::size_opaque_aware`] now returns an `Option` rather than panicking.
+- The `to_string_*` methods on [`Location`] are now public, rather than
+internal to the crate, allowing users more control over the `String`
+representation of a `Location`.
+
+Error handling:
+- [`Error`] has three new variants `UnreachableInstruction`,
+`FailedToResolveFunctionPointer`, and `HookReturnValueMismatch`. All of these
+were previously reported as `Error::OtherError`, but now have dedicated
+variants.
+- `Error::LoopBoundExceeded` now also includes the value of the loop bound
+which was exceeded.
+
+Other notes:
+- `haybale` no longer selects features of the `log` crate. This allows
+downstream users to select these features or not, and in particular, allows
+users to enable debug logging in release builds.
+
 ### Version 0.3.2 (Feb 28, 2020)
 
 - New option [`Config.max_callstack_depth`] allows you to limit the callstack
@@ -483,6 +518,7 @@ Initial release!
 [`ReturnValue`]: https://PLSysSec.github.io/haybale/haybale/enum.ReturnValue.html
 [`Error`]: https://PLSysSec.github.io/haybale/haybale/enum.Error.html
 [`State`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html
+[`Location`]: https://PLSysSec.github.io/haybale/haybale/struct.Location.html
 [`Project::get_inner_struct_type_from_named()`]: https://PLSysSec.github.io/haybale/haybale/struct.Project.html#method.get_inner_struct_type_from_named
 [`State::add_mem_watchpoint()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.add_mem_watchpoint
 [`FunctionHooks::add_cpp_demangled()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_cpp_demangled
@@ -501,5 +537,10 @@ Initial release!
 [`Config.squash_unsats`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.squash_unsats
 [`Config.max_callstack_depth`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.max_callstack_depth
 [`Config.max_memcpy_length`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.max_memcpy_length
+[`Config.callbacks`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.callbacks
+[`Config.null_pointer_checking`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.null_pointer_checking
 [`backend::BV`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.BV.html
 [`State.full_error_message_with_context()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.full_error_message_with_context
+[`memcpy_bv`]: https://PLSysSec.github.io/haybale/haybale/hook_utils/fn.memcpy_bv.html
+[`memset_bv`]: https://PLSysSec.github.io/haybale/haybale/hook_utils/fn.memset_bv.html
+[`layout::size_opaque_aware`]: https://PLSysSec.github.io/haybale/haybale/layout/fn.size_opaque_aware.html
