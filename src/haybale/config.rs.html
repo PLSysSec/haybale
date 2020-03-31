@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source to the Rust file `src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs.html -- source</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../haybale/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">  1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source to the Rust file `src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs.html -- source</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../haybale/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">  1</span>
 <span id="2">  2</span>
 <span id="3">  3</span>
 <span id="4">  4</span>
@@ -297,10 +297,17 @@
 <span id="297">297</span>
 <span id="298">298</span>
 <span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! The `Config` structure for configuring `haybale`, and other associated definitions</span>
 
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="ident">Backend</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">callbacks</span>::<span class="ident">Callbacks</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">demangling</span>::<span class="ident">Demangling</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">FunctionHooks</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">watchpoints</span>::<span class="ident">Watchpoint</span>;
@@ -367,12 +374,11 @@
     <span class="doccomment">/// Default is 300 seconds (5 minutes).</span>
     <span class="kw">pub</span> <span class="ident">solver_query_timeout</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Duration</span><span class="op">&gt;</span>,
 
-    <span class="doccomment">/// If `true`, all memory accesses will be checked to ensure their addresses</span>
-    <span class="doccomment">/// cannot be `NULL`, throwing `Error::NullPointerDereference` if `NULL` is a</span>
-    <span class="doccomment">/// possible solution for the address.</span>
+    <span class="doccomment">/// Should we check each memory access for possible `NULL` dereference,</span>
+    <span class="doccomment">/// and if so, how should we report any errors?</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// Default is `true`.</span>
-    <span class="kw">pub</span> <span class="ident">null_detection</span>: <span class="ident">bool</span>,
+    <span class="doccomment">/// Default is `NullPointerChecking::Simple`.</span>
+    <span class="kw">pub</span> <span class="ident">null_pointer_checking</span>: <span class="ident">NullPointerChecking</span>,
 
     <span class="doccomment">/// When encountering a `memcpy`, `memset`, or `memmove` with multiple</span>
     <span class="doccomment">/// possible lengths, how (if at all) should we concretize the length?</span>
@@ -437,6 +443,12 @@
     <span class="doccomment">/// see docs there for more details.</span>
     <span class="kw">pub</span> <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
 
+    <span class="doccomment">/// The set of currently active callbacks; see</span>
+    <span class="doccomment">/// [`Callbacks`](../callbacks/struct.Callbacks.html) for more details.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Default is no callbacks.</span>
+    <span class="kw">pub</span> <span class="ident">callbacks</span>: <span class="ident">Callbacks</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+
     <span class="doccomment">/// The initial memory watchpoints when a `State` is created (mapping from</span>
     <span class="doccomment">/// watchpoint name to the actual watchpoint).</span>
     <span class="doccomment">///</span>
@@ -495,6 +507,27 @@
     <span class="kw">pub</span> <span class="ident">print_module_name</span>: <span class="ident">bool</span>,
 }
 
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
+<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">NullPointerChecking</span> {
+    <span class="doccomment">/// All memory accesses will be checked to ensure their addresses cannot be</span>
+    <span class="doccomment">/// `NULL`. If `NULL` is a possible solution for the address of a memory</span>
+    <span class="doccomment">/// access, we will return `Error::NullPointerDereference` and not continue</span>
+    <span class="doccomment">/// along the path.</span>
+    <span class="ident">Simple</span>,
+
+    <span class="doccomment">/// All memory accesses will be checked to ensure their addresses cannot be</span>
+    <span class="doccomment">/// `NULL`. If `NULL` is a possible solution for the address of a memory</span>
+    <span class="doccomment">/// access, but not the only possible solution, we will split into two paths:</span>
+    <span class="doccomment">/// one in which the address is constrained to be `NULL`, and which returns</span>
+    <span class="doccomment">/// `Error::NullPointerDereference`; and another in which the address is</span>
+    <span class="doccomment">/// constrained to be non-`NULL`, and which will continue execution.</span>
+    <span class="ident">SplitPath</span>,
+
+    <span class="doccomment">/// Memory accesses will not be checked for `NULL` addresses. This may result</span>
+    <span class="doccomment">/// in fewer solver queries and thus improved performance for some workloads.</span>
+    <span class="prelude-val">None</span>,
+}
+
 <span class="doccomment">/// Enum used for the `concretize_memcpy_lengths` option in `Config`.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Concretize</span> {
@@ -535,38 +568,16 @@
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> {
-    <span class="doccomment">/// Creates a new `Config` with the given `loop_bound`,</span>
-    <span class="doccomment">/// `solver_query_timeout`, `null_detection`, `concretize_memcpy_lengths`,</span>
-    <span class="doccomment">/// `squash_unsats`, and `trust_llvm_assumes` options; no function hooks or</span>
-    <span class="doccomment">/// memory watchpoints; and defaults for the other options.</span>
+    <span class="doccomment">/// Creates a new `Config` with defaults for all the options, except with</span>
+    <span class="doccomment">/// no function hooks.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// You may want to consider</span>
-    <span class="doccomment">/// [`Config::default()`](struct.Config.html#method.default), which provides</span>
-    <span class="doccomment">/// defaults for all parameters and comes with predefined hooks for common</span>
-    <span class="doccomment">/// functions.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
-        <span class="ident">loop_bound</span>: <span class="ident">usize</span>,
-        <span class="ident">solver_query_timeout</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Duration</span><span class="op">&gt;</span>,
-        <span class="ident">null_detection</span>: <span class="ident">bool</span>,
-        <span class="ident">concretize_memcpy_lengths</span>: <span class="ident">Concretize</span>,
-        <span class="ident">squash_unsats</span>: <span class="ident">bool</span>,
-        <span class="ident">trust_llvm_assumes</span>: <span class="ident">bool</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span> {
-            <span class="ident">loop_bound</span>,
-            <span class="ident">max_callstack_depth</span>: <span class="prelude-val">None</span>,
-            <span class="ident">solver_query_timeout</span>,
-            <span class="ident">null_detection</span>,
-            <span class="ident">concretize_memcpy_lengths</span>,
-            <span class="ident">max_memcpy_length</span>: <span class="prelude-val">None</span>,
-            <span class="ident">squash_unsats</span>,
-            <span class="ident">trust_llvm_assumes</span>,
-            <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span>::<span class="ident">new</span>(),
-            <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
-            <span class="ident">demangling</span>: <span class="prelude-val">None</span>,
-            <span class="ident">print_source_info</span>: <span class="bool-val">true</span>,
-            <span class="ident">print_module_name</span>: <span class="bool-val">true</span>,
-        }
+    <span class="doccomment">/// [`Config::default()`](struct.Config.html#method.default), which comes</span>
+    <span class="doccomment">/// with predefined hooks for common functions.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">config</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">default</span>();
+        <span class="ident">config</span>.<span class="ident">function_hooks</span> <span class="op">=</span> <span class="ident">FunctionHooks</span>::<span class="ident">new</span>();
+        <span class="ident">config</span>
     }
 }
 
@@ -584,12 +595,13 @@
             <span class="ident">loop_bound</span>: <span class="number">10</span>,
             <span class="ident">max_callstack_depth</span>: <span class="prelude-val">None</span>,
             <span class="ident">solver_query_timeout</span>: <span class="prelude-val">Some</span>(<span class="ident">Duration</span>::<span class="ident">from_secs</span>(<span class="number">300</span>)),
-            <span class="ident">null_detection</span>: <span class="bool-val">true</span>,
+            <span class="ident">null_pointer_checking</span>: <span class="ident">NullPointerChecking</span>::<span class="ident">Simple</span>,
             <span class="ident">concretize_memcpy_lengths</span>: <span class="ident">Concretize</span>::<span class="ident">Symbolic</span>,
             <span class="ident">max_memcpy_length</span>: <span class="prelude-val">None</span>,
             <span class="ident">squash_unsats</span>: <span class="bool-val">true</span>,
             <span class="ident">trust_llvm_assumes</span>: <span class="bool-val">true</span>,
             <span class="ident">function_hooks</span>: <span class="ident">FunctionHooks</span>::<span class="ident">default</span>(),
+            <span class="ident">callbacks</span>: <span class="ident">Callbacks</span>::<span class="ident">default</span>(),
             <span class="ident">initial_mem_watchpoints</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
             <span class="ident">demangling</span>: <span class="prelude-val">None</span>,
             <span class="ident">print_source_info</span>: <span class="bool-val">true</span>,

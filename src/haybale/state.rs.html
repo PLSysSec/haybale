@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source to the Rust file `src/state.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>state.rs.html -- source</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../haybale/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">   1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source to the Rust file `src/state.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>state.rs.html -- source</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../haybale/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">   1</span>
 <span id="2">   2</span>
 <span id="3">   3</span>
 <span id="4">   4</span>
@@ -1839,6 +1839,47 @@
 <span id="1839">1839</span>
 <span id="1840">1840</span>
 <span id="1841">1841</span>
+<span id="1842">1842</span>
+<span id="1843">1843</span>
+<span id="1844">1844</span>
+<span id="1845">1845</span>
+<span id="1846">1846</span>
+<span id="1847">1847</span>
+<span id="1848">1848</span>
+<span id="1849">1849</span>
+<span id="1850">1850</span>
+<span id="1851">1851</span>
+<span id="1852">1852</span>
+<span id="1853">1853</span>
+<span id="1854">1854</span>
+<span id="1855">1855</span>
+<span id="1856">1856</span>
+<span id="1857">1857</span>
+<span id="1858">1858</span>
+<span id="1859">1859</span>
+<span id="1860">1860</span>
+<span id="1861">1861</span>
+<span id="1862">1862</span>
+<span id="1863">1863</span>
+<span id="1864">1864</span>
+<span id="1865">1865</span>
+<span id="1866">1866</span>
+<span id="1867">1867</span>
+<span id="1868">1868</span>
+<span id="1869">1869</span>
+<span id="1870">1870</span>
+<span id="1871">1871</span>
+<span id="1872">1872</span>
+<span id="1873">1873</span>
+<span id="1874">1874</span>
+<span id="1875">1875</span>
+<span id="1876">1876</span>
+<span id="1877">1877</span>
+<span id="1878">1878</span>
+<span id="1879">1879</span>
+<span id="1880">1880</span>
+<span id="1881">1881</span>
+<span id="1882">1882</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">BVSolution</span>;
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">option</span>::{<span class="ident">BtorOption</span>, <span class="ident">ModelGen</span>};
@@ -1856,7 +1897,7 @@
 
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">Alloc</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="kw-2">*</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">config</span>::<span class="ident">Config</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">config</span>::{<span class="ident">Config</span>, <span class="ident">NullPointerChecking</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">demangling</span>::<span class="ident">Demangling</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::{<span class="self">self</span>, <span class="ident">FunctionHooks</span>};
@@ -1898,7 +1939,7 @@
     <span class="ident">stack</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">StackFrame</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="doccomment">/// These backtrack points are places where execution can be resumed later</span>
     <span class="doccomment">/// (efficiently, thanks to the incremental solving capabilities of Boolector).</span>
-    <span class="ident">backtrack_points</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">BacktrackPoint</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">backtrack_points</span>: <span class="ident">RefCell</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">BacktrackPoint</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="doccomment">/// Log of the basic blocks which have been executed to get to this point</span>
     <span class="ident">path</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PathEntry</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="doccomment">/// Memory watchpoints (segments of memory to log reads/writes of).</span>
@@ -1958,29 +1999,7 @@
 }
 
 <span class="kw">fn</span> <span class="ident">pretty_source_loc</span>(<span class="ident">source_loc</span>: <span class="kw-2">&amp;</span><span class="ident">DebugLoc</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
-    <span class="kw">let</span> <span class="ident">pretty_directory</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">source_loc</span>.<span class="ident">directory</span> {
-        <span class="prelude-val">Some</span>(<span class="ident">dir</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">dir</span>,
-        <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="string">&quot;&quot;</span>,
-    };
-    <span class="kw">let</span> <span class="ident">need_slash</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">source_loc</span>.<span class="ident">directory</span> {
-        <span class="prelude-val">Some</span>(<span class="ident">dir</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">dir</span>.<span class="ident">is_empty</span>() <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="op">!</span><span class="ident">dir</span>.<span class="ident">ends_with</span>(<span class="string">&#39;/&#39;</span>) <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="op">!</span><span class="ident">source_loc</span>.<span class="ident">filename</span>.<span class="ident">starts_with</span>(<span class="string">&#39;/&#39;</span>),
-        <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">false</span>,
-    };
-    <span class="kw">let</span> <span class="ident">pretty_filename</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">source_loc</span>.<span class="ident">filename</span> <span class="kw">as</span> <span class="kw-2">&amp;</span><span class="ident">str</span> {
-        <span class="string">&quot;&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="string">&quot;&lt;no filename available&gt;&quot;</span>,
-        <span class="ident">filename</span> <span class="kw">if</span> <span class="op">!</span><span class="ident">pretty_directory</span>.<span class="ident">is_empty</span>() <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="ident">filename</span>.<span class="ident">trim_start_matches</span>(<span class="ident">pretty_directory</span>)
-        },
-        <span class="ident">filename</span> <span class="op">=</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">filename</span>,
-    };
-    <span class="kw">let</span> <span class="ident">pretty_column</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">source_loc</span>.<span class="ident">col</span> {
-        <span class="prelude-val">Some</span>(<span class="ident">col</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;, col {}&quot;</span>, <span class="ident">col</span>),
-        <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">String</span>::<span class="ident">new</span>(),
-    };
-    <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}{}{}, line {}{}&quot;</span>,
-        <span class="ident">pretty_directory</span>, <span class="kw">if</span> <span class="ident">need_slash</span> { <span class="string">&quot;/&quot;</span> } <span class="kw">else</span> { <span class="string">&quot;&quot;</span> }, <span class="ident">pretty_filename</span>,
-        <span class="ident">source_loc</span>.<span class="ident">line</span>, <span class="ident">pretty_column</span>,
-    )
+    <span class="ident">source_loc</span>.<span class="ident">to_string</span>()
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="ident">Debug</span> <span class="kw">for</span> <span class="ident">LocationDescription</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
@@ -2074,17 +2093,27 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="ident">Debug</span> <span class="kw">for</span> <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">fmt</span>::<span class="ident">Formatter</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="prelude-ty">Result</span> {
-        <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;{}&quot;</span>, <span class="self">self</span>.<span class="ident">to_string_with_module</span>())  <span class="comment">// default to with-module, especially for a Debug representation</span>
+        <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;{{{}}}&quot;</span>, <span class="self">self</span>.<span class="ident">to_string_with_module</span>())  <span class="comment">// default to with-module, especially for a Debug representation</span>
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">to_string_with_module</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
-        <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{{{}: {}, bb {}, {}}}&quot;</span>, <span class="self">self</span>.<span class="ident">module</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">bb</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">instr</span>)
+    <span class="doccomment">/// Format this `Location` as a string, including the full module name</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_string_with_module</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
+        <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}: {}, bb {}, {}&quot;</span>, <span class="self">self</span>.<span class="ident">module</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">bb</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">instr</span>)
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">to_string_no_module</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
-        <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{{{}, bb {}, {}}}&quot;</span>, <span class="self">self</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">bb</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">instr</span>)
+    <span class="doccomment">/// Format this `Location` as a string, omitting the module name</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_string_no_module</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
+        <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}, bb {}, {}&quot;</span>, <span class="self">self</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">bb</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">instr</span>)
+    }
+
+    <span class="doccomment">/// Format this `Location` as a string, including the short module name. The</span>
+    <span class="doccomment">/// short module name is the part of the module name after the last `/`, if</span>
+    <span class="doccomment">/// any; or the full module name, if the module name does not contain a `/`.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_string_short_module</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
+        <span class="kw">let</span> <span class="ident">short_module_name</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">module</span>.<span class="ident">name</span>.<span class="ident">rsplit</span>(<span class="string">&#39;/&#39;</span>).<span class="ident">next</span>().<span class="ident">unwrap_or</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">module</span>.<span class="ident">name</span>);
+        <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}: {}, bb {}, {}&quot;</span>, <span class="ident">short_module_name</span>, <span class="self">self</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">bb</span>.<span class="ident">name</span>, <span class="self">self</span>.<span class="ident">instr</span>)
     }
 }
 
@@ -2204,7 +2233,15 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="self">Self</span> {
             <span class="ident">cur_loc</span>: <span class="ident">start_loc</span>.<span class="ident">clone</span>(),
             <span class="ident">varmap</span>: <span class="ident">VarMap</span>::<span class="ident">new</span>(<span class="ident">solver</span>.<span class="ident">clone</span>(), <span class="ident">config</span>.<span class="ident">loop_bound</span>),
-            <span class="ident">mem</span>: <span class="ident">RefCell</span>::<span class="ident">new</span>(<span class="ident">Memory</span>::<span class="ident">new_uninitialized</span>(<span class="ident">solver</span>.<span class="ident">clone</span>(), <span class="ident">config</span>.<span class="ident">null_detection</span>, <span class="prelude-val">None</span>)),
+            <span class="ident">mem</span>: <span class="ident">RefCell</span>::<span class="ident">new</span>(<span class="ident">Memory</span>::<span class="ident">new_uninitialized</span>(
+                <span class="ident">solver</span>.<span class="ident">clone</span>(),
+                <span class="kw">match</span> <span class="ident">config</span>.<span class="ident">null_pointer_checking</span> {
+                    <span class="ident">NullPointerChecking</span>::<span class="ident">Simple</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">true</span>,
+                    <span class="ident">NullPointerChecking</span>::<span class="ident">SplitPath</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">true</span>,
+                    <span class="ident">NullPointerChecking</span>::<span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">false</span>,
+                },
+                <span class="prelude-val">None</span>)
+            ),
             <span class="ident">alloc</span>: <span class="ident">Alloc</span>::<span class="ident">new</span>(),
             <span class="ident">global_allocations</span>: <span class="ident">GlobalAllocations</span>::<span class="ident">new</span>(),
             <span class="ident">intrinsic_hooks</span>: {
@@ -2230,7 +2267,7 @@
                 <span class="ident">intrinsic_hooks</span>
             },
             <span class="ident">stack</span>: <span class="ident">Vec</span>::<span class="ident">new</span>(),
-            <span class="ident">backtrack_points</span>: <span class="ident">Vec</span>::<span class="ident">new</span>(),
+            <span class="ident">backtrack_points</span>: <span class="ident">RefCell</span>::<span class="ident">new</span>(<span class="ident">Vec</span>::<span class="ident">new</span>()),
             <span class="ident">path</span>: <span class="ident">Vec</span>::<span class="ident">new</span>(),
             <span class="ident">mem_watchpoints</span>: <span class="ident">config</span>.<span class="ident">initial_mem_watchpoints</span>.<span class="ident">clone</span>().<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
             <span class="ident">function_ptr_cache</span>: <span class="ident">HashMap</span>::<span class="ident">new</span>(),
@@ -2268,7 +2305,8 @@
             <span class="comment">// definitions, since each global variable must have exactly one</span>
             <span class="comment">// definition. Hence the `filter()` above.</span>
             <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">PointerType</span> { <span class="ident">pointee_type</span>, .. } <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">var</span>.<span class="ident">ty</span> {
-                <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">pointee_type</span>, <span class="ident">project</span>);
+                <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">pointee_type</span>, <span class="ident">project</span>)
+                    .<span class="ident">expect</span>(<span class="string">&quot;Global variable has a struct type which is opaque in the entire Project&quot;</span>);
                 <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">size_bits</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
                     <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Global {:?} has size 0 bits; allocating 8 bits for it anyway&quot;</span>, <span class="ident">var</span>.<span class="ident">name</span>);
                     <span class="number">8</span>
@@ -2852,8 +2890,9 @@
     <span class="doccomment">///</span>
     <span class="doccomment">/// Possible errors:</span>
     <span class="doccomment">///   - `Error::SolverError` if the solver query fails</span>
-    <span class="doccomment">///   - `Error::OtherError` if it finds that it is possible that the `BV`</span>
-    <span class="doccomment">///     points to something that&#39;s not a `Function` in the `Project`</span>
+    <span class="doccomment">///   - `Error::FailedToResolveFunctionPointer` if it finds that it is possible</span>
+    <span class="doccomment">///     that the `BV` points to something that&#39;s not a `Function` in the</span>
+    <span class="doccomment">///     `Project`</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">interpret_as_function_ptr</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">bv</span>: <span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">n</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PossibleSolutions</span><span class="op">&lt;</span><span class="ident">Callable</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="ident">n</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
             <span class="macro">unimplemented</span><span class="macro">!</span>(<span class="string">&quot;n == 0 in interpret_as_function_ptr&quot;</span>)
@@ -2885,7 +2924,7 @@
 
         <span class="kw">let</span> <span class="ident">callables</span> <span class="op">=</span> <span class="ident">addrs</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">addr</span><span class="op">|</span> {
             <span class="self">self</span>.<span class="ident">global_allocations</span>.<span class="ident">get_func_for_address</span>(<span class="ident">addr</span>, <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>)
-                .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;This BV can&#39;t be interpreted as a function pointer: it has a possible solution {:?} which points to something that&#39;s not a function.\n  The BV was: {:?}&quot;</span>, <span class="ident">addr</span>, <span class="ident">bv</span>)))
+                .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">FailedToResolveFunctionPointer</span>(<span class="ident">addr</span>))
         }).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
         <span class="kw">if</span> <span class="ident">callables</span>.<span class="ident">len</span>() <span class="op">&gt;</span> <span class="ident">n</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>(<span class="ident">callables</span>))
@@ -2937,14 +2976,29 @@
     <span class="doccomment">/// Read a value `bits` bits long from memory at `addr`.</span>
     <span class="doccomment">/// Note that `bits` can be arbitrarily large.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">retval</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow</span>().<span class="ident">read</span>(<span class="ident">addr</span>, <span class="ident">bits</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">retval</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow</span>().<span class="ident">read</span>(<span class="ident">addr</span>, <span class="ident">bits</span>) {
+            <span class="prelude-val">Ok</span>(<span class="ident">val</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">val</span>,
+            <span class="ident">e</span>@<span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">NullPointerDereference</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">if</span> <span class="self">self</span>.<span class="ident">config</span>.<span class="ident">null_pointer_checking</span> <span class="op">=</span><span class="op">=</span> <span class="ident">NullPointerChecking</span>::<span class="ident">SplitPath</span> {
+                    <span class="comment">// save a backtracking point to re-execute the current</span>
+                    <span class="comment">// instruction with the address constrained to be non-null,</span>
+                    <span class="comment">// and continue from there</span>
+                    <span class="self">self</span>.<span class="ident">save_backtracking_point_at_location</span>(
+                        <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">clone</span>(),
+                        <span class="ident">addr</span>.<span class="ident">_ne</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">zero</span>(<span class="ident">addr</span>.<span class="ident">get_width</span>()))
+                    );
+                }
+                <span class="kw">return</span> <span class="ident">e</span>;  <span class="comment">// report the null-pointer dereference</span>
+            },
+            <span class="ident">e</span>@<span class="prelude-val">Err</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="ident">e</span>,  <span class="comment">// propagate any other kind of error</span>
+        };
         <span class="kw">for</span> (<span class="ident">name</span>, <span class="ident">watchpoint</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">mem_watchpoints</span>.<span class="ident">get_triggered_watchpoints</span>(<span class="ident">addr</span>, <span class="ident">bits</span>)<span class="question-mark">?</span> {
             <span class="kw">let</span> <span class="ident">pretty_loc</span> <span class="op">=</span> <span class="kw">if</span> <span class="self">self</span>.<span class="ident">config</span>.<span class="ident">print_module_name</span> {
                 <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_with_module</span>()
             } <span class="kw">else</span> {
                 <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_no_module</span>()
             };
-            <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} read by {}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>);
+            <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} read by {{{}}}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>);
         }
         <span class="prelude-val">Ok</span>(<span class="ident">retval</span>)
     }
@@ -2962,7 +3016,26 @@
     <span class="doccomment">/// have this</span>
     <span class="kw">fn</span> <span class="ident">write_without_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">val</span>: <span class="ident">B</span>::<span class="ident">BV</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">write_width</span> <span class="op">=</span> <span class="ident">val</span>.<span class="ident">get_width</span>();
-        <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow_mut</span>().<span class="ident">write</span>(<span class="ident">addr</span>, <span class="ident">val</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow_mut</span>().<span class="ident">write</span>(<span class="ident">addr</span>, <span class="ident">val</span>);
+        <span class="comment">// we do this awkward `let result` / `match result` because it forces</span>
+        <span class="comment">// the mutable borrow of self.mem to end, which is necessary because</span>
+        <span class="comment">// save_backtracking_point_at_location requires a borrow of self.mem</span>
+        <span class="kw">match</span> <span class="ident">result</span> {
+            <span class="prelude-val">Ok</span>(()) <span class="op">=</span><span class="op">&gt;</span> (),
+            <span class="ident">e</span>@<span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">NullPointerDereference</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">if</span> <span class="self">self</span>.<span class="ident">config</span>.<span class="ident">null_pointer_checking</span> <span class="op">=</span><span class="op">=</span> <span class="ident">NullPointerChecking</span>::<span class="ident">SplitPath</span> {
+                    <span class="comment">// save a backtracking point to re-execute the current</span>
+                    <span class="comment">// instruction with the address constrained to be non-null,</span>
+                    <span class="comment">// and continue from there</span>
+                    <span class="self">self</span>.<span class="ident">save_backtracking_point_at_location</span>(
+                        <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">clone</span>(),
+                        <span class="ident">addr</span>.<span class="ident">_ne</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">zero</span>(<span class="ident">addr</span>.<span class="ident">get_width</span>()))
+                    );
+                }
+                <span class="kw">return</span> <span class="ident">e</span>;  <span class="comment">// report the null-pointer dereference</span>
+            },
+            <span class="ident">e</span>@<span class="prelude-val">Err</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="ident">e</span>,  <span class="comment">// propagate any other kind of error</span>
+        };
         <span class="kw">for</span> (<span class="ident">name</span>, <span class="ident">watchpoint</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">mem_watchpoints</span>.<span class="ident">get_triggered_watchpoints</span>(<span class="ident">addr</span>, <span class="ident">write_width</span>)<span class="question-mark">?</span> {
             <span class="kw">let</span> <span class="ident">pretty_loc</span> <span class="op">=</span> <span class="kw">if</span> <span class="self">self</span>.<span class="ident">config</span>.<span class="ident">print_module_name</span> {
                 <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">to_string_with_module</span>()
@@ -2974,7 +3047,7 @@
             <span class="kw">let</span> <span class="ident">watchpoint_low</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">bv_from_u64</span>(<span class="ident">watchpoint</span>.<span class="ident">get_lower_bound</span>(), <span class="kw">crate</span>::<span class="ident">layout</span>::<span class="ident">POINTER_SIZE_BITS</span> <span class="kw">as</span> <span class="ident">u32</span>);
             <span class="kw">let</span> <span class="ident">watchpoint_size_bits</span> <span class="op">=</span> (<span class="ident">watchpoint</span>.<span class="ident">get_upper_bound</span>() <span class="op">-</span> <span class="ident">watchpoint</span>.<span class="ident">get_lower_bound</span>() <span class="op">+</span> <span class="number">1</span>) <span class="op">*</span> <span class="number">8</span>;
             <span class="kw">let</span> <span class="ident">new_value</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mem</span>.<span class="ident">borrow</span>().<span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="ident">watchpoint_low</span>, <span class="ident">watchpoint_size_bits</span> <span class="kw">as</span> <span class="ident">u32</span>)<span class="question-mark">?</span>;  <span class="comment">// performs a read without using `state.read()` which would trigger watchpoints (we don&#39;t want to trigger watchpoints with this read)</span>
-            <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} written by {}; new value is {:?}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>, <span class="ident">new_value</span>);
+            <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Memory watchpoint {:?} {} written by {{{}}}; new value is {:?}&quot;</span>, <span class="ident">name</span>, <span class="ident">watchpoint</span>, <span class="ident">pretty_loc</span>, <span class="ident">new_value</span>);
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -3111,7 +3184,6 @@
     <span class="doccomment">/// The constraint will be added only if we end up backtracking to this point, and only then.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">save_backtracking_point</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">bb_to_enter</span>: <span class="kw-2">&amp;</span><span class="ident">Name</span>, <span class="ident">constraint</span>: <span class="ident">B</span>::<span class="ident">BV</span>) {
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Saving a backtracking point, which would enter bb {:?} with constraint {:?}&quot;</span>, <span class="ident">bb_to_enter</span>, <span class="ident">constraint</span>);
-        <span class="self">self</span>.<span class="ident">solver</span>.<span class="ident">push</span>(<span class="number">1</span>);
         <span class="kw">let</span> <span class="ident">bb_to_enter</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">get_bb_by_name</span>(<span class="kw-2">&amp;</span><span class="ident">bb_to_enter</span>)
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Failed to find bb named {} in function {:?}&quot;</span>, <span class="ident">bb_to_enter</span>, <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>));
         <span class="kw">let</span> <span class="ident">backtrack_loc</span> <span class="op">=</span> <span class="ident">Location</span> {
@@ -3121,8 +3193,18 @@
             <span class="ident">instr</span>: <span class="ident">BBInstrIndex</span>::<span class="ident">Instr</span>(<span class="number">0</span>),
             <span class="ident">source_loc</span>: <span class="prelude-val">None</span>,
         };
-        <span class="self">self</span>.<span class="ident">backtrack_points</span>.<span class="ident">push</span>(<span class="ident">BacktrackPoint</span> {
-            <span class="ident">loc</span>: <span class="ident">backtrack_loc</span>,
+        <span class="self">self</span>.<span class="ident">save_backtracking_point_at_location</span>(<span class="ident">backtrack_loc</span>, <span class="ident">constraint</span>);
+    }
+
+    <span class="doccomment">/// Internal version of `save_backtracking_point()` which takes an arbitrary</span>
+    <span class="doccomment">/// `Location` instead of just the basic block to start at.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Also it doesn&#39;t require `&amp;mut self`. This allows us to save backtracking</span>
+    <span class="doccomment">/// points even when we&#39;re inside methods that only have `&amp;self`.</span>
+    <span class="kw">fn</span> <span class="ident">save_backtracking_point_at_location</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">loc_to_start_at</span>: <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>, <span class="ident">constraint</span>: <span class="ident">B</span>::<span class="ident">BV</span>) {
+        <span class="self">self</span>.<span class="ident">solver</span>.<span class="ident">push</span>(<span class="number">1</span>);
+        <span class="self">self</span>.<span class="ident">backtrack_points</span>.<span class="ident">borrow_mut</span>().<span class="ident">push</span>(<span class="ident">BacktrackPoint</span> {
+            <span class="ident">loc</span>: <span class="ident">loc_to_start_at</span>,
             <span class="ident">stack</span>: <span class="self">self</span>.<span class="ident">stack</span>.<span class="ident">clone</span>(),
             <span class="ident">constraint</span>,
             <span class="ident">varmap</span>: <span class="self">self</span>.<span class="ident">varmap</span>.<span class="ident">clone</span>(),
@@ -3134,7 +3216,7 @@
     <span class="doccomment">/// returns `Ok(true)` if the operation was successful, `Ok(false)` if there are</span>
     <span class="doccomment">/// no saved backtracking points, or `Err` for other errors</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">revert_to_backtracking_point</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">bool</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">bp</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">backtrack_points</span>.<span class="ident">pop</span>() {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">bp</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">backtrack_points</span>.<span class="ident">borrow_mut</span>().<span class="ident">pop</span>() {
             <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Reverting to backtracking point {}&quot;</span>, <span class="ident">bp</span>);
             <span class="self">self</span>.<span class="ident">solver</span>.<span class="ident">pop</span>(<span class="number">1</span>);
             <span class="self">self</span>.<span class="ident">varmap</span> <span class="op">=</span> <span class="ident">bp</span>.<span class="ident">varmap</span>;
@@ -3151,7 +3233,7 @@
 
     <span class="doccomment">/// returns the number of saved backtracking points</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">count_backtracking_points</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
-        <span class="self">self</span>.<span class="ident">backtrack_points</span>.<span class="ident">len</span>()
+        <span class="self">self</span>.<span class="ident">backtrack_points</span>.<span class="ident">borrow</span>().<span class="ident">len</span>()
     }
 
     <span class="doccomment">/// returns a `String` containing a formatted view of the current backtrace</span>
@@ -3327,8 +3409,8 @@
             <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;\nnote: For a dump of variable values at time of error, rerun with `HAYBALE_DUMP_VARS=1` environment variable.\n&quot;</span>);
         }
         <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;\nnote: to enable detailed logs, ensure that debug-level logging messages are visible.\n&quot;</span>);
-        <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;  This requires a non-release build, and also (for env_logger) `RUST_LOG=haybale` or similar.\n&quot;</span>);
-        <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;  (For how to enable more granular logging options, see docs for the env_logger crate).\n&quot;</span>);
+        <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;  See the documentation for your chosen logging backend (e.g., env_logger, log4rs, etc)\n&quot;</span>);
+        <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;  for help with configuration.\n&quot;</span>);
         <span class="ident">err_msg</span>.<span class="ident">push_str</span>(<span class="string">&quot;\n&quot;</span>);
         <span class="ident">err_msg</span>
     }
