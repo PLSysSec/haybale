@@ -18,8 +18,8 @@ fn no_args_nozero() {
     let funcname = "no_args_nozero";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r));
+    let args =
+        find_zero_of_func(funcname, &proj, Config::default()).unwrap_or_else(|r| panic!("{}", r));
     assert_eq!(args, None);
 }
 
@@ -29,8 +29,8 @@ fn no_args_zero() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 0);
 }
 
@@ -40,8 +40,8 @@ fn one_arg() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -53,8 +53,8 @@ fn two_args() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -66,8 +66,8 @@ fn three_args() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 3);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -79,8 +79,8 @@ fn four_args() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 4);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -92,8 +92,8 @@ fn five_args() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 5);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -105,8 +105,8 @@ fn binops() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = Wrapping(args[0].unwrap_to_i32());
     let b = Wrapping(args[1].unwrap_to_i32());
@@ -123,13 +123,17 @@ fn conditional_true() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = Wrapping(args[0].unwrap_to_i32());
     let b = Wrapping(args[1].unwrap_to_i32());
     println!("a = {}, b = {}", a, b);
-    let c = if a > b { (a - Wrapping(1)) * (b - Wrapping(1)) } else { (a + b) % Wrapping(3) + Wrapping(10) };
+    let c = if a > b {
+        (a - Wrapping(1)) * (b - Wrapping(1))
+    } else {
+        (a + b) % Wrapping(3) + Wrapping(10)
+    };
     assert_eq!(c.0, 0);
 }
 
@@ -139,24 +143,27 @@ fn conditional_false() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = Wrapping(args[0].unwrap_to_i32());
     let b = Wrapping(args[1].unwrap_to_i32());
     println!("a = {}, b = {}", a, b);
-    let c = if a > b { (a + b) % Wrapping(3) + Wrapping(10) } else { (a - Wrapping(1)) * (b - Wrapping(1)) };
+    let c = if a > b {
+        (a + b) % Wrapping(3) + Wrapping(10)
+    } else {
+        (a - Wrapping(1)) * (b - Wrapping(1))
+    };
     assert_eq!(c.0, 0);
 }
-
 
 #[test]
 fn conditional_nozero() {
     let funcname = "conditional_nozero";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r));
+    let args =
+        find_zero_of_func(funcname, &proj, Config::default()).unwrap_or_else(|r| panic!("{}", r));
     assert_eq!(args, None);
 }
 
@@ -166,8 +173,8 @@ fn conditional_with_and() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = args[0].unwrap_to_i32();
     let b = args[1].unwrap_to_i32();
@@ -182,8 +189,8 @@ fn switch() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let a = args[0].unwrap_to_i32();
     let b = args[1].unwrap_to_i32();
@@ -198,8 +205,8 @@ fn int8t() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i8 = args.iter().map(|a| a.unwrap_to_i8()).sum();
     assert_eq!(sum, 3);
@@ -211,8 +218,8 @@ fn int16t() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i16 = args.iter().map(|a| a.unwrap_to_i16()).sum();
     assert_eq!(sum, 3);
@@ -224,8 +231,8 @@ fn int32t() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i32 = args.iter().map(|a| a.unwrap_to_i32()).sum();
     assert_eq!(sum, 3);
@@ -237,8 +244,8 @@ fn int64t() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let sum: i64 = args.iter().map(|a| a.unwrap_to_i64()).sum();
     assert_eq!(sum, 3);
@@ -250,8 +257,8 @@ fn mixed_bitwidths() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 4);
     let arg1 = args[0].unwrap_to_i8();
     let arg2 = args[1].unwrap_to_i16();

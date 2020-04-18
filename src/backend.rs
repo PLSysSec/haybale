@@ -1,25 +1,25 @@
 //! Traits which abstract over the backend (BV types, memory implementation,
 //! etc) being used.
 
-use boolector::{Btor, BVSolution};
 use crate::error::Result;
+use boolector::{BVSolution, Btor};
 use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
 
 /// A `Backend` is just a collection of types which together implement the necessary traits
 pub trait Backend: Clone {
-    type SolverRef: SolverRef<BV=Self::BV>;
-    type BV: BV<SolverRef=Self::SolverRef>;
-    type Memory: Memory<SolverRef=Self::SolverRef, Index=Self::BV, Value=Self::BV>;
+    type SolverRef: SolverRef<BV = Self::BV>;
+    type BV: BV<SolverRef = Self::SolverRef>;
+    type Memory: Memory<SolverRef = Self::SolverRef, Index = Self::BV, Value = Self::BV>;
 }
 
 /// Trait for something which acts as a reference to a `boolector::Btor` (and
 /// possibly may carry other information as well).
 ///
 /// This module provides an implementation of `SolverRef` for `Rc<Btor>`.
-pub trait SolverRef: Clone + Deref<Target=Btor> {
-    type BV: BV<SolverRef=Self>;
+pub trait SolverRef: Clone + Deref<Target = Btor> {
+    type BV: BV<SolverRef = Self>;
     type Array;
 
     /// Create a new `Btor` instance, initialize it as necessary, and return a
@@ -76,7 +76,10 @@ impl SolverRef for Rc<Btor> {
         Btor::get_matching_bv(self.clone(), bv)
     }
 
-    fn match_array(&self, array: &boolector::Array<Rc<Btor>>) -> Option<boolector::Array<Rc<Btor>>> {
+    fn match_array(
+        &self,
+        array: &boolector::Array<Rc<Btor>>,
+    ) -> Option<boolector::Array<Rc<Btor>>> {
         Btor::get_matching_array(self.clone(), array)
     }
 }
@@ -86,7 +89,7 @@ impl SolverRef for Rc<Btor> {
 /// These methods mirror the methods available on `boolector::BV`;
 /// detailed docs are available there.
 pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
-    type SolverRef: SolverRef<BV=Self>;
+    type SolverRef: SolverRef<BV = Self>;
 
     fn new(solver: Self::SolverRef, width: u32, name: Option<&str>) -> Self;
     fn from_bool(solver: Self::SolverRef, b: bool) -> Self;
@@ -178,7 +181,10 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
         } else if cur_bits < bits {
             self.zext(bits - cur_bits)
         } else {
-            panic!("tried to zero-extend to {} bits, but already had {} bits", bits, cur_bits)
+            panic!(
+                "tried to zero-extend to {} bits, but already had {} bits",
+                bits, cur_bits
+            )
         }
     }
 
@@ -195,7 +201,10 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
         } else if cur_bits < bits {
             self.sext(bits - cur_bits)
         } else {
-            panic!("tried to sign-extend to {} bits, but already had {} bits", bits, cur_bits)
+            panic!(
+                "tried to sign-extend to {} bits, but already had {} bits",
+                bits, cur_bits
+            )
         }
     }
 
@@ -220,8 +229,8 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
         let max_value = Self::ones(self.get_solver(), width);
 
         overflow.cond_bv(
-            &max_value,  // overflow: return the max value
-            &result,  // no overflow: return the ordinary result
+            &max_value, // overflow: return the max value
+            &result,    // no overflow: return the ordinary result
         )
     }
 
@@ -246,18 +255,20 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
         //   adding two negative values: if there was overflow, we saturate; return the max negative value
         let result = self.add(other);
         let overflow = self.saddo(other);
-        let max_positive = Self::zero(self.get_solver(), 1).concat(&Self::ones(self.get_solver(), width - 1));
+        let max_positive =
+            Self::zero(self.get_solver(), 1).concat(&Self::ones(self.get_solver(), width - 1));
         assert_eq!(max_positive.get_width(), width);
-        let max_negative = Self::one(self.get_solver(), 1).concat(&Self::zero(self.get_solver(), width - 1));
+        let max_negative =
+            Self::one(self.get_solver(), 1).concat(&Self::zero(self.get_solver(), width - 1));
         assert_eq!(max_negative.get_width(), width);
-        let self_negative = self.slice(width-1, width-1);  // `true` if the sign bit of `self` is set, meaning `self` is negative
+        let self_negative = self.slice(width - 1, width - 1); // `true` if the sign bit of `self` is set, meaning `self` is negative
 
         overflow.cond_bv(
             &self_negative.cond_bv(
-                &max_negative,  // overflow, and `self` was negative, so `other` must also have been negative, so return the max negative value
-                &max_positive,  // overflow, and `self` was positive, so `other` must also have been positive, so return the max positive value
+                &max_negative, // overflow, and `self` was negative, so `other` must also have been negative, so return the max negative value
+                &max_positive, // overflow, and `self` was positive, so `other` must also have been positive, so return the max positive value
             ),
-            &result,  // no overflow: just return the ordinary result
+            &result, // no overflow: just return the ordinary result
         )
     }
 
@@ -282,8 +293,8 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
         let zero = Self::zero(self.get_solver(), width);
 
         overflow.cond_bv(
-            &zero,  // overflow: return zero
-            &result,  // no overflow: return the ordinary result
+            &zero,   // overflow: return zero
+            &result, // no overflow: return the ordinary result
         )
     }
 
@@ -301,9 +312,9 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
 }
 
 /// Trait for things which can act like 'memories', that is, maps from bitvector (addresses) to bitvector (values)
-pub trait Memory : Clone + PartialEq + Eq {
-    type SolverRef: SolverRef<BV=Self::Index>;
-    type Index: BV<SolverRef=Self::SolverRef>;
+pub trait Memory: Clone + PartialEq + Eq {
+    type SolverRef: SolverRef<BV = Self::Index>;
+    type Index: BV<SolverRef = Self::SolverRef>;
     type Value: BV;
 
     /// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)
@@ -313,7 +324,8 @@ pub trait Memory : Clone + PartialEq + Eq {
     /// if NULL is a possible solution for the address
     ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
-    fn new_uninitialized(solver: Self::SolverRef, null_detection: bool, name: Option<&str>) -> Self;
+    fn new_uninitialized(solver: Self::SolverRef, null_detection: bool, name: Option<&str>)
+        -> Self;
 
     /// A new `Memory`, whose contents at all addresses are initialized to be `0`
     ///
@@ -322,7 +334,11 @@ pub trait Memory : Clone + PartialEq + Eq {
     /// if NULL is a possible solution for the address
     ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
-    fn new_zero_initialized(solver: Self::SolverRef, null_detection: bool, name: Option<&str>) -> Self;
+    fn new_zero_initialized(
+        solver: Self::SolverRef,
+        null_detection: bool,
+        name: Option<&str>,
+    ) -> Self;
 
     /// Read any number (>0) of bits of memory, at any alignment.
     /// Returned `BV` will have size `bits`.

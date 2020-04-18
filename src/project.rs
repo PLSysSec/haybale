@@ -1,6 +1,6 @@
 use crate::demangling::try_cpp_demangle;
-use llvm_ir::{Function, Module, Type};
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
+use llvm_ir::{Function, Module, Type};
 use log::{info, warn};
 use rustc_demangle::demangle;
 use std::fs::DirEntry;
@@ -24,13 +24,16 @@ impl Project {
     }
 
     /// Construct a new `Project` from multiple LLVM bitcode files
-    pub fn from_bc_paths<P>(paths: impl IntoIterator<Item = P>) -> Result<Self, String> where P: AsRef<Path> {
+    pub fn from_bc_paths<P>(paths: impl IntoIterator<Item = P>) -> Result<Self, String>
+    where
+        P: AsRef<Path>,
+    {
         info!("Parsing bitcode from specified files");
         Ok(Self {
             modules: paths
                 .into_iter()
                 .map(|p| Module::from_bc_path(p.as_ref()))
-                .collect::<Result<Vec<_>,_>>()?,
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 
@@ -52,8 +55,15 @@ impl Project {
     /// All files in the directory which have the extension `extn`, except those
     /// for which the provided `exclude` closure returns `true`, will be parsed
     /// and added to the `Project`.
-    pub fn from_bc_dir_with_blacklist(path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<Self, io::Error> {
-        info!("Parsing bitcode from directory {} with blacklist", path.as_ref().display());
+    pub fn from_bc_dir_with_blacklist(
+        path: impl AsRef<Path>,
+        extn: &str,
+        exclude: impl Fn(&Path) -> bool,
+    ) -> Result<Self, io::Error> {
+        info!(
+            "Parsing bitcode from directory {} with blacklist",
+            path.as_ref().display()
+        );
         Ok(Self {
             modules: Self::modules_from_bc_dir(path, extn, exclude)?,
         })
@@ -78,8 +88,16 @@ impl Project {
 
     /// Add the code in the given directory, except for blacklisted files, to the `Project`.
     /// See [`Project::from_bc_dir_with_blacklist()`](struct.Project.html#method.from_bc_dir_with_blacklist).
-    pub fn add_bc_dir_with_blacklist(&mut self, path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<(), io::Error> {
-        info!("Parsing bitcode from directory {} with blacklist", path.as_ref().display());
+    pub fn add_bc_dir_with_blacklist(
+        &mut self,
+        path: impl AsRef<Path>,
+        extn: &str,
+        exclude: impl Fn(&Path) -> bool,
+    ) -> Result<(), io::Error> {
+        info!(
+            "Parsing bitcode from directory {} with blacklist",
+            path.as_ref().display()
+        );
         let modules = Self::modules_from_bc_dir(path, extn, exclude)?;
         self.modules.extend(modules);
         Ok(())
@@ -88,19 +106,28 @@ impl Project {
     /// Iterate over all `Function`s in the `Project`.
     /// Gives pairs which also indicate the `Module` the `Function` is defined in.
     pub fn all_functions(&self) -> impl Iterator<Item = (&Function, &Module)> {
-        self.modules.iter().map(|m| m.functions.iter().zip(std::iter::repeat(m))).flatten()
+        self.modules
+            .iter()
+            .map(|m| m.functions.iter().zip(std::iter::repeat(m)))
+            .flatten()
     }
 
     /// Iterate over all `GlobalVariable`s in the `Project`.
     /// Gives pairs which also indicate the `Module` the `GlobalVariable` comes from.
     pub fn all_global_vars(&self) -> impl Iterator<Item = (&GlobalVariable, &Module)> {
-        self.modules.iter().map(|m| m.global_vars.iter().zip(std::iter::repeat(m))).flatten()
+        self.modules
+            .iter()
+            .map(|m| m.global_vars.iter().zip(std::iter::repeat(m)))
+            .flatten()
     }
 
     /// Iterate over all `GlobalAlias`es in the `Project`.
     /// Gives pairs which also indicate the `Module` the `GlobalAlias` comes from.
     pub fn all_global_aliases(&self) -> impl Iterator<Item = (&GlobalAlias, &Module)> {
-        self.modules.iter().map(|m| m.global_aliases.iter().zip(std::iter::repeat(m))).flatten()
+        self.modules
+            .iter()
+            .map(|m| m.global_aliases.iter().zip(std::iter::repeat(m)))
+            .flatten()
     }
 
     /// Iterate over all named struct types in the `Project`.
@@ -111,12 +138,15 @@ impl Project {
     /// opaque; see
     /// [LLVM 9 docs on Opaque Structure Types](https://releases.llvm.org/9.0.0/docs/LangRef.html#t-opaque).
     pub fn all_named_struct_types(&self) -> impl Iterator<Item = (&String, Option<Type>, &Module)> {
-        self.modules.iter()
-            .map(|m| m.named_struct_types.iter()
-                .map(|(name, opt)| (name, opt.as_ref().map(|arc| arc.read().unwrap().clone())))
-                .zip(std::iter::repeat(m))
-                .map(|((name, opt), m)| (name, opt, m))
-            )
+        self.modules
+            .iter()
+            .map(|m| {
+                m.named_struct_types
+                    .iter()
+                    .map(|(name, opt)| (name, opt.as_ref().map(|arc| arc.read().unwrap().clone())))
+                    .zip(std::iter::repeat(m))
+                    .map(|((name, opt), m)| (name, opt, m))
+            })
             .flatten()
     }
 
@@ -156,7 +186,11 @@ impl Project {
         // if we get to this point, we haven't found the function normally; maybe we were
         // given a Rust demangled name
         for module in &self.modules {
-            if let Some(f) = module.functions.iter().find(|func| demangle(&func.name).to_string() == name) {
+            if let Some(f) = module
+                .functions
+                .iter()
+                .find(|func| demangle(&func.name).to_string() == name)
+            {
                 match retval {
                     None => retval = Some((f, module)),
                     Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
@@ -169,7 +203,11 @@ impl Project {
         // if we get to this point, we still haven't found the function; try
         // stripping the trailing hash value from the Rust mangled name
         for module in &self.modules {
-            if let Some(f) = module.functions.iter().find(|func| format!("{:#}", demangle(&func.name)) == name) {
+            if let Some(f) = module
+                .functions
+                .iter()
+                .find(|func| format!("{:#}", demangle(&func.name)) == name)
+            {
                 match retval {
                     None => retval = Some((f, module)),
                     Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
@@ -182,7 +220,11 @@ impl Project {
         // if we get to this point, we still haven't found the function;
         // maybe we were given a C++ demangled name
         for module in &self.modules {
-            if let Some(f) = module.functions.iter().find(|func| try_cpp_demangle(&func.name).as_deref() == Some(name)) {
+            if let Some(f) = module
+                .functions
+                .iter()
+                .find(|func| try_cpp_demangle(&func.name).as_deref() == Some(name))
+            {
                 match retval {
                     None => retval = Some((f, module)),
                     Some((_, retmod)) => panic!("Multiple functions found with demangled name {:?}: one in module {:?}, another in module {:?}", name, retmod.name, module.name),
@@ -208,14 +250,22 @@ impl Project {
     /// `Some(None, <module>)` if _all_ definitions are opaque; that is, it will
     /// attempt to return some non-opaque definition if one exists, before
     /// returning an opaque definition.
-    pub fn get_named_struct_type_by_name<'p>(&'p self, name: &str) -> Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> {
+    pub fn get_named_struct_type_by_name<'p>(
+        &'p self,
+        name: &str,
+    ) -> Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> {
         let mut retval: Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> = None;
         for module in &self.modules {
-            if let Some(t) = module.named_struct_types.iter().find(|&(n, _)| n == name).map(|(_, t)| t) {
+            if let Some(t) = module
+                .named_struct_types
+                .iter()
+                .find(|&(n, _)| n == name)
+                .map(|(_, t)| t)
+            {
                 match (retval, t) {
-                    (None, t) => retval = Some((t, module)),  // first definition we've found: this is the new candidate to return
-                    (Some(_), None) => {},  // this is an opaque definition, and we previously found some other definition (opaque or not); do nothing
-                    (Some((None, _)), t@Some(_)) => retval = Some((t, module)),  // found an actual definition, replace the previous opaque definition
+                    (None, t) => retval = Some((t, module)), // first definition we've found: this is the new candidate to return
+                    (Some(_), None) => {} // this is an opaque definition, and we previously found some other definition (opaque or not); do nothing
+                    (Some((None, _)), t @ Some(_)) => retval = Some((t, module)), // found an actual definition, replace the previous opaque definition
                     (Some((Some(arc1), retmod)), Some(arc2)) => {
                         // duplicate non-opaque definitions: ensure they completely agree
                         let def1: &Type = &arc1.read().unwrap();
@@ -227,11 +277,11 @@ impl Project {
                             // anonymous union being numbered differently in the two modules, even if the
                             // union has the same contents in both modules.
                             warn!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n  We will (arbitrarily) use the first one.", name, retmod.name, module.name, def1, def2);
-                            // then we'll do nothing, leaving (arbitrarily) the first definition we found
+                        // then we'll do nothing, leaving (arbitrarily) the first definition we found
                         } else {
                             // do nothing, leaving (arbitrarily) the first definition we found
                         }
-                    },
+                    }
                 };
             }
         }
@@ -261,26 +311,32 @@ impl Project {
         }
     }
 
-    fn modules_from_bc_dir(path: impl AsRef<Path>, extn: &str, exclude: impl Fn(&Path) -> bool) -> Result<Vec<Module>, io::Error> {
+    fn modules_from_bc_dir(
+        path: impl AsRef<Path>,
+        extn: &str,
+        exclude: impl Fn(&Path) -> bool,
+    ) -> Result<Vec<Module>, io::Error> {
         // warning, we use both `Iterator::map` and `Result::map` in here, and it's easy to get them confused
-        path
-            .as_ref()
+        path.as_ref()
             .read_dir()?
             .filter(|entry| match entry_is_dir(entry) {
-                Some(true) => false,  // filter out if it is a directory
-                Some(false) => true,  // leave in the ones that are non-directories
-                None => true,  // also leave in errors, because we want to know about those
+                Some(true) => false, // filter out if it is a directory
+                Some(false) => true, // leave in the ones that are non-directories
+                None => true,        // also leave in errors, because we want to know about those
             })
             .map(|entry| entry.map(|entry| entry.path()))
             .filter(|path| match path {
                 Ok(path) => match path.extension() {
                     Some(e) => e == extn && !exclude(path),
-                    None => false,  // filter out if it has no extension
+                    None => false, // filter out if it has no extension
                 },
-                Err(_) => true,  // leave in errors, because we want to know about those
+                Err(_) => true, // leave in errors, because we want to know about those
             })
-            .map(|path| path.and_then(|path| Module::from_bc_path(path)
-                .map_err(|s| io::Error::new(io::ErrorKind::Other, s))))
+            .map(|path| {
+                path.and_then(|path| {
+                    Module::from_bc_path(path).map_err(|s| io::Error::new(io::ErrorKind::Other, s))
+                })
+            })
             .collect()
     }
 
@@ -313,42 +369,57 @@ mod tests {
     fn single_file_project() {
         let proj = Project::from_bc_path(Path::new("tests/bcfiles/basic.bc"))
             .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
-        let (func, module) = proj.get_func_by_name("no_args_zero").expect("Failed to find function");
+        let (func, module) = proj
+            .get_func_by_name("no_args_zero")
+            .expect("Failed to find function");
         assert_eq!(&func.name, "no_args_zero");
         assert_eq!(&module.name, "tests/bcfiles/basic.bc");
     }
 
     #[test]
     fn double_file_project() {
-        let proj = Project::from_bc_paths(vec!["tests/bcfiles/basic.bc", "tests/bcfiles/loop.bc"].into_iter().map(Path::new))
-            .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
-        let (func, module) = proj.get_func_by_name("no_args_zero").expect("Failed to find function");
+        let proj = Project::from_bc_paths(
+            vec!["tests/bcfiles/basic.bc", "tests/bcfiles/loop.bc"]
+                .into_iter()
+                .map(Path::new),
+        )
+        .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
+        let (func, module) = proj
+            .get_func_by_name("no_args_zero")
+            .expect("Failed to find function");
         assert_eq!(&func.name, "no_args_zero");
         assert_eq!(&module.name, "tests/bcfiles/basic.bc");
-        let (func, module) = proj.get_func_by_name("while_loop").expect("Failed to find function");
+        let (func, module) = proj
+            .get_func_by_name("while_loop")
+            .expect("Failed to find function");
         assert_eq!(&func.name, "while_loop");
         assert_eq!(&module.name, "tests/bcfiles/loop.bc");
     }
 
     #[test]
     fn whole_directory_project() {
-        let proj = Project::from_bc_dir("tests/bcfiles", "bc").unwrap_or_else(|e| panic!("Failed to create project: {}", e));
-        let (func, module) = proj.get_func_by_name("no_args_zero").expect("Failed to find function");
+        let proj = Project::from_bc_dir("tests/bcfiles", "bc")
+            .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
+        let (func, module) = proj
+            .get_func_by_name("no_args_zero")
+            .expect("Failed to find function");
         assert_eq!(&func.name, "no_args_zero");
         assert_eq!(&module.name, "tests/bcfiles/basic.bc");
-        let (func, module) = proj.get_func_by_name("while_loop").expect("Failed to find function");
+        let (func, module) = proj
+            .get_func_by_name("while_loop")
+            .expect("Failed to find function");
         assert_eq!(&func.name, "while_loop");
         assert_eq!(&module.name, "tests/bcfiles/loop.bc");
     }
 
     #[test]
     fn whole_directory_project_with_blacklist() {
-        let proj = Project::from_bc_dir_with_blacklist(
-            "tests/bcfiles",
-            "bc",
-            |path| path.file_stem().unwrap() == "basic",
-        ).unwrap_or_else(|e| panic!("Failed to create project: {}", e));
-        proj.get_func_by_name("while_loop").expect("Failed to find function while_loop, which should be present");
+        let proj = Project::from_bc_dir_with_blacklist("tests/bcfiles", "bc", |path| {
+            path.file_stem().unwrap() == "basic"
+        })
+        .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
+        proj.get_func_by_name("while_loop")
+            .expect("Failed to find function while_loop, which should be present");
         assert!(proj.get_func_by_name("no_args_zero").is_none(), "Found function no_args_zero, which is from a file that should have been blacklisted out");
     }
 }

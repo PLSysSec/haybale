@@ -1,15 +1,20 @@
-use crate::{BBInstrIndex, Config, Location, Project, State};
 use crate::backend::BtorBackend;
+use crate::{BBInstrIndex, Config, Location, Project, State};
 use llvm_ir::*;
 use std::collections::HashMap;
 
 /// utility to initialize a `State` out of a `Project` and a function name
 pub fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, BtorBackend> {
-    let (func, module) = project.get_func_by_name(funcname).expect("Failed to find function");
+    let (func, module) = project
+        .get_func_by_name(funcname)
+        .expect("Failed to find function");
     let start_loc = Location {
         module,
         func,
-        bb: func.basic_blocks.get(0).expect("Function must contain at least one basic block"),
+        bb: func
+            .basic_blocks
+            .get(0)
+            .expect("Function must contain at least one basic block"),
         instr: BBInstrIndex::Instr(0),
         source_loc: None,
     };

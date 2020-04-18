@@ -1,21 +1,21 @@
-use llvm_ir::*;
-use llvm_ir::instruction::{BinaryOp, InlineAssembly};
-use log::{debug, info};
 use either::Either;
+use llvm_ir::instruction::{BinaryOp, InlineAssembly};
+use llvm_ir::*;
+use log::{debug, info};
 use reduce::Reduce;
 use std::convert::TryInto;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
-pub use crate::state::{State, BBInstrIndex, Location, LocationDescription, PathEntry};
 use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
 use crate::function_hooks::*;
 use crate::layout::*;
-use crate::solver_utils::PossibleSolutions;
 use crate::project::Project;
 use crate::return_value::*;
+use crate::solver_utils::PossibleSolutions;
+pub use crate::state::{BBInstrIndex, Location, LocationDescription, PathEntry, State};
 
 /// Begin symbolic execution of the function named `funcname`, obtaining an
 /// `ExecutionManager`. The function's parameters will start completely
@@ -31,20 +31,32 @@ pub fn symex_function<'p, B: Backend>(
     config: Config<'p, B>,
 ) -> ExecutionManager<'p, B> {
     debug!("Symexing function {}", funcname);
-    let (func, module) = project.get_func_by_name(funcname).unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
+    let (func, module) = project
+        .get_func_by_name(funcname)
+        .unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
     let start_loc = Location {
         module,
         func,
-        bb: func.basic_blocks.get(0).expect("Failed to get entry basic block"),
+        bb: func
+            .basic_blocks
+            .get(0)
+            .expect("Failed to get entry basic block"),
         instr: BBInstrIndex::Instr(0),
-        source_loc: None,  // this will be updated once we get there and begin symex of the instruction
+        source_loc: None, // this will be updated once we get there and begin symex of the instruction
     };
     let squash_unsats = config.squash_unsats;
     let mut state = State::new(project, start_loc, config);
-    let bvparams: Vec<_> = func.parameters.iter().map(|param| {
-        let param_size = size_opaque_aware(&param.ty, project).expect("Parameter type is a struct opaque in the entire Project");
-        state.new_bv_with_name(param.name.clone(), param_size as u32).unwrap()
-    }).collect();
+    let bvparams: Vec<_> = func
+        .parameters
+        .iter()
+        .map(|param| {
+            let param_size = size_opaque_aware(&param.ty, project)
+                .expect("Parameter type is a struct opaque in the entire Project");
+            state
+                .new_bv_with_name(param.name.clone(), param_size as u32)
+                .unwrap()
+        })
+        .collect();
     ExecutionManager::new(state, project, bvparams, squash_unsats)
 }
 
@@ -77,7 +89,12 @@ pub struct ExecutionManager<'p, B: Backend> {
 }
 
 impl<'p, B: Backend> ExecutionManager<'p, B> {
-    fn new(state: State<'p, B>, project: &'p Project, bvparams: Vec<B::BV>, squash_unsats: bool) -> Self {
+    fn new(
+        state: State<'p, B>,
+        project: &'p Project,
+        bvparams: Vec<B::BV>,
+        squash_unsats: bool,
+    ) -> Self {
         Self {
             state,
             project,
@@ -109,13 +126,19 @@ impl<'p, B: Backend> ExecutionManager<'p, B> {
     }
 }
 
-impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
+impl<'p, B: Backend> Iterator for ExecutionManager<'p, B>
+where
+    B: 'p,
+{
     type Item = Result<ReturnValue<B::BV>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let retval = if self.fresh {
             self.fresh = false;
-            info!("Beginning symex in function {:?}", self.state.cur_loc.func.name);
+            info!(
+                "Beginning symex in function {:?}",
+                self.state.cur_loc.func.name
+            );
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             debug!("ExecutionManager: requesting next path");
@@ -125,7 +148,10 @@ impl<'p, B: Backend> Iterator for ExecutionManager<'p, B> where B: 'p {
     }
 }
 
-impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
+impl<'p, B: Backend> ExecutionManager<'p, B>
+where
+    B: 'p,
+{
     /// Symex from the current `Location` through the rest of the function.
     /// Returns the `ReturnValue` representing the return value of the function,
     /// or `Ok(None)` if no possible paths were found.
@@ -136,10 +162,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `BBInstrIndex::Instr(0)` will still be considered valid, and be treated
     /// equivalently to `BBInstrIndex::Terminator`.
     fn symex_from_cur_loc_through_end_of_function(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
-        debug!("Symexing basic block {:?} in function {}", self.state.cur_loc.bb.name, self.state.cur_loc.func.name);
+        debug!(
+            "Symexing basic block {:?} in function {}",
+            self.state.cur_loc.bb.name, self.state.cur_loc.func.name
+        );
         let num_insts = self.state.cur_loc.bb.instrs.len();
         let insts_to_skip = match self.state.cur_loc.instr {
-            BBInstrIndex::Instr(0) if num_insts == 0 => 0,  // considered valid, see notes above
+            BBInstrIndex::Instr(0) if num_insts == 0 => 0, // considered valid, see notes above
             BBInstrIndex::Instr(i) => {
                 assert!(
                     i < num_insts,
@@ -150,16 +179,24 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     num_insts,
                 );
                 i
-            },
-            BBInstrIndex::Terminator => num_insts,  // skip all the instructions, go right to the terminator
+            }
+            BBInstrIndex::Terminator => num_insts, // skip all the instructions, go right to the terminator
         };
-        let mut first_iter = true;  // is it the first iteration of the for loop
-        for (instnum, inst) in self.state.cur_loc.bb.instrs.iter().enumerate().skip(insts_to_skip) {
+        let mut first_iter = true; // is it the first iteration of the for loop
+        for (instnum, inst) in self
+            .state
+            .cur_loc
+            .bb
+            .instrs
+            .iter()
+            .enumerate()
+            .skip(insts_to_skip)
+        {
             self.state.cur_loc.instr = BBInstrIndex::Instr(instnum);
             self.state.cur_loc.source_loc = inst.get_debug_loc().as_ref();
             if first_iter {
                 first_iter = false;
-                self.state.record_path_entry();  // do this only on the first iteration
+                self.state.record_path_entry(); // do this only on the first iteration
             }
             for callback in &self.state.config.callbacks.instruction_callbacks {
                 callback(inst, &self.state)?;
@@ -197,13 +234,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 }
             };
             match result {
-                Ok(_) => {},  // no error, we can continue
+                Ok(_) => {} // no error, we can continue
                 Err(Error::Unsat) if self.squash_unsats => {
                     // we can't continue down this path anymore; try another
                     info!("Path is unsat");
                     return self.backtrack_and_continue();
                 }
-                Err(e) => return Err(e),  // propagate any other errors
+                Err(e) => return Err(e), // propagate any other errors
             };
         }
         let term = &self.state.cur_loc.bb.term;
@@ -224,7 +261,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Terminator::Invoke(invoke) => self.symex_invoke(invoke),
             Terminator::Resume(resume) => self.symex_resume(resume),
             Terminator::Unreachable(_) => Err(Error::UnreachableInstruction),
-            _ => Err(Error::UnsupportedInstruction(format!("terminator {:?}", term))),
+            _ => Err(Error::UnsupportedInstruction(format!(
+                "terminator {:?}",
+                term
+            ))),
         }
     }
 
@@ -236,8 +276,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `Ok(None)` if no possible paths were found.
     fn backtrack_and_continue(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         if self.state.revert_to_backtracking_point()? {
-            info!("Reverted to backtrack point; {} more backtrack points available", self.state.count_backtracking_points());
-            info!("Continuing in bb {} in function {:?}{}",
+            info!(
+                "Reverted to backtrack point; {} more backtrack points available",
+                self.state.count_backtracking_points()
+            );
+            info!(
+                "Continuing in bb {} in function {:?}{}",
                 self.state.cur_loc.bb.name,
                 self.state.cur_loc.func.name,
                 if self.state.config.print_module_name {
@@ -283,10 +327,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                     },
                                 );
                                 continue;
-                            },
+                            }
                             Either::Right(invoke) => {
                                 // catch the thrown value
-                                info!("Caller {:?} (bb {}){} catching the thrown value at bb {}",
+                                info!(
+                                    "Caller {:?} (bb {}){} catching the thrown value at bb {}",
                                     callsite.loc.func.name,
                                     callsite.loc.bb.name,
                                     if self.state.config.print_module_name {
@@ -297,22 +342,24 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                     invoke.exception_label,
                                 );
                                 self.state.cur_loc = callsite.loc.clone();
-                                return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
-                            },
+                                return self
+                                    .catch_at_exception_label(&bvptr, &invoke.exception_label);
+                            }
                         },
                         None => {
                             // no callsite to return to, so we're done; exception was uncaught
                             return Ok(Some(ReturnValue::Throw(bvptr)));
-                        },
+                        }
                     }
                 }
-            },
+            }
             Some(ReturnValue::Abort) => Ok(Some(ReturnValue::Abort)),
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => match callsite.instr {
                     Either::Left(call) => {
                         // Return to normal callsite
-                        info!("Leaving function {:?}, continuing in caller {:?} (bb {}){}",
+                        info!(
+                            "Leaving function {:?}, continuing in caller {:?} (bb {}){}",
                             self.state.cur_loc.func.name,
                             callsite.loc.func.name,
                             callsite.loc.bb.name,
@@ -326,19 +373,27 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // Assign the returned value as the result of the caller's call instruction
                         match symexresult {
                             ReturnValue::Return(bv) => {
-                                if self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv).is_err() {
+                                if self
+                                    .state
+                                    .assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)
+                                    .is_err()
+                                {
                                     // This path is dead, try backtracking again
                                     return self.backtrack_and_continue();
                                 };
-                            },
-                            ReturnValue::ReturnVoid => { },
-                            ReturnValue::Throw(_) => panic!("This case should have been handled above"),
-                            ReturnValue::Abort => panic!("This case should have been handled above"),
+                            }
+                            ReturnValue::ReturnVoid => {}
+                            ReturnValue::Throw(_) => {
+                                panic!("This case should have been handled above")
+                            }
+                            ReturnValue::Abort => {
+                                panic!("This case should have been handled above")
+                            }
                         };
                         // Continue execution in caller, with the instruction after the call instruction
-                        self.state.cur_loc.inc();   // advance past the call instruction itself before recording the path entry. `saved_loc` must have been a call instruction, so can't be a terminator, so the call to `inc()` is safe.
+                        self.state.cur_loc.inc(); // advance past the call instruction itself before recording the path entry. `saved_loc` must have been a call instruction, so can't be a terminator, so the call to `inc()` is safe.
                         self.symex_from_cur_loc()
-                    },
+                    }
                     Either::Right(invoke) => {
                         // Normal return to an `Invoke` instruction
                         info!("Leaving function {:?}, continuing in caller {:?}{} (finished invoke in bb {}, now in bb {})",
@@ -356,17 +411,27 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // Assign the returned value as the result of the `Invoke` instruction
                         match symexresult {
                             ReturnValue::Return(bv) => {
-                                if self.state.assign_bv_to_name(invoke.result.clone(), bv).is_err() {
+                                if self
+                                    .state
+                                    .assign_bv_to_name(invoke.result.clone(), bv)
+                                    .is_err()
+                                {
                                     // This path is dead, try backtracking again
                                     return self.backtrack_and_continue();
                                 };
-                            },
-                            ReturnValue::ReturnVoid => { },
-                            ReturnValue::Throw(_) => panic!("This case should have been handled above"),
-                            ReturnValue::Abort => panic!("This case should have been handled above"),
+                            }
+                            ReturnValue::ReturnVoid => {}
+                            ReturnValue::Throw(_) => {
+                                panic!("This case should have been handled above")
+                            }
+                            ReturnValue::Abort => {
+                                panic!("This case should have been handled above")
+                            }
                         };
                         // Continue execution in caller, at the normal-return label of the `Invoke` instruction
-                        self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
+                        self.state
+                            .cur_loc
+                            .move_to_start_of_bb_by_name(&invoke.return_label);
                         self.symex_from_cur_loc()
                     }
                 },
@@ -378,11 +443,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             None => {
                 // This path is dead, try backtracking again
                 self.backtrack_and_continue()
-            },
+            }
         }
     }
 
-    fn binop_to_bvbinop<'a, V: BV + 'a>(bop: &instruction::groups::BinaryOp) -> Result<Box<dyn for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
+    fn binop_to_bvbinop<'a, V: BV + 'a>(
+        bop: &instruction::groups::BinaryOp,
+    ) -> Result<Box<dyn for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
         match bop {
             // TODO: how to not clone the inner instruction here
             instruction::groups::BinaryOp::Add(_) => Ok(Box::new(V::add)),
@@ -419,36 +486,49 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
 
     // Apply the given unary scalar operation to a vector
     fn unary_on_vector<F>(in_vector: &B::BV, num_elements: u32, mut op: F) -> Result<B::BV>
-        where F: FnMut(&B::BV) -> B::BV
+    where
+        F: FnMut(&B::BV) -> B::BV,
     {
         let in_vector_size = in_vector.get_width();
         assert_eq!(in_vector_size % num_elements, 0);
         let in_el_size = in_vector_size / num_elements;
-        let in_scalars = (0 .. num_elements).map(|i| in_vector.slice((i+1)*in_el_size - 1, i*in_el_size));
+        let in_scalars =
+            (0..num_elements).map(|i| in_vector.slice((i + 1) * in_el_size - 1, i * in_el_size));
         let out_scalars = in_scalars.map(|s| op(&s));
-        out_scalars
-            .reduce(|a,b| b.concat(&a))
-            .ok_or_else(|| Error::MalformedInstruction("Vector operation with 0 elements".to_owned()))  // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
+        out_scalars.reduce(|a, b| b.concat(&a)).ok_or_else(|| {
+            Error::MalformedInstruction("Vector operation with 0 elements".to_owned())
+        }) // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
     }
 
     // Apply the given binary scalar operation to a vector
-    fn binary_on_vector<F>(in_vector_0: &B::BV, in_vector_1: &B::BV, num_elements: u32, mut op: F) -> Result<B::BV>
-        where F: for<'a> FnMut(&'a B::BV, &'a B::BV) -> B::BV
+    fn binary_on_vector<F>(
+        in_vector_0: &B::BV,
+        in_vector_1: &B::BV,
+        num_elements: u32,
+        mut op: F,
+    ) -> Result<B::BV>
+    where
+        F: for<'a> FnMut(&'a B::BV, &'a B::BV) -> B::BV,
     {
         let in_vector_0_size = in_vector_0.get_width();
         let in_vector_1_size = in_vector_1.get_width();
         if in_vector_0_size != in_vector_1_size {
-            return Err(Error::MalformedInstruction(format!("Binary operation's vector operands are different total sizes: {} vs. {}", in_vector_0_size, in_vector_1_size)));
+            return Err(Error::MalformedInstruction(format!(
+                "Binary operation's vector operands are different total sizes: {} vs. {}",
+                in_vector_0_size, in_vector_1_size
+            )));
         }
         let in_vector_size = in_vector_0_size;
         assert_eq!(in_vector_size % num_elements, 0);
         let in_el_size = in_vector_size / num_elements;
-        let in_scalars_0 = (0 .. num_elements).map(|i| in_vector_0.slice((i+1)*in_el_size - 1, i*in_el_size));
-        let in_scalars_1 = (0 .. num_elements).map(|i| in_vector_1.slice((i+1)*in_el_size - 1, i*in_el_size));
-        let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0,s1)| op(&s0, &s1));
-        out_scalars
-            .reduce(|a,b| b.concat(&a))
-            .ok_or_else(|| Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned()))  // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
+        let in_scalars_0 =
+            (0..num_elements).map(|i| in_vector_0.slice((i + 1) * in_el_size - 1, i * in_el_size));
+        let in_scalars_1 =
+            (0..num_elements).map(|i| in_vector_1.slice((i + 1) * in_el_size - 1, i * in_el_size));
+        let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0, s1)| op(&s0, &s1));
+        out_scalars.reduce(|a, b| b.concat(&a)).ok_or_else(|| {
+            Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned())
+        }) // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
     }
 
     fn symex_binop(&mut self, bop: &instruction::groups::BinaryOp) -> Result<()> {
@@ -489,7 +569,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         let op0_type = icmp.operand0.get_type();
         let op1_type = icmp.operand1.get_type();
         if op0_type != op1_type {
-            return Err(Error::MalformedInstruction(format!("Expected icmp to compare two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
+            return Err(Error::MalformedInstruction(format!(
+                "Expected icmp to compare two operands of same type, but have types {:?} and {:?}",
+                op0_type, op1_type
+            )));
         }
         match icmp.get_type() {
             Type::IntegerType { bits } if bits == 1 => match op0_type {
@@ -521,26 +604,41 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let bvop = self.state.operand_to_bv(&zext.operand)?;
                 let source_size = bits;
                 let dest_size = size(&zext.get_type()) as u32;
-                self.state.record_bv_result(zext, bvop.zext(dest_size - source_size))
-            },
-            Type::VectorType { element_type, num_elements } => {
+                self.state
+                    .record_bv_result(zext, bvop.zext(dest_size - source_size))
+            }
+            Type::VectorType {
+                element_type,
+                num_elements,
+            } => {
                 let in_vector = self.state.operand_to_bv(&zext.operand)?;
                 let in_el_size = size(&element_type) as u32;
                 let out_el_size = match zext.get_type() {
-                    Type::VectorType { element_type: out_el_type, num_elements: out_num_els } => {
+                    Type::VectorType {
+                        element_type: out_el_type,
+                        num_elements: out_num_els,
+                    } => {
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("ZExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
                         size(&out_el_type) as u32
-                    },
-                    ty => return Err(Error::MalformedInstruction(format!("ZExt operand is a vector type, but output is not: it is {:?}", ty))),
+                    }
+                    ty => {
+                        return Err(Error::MalformedInstruction(format!(
+                            "ZExt operand is a vector type, but output is not: it is {:?}",
+                            ty
+                        )))
+                    }
                 };
                 let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
                     el.zext(out_el_size - in_el_size)
                 })?;
                 self.state.record_bv_result(zext, final_bv)
-            },
-            ty => Err(Error::MalformedInstruction(format!("Expected ZExt operand type to be integer or vector of integers; got {:?}", ty))),
+            }
+            ty => Err(Error::MalformedInstruction(format!(
+                "Expected ZExt operand type to be integer or vector of integers; got {:?}",
+                ty
+            ))),
         }
     }
 
@@ -551,26 +649,41 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let bvop = self.state.operand_to_bv(&sext.operand)?;
                 let source_size = bits;
                 let dest_size = size(&sext.get_type()) as u32;
-                self.state.record_bv_result(sext, bvop.sext(dest_size - source_size))
-            },
-            Type::VectorType { element_type, num_elements } => {
+                self.state
+                    .record_bv_result(sext, bvop.sext(dest_size - source_size))
+            }
+            Type::VectorType {
+                element_type,
+                num_elements,
+            } => {
                 let in_vector = self.state.operand_to_bv(&sext.operand)?;
                 let in_el_size = size(&element_type) as u32;
                 let out_el_size = match sext.get_type() {
-                    Type::VectorType { element_type: out_el_type, num_elements: out_num_els } => {
+                    Type::VectorType {
+                        element_type: out_el_type,
+                        num_elements: out_num_els,
+                    } => {
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("SExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
                         size(&out_el_type) as u32
-                    },
-                    ty => return Err(Error::MalformedInstruction(format!("SExt operand is a vector type, but output is not: it is {:?}", ty))),
+                    }
+                    ty => {
+                        return Err(Error::MalformedInstruction(format!(
+                            "SExt operand is a vector type, but output is not: it is {:?}",
+                            ty
+                        )))
+                    }
                 };
                 let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
                     el.sext(out_el_size - in_el_size)
                 })?;
                 self.state.record_bv_result(sext, final_bv)
-            },
-            ty => Err(Error::MalformedInstruction(format!("Expected SExt operand type to be integer or vector of integers; got {:?}", ty))),
+            }
+            ty => Err(Error::MalformedInstruction(format!(
+                "Expected SExt operand type to be integer or vector of integers; got {:?}",
+                ty
+            ))),
         }
     }
 
@@ -580,23 +693,37 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Type::IntegerType { .. } => {
                 let bvop = self.state.operand_to_bv(&trunc.operand)?;
                 let dest_size = size(&trunc.get_type()) as u32;
-                self.state.record_bv_result(trunc, bvop.slice(dest_size-1, 0))
-            },
+                self.state
+                    .record_bv_result(trunc, bvop.slice(dest_size - 1, 0))
+            }
             Type::VectorType { num_elements, .. } => {
                 let in_vector = self.state.operand_to_bv(&trunc.operand)?;
                 let dest_el_size = match trunc.get_type() {
-                    Type::VectorType { element_type: out_el_type, num_elements: out_num_els } => {
+                    Type::VectorType {
+                        element_type: out_el_type,
+                        num_elements: out_num_els,
+                    } => {
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("Trunc operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
                         size(&out_el_type) as u32
-                    },
-                    ty => return Err(Error::MalformedInstruction(format!("Trunc operand is a vector type, but output is not: it is {:?}", ty))),
+                    }
+                    ty => {
+                        return Err(Error::MalformedInstruction(format!(
+                            "Trunc operand is a vector type, but output is not: it is {:?}",
+                            ty
+                        )))
+                    }
                 };
-                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| el.slice(dest_el_size-1, 0))?;
+                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
+                    el.slice(dest_el_size - 1, 0)
+                })?;
                 self.state.record_bv_result(trunc, final_bv)
-            },
-            ty => Err(Error::MalformedInstruction(format!("Expected Trunc operand type to be integer or vector of integers; got {:?}", ty))),
+            }
+            ty => Err(Error::MalformedInstruction(format!(
+                "Expected Trunc operand type to be integer or vector of integers; got {:?}",
+                ty
+            ))),
         }
     }
 
@@ -604,14 +731,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_cast_op(&mut self, cast: &'p impl instruction::UnaryOp) -> Result<()> {
         debug!("Symexing cast op {:?}", cast);
         let bvop = self.state.operand_to_bv(&cast.get_operand())?;
-        self.state.record_bv_result(cast, bvop)  // from Boolector's perspective a cast is simply a no-op; the bit patterns are equal
+        self.state.record_bv_result(cast, bvop) // from Boolector's perspective a cast is simply a no-op; the bit patterns are equal
     }
 
     fn symex_load(&mut self, load: &'p instruction::Load) -> Result<()> {
         debug!("Symexing load {:?}", load);
         let bvaddr = self.state.operand_to_bv(&load.address)?;
         let dest_size = size(&load.get_type());
-        self.state.record_bv_result(load, self.state.read(&bvaddr, dest_size as u32)?)
+        self.state
+            .record_bv_result(load, self.state.read(&bvaddr, dest_size as u32)?)
     }
 
     fn symex_store(&mut self, store: &'p instruction::Store) -> Result<()> {
@@ -626,42 +754,68 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         match gep.get_type() {
             Type::PointerType { .. } => {
                 let bvbase = self.state.operand_to_bv(&gep.address)?;
-                let offset = Self::get_offset_recursive(&self.state, gep.indices.iter(), &gep.address.get_type(), bvbase.get_width())?;
+                let offset = Self::get_offset_recursive(
+                    &self.state,
+                    gep.indices.iter(),
+                    &gep.address.get_type(),
+                    bvbase.get_width(),
+                )?;
                 self.state.record_bv_result(gep, bvbase.add(&offset))
-            },
-            Type::VectorType { .. } => Err(Error::UnsupportedInstruction("GEP calculating a vector of pointers".to_owned())),
-            ty => Err(Error::MalformedInstruction(format!("Expected GEP result type to be pointer or vector of pointers; got {:?}", ty))),
+            }
+            Type::VectorType { .. } => Err(Error::UnsupportedInstruction(
+                "GEP calculating a vector of pointers".to_owned(),
+            )),
+            ty => Err(Error::MalformedInstruction(format!(
+                "Expected GEP result type to be pointer or vector of pointers; got {:?}",
+                ty
+            ))),
         }
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-    fn get_offset_recursive(state: &State<'p, B>, mut indices: impl Iterator<Item = &'p Operand>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
+    fn get_offset_recursive(
+        state: &State<'p, B>,
+        mut indices: impl Iterator<Item = &'p Operand>,
+        base_type: &Type,
+        result_bits: u32,
+    ) -> Result<B::BV> {
         match indices.next() {
             None => Ok(state.zero(result_bits)),
-            Some(index) => match base_type {
-                Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
-                    let index = state.operand_to_bv(index)?.zero_extend_to_bits(result_bits);
-                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, state.solver.clone())?;
-                    Self::get_offset_recursive(state, indices, nested_ty, result_bits)
-                        .map(|bv| bv.add(&offset))
-                },
-                Type::StructType { .. } => match index {
-                    Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                        let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
-                        Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                            .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
+            Some(index) => {
+                match base_type {
+                    Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
+                        let index = state.operand_to_bv(index)?.zero_extend_to_bits(result_bits);
+                        let (offset, nested_ty) =
+                            get_offset_bv_index(base_type, &index, state.solver.clone())?;
+                        Self::get_offset_recursive(state, indices, nested_ty, result_bits)
+                            .map(|bv| bv.add(&offset))
+                    }
+                    Type::StructType { .. } => match index {
+                        Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+                            let (offset, nested_ty) =
+                                get_offset_constant_index(base_type, *index as usize)?;
+                            Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
+                                .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
+                        }
+                        _ => Err(Error::MalformedInstruction(format!(
+                            "Expected index into struct type to be constant, but got index {:?}",
+                            index
+                        ))),
                     },
-                    _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
-                },
-                Type::NamedStructType { ty, .. } => {
-                    let arc: Arc<RwLock<Type>> = ty.as_ref()
-                        .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
-                        .upgrade()
-                        .expect("Failed to upgrade weak reference");
-                    let actual_ty: &Type = &arc.read().unwrap();
-                    if let Type::StructType { .. } = actual_ty {
-                        // this code copied from the StructType case
-                        match index {
+                    Type::NamedStructType { ty, .. } => {
+                        let arc: Arc<RwLock<Type>> = ty
+                            .as_ref()
+                            .ok_or_else(|| {
+                                Error::MalformedInstruction(
+                                    "get_offset on an opaque struct type".to_owned(),
+                                )
+                            })?
+                            .upgrade()
+                            .expect("Failed to upgrade weak reference");
+                        let actual_ty: &Type = &arc.read().unwrap();
+                        if let Type::StructType { .. } = actual_ty {
+                            // this code copied from the StructType case
+                            match index {
                             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                                 let (offset, nested_ty) = get_offset_constant_index(actual_ty, *index as usize)?;
                                 Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
@@ -669,11 +823,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                         }
-                    } else {
-                        Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+                        } else {
+                            Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+                        }
                     }
+                    _ => panic!("get_offset_recursive with base type {:?}", base_type),
                 }
-                _ => panic!("get_offset_recursive with base type {:?}", base_type),
             }
         }
     }
@@ -681,7 +836,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     fn symex_alloca(&mut self, alloca: &'p instruction::Alloca) -> Result<()> {
         debug!("Symexing alloca {:?}", alloca);
         match &alloca.num_elements {
-            Operand::ConstantOperand(Constant::Int { value: num_elements, .. }) => {
+            Operand::ConstantOperand(Constant::Int {
+                value: num_elements,
+                ..
+            }) => {
                 let allocation_size_bits = {
                     let element_size_bits = size_opaque_aware(&alloca.allocated_type, self.project)
                         .expect("Alloca with type which is opaque in the entire Project");
@@ -695,8 +853,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 };
                 let allocated = self.state.allocate(allocation_size_bits);
                 self.state.record_bv_result(alloca, allocated)
-            },
-            op => Err(Error::UnsupportedInstruction(format!("Alloca with num_elements not a constant int: {:?}", op))),
+            }
+            op => Err(Error::UnsupportedInstruction(format!(
+                "Alloca with num_elements not a constant int: {:?}",
+                op
+            ))),
         }
     }
 
@@ -707,18 +868,33 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                 let index = *index as u32;
                 match ee.vector.get_type() {
-                    Type::VectorType { element_type, num_elements } => {
+                    Type::VectorType {
+                        element_type,
+                        num_elements,
+                    } => {
                         if index >= num_elements as u32 {
-                            Err(Error::MalformedInstruction(format!("ExtractElement index out of range: index {} with {} elements", index, num_elements)))
+                            Err(Error::MalformedInstruction(format!(
+                                "ExtractElement index out of range: index {} with {} elements",
+                                index, num_elements
+                            )))
                         } else {
                             let el_size = size(&element_type) as u32;
-                            self.state.record_bv_result(ee, vector.slice((index+1)*el_size - 1, index*el_size))
+                            self.state.record_bv_result(
+                                ee,
+                                vector.slice((index + 1) * el_size - 1, index * el_size),
+                            )
                         }
-                    },
-                    ty => Err(Error::MalformedInstruction(format!("Expected ExtractElement vector to be a vector type, got {:?}", ty))),
+                    }
+                    ty => Err(Error::MalformedInstruction(format!(
+                        "Expected ExtractElement vector to be a vector type, got {:?}",
+                        ty
+                    ))),
                 }
-            },
-            op => Err(Error::UnsupportedInstruction(format!("ExtractElement with index not a constant int: {:?}", op))),
+            }
+            op => Err(Error::UnsupportedInstruction(format!(
+                "ExtractElement with index not a constant int: {:?}",
+                op
+            ))),
         }
     }
 
@@ -730,25 +906,43 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                 let index = *index as u32;
                 match ie.vector.get_type() {
-                    Type::VectorType { element_type, num_elements } => {
+                    Type::VectorType {
+                        element_type,
+                        num_elements,
+                    } => {
                         if index >= num_elements as u32 {
-                            Err(Error::MalformedInstruction(format!("InsertElement index out of range: index {} with {} elements", index, num_elements)))
+                            Err(Error::MalformedInstruction(format!(
+                                "InsertElement index out of range: index {} with {} elements",
+                                index, num_elements
+                            )))
                         } else {
                             let vec_size = vector.get_width();
                             let el_size = size(&element_type) as u32;
                             assert_eq!(vec_size, el_size * num_elements as u32);
-                            let insertion_bitindex_low = index * el_size;  // lowest bit number in the vector which will be overwritten
-                            let insertion_bitindex_high = (index+1) * el_size - 1;  // highest bit number in the vector which will be overwritten
+                            let insertion_bitindex_low = index * el_size; // lowest bit number in the vector which will be overwritten
+                            let insertion_bitindex_high = (index + 1) * el_size - 1; // highest bit number in the vector which will be overwritten
 
-                            let with_insertion = Self::overwrite_bv_segment(&mut self.state, &vector, element, insertion_bitindex_low, insertion_bitindex_high);
+                            let with_insertion = Self::overwrite_bv_segment(
+                                &mut self.state,
+                                &vector,
+                                element,
+                                insertion_bitindex_low,
+                                insertion_bitindex_high,
+                            );
 
                             self.state.record_bv_result(ie, with_insertion)
                         }
-                    },
-                    ty => Err(Error::MalformedInstruction(format!("Expected InsertElement vector to be a vector type, got {:?}", ty))),
+                    }
+                    ty => Err(Error::MalformedInstruction(format!(
+                        "Expected InsertElement vector to be a vector type, got {:?}",
+                        ty
+                    ))),
                 }
-            },
-            op => Err(Error::UnsupportedInstruction(format!("InsertElement with index not a constant int: {:?}", op))),
+            }
+            op => Err(Error::UnsupportedInstruction(format!(
+                "InsertElement with index not a constant int: {:?}",
+                op
+            ))),
         }
     }
 
@@ -763,7 +957,10 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             op0_type
         };
         match op_type {
-            Type::VectorType { element_type, num_elements } => {
+            Type::VectorType {
+                element_type,
+                num_elements,
+            } => {
                 let mask: Vec<u32> = match &sv.mask {
                     Constant::Vector(mask) => mask.iter()
                         .map(|c| match c {
@@ -786,42 +983,64 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let el_size = size(&element_type) as u32;
                 let num_elements = num_elements as u32;
                 assert_eq!(op0.get_width(), el_size * num_elements);
-                let final_bv = mask.into_iter()
+                let final_bv = mask
+                    .into_iter()
                     .map(|idx| {
                         if idx < num_elements {
-                            op0.slice((idx+1) * el_size - 1, idx * el_size)
+                            op0.slice((idx + 1) * el_size - 1, idx * el_size)
                         } else {
                             let idx = idx - num_elements;
-                            op1.slice((idx+1) * el_size - 1, idx * el_size)
+                            op1.slice((idx + 1) * el_size - 1, idx * el_size)
                         }
                     })
-                    .reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("ShuffleVector mask had 0 elements".to_owned()))?;
+                    .reduce(|a, b| b.concat(&a))
+                    .ok_or_else(|| {
+                        Error::MalformedInstruction("ShuffleVector mask had 0 elements".to_owned())
+                    })?;
                 self.state.record_bv_result(sv, final_bv)
-            },
-            ty => Err(Error::MalformedInstruction(format!("Expected ShuffleVector operands to be vectors, got {:?}", ty))),
+            }
+            ty => Err(Error::MalformedInstruction(format!(
+                "Expected ShuffleVector operands to be vectors, got {:?}",
+                ty
+            ))),
         }
     }
 
     fn symex_extractvalue(&mut self, ev: &'p instruction::ExtractValue) -> Result<()> {
         debug!("Symexing extractvalue {:?}", ev);
         let aggregate = self.state.operand_to_bv(&ev.aggregate)?;
-        let (offset_bytes, size_bits) = Self::get_offset_recursive_const_indices(ev.indices.iter().map(|i| *i as usize), &ev.aggregate.get_type())?;
-        let low_offset_bits = offset_bytes * 8;  // inclusive
-        let high_offset_bits = low_offset_bits + size_bits;  // exclusive
+        let (offset_bytes, size_bits) = Self::get_offset_recursive_const_indices(
+            ev.indices.iter().map(|i| *i as usize),
+            &ev.aggregate.get_type(),
+        )?;
+        let low_offset_bits = offset_bytes * 8; // inclusive
+        let high_offset_bits = low_offset_bits + size_bits; // exclusive
         assert!(aggregate.get_width() >= high_offset_bits as u32, "Trying to extractvalue from an aggregate with total size {} bits, extracting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits - 1);
-        self.state.record_bv_result(ev, aggregate.slice((high_offset_bits - 1) as u32, low_offset_bits as u32))
+        self.state.record_bv_result(
+            ev,
+            aggregate.slice((high_offset_bits - 1) as u32, low_offset_bits as u32),
+        )
     }
 
     fn symex_insertvalue(&mut self, iv: &'p instruction::InsertValue) -> Result<()> {
         debug!("Symexing insertvalue {:?}", iv);
         let aggregate = self.state.operand_to_bv(&iv.aggregate)?;
         let element = self.state.operand_to_bv(&iv.element)?;
-        let (offset_bytes, size_bits) = Self::get_offset_recursive_const_indices(iv.indices.iter().map(|i| *i as usize), &iv.aggregate.get_type())?;
-        let low_offset_bits = offset_bytes * 8;  // inclusive
-        let high_offset_bits = low_offset_bits + size_bits - 1;  // inclusive
+        let (offset_bytes, size_bits) = Self::get_offset_recursive_const_indices(
+            iv.indices.iter().map(|i| *i as usize),
+            &iv.aggregate.get_type(),
+        )?;
+        let low_offset_bits = offset_bytes * 8; // inclusive
+        let high_offset_bits = low_offset_bits + size_bits - 1; // inclusive
         assert!(aggregate.get_width() >= high_offset_bits as u32, "Trying to insertvalue into an aggregate with total size {} bits, inserting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits);
 
-        let new_aggregate = Self::overwrite_bv_segment(&mut self.state, &aggregate, element, low_offset_bits as u32, high_offset_bits as u32);
+        let new_aggregate = Self::overwrite_bv_segment(
+            &mut self.state,
+            &aggregate,
+            element,
+            low_offset_bits as u32,
+            high_offset_bits as u32,
+        );
 
         self.state.record_bv_result(iv, new_aggregate)
     }
@@ -829,28 +1048,46 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Like `get_offset_recursive()` above, but with constant indices rather than `Operand`s.
     ///
     /// Returns the start offset (in bytes) of the indicated element, and the size (in bits) of the indicated element.
-    fn get_offset_recursive_const_indices(mut indices: impl Iterator<Item = usize>, base_type: &Type) -> Result<(usize, usize)> {
+    fn get_offset_recursive_const_indices(
+        mut indices: impl Iterator<Item = usize>,
+        base_type: &Type,
+    ) -> Result<(usize, usize)> {
         match indices.next() {
             None => Ok((0, size(base_type))),
-            Some(index) => match base_type {
-                Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } | Type::StructType { .. } => {
-                    let (offset, nested_ty) = get_offset_constant_index(base_type, index)?;
-                    Self::get_offset_recursive_const_indices(indices, &nested_ty).map(|(val, size)| (val + offset, size))
-                },
-                Type::NamedStructType { ty, .. } => {
-                    let arc: Arc<RwLock<Type>> = ty.as_ref()
-                        .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
-                        .upgrade()
-                        .expect("Failed to upgrade weak reference");
-                    let actual_ty: &Type = &arc.read().unwrap();
-                    if let Type::StructType { .. } = actual_ty {
-                        let (offset, nested_ty) = get_offset_constant_index(actual_ty, index)?;
-                        Self::get_offset_recursive_const_indices(indices, &nested_ty).map(|(val, size)| (val + offset, size))
-                    } else {
-                        Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+            Some(index) => {
+                match base_type {
+                    Type::PointerType { .. }
+                    | Type::ArrayType { .. }
+                    | Type::VectorType { .. }
+                    | Type::StructType { .. } => {
+                        let (offset, nested_ty) = get_offset_constant_index(base_type, index)?;
+                        Self::get_offset_recursive_const_indices(indices, &nested_ty)
+                            .map(|(val, size)| (val + offset, size))
                     }
-                },
-                _ => panic!("get_offset_recursive_const_indices with base type {:?}", base_type),
+                    Type::NamedStructType { ty, .. } => {
+                        let arc: Arc<RwLock<Type>> = ty
+                            .as_ref()
+                            .ok_or_else(|| {
+                                Error::MalformedInstruction(
+                                    "get_offset on an opaque struct type".to_owned(),
+                                )
+                            })?
+                            .upgrade()
+                            .expect("Failed to upgrade weak reference");
+                        let actual_ty: &Type = &arc.read().unwrap();
+                        if let Type::StructType { .. } = actual_ty {
+                            let (offset, nested_ty) = get_offset_constant_index(actual_ty, index)?;
+                            Self::get_offset_recursive_const_indices(indices, &nested_ty)
+                                .map(|(val, size)| (val + offset, size))
+                        } else {
+                            Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+                        }
+                    }
+                    _ => panic!(
+                        "get_offset_recursive_const_indices with base type {:?}",
+                        base_type
+                    ),
+                }
             }
         }
     }
@@ -860,11 +1097,22 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// Specifically, offsets `low_bitindex` to `high_bitindex` of
     /// `original_bv` (inclusive) will be overwritten with the data in
     /// `overwrite_data`, which must be exactly the correct length
-    fn overwrite_bv_segment(state: &mut State<B>, original_bv: &B::BV, overwrite_data: B::BV, low_bitindex: u32, high_bitindex: u32) -> B::BV {
+    fn overwrite_bv_segment(
+        state: &mut State<B>,
+        original_bv: &B::BV,
+        overwrite_data: B::BV,
+        low_bitindex: u32,
+        high_bitindex: u32,
+    ) -> B::BV {
         let full_width = original_bv.get_width();
         let highest_bit_index = full_width - 1;
         assert!(high_bitindex <= highest_bit_index, "overwrite_bv_segment: high_bitindex {} is larger than highest valid bit index {} for an original_bv of width {}", high_bitindex, highest_bit_index, full_width);
-        assert!(high_bitindex >= low_bitindex, "overwrite_bv_segment: high_bitindex {} is lower than low_bitindex {}", high_bitindex, low_bitindex);
+        assert!(
+            high_bitindex >= low_bitindex,
+            "overwrite_bv_segment: high_bitindex {} is lower than low_bitindex {}",
+            high_bitindex,
+            low_bitindex
+        );
         let overwrite_width = overwrite_data.get_width();
         assert_eq!(overwrite_width, high_bitindex - low_bitindex + 1, "overwrite_bv_segment: indicated a segment from bit {} to bit {} (width {}), but provided overwrite_data has width {}", low_bitindex, high_bitindex, high_bitindex - low_bitindex + 1, overwrite_width);
 
@@ -877,7 +1125,9 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 zeroes.concat(&state.ones(low_bitindex))
             }
         } else {
-            let top = state.ones(highest_bit_index - high_bitindex).concat(&zeroes);
+            let top = state
+                .ones(highest_bit_index - high_bitindex)
+                .concat(&zeroes);
             if low_bitindex == 0 {
                 top
             } else {
@@ -894,8 +1144,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
         };
 
         original_bv
-            .and(&mask_clear)  // zero out the segment we'll be writing
-            .or(&mask_overwrite)  // write the data into the appropriate position
+            .and(&mask_clear) // zero out the segment we'll be writing
+            .or(&mask_overwrite) // write the data into the appropriate position
     }
 
     /// If the returned value is `Ok(Some(_))`, then this is the final return value of the
@@ -910,26 +1160,35 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             ResolvedFunction::HookActive { hook, hooked_thing } => {
                 let pretty_hookedthing = hooked_thing.to_string();
                 let quiet = if let HookedThing::Intrinsic(_) = hooked_thing {
-                    true  // executing the built-in hook of an intrinsic is relatively unimportant from a logging standpoint
+                    true // executing the built-in hook of an intrinsic is relatively unimportant from a logging standpoint
                 } else {
-                    false  // executing a hook for an actual function call is relatively important from a logging standpoint
+                    false // executing a hook for an actual function call is relatively important from a logging standpoint
                 };
                 match self.symex_hook(call, &hook, &pretty_hookedthing, quiet)? {
                     // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                     ReturnValue::Return(retval) => {
                         // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
-                        self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
-                    },
-                    ReturnValue::ReturnVoid => {},
+                        self.state
+                            .assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
+                    }
+                    ReturnValue::ReturnVoid => {}
                     ReturnValue::Throw(bvptr) => {
                         debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
                         return Ok(Some(ReturnValue::Throw(bvptr)));
-                    },
+                    }
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 }
-                let log_level = if quiet { log::Level::Debug } else { log::Level::Info };
-                log::log!(log_level, "Done processing hook for {}; continuing in bb {} in function {:?}{}",
-                    pretty_hookedthing, self.state.cur_loc.bb.name, self.state.cur_loc.func.name,
+                let log_level = if quiet {
+                    log::Level::Debug
+                } else {
+                    log::Level::Info
+                };
+                log::log!(
+                    log_level,
+                    "Done processing hook for {}; continuing in bb {} in function {:?}{}",
+                    pretty_hookedthing,
+                    self.state.cur_loc.bb.name,
+                    self.state.cur_loc.func.name,
                     if self.state.config.print_module_name {
                         format!(", module {:?}", self.state.cur_loc.module.name)
                     } else {
@@ -937,7 +1196,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     }
                 );
                 Ok(None)
-            },
+            }
             ResolvedFunction::NoHookActive { called_funcname } => {
                 let at_max_callstack_depth = match self.state.config.max_callstack_depth {
                     Some(max_depth) => self.state.current_callstack_depth() >= max_depth,
@@ -946,60 +1205,88 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 if at_max_callstack_depth {
                     info!("Ignoring a call to function {:?} due to max_callstack_len setting (current callstack depth is {}, max is {})", called_funcname, self.state.current_callstack_depth(), self.state.config.max_callstack_depth.unwrap());
                     match call.get_type() {
-                        Type::VoidType => {},
+                        Type::VoidType => {}
                         ty => {
                             let width = size(&ty);
-                            let bv = self.state.new_bv_with_name(Name::from(format!("{}_retval", called_funcname)), width as u32)?;
-                            self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
-                        },
+                            let bv = self.state.new_bv_with_name(
+                                Name::from(format!("{}_retval", called_funcname)),
+                                width as u32,
+                            )?;
+                            self.state
+                                .assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
+                        }
                     }
                     Ok(None)
-                } else if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
+                } else if let Some((callee, callee_mod)) =
+                    self.state.get_func_by_name(called_funcname)
+                {
                     if call.arguments.len() != callee.parameters.len() {
                         if callee.is_var_arg {
-                            return Err(Error::UnsupportedInstruction(format!("Call of a function named {:?} which is variadic", callee.name)));
+                            return Err(Error::UnsupportedInstruction(format!(
+                                "Call of a function named {:?} which is variadic",
+                                callee.name
+                            )));
                         } else {
                             return Err(Error::MalformedInstruction(format!("Call of a function named {:?} which has {} parameters, but {} arguments were given", callee.name, callee.parameters.len(), call.arguments.len())));
                         }
                     }
-                    let bvargs: Vec<B::BV> = call.arguments.iter()
-                        .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+                    let bvargs: Vec<B::BV> = call
+                        .arguments
+                        .iter()
+                        .map(|arg| self.state.operand_to_bv(&arg.0)) // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                         .collect::<Result<Vec<B::BV>>>()?;
                     let saved_loc = self.state.cur_loc.clone();
                     self.state.push_callsite(call);
                     self.state.cur_loc = Location {
                         module: callee_mod,
                         func: callee,
-                        bb: callee.basic_blocks.get(0).expect("Failed to get entry basic block"),
+                        bb: callee
+                            .basic_blocks
+                            .get(0)
+                            .expect("Failed to get entry basic block"),
                         instr: BBInstrIndex::Instr(0),
-                        source_loc: None,  // this will be updated once we get there and begin symex of the instruction
+                        source_loc: None, // this will be updated once we get there and begin symex of the instruction
                     };
                     for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
-                        self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
+                        self.state.assign_bv_to_name(param.name.clone(), bvarg)?;
+                        // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
-                    info!("Entering function {:?} in module {:?}", called_funcname, &callee_mod.name);
-                    let returned_bv = self.symex_from_cur_loc_through_end_of_function()?.ok_or(Error::Unsat)?;  // if symex_from_cur_loc_through_end_of_function() returns `None`, this path is unsat
+                    info!(
+                        "Entering function {:?} in module {:?}",
+                        called_funcname, &callee_mod.name
+                    );
+                    let returned_bv = self
+                        .symex_from_cur_loc_through_end_of_function()?
+                        .ok_or(Error::Unsat)?; // if symex_from_cur_loc_through_end_of_function() returns `None`, this path is unsat
                     match self.state.pop_callsite() {
-                        None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                        Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_left() => {
+                        None => Ok(Some(returned_bv)), // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
+                        Some(ref callsite)
+                            if callsite.loc == saved_loc && callsite.instr.is_left() =>
+                        {
                             self.state.cur_loc = saved_loc;
-                            self.state.cur_loc.inc();  // advance past the call instruction itself before recording the path entry. `saved_loc` must have been a call instruction, so can't be a terminator, so the call to `inc()` is safe.
+                            self.state.cur_loc.inc(); // advance past the call instruction itself before recording the path entry. `saved_loc` must have been a call instruction, so can't be a terminator, so the call to `inc()` is safe.
                             self.state.record_path_entry();
                             match returned_bv {
                                 ReturnValue::Return(bv) => {
                                     // can't quite use `state.record_bv_result(call, bv)?` because Call is not HasResult
-                                    self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
-                                },
+                                    self.state.assign_bv_to_name(
+                                        call.dest.as_ref().unwrap().clone(),
+                                        bv,
+                                    )?;
+                                }
                                 ReturnValue::ReturnVoid => assert_eq!(call.dest, None),
                                 ReturnValue::Throw(bvptr) => {
                                     debug!("Callee threw an exception, but caller isn't inside a try block; rethrowing upwards");
                                     return Ok(Some(ReturnValue::Throw(bvptr)));
-                                },
+                                }
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             };
                             debug!("Completed ordinary return to caller");
-                            info!("Leaving function {:?}, continuing in caller {:?} (bb {}){}",
-                                called_funcname, self.state.cur_loc.func.name, self.state.cur_loc.bb.name,
+                            info!(
+                                "Leaving function {:?}, continuing in caller {:?} (bb {}){}",
+                                called_funcname,
+                                self.state.cur_loc.func.name,
+                                self.state.cur_loc.bb.name,
                                 if self.state.config.print_module_name {
                                     format!(" in module {:?}", self.state.cur_loc.module.name)
                                 } else {
@@ -1007,39 +1294,50 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 },
                             );
                             Ok(None)
-                        },
+                        }
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
                     }
                 } else {
                     match self.state.config.function_hooks.get_default_hook() {
-                        None => Err(Error::FunctionNotFound(self.state.demangle(called_funcname))),
+                        None => Err(Error::FunctionNotFound(
+                            self.state.demangle(called_funcname),
+                        )),
                         Some(hook) => {
-                            let hook = hook.clone();  // end the implicit borrow of `self` that arose from `get_default_hook()`. The `clone` is just an `Rc` and a `usize`, as of this writing
+                            let hook = hook.clone(); // end the implicit borrow of `self` that arose from `get_default_hook()`. The `clone` is just an `Rc` and a `usize`, as of this writing
                             let pretty_funcname = self.state.demangle(called_funcname);
-                            info!("Using default hook for a function named {:?}", pretty_funcname);
+                            info!(
+                                "Using default hook for a function named {:?}",
+                                pretty_funcname
+                            );
                             match self.symex_hook(call, &hook.clone(), &pretty_funcname, true)? {
                                 // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                                 ReturnValue::Return(retval) => {
                                     // can't quite use `state.record_bv_result(call, retval)?` because Call is not HasResult
-                                    self.state.assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
-                                },
-                                ReturnValue::ReturnVoid => {},
+                                    self.state.assign_bv_to_name(
+                                        call.dest.as_ref().unwrap().clone(),
+                                        retval,
+                                    )?;
+                                }
+                                ReturnValue::ReturnVoid => {}
                                 ReturnValue::Throw(bvptr) => {
                                     debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
                                     return Ok(Some(ReturnValue::Throw(bvptr)));
-                                },
+                                }
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             }
                             Ok(None)
                         }
                     }
                 }
-            },
+            }
         }
     }
 
-    #[allow(clippy::if_same_then_else)]  // in this case, having some identical `if` blocks actually improves readability, I think
-    fn resolve_function(&mut self, function: &'p Either<InlineAssembly, Operand>) -> Result<ResolvedFunction<'p, B>> {
+    #[allow(clippy::if_same_then_else)] // in this case, having some identical `if` blocks actually improves readability, I think
+    fn resolve_function(
+        &mut self,
+        function: &'p Either<InlineAssembly, Operand>,
+    ) -> Result<ResolvedFunction<'p, B>> {
         use crate::global_allocations::Callable;
         let funcname_or_hook: Either<&str, FunctionHook<B>> = match function {
             // the first two cases are really just optimizations for the third case; things should still work without the first two lines
@@ -1064,16 +1362,23 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             },
         };
         match funcname_or_hook {
-            Either::Left(funcname) => match self.state.config.function_hooks.get_hook_for(funcname) {
-                Some(hook) => Ok(ResolvedFunction::HookActive { hook: hook.clone(), hooked_thing: HookedThing::Function(funcname) }),
+            Either::Left(funcname) => match self.state.config.function_hooks.get_hook_for(funcname)
+            {
+                Some(hook) => Ok(ResolvedFunction::HookActive {
+                    hook: hook.clone(),
+                    hooked_thing: HookedThing::Function(funcname),
+                }),
                 None => {
                     // No hook currently defined for this function, check if any intrinsic hooks apply
                     // (see notes on function resolution in function_hooks.rs)
-                    if funcname.starts_with("llvm.memset")
-                        || funcname.starts_with("__memset")
-                    {
+                    if funcname.starts_with("llvm.memset") || funcname.starts_with("__memset") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.memset").cloned().expect("Failed to find LLVM intrinsic memset hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.memset")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic memset hook"),
                             hooked_thing: HookedThing::Function(funcname),
                         })
                     } else if funcname.starts_with("llvm.memcpy")
@@ -1082,72 +1387,142 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     {
                         // Our memcpy implementation also works for memmove
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.memcpy/memmove").cloned().expect("Failed to find LLVM intrinsic memcpy/memmove hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.memcpy/memmove")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic memcpy/memmove hook"),
                             hooked_thing: HookedThing::Function(funcname),
                         })
                     } else if funcname.starts_with("llvm.bswap") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.bswap").cloned().expect("Failed to find LLVM intrinsic bswap hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.bswap")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic bswap hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.objectsize") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.objectsize").cloned().expect("Failed to find LLVM intrinsic objectsize hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.objectsize")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic objectsize hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname == "llvm.assume" {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.assume").cloned().expect("Failed to find LLVM intrinsic assume hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.assume")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic assume hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.uadd.with.overflow") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.uadd.with.overflow").cloned().expect("Failed to find LLVM intrinsic uadd.with.overflow hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.uadd.with.overflow")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic uadd.with.overflow hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.sadd.with.overflow") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.sadd.with.overflow").cloned().expect("Failed to find LLVM intrinsic sadd.with.overflow hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.sadd.with.overflow")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic sadd.with.overflow hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
-                     } else if funcname.starts_with("llvm.usub.with.overflow") {
+                    } else if funcname.starts_with("llvm.usub.with.overflow") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.usub.with.overflow").cloned().expect("Failed to find LLVM intrinsic usub.with.overflow hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.usub.with.overflow")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic usub.with.overflow hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.ssub.with.overflow") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.ssub.with.overflow").cloned().expect("Failed to find LLVM intrinsic ssub.with.overflow hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.ssub.with.overflow")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic ssub.with.overflow hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
-                     } else if funcname.starts_with("llvm.umul.with.overflow") {
+                    } else if funcname.starts_with("llvm.umul.with.overflow") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.umul.with.overflow").cloned().expect("Failed to find LLVM intrinsic umul.with.overflow hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.umul.with.overflow")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic umul.with.overflow hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.smul_with_overflow") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.smul.with.overflow").cloned().expect("Failed to find LLVM intrinsic smul.with.overflow hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.smul.with.overflow")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic smul.with.overflow hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.uadd.sat") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.uadd.sat").cloned().expect("Failed to find LLVM intrinsic uadd.sat hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.uadd.sat")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic uadd.sat hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.sadd.sat") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.sadd.sat").cloned().expect("Failed to find LLVM intrinsic sadd.sat hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.sadd.sat")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic sadd.sat hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.usub.sat") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.usub.sat").cloned().expect("Failed to find LLVM intrinsic usub.sat hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.usub.sat")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic usub.sat hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.ssub.sat") {
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: llvm.ssub.sat").cloned().expect("Failed to find LLVM intrinsic ssub.sat hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.ssub.sat")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic ssub.sat hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.read_register")
@@ -1155,7 +1530,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     {
                         // These can just ignore their arguments and return unconstrained data, as appropriate
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: generic_stub_hook")
+                                .cloned()
+                                .expect("Failed to find intrinsic generic stub hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else if funcname.starts_with("llvm.lifetime")
@@ -1166,16 +1546,26 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     {
                         // these are all safe to ignore
                         Ok(ResolvedFunction::HookActive {
-                            hook: self.state.intrinsic_hooks.get_hook_for("intrinsic: generic_stub_hook").cloned().expect("Failed to find intrinsic generic stub hook"),
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: generic_stub_hook")
+                                .cloned()
+                                .expect("Failed to find intrinsic generic stub hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
                     } else {
                         // No hook currently defined for this function, and none of our intrinsic hooks apply
-                        Ok(ResolvedFunction::NoHookActive { called_funcname: funcname })
+                        Ok(ResolvedFunction::NoHookActive {
+                            called_funcname: funcname,
+                        })
                     }
-                },
+                }
             },
-            Either::Right(hook) => Ok(ResolvedFunction::HookActive { hook, hooked_thing: HookedThing::FunctionPtr }),
+            Either::Right(hook) => Ok(ResolvedFunction::HookActive {
+                hook,
+                hooked_thing: HookedThing::FunctionPtr,
+            }),
         }
     }
 
@@ -1187,21 +1577,37 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// level; if `false`, then at `INFO` level. Callers should decide how
     /// important it is to point out to the user that a hook is being processed
     /// in this case.
-    fn symex_hook(&mut self, call: &'p impl IsCall, hook: &FunctionHook<'p, B>, hooked_funcname: &str, quiet: bool) -> Result<ReturnValue<B::BV>> {
-        let log_level = if quiet { log::Level::Debug } else { log::Level::Info };
+    fn symex_hook(
+        &mut self,
+        call: &'p impl IsCall,
+        hook: &FunctionHook<'p, B>,
+        hooked_funcname: &str,
+        quiet: bool,
+    ) -> Result<ReturnValue<B::BV>> {
+        let log_level = if quiet {
+            log::Level::Debug
+        } else {
+            log::Level::Info
+        };
         log::log!(log_level, "Processing hook for {}", hooked_funcname);
         match hook.call_hook(&self.project, &mut self.state, call)? {
             ReturnValue::ReturnVoid => {
                 if call.get_type() != Type::VoidType {
-                    Err(Error::HookReturnValueMismatch(format!("Hook for {:?} returned void but call needs a return value", hooked_funcname)))
+                    Err(Error::HookReturnValueMismatch(format!(
+                        "Hook for {:?} returned void but call needs a return value",
+                        hooked_funcname
+                    )))
                 } else {
                     Ok(ReturnValue::ReturnVoid)
                 }
-            },
+            }
             ReturnValue::Return(retval) => {
                 let ret_type = call.get_type();
                 if ret_type == Type::VoidType {
-                    Err(Error::HookReturnValueMismatch(format!("Hook for {:?} returned a value but call is void-typed", hooked_funcname)))
+                    Err(Error::HookReturnValueMismatch(format!(
+                        "Hook for {:?} returned a value but call is void-typed",
+                        hooked_funcname
+                    )))
                 } else {
                     let retwidth = size(&ret_type);
                     if retval.get_width() != retwidth as u32 {
@@ -1210,19 +1616,20 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         Ok(ReturnValue::Return(retval))
                     }
                 }
-            },
-            ReturnValue::Throw(bvptr) => Ok(ReturnValue::Throw(bvptr)),  // throwing is always OK and doesn't need to be checked against function type
-            ReturnValue::Abort => Ok(ReturnValue::Abort),  // aborting is always OK and doesn't need to be checked against function type
+            }
+            ReturnValue::Throw(bvptr) => Ok(ReturnValue::Throw(bvptr)), // throwing is always OK and doesn't need to be checked against function type
+            ReturnValue::Abort => Ok(ReturnValue::Abort), // aborting is always OK and doesn't need to be checked against function type
         }
     }
 
     /// Returns the `ReturnValue` representing the return value
     fn symex_return(&self, ret: &'p terminator::Ret) -> Result<ReturnValue<B::BV>> {
         debug!("Symexing return {:?}", ret);
-        Ok(ret.return_operand
+        Ok(ret
+            .return_operand
             .as_ref()
             .map(|op| self.state.operand_to_bv(op))
-            .transpose()?  // turns Option<Result<_>> into Result<Option<_>>, then ?'s away the Result
+            .transpose()? // turns Option<Result<_>> into Result<Option<_>>, then ?'s away the Result
             .map(ReturnValue::Return)
             .unwrap_or(ReturnValue::ReturnVoid))
     }
@@ -1240,27 +1647,41 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// necessary) and eventually returns the new `ReturnValue` representing the
     /// return value of the function (when it reaches the end of the function), or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_condbr(&mut self, condbr: &'p terminator::CondBr) -> Result<Option<ReturnValue<B::BV>>> {
+    fn symex_condbr(
+        &mut self,
+        condbr: &'p terminator::CondBr,
+    ) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing condbr {:?}", condbr);
         let bvcond = self.state.operand_to_bv(&condbr.condition)?;
-        let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond))?;
-        let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond.not()))?;
+        let true_feasible = self
+            .state
+            .sat_with_extra_constraints(std::iter::once(&bvcond))?;
+        let false_feasible = self
+            .state
+            .sat_with_extra_constraints(std::iter::once(&bvcond.not()))?;
         if true_feasible && false_feasible {
             debug!("both true and false branches are feasible");
             // for now we choose to explore true first, and backtrack to false if necessary
-            self.state.save_backtracking_point(&condbr.false_dest, bvcond.not());
+            self.state
+                .save_backtracking_point(&condbr.false_dest, bvcond.not());
             bvcond.assert()?;
-            self.state.cur_loc.move_to_start_of_bb_by_name(&condbr.true_dest);
+            self.state
+                .cur_loc
+                .move_to_start_of_bb_by_name(&condbr.true_dest);
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
             debug!("only the true branch is feasible");
-            bvcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
-            self.state.cur_loc.move_to_start_of_bb_by_name(&condbr.true_dest);
+            bvcond.assert()?; // unnecessary, but may help Boolector more than it hurts?
+            self.state
+                .cur_loc
+                .move_to_start_of_bb_by_name(&condbr.true_dest);
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
             debug!("only the false branch is feasible");
-            bvcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
-            self.state.cur_loc.move_to_start_of_bb_by_name(&condbr.false_dest);
+            bvcond.not().assert()?; // unnecessary, but may help Boolector more than it hurts?
+            self.state
+                .cur_loc
+                .move_to_start_of_bb_by_name(&condbr.false_dest);
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             debug!("neither branch is feasible");
@@ -1272,45 +1693,57 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// necessary) and eventually returns the new `ReturnValue` representing the
     /// return value of the function (when it reaches the end of the function), or
     /// `Ok(None)` if no possible paths were found.
-    fn symex_switch(&mut self, switch: &'p terminator::Switch) -> Result<Option<ReturnValue<B::BV>>> {
+    fn symex_switch(
+        &mut self,
+        switch: &'p terminator::Switch,
+    ) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing switch {:?}", switch);
         let switchval = self.state.operand_to_bv(&switch.operand)?;
-        let dests = switch.dests
+        let dests = switch
+            .dests
             .iter()
-            .map(|(c,n)| {
-                self.state.const_to_bv(c)
-                    .map(|c| (c,n))
-            })
+            .map(|(c, n)| self.state.const_to_bv(c).map(|c| (c, n)))
             .collect::<Result<Vec<(B::BV, &Name)>>>()?;
-        let feasible_dests: Vec<_> = dests.iter()
-            .map(|(c,n)| {
-                self.state.bvs_can_be_equal(&c, &switchval).map(|b| (c,*n,b))
+        let feasible_dests: Vec<_> = dests
+            .iter()
+            .map(|(c, n)| {
+                self.state
+                    .bvs_can_be_equal(&c, &switchval)
+                    .map(|b| (c, *n, b))
             })
             .collect::<Result<Vec<(&B::BV, &Name, bool)>>>()?
             .into_iter()
-            .filter(|(_,_,b)| *b)
-            .map(|(c,n,_)| (c,n))
+            .filter(|(_, _, b)| *b)
+            .map(|(c, n, _)| (c, n))
             .collect::<Vec<(&B::BV, &Name)>>();
         if feasible_dests.is_empty() {
             // none of the dests are feasible, we will always end up in the default dest
-            self.state.cur_loc.move_to_start_of_bb_by_name(&switch.default_dest);
+            self.state
+                .cur_loc
+                .move_to_start_of_bb_by_name(&switch.default_dest);
             self.symex_from_cur_loc_through_end_of_function()
         } else {
             // make backtracking points for all but the first destination
             for (val, name) in feasible_dests.iter().skip(1) {
-                self.state.save_backtracking_point(name, val._eq(&switchval));
+                self.state
+                    .save_backtracking_point(name, val._eq(&switchval));
             }
             // if the default dest is feasible, make a backtracking point for it
-            let default_dest_constraint = dests.iter()
-                .map(|(c,_)| c._eq(&switchval).not())
-                .reduce(|a,b| a.and(&b))
-                .unwrap_or_else(|| self.state.bv_from_bool(true));  // if `dests` was empty, that's weird, but the default dest is definitely feasible
-            if self.state.sat_with_extra_constraints(std::iter::once(&default_dest_constraint))? {
-                self.state.save_backtracking_point(&switch.default_dest, default_dest_constraint);
+            let default_dest_constraint = dests
+                .iter()
+                .map(|(c, _)| c._eq(&switchval).not())
+                .reduce(|a, b| a.and(&b))
+                .unwrap_or_else(|| self.state.bv_from_bool(true)); // if `dests` was empty, that's weird, but the default dest is definitely feasible
+            if self
+                .state
+                .sat_with_extra_constraints(std::iter::once(&default_dest_constraint))?
+            {
+                self.state
+                    .save_backtracking_point(&switch.default_dest, default_dest_constraint);
             }
             // follow the first destination
             let (val, name) = &feasible_dests[0];
-            val._eq(&switchval).assert()?;  // unnecessary, but may help Boolector more than it hurts?
+            val._eq(&switchval).assert()?; // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.move_to_start_of_bb_by_name(name);
             self.symex_from_cur_loc_through_end_of_function()
         }
@@ -1320,22 +1753,26 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `ReturnValue` representing the return value of the function (when it
     /// reaches the end of the function), or `Ok(None)` if no possible paths were
     /// found.
-    fn symex_invoke(&mut self, invoke: &'p terminator::Invoke) -> Result<Option<ReturnValue<B::BV>>> {
+    fn symex_invoke(
+        &mut self,
+        invoke: &'p terminator::Invoke,
+    ) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing invoke {:?}", invoke);
         match self.resolve_function(&invoke.function)? {
             ResolvedFunction::HookActive { hook, hooked_thing } => {
                 let pretty_hookedthing = hooked_thing.to_string();
                 let quiet = if let HookedThing::Intrinsic(_) = hooked_thing {
-                    true  // executing the built-in hook of an intrinsic is relatively unimportant from a logging standpoint
+                    true // executing the built-in hook of an intrinsic is relatively unimportant from a logging standpoint
                 } else {
-                    false  // executing a hook for an actual function call is relatively important from a logging standpoint
+                    false // executing a hook for an actual function call is relatively important from a logging standpoint
                 };
                 match self.symex_hook(invoke, &hook, &pretty_hookedthing, quiet)? {
                     // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                     ReturnValue::Return(retval) => {
-                        self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
-                    },
-                    ReturnValue::ReturnVoid => {},
+                        self.state
+                            .assign_bv_to_name(invoke.result.clone(), retval)?;
+                    }
+                    ReturnValue::ReturnVoid => {}
                     ReturnValue::Throw(bvptr) => {
                         info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}{}",
                             pretty_hookedthing, invoke.exception_label, self.state.cur_loc.func.name,
@@ -1346,13 +1783,19 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                             }
                         );
                         return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
-                    },
+                    }
                     ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                 };
                 let old_bb_name = &self.state.cur_loc.bb.name;
                 // We had a normal return, so continue at the `return_label`
-                self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
-                let log_level = if quiet { log::Level::Debug } else { log::Level::Info };
+                self.state
+                    .cur_loc
+                    .move_to_start_of_bb_by_name(&invoke.return_label);
+                let log_level = if quiet {
+                    log::Level::Debug
+                } else {
+                    log::Level::Info
+                };
                 log::log!(log_level, "Done processing hook for {}; continuing in function {:?}{} (hook was for the invoke in bb {}, now in bb {})",
                     pretty_hookedthing,
                     self.state.cur_loc.func.name,
@@ -1365,7 +1808,7 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     self.state.cur_loc.bb.name,
                 );
                 self.symex_from_cur_loc_through_end_of_function()
-            },
+            }
             ResolvedFunction::NoHookActive { called_funcname } => {
                 let at_max_callstack_depth = match self.state.config.max_callstack_depth {
                     Some(max_depth) => self.state.current_callstack_depth() >= max_depth,
@@ -1374,50 +1817,74 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 if at_max_callstack_depth {
                     info!("Ignoring a call to function {:?} due to max_callstack_len setting (current callstack depth is {}, max is {})", called_funcname, self.state.current_callstack_depth(), self.state.config.max_callstack_depth.unwrap());
                     match invoke.get_type() {
-                        Type::VoidType => {},
+                        Type::VoidType => {}
                         ty => {
                             let width = size(&ty);
-                            let bv = self.state.new_bv_with_name(Name::from(format!("{}_retval", called_funcname)), width as u32)?;
+                            let bv = self.state.new_bv_with_name(
+                                Name::from(format!("{}_retval", called_funcname)),
+                                width as u32,
+                            )?;
                             self.state.assign_bv_to_name(invoke.result.clone(), bv)?;
-                        },
+                        }
                     }
-                    self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
+                    self.state
+                        .cur_loc
+                        .move_to_start_of_bb_by_name(&invoke.return_label);
                     self.symex_from_cur_loc_through_end_of_function()
-                } else if let Some((callee, callee_mod)) = self.state.get_func_by_name(called_funcname) {
+                } else if let Some((callee, callee_mod)) =
+                    self.state.get_func_by_name(called_funcname)
+                {
                     if invoke.arguments.len() != callee.parameters.len() {
                         if callee.is_var_arg {
-                            return Err(Error::UnsupportedInstruction(format!("Call of a function named {:?} which is variadic", callee.name)));
+                            return Err(Error::UnsupportedInstruction(format!(
+                                "Call of a function named {:?} which is variadic",
+                                callee.name
+                            )));
                         } else {
                             return Err(Error::MalformedInstruction(format!("Call of a function named {:?} which has {} parameters, but {} arguments were given", callee.name, callee.parameters.len(), invoke.arguments.len())));
                         }
                     }
-                    let bvargs: Vec<B::BV> = invoke.arguments.iter()
-                        .map(|arg| self.state.operand_to_bv(&arg.0))  // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
+                    let bvargs: Vec<B::BV> = invoke
+                        .arguments
+                        .iter()
+                        .map(|arg| self.state.operand_to_bv(&arg.0)) // have to do this before changing state.cur_loc, so that the lookups happen in the caller function
                         .collect::<Result<Vec<B::BV>>>()?;
                     let saved_loc = self.state.cur_loc.clone();
                     self.state.push_invokesite(invoke);
                     self.state.cur_loc = Location {
                         module: callee_mod,
                         func: callee,
-                        bb: callee.basic_blocks.get(0).expect("Failed to get entry basic block"),
+                        bb: callee
+                            .basic_blocks
+                            .get(0)
+                            .expect("Failed to get entry basic block"),
                         instr: BBInstrIndex::Instr(0),
-                        source_loc: None,  // this will be updated once we get there and begin symex of the instruction
+                        source_loc: None, // this will be updated once we get there and begin symex of the instruction
                     };
                     for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
-                        self.state.assign_bv_to_name(param.name.clone(), bvarg)?;  // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
+                        self.state.assign_bv_to_name(param.name.clone(), bvarg)?;
+                        // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
-                    info!("Entering function {:?} in module {:?}", called_funcname, &callee_mod.name);
-                    let returned_bv = self.symex_from_cur_loc_through_end_of_function()?.ok_or(Error::Unsat)?;  // if symex_from_cur_loc_through_end_of_function() returns `None`, this path is unsat
+                    info!(
+                        "Entering function {:?} in module {:?}",
+                        called_funcname, &callee_mod.name
+                    );
+                    let returned_bv = self
+                        .symex_from_cur_loc_through_end_of_function()?
+                        .ok_or(Error::Unsat)?; // if symex_from_cur_loc_through_end_of_function() returns `None`, this path is unsat
                     match self.state.pop_callsite() {
-                        None => Ok(Some(returned_bv)),  // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
-                        Some(ref callsite) if callsite.loc == saved_loc && callsite.instr.is_right() => {
+                        None => Ok(Some(returned_bv)), // if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`
+                        Some(ref callsite)
+                            if callsite.loc == saved_loc && callsite.instr.is_right() =>
+                        {
                             let old_bb_name = &self.state.cur_loc.bb.name;
                             self.state.cur_loc = saved_loc;
                             match returned_bv {
                                 ReturnValue::Return(retval) => {
-                                    self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
-                                },
-                                ReturnValue::ReturnVoid => {},
+                                    self.state
+                                        .assign_bv_to_name(invoke.result.clone(), retval)?;
+                                }
+                                ReturnValue::ReturnVoid => {}
                                 ReturnValue::Throw(bvptr) => {
                                     info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}{}",
                                         self.state.cur_loc.func.name, called_funcname, self.state.cur_loc.bb.name, self.state.cur_loc.func.name,
@@ -1427,12 +1894,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                             String::new()
                                         },
                                     );
-                                    return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
-                                },
+                                    return self
+                                        .catch_at_exception_label(&bvptr, &invoke.exception_label);
+                                }
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             }
                             // Returned normally, so continue at the `return_label`
-                            self.state.cur_loc.move_to_start_of_bb_by_name(&invoke.return_label);
+                            self.state
+                                .cur_loc
+                                .move_to_start_of_bb_by_name(&invoke.return_label);
                             debug!("Completed ordinary return from invoke");
                             info!("Leaving function {:?}, continuing in caller {:?}{} (finished the invoke in bb {}, now in bb {})",
                                 called_funcname,
@@ -1446,22 +1916,28 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                 self.state.cur_loc.bb.name,
                             );
                             self.symex_from_cur_loc_through_end_of_function()
-                        },
+                        }
                         Some(callsite) => panic!("Received unexpected callsite {:?}", callsite),
                     }
                 } else {
                     match self.state.config.function_hooks.get_default_hook() {
-                        None => Err(Error::FunctionNotFound(self.state.demangle(called_funcname))),
+                        None => Err(Error::FunctionNotFound(
+                            self.state.demangle(called_funcname),
+                        )),
                         Some(hook) => {
-                            let hook = hook.clone();  // end the implicit borrow of `self` that arose from `get_default_hook()`. The `clone` is just an `Rc` and a `usize`, as of this writing
+                            let hook = hook.clone(); // end the implicit borrow of `self` that arose from `get_default_hook()`. The `clone` is just an `Rc` and a `usize`, as of this writing
                             let pretty_funcname = self.state.demangle(called_funcname);
-                            info!("Using default hook for a function named {:?}", pretty_funcname);
+                            info!(
+                                "Using default hook for a function named {:?}",
+                                pretty_funcname
+                            );
                             match self.symex_hook(invoke, &hook.clone(), &pretty_funcname, true)? {
                                 // Assume that `symex_hook()` has taken care of validating the hook return value as necessary
                                 ReturnValue::Return(retval) => {
-                                    self.state.assign_bv_to_name(invoke.result.clone(), retval)?;
-                                },
-                                ReturnValue::ReturnVoid => {},
+                                    self.state
+                                        .assign_bv_to_name(invoke.result.clone(), retval)?;
+                                }
+                                ReturnValue::ReturnVoid => {}
                                 ReturnValue::Throw(bvptr) => {
                                     info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}{}",
                                         pretty_funcname, invoke.exception_label, self.state.cur_loc.func.name,
@@ -1471,27 +1947,30 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                                             String::new()
                                         }
                                     );
-                                    return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
-                                },
+                                    return self
+                                        .catch_at_exception_label(&bvptr, &invoke.exception_label);
+                                }
                                 ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
                             }
                             Ok(None)
                         }
                     }
-
                 }
-            },
+            }
         }
     }
 
-    fn symex_resume(&mut self, resume: &'p terminator::Resume) -> Result<Option<ReturnValue<B::BV>>> {
+    fn symex_resume(
+        &mut self,
+        resume: &'p terminator::Resume,
+    ) -> Result<Option<ReturnValue<B::BV>>> {
         debug!("Symexing resume {:?}", resume);
 
         // (At least for C++ exceptions) the operand of the resume operand is the struct {exception_ptr, type_index}
         // (see notes on `catch_with_type_index()`). For now we don't handle the type_index, so we just strip out the
         // exception_ptr and throw that
         let operand = self.state.operand_to_bv(&resume.operand)?;
-        let exception_ptr = operand.slice(POINTER_SIZE_BITS as u32 - 1, 0);  // strip out the first element, assumed to be a pointer
+        let exception_ptr = operand.slice(POINTER_SIZE_BITS as u32 - 1, 0); // strip out the first element, assumed to be a pointer
         Ok(Some(ReturnValue::Throw(exception_ptr)))
     }
 
@@ -1503,9 +1982,15 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// `thrown_ptr`: pointer to the value or object that was thrown
     ///
     /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
-    fn catch_at_exception_label(&mut self, thrown_ptr: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {
+    fn catch_at_exception_label(
+        &mut self,
+        thrown_ptr: &B::BV,
+        bbname: &Name,
+    ) -> Result<Option<ReturnValue<B::BV>>> {
         // For now we just add an unconstrained type index
-        let type_index = self.state.new_bv_with_name(Name::from("unconstrained_type_index_for_thrown_value"), 32)?;
+        let type_index = self
+            .state
+            .new_bv_with_name(Name::from("unconstrained_type_index_for_thrown_value"), 32)?;
         self.catch_with_type_index(thrown_ptr, &type_index, bbname)
     }
 
@@ -1520,17 +2005,25 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     /// [LLVM's exception handling docs](https://releases.llvm.org/9.0.0/docs/ExceptionHandling.html#overview) call this a type info index.
     ///
     /// `bbname`: `Name` of the `landingpad` block which should catch the exception if appropriate
-    fn catch_with_type_index(&mut self, thrown_ptr: &B::BV, type_index: &B::BV, bbname: &Name) -> Result<Option<ReturnValue<B::BV>>> {
-        debug!("Catching exception {{{:?}, {:?}}} at bb {}", thrown_ptr, type_index, bbname);
+    fn catch_with_type_index(
+        &mut self,
+        thrown_ptr: &B::BV,
+        type_index: &B::BV,
+        bbname: &Name,
+    ) -> Result<Option<ReturnValue<B::BV>>> {
+        debug!(
+            "Catching exception {{{:?}, {:?}}} at bb {}",
+            thrown_ptr, type_index, bbname
+        );
         self.state.cur_loc.move_to_start_of_bb_by_name(bbname);
         let mut found_landingpad = false;
-        let mut first_iter = true;  // is it the first iteration of the for loop
+        let mut first_iter = true; // is it the first iteration of the for loop
         for (instnum, inst) in self.state.cur_loc.bb.instrs.iter().enumerate() {
             self.state.cur_loc.instr = BBInstrIndex::Instr(instnum);
             self.state.cur_loc.source_loc = inst.get_debug_loc().as_ref();
             if first_iter {
                 first_iter = false;
-                self.state.record_path_entry();  // do this only on the first iteration
+                self.state.record_path_entry(); // do this only on the first iteration
             }
             let result = match inst {
                 Instruction::Phi(phi) => self.symex_phi(phi),  // phi instructions are allowed before the landingpad
@@ -1547,13 +2040,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                         // move on to the next instruction in our for loop
                         continue;
                     }
-                },
+                }
                 Err(Error::Unsat) | Err(Error::LoopBoundExceeded(_)) => {
                     // we can't continue down this path anymore
                     info!("Path is either unsat or exceeds the loop bound");
                     return self.backtrack_and_continue();
-                },
-                Err(e) => return Err(e),  // propagate any other errors
+                }
+                Err(e) => return Err(e), // propagate any other errors
             }
         }
         if found_landingpad {
@@ -1564,7 +2057,12 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
     }
 
     /// `thrown_ptr` and `type_index` arguments: see descriptions on `self.throw()`
-    fn symex_landing_pad(&mut self, lp: &'p instruction::LandingPad, thrown_ptr: &B::BV, type_index: &B::BV) -> Result<()> {
+    fn symex_landing_pad(
+        &mut self,
+        lp: &'p instruction::LandingPad,
+        thrown_ptr: &B::BV,
+        type_index: &B::BV,
+    ) -> Result<()> {
         debug!("Symexing landingpad {:?}", lp);
         let result_ty = lp.get_type();
         match result_ty {
@@ -1580,13 +2078,19 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                     Type::IntegerType { bits: 32 } => {},
                     ty => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct with second element an i32, got second element {:?}", ty))),
                 }
-            },
-            _ => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct, got {:?}", result_ty))),
+            }
+            _ => {
+                return Err(Error::MalformedInstruction(format!(
+                    "Expected landingpad result type to be a struct, got {:?}",
+                    result_ty
+                )))
+            }
         }
         // Partly due to current restrictions in `llvm-ir` (not enough info
         // available on landingpad clauses - see `llvm-ir` docs), for now we
         // assume that the landingpad always catches
-        self.state.record_bv_result(lp, type_index.concat(thrown_ptr))
+        self.state
+            .record_bv_result(lp, type_index.concat(thrown_ptr))
     }
 
     fn symex_phi(&mut self, phi: &'p instruction::Phi) -> Result<()> {
@@ -1600,7 +2104,8 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
             .find(|&(_, bbname)| bbname == prev_bb)
             .map(|(op, _)| op)
             .ok_or_else(|| Error::OtherError(format!("Failed to find a Phi member matching previous BasicBlock. Phi incoming_values are {:?} but we were looking for {:?}", phi.incoming_values, prev_bb)))?;
-        self.state.record_bv_result(phi, self.state.operand_to_bv(&chosen_value)?)
+        self.state
+            .record_bv_result(phi, self.state.operand_to_bv(&chosen_value)?)
     }
 
     fn symex_select(&mut self, select: &'p instruction::Select) -> Result<()> {
@@ -1620,25 +2125,34 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let bvfalseval = self.state.operand_to_bv(&select.false_value)?;
                 let do_feasibility_checks = false;
                 if do_feasibility_checks {
-                    let true_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond))?;
-                    let false_feasible = self.state.sat_with_extra_constraints(std::iter::once(&bvcond.not()))?;
+                    let true_feasible = self
+                        .state
+                        .sat_with_extra_constraints(std::iter::once(&bvcond))?;
+                    let false_feasible = self
+                        .state
+                        .sat_with_extra_constraints(std::iter::once(&bvcond.not()))?;
                     if true_feasible && false_feasible {
-                        self.state.record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
+                        self.state
+                            .record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
                     } else if true_feasible {
-                        bvcond.assert()?;  // unnecessary, but may help Boolector more than it hurts?
+                        bvcond.assert()?; // unnecessary, but may help Boolector more than it hurts?
                         self.state.record_bv_result(select, bvtrueval)
                     } else if false_feasible {
-                        bvcond.not().assert()?;  // unnecessary, but may help Boolector more than it hurts?
+                        bvcond.not().assert()?; // unnecessary, but may help Boolector more than it hurts?
                         self.state.record_bv_result(select, bvfalseval)
                     } else {
                         // this path is unsat
                         Err(Error::Unsat)
                     }
                 } else {
-                    self.state.record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
+                    self.state
+                        .record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
                 }
-            },
-            Type::VectorType { element_type, num_elements } => {
+            }
+            Type::VectorType {
+                element_type,
+                num_elements,
+            } => {
                 match *element_type {
                     Type::IntegerType { bits: 1 } => {},
                     ty => return Err(Error::MalformedInstruction(format!("Expected Select vector condition to be vector of i1, but got vector of {:?}", ty))),
@@ -1655,18 +2169,24 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 let condvec = self.state.operand_to_bv(&select.condition)?;
                 let truevec = self.state.operand_to_bv(&select.true_value)?;
                 let falsevec = self.state.operand_to_bv(&select.false_value)?;
-                let final_bv = (0 .. num_elements as u32)
+                let final_bv = (0..num_elements as u32)
                     .map(|idx| {
                         let bit = condvec.slice(idx, idx);
                         bit.cond_bv(
-                            &truevec.slice((idx+1) * el_size - 1, idx * el_size),
-                            &falsevec.slice((idx+1) * el_size - 1, idx * el_size),
+                            &truevec.slice((idx + 1) * el_size - 1, idx * el_size),
+                            &falsevec.slice((idx + 1) * el_size - 1, idx * el_size),
                         )
                     })
-                    .reduce(|a,b| b.concat(&a)).ok_or_else(|| Error::MalformedInstruction("Select with vectors of 0 elements".to_owned()))?;
+                    .reduce(|a, b| b.concat(&a))
+                    .ok_or_else(|| {
+                        Error::MalformedInstruction("Select with vectors of 0 elements".to_owned())
+                    })?;
                 self.state.record_bv_result(select, final_bv)
             }
-            ty => Err(Error::MalformedInstruction(format!("Expected select condition to be i1 or vector of i1, but got {:?}", ty))),
+            ty => Err(Error::MalformedInstruction(format!(
+                "Expected select condition to be i1 or vector of i1, but got {:?}",
+                ty
+            ))),
         }
     }
 
@@ -1692,8 +2212,13 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
                 if element_types[1] != (Type::IntegerType { bits: 1 }) {
                     return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct with second element an i1; got second element {:?}", element_types[1])));
                 }
-            },
-            _ => return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct, got {:?}", result_ty))),
+            }
+            _ => {
+                return Err(Error::MalformedInstruction(format!(
+                    "Expected cmpxchg result type to be a struct, got {:?}",
+                    result_ty
+                )))
+            }
         }
 
         let addr = self.state.operand_to_bv(&cmpxchg.address)?;
@@ -1702,9 +2227,11 @@ impl<'p, B: Backend> ExecutionManager<'p, B> where B: 'p {
 
         let read_value = self.state.read(&addr, expected.get_width())?;
         let match_flag = read_value._eq(&expected);
-        self.state.write(&addr, match_flag.cond_bv(&replacement, &read_value))?;
+        self.state
+            .write(&addr, match_flag.cond_bv(&replacement, &read_value))?;
 
-        self.state.record_bv_result(cmpxchg, match_flag.concat(&read_value))
+        self.state
+            .record_bv_result(cmpxchg, match_flag.concat(&read_value))
     }
 }
 
@@ -1775,15 +2302,18 @@ mod tests {
         /// over any arbitrary desired lifetime by stripping out the
         /// `source_loc`s
         fn strip_source_locs<'a>(self) -> Path<'a> {
-            Path(self.0.into_iter().map(|locdescr|
-                LocationDescription {
-                    modname: locdescr.modname,
-                    funcname: locdescr.funcname,
-                    bbname: locdescr.bbname,
-                    instr: locdescr.instr,
-                    source_loc: None,
-                }
-            ).collect())
+            Path(
+                self.0
+                    .into_iter()
+                    .map(|locdescr| LocationDescription {
+                        modname: locdescr.modname,
+                        funcname: locdescr.funcname,
+                        bbname: locdescr.bbname,
+                        instr: locdescr.instr,
+                        source_loc: None,
+                    })
+                    .collect(),
+            )
         }
     }
 
@@ -1805,7 +2335,11 @@ mod tests {
     }
 
     /// Build a path from bbnames, that stays in a single function in the given module
-    fn path_from_bbnames<'p>(modname: &str, funcname: &str, bbnames: impl IntoIterator<Item = Name>) -> Path<'p> {
+    fn path_from_bbnames<'p>(
+        modname: &str,
+        funcname: &str,
+        bbnames: impl IntoIterator<Item = Name>,
+    ) -> Path<'p> {
         let mut vec = vec![];
         for bbname in bbnames {
             vec.push(LocationDescription {
@@ -1820,12 +2354,20 @@ mod tests {
     }
 
     /// Like `path_from_bbnames`, but allows you to specify bbs by number rather than `Name`
-    fn path_from_bbnums<'p>(modname: &str, funcname: &str, bbnums: impl IntoIterator<Item = usize>) -> Path<'p> {
+    fn path_from_bbnums<'p>(
+        modname: &str,
+        funcname: &str,
+        bbnums: impl IntoIterator<Item = usize>,
+    ) -> Path<'p> {
         path_from_bbnames(modname, funcname, bbnums.into_iter().map(Name::from))
     }
 
     /// Build a path from (bbnum, instr) pairs, that stays in a single function in the given module
-    fn path_from_bbnum_instr_pairs<'p>(modname: &str, funcname: &str, pairs: impl IntoIterator<Item = (usize, BBInstrIndex)>) -> Path<'p> {
+    fn path_from_bbnum_instr_pairs<'p>(
+        modname: &str,
+        funcname: &str,
+        pairs: impl IntoIterator<Item = (usize, BBInstrIndex)>,
+    ) -> Path<'p> {
         let mut vec = vec![];
         for (bbnum, instr) in pairs {
             vec.push(LocationDescription {
@@ -1840,7 +2382,10 @@ mod tests {
     }
 
     /// Build a path from (funcname, bbname, instr) tuples, that stays in the module with the given modname
-    fn path_from_tuples_with_bbnames<'a, 'p>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, Name, BBInstrIndex)>) -> Path<'p> {
+    fn path_from_tuples_with_bbnames<'a, 'p>(
+        modname: &str,
+        tuples: impl IntoIterator<Item = (&'a str, Name, BBInstrIndex)>,
+    ) -> Path<'p> {
         let mut vec = vec![];
         for (funcname, bbname, instr) in tuples {
             vec.push(LocationDescription {
@@ -1855,12 +2400,22 @@ mod tests {
     }
 
     /// Build a path from (funcname, bbnum, instr) tuples, that stays in the module with the given modname
-    fn path_from_tuples_with_bbnums<'a, 'p>(modname: &str, tuples: impl IntoIterator<Item = (&'a str, usize, BBInstrIndex)>) -> Path<'p> {
-        path_from_tuples_with_bbnames(modname, tuples.into_iter().map(|(f, bbnum, instr)| (f, Name::from(bbnum), instr)))
+    fn path_from_tuples_with_bbnums<'a, 'p>(
+        modname: &str,
+        tuples: impl IntoIterator<Item = (&'a str, usize, BBInstrIndex)>,
+    ) -> Path<'p> {
+        path_from_tuples_with_bbnames(
+            modname,
+            tuples
+                .into_iter()
+                .map(|(f, bbnum, instr)| (f, Name::from(bbnum), instr)),
+        )
     }
 
     /// Build a path from (modname, funcname, bbnum, instr) tuples
-    fn path_from_tuples_varying_modules<'a, 'p>(tuples: impl IntoIterator<Item = (&'a str, &'a str, usize, BBInstrIndex)>) -> Path<'p> {
+    fn path_from_tuples_varying_modules<'a, 'p>(
+        tuples: impl IntoIterator<Item = (&'a str, &'a str, usize, BBInstrIndex)>,
+    ) -> Path<'p> {
         let mut vec = vec![];
         for (modname, funcname, bbnum, instr) in tuples {
             vec.push(LocationDescription {
@@ -1881,16 +2436,17 @@ mod tests {
 
     impl<'p, B: Backend> PathIterator<'p, B> {
         /// For argument descriptions, see notes on `symex_function`
-        pub fn new(
-            funcname: &str,
-            project: &'p Project,
-            config: Config<'p, B>,
-        ) -> Self {
-            Self { em: symex_function(funcname, project, config) }
+        pub fn new(funcname: &str, project: &'p Project, config: Config<'p, B>) -> Self {
+            Self {
+                em: symex_function(funcname, project, config),
+            }
         }
     }
 
-    impl<'p, B: Backend> Iterator for PathIterator<'p, B> where B: 'p {
+    impl<'p, B: Backend> Iterator for PathIterator<'p, B>
+    where
+        B: 'p,
+    {
         type Item = Result<Path<'p>>;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -1900,18 +2456,24 @@ mod tests {
                         // for the purposes of the PathIterator for these tests,
                         // we silently ignore paths which exceeded the loop bound
                         continue;
-                    },
-                    res => return res.map(|res| match res {
-                        Err(e) => {
-                            // format the error nicely and propagate it
-                            Err(self.em.state().full_error_message_with_context(e))
-                        },
-                        Ok(_) => {
-                            Ok(Path(
-                                self.em.state().get_path().iter().map(|pathentry| LocationDescription::from(pathentry.0.clone())).collect()
-                            ).strip_source_locs())
-                        },
-                    }),
+                    }
+                    res => {
+                        return res.map(|res| match res {
+                            Err(e) => {
+                                // format the error nicely and propagate it
+                                Err(self.em.state().full_error_message_with_context(e))
+                            }
+                            Ok(_) => Ok(Path(
+                                self.em
+                                    .state()
+                                    .get_path()
+                                    .iter()
+                                    .map(|pathentry| LocationDescription::from(pathentry.0.clone()))
+                                    .collect(),
+                            )
+                            .strip_source_locs()),
+                        })
+                    }
                 }
             }
         }
@@ -1926,12 +2488,16 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -1943,13 +2509,23 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 12]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 8, 12]));
-        assert_eq!(paths.len(), 2);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnums(modname, funcname, vec![2, 4, 12])
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnums(modname, funcname, vec![2, 8, 12])
+        );
+        assert_eq!(paths.len(), 2); // ensure there are no more paths
 
         Ok(())
     }
@@ -1961,15 +2537,28 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 6, 14]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14]));
+        assert_eq!(
+            paths[0],
+            path_from_bbnums(modname, funcname, vec![2, 4, 6, 14])
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14])
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14])
+        );
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![2, 14]));
-        assert_eq!(paths.len(), 4);  // ensure there are no more paths
+        assert_eq!(paths.len(), 4); // ensure there are no more paths
 
         Ok(())
     }
@@ -1981,45 +2570,67 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (2, Instr(0)),
-            (4, Terminator),
-            (14, Instr(0)),
-        ]));
-        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (2, Instr(0)),
-            (5, Instr(0)),
-            (14, Instr(0)),
-        ]));
-        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (2, Instr(0)),
-            (7, Instr(0)),
-            (14, Instr(0)),
-        ]));
-        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (2, Instr(0)),
-            (10, Terminator),
-            (14, Instr(0)),
-        ]));
-        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (2, Instr(0)),
-            (11, Terminator),
-            (14, Instr(0)),
-        ]));
-        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (2, Instr(0)),
-            (12, Instr(0)),
-            (14, Instr(0)),
-        ]));
-        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (2, Instr(0)),
-            (14, Instr(0)),
-        ]));
-        assert_eq!(paths.len(), 7);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(2, Instr(0)), (4, Terminator), (14, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(2, Instr(0)), (5, Instr(0)), (14, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(2, Instr(0)), (7, Instr(0)), (14, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(2, Instr(0)), (10, Terminator), (14, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(2, Instr(0)), (11, Terminator), (14, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[5],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(2, Instr(0)), (12, Instr(0)), (14, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[6],
+            path_from_bbnum_instr_pairs(modname, funcname, vec![(2, Instr(0)), (14, Instr(0)),])
+        );
+        assert_eq!(paths.len(), 7); // ensure there are no more paths
 
         Ok(())
     }
@@ -2031,16 +2642,35 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12]));
-        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 6, 6, 12]));
-        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 12]));
-        assert_eq!(paths.len(), 5);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12])
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12])
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12])
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnums(modname, funcname, vec![1, 6, 6, 12])
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnums(modname, funcname, vec![1, 6, 12])
+        );
+        assert_eq!(paths.len(), 5); // ensure there are no more paths
 
         Ok(())
     }
@@ -2052,17 +2682,33 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 9, 6]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 9, 9, 6]));
-        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 6]));
-        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 6]));
-        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 9, 6]));
-        assert_eq!(paths.len(), 6);  // ensure there are no more paths
+        assert_eq!(
+            paths[2],
+            path_from_bbnums(modname, funcname, vec![1, 9, 9, 6])
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 6])
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 6])
+        );
+        assert_eq!(
+            paths[5],
+            path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 9, 6])
+        );
+        assert_eq!(paths.len(), 6); // ensure there are no more paths
 
         Ok(())
     }
@@ -2074,18 +2720,40 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 8, 18]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18]));
-        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 8, 18]));
-        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
+        assert_eq!(
+            paths[0],
+            path_from_bbnums(modname, funcname, vec![1, 5, 8, 18])
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18])
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18])
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 8, 18])
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 8, 18])
+        );
+        assert_eq!(
+            paths[5],
+            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 11, 8, 18])
+        );
         assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 18]));
-        assert_eq!(paths.len(), 7);  // ensure there are no more paths
+        assert_eq!(paths.len(), 7); // ensure there are no more paths
 
         Ok(())
     }
@@ -2097,26 +2765,47 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
-                                                                         6, 10, 16,
-                                                                         6, 10, 16,
-                                                                         6, 13, 16,
-                                                                         6, 10, 16, 20]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
-                                                                         6, 10, 16,
-                                                                         6, 10, 16,
-                                                                         6, 13, 16, 20]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
-                                                                         6, 10, 16,
-                                                                         6, 10, 16, 20]));
-        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
-                                                                         6, 10, 16, 20]));
-        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 20]));
-        assert_eq!(paths.len(), 5);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnums(
+                modname,
+                funcname,
+                vec![1, 6, 13, 16, 6, 10, 16, 6, 10, 16, 6, 13, 16, 6, 10, 16, 20]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnums(
+                modname,
+                funcname,
+                vec![1, 6, 13, 16, 6, 10, 16, 6, 10, 16, 6, 13, 16, 20]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnums(
+                modname,
+                funcname,
+                vec![1, 6, 13, 16, 6, 10, 16, 6, 10, 16, 20]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 6, 10, 16, 20])
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 20])
+        );
+        assert_eq!(paths.len(), 5); // ensure there are no more paths
 
         Ok(())
     }
@@ -2128,13 +2817,23 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 30, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 30,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-                                                                         11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnums(
+                modname,
+                funcname,
+                vec![1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]
+            )
+        );
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -2146,21 +2845,46 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 30, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 30,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                     10, 7]));
-        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                     10, 7]));
-        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-                                                                     10, 7]));
+        assert_eq!(
+            paths[0],
+            path_from_bbnums(
+                modname,
+                funcname,
+                vec![
+                    1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 5, 13, 13, 13, 13, 13, 13,
+                    13, 13, 13, 13, 10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 7
+                ]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnums(
+                modname,
+                funcname,
+                vec![
+                    1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 5, 13, 13, 13, 13, 13, 13,
+                    13, 13, 13, 13, 10, 7
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnums(
+                modname,
+                funcname,
+                vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 7]
+            )
+        );
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 7]));
-        assert_eq!(paths.len(), 4);  // ensure there are no more paths
+        assert_eq!(paths.len(), 4); // ensure there are no more paths
 
         Ok(())
     }
@@ -2172,16 +2896,26 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
-            ("simple_caller", 1, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("simple_caller", 1, Terminator),
-        ]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                &modname,
+                vec![
+                    ("simple_caller", 1, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("simple_caller", 1, Terminator),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -2193,15 +2927,26 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, max_callstack_depth: Some(0), ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            max_callstack_depth: Some(0),
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
-            ("simple_caller", 1, Instr(0)),
-            // shouldn't enter the call, due to `max_callstack_depth` setting
-        ]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                &modname,
+                vec![
+                    ("simple_caller", 1, Instr(0)),
+                    // shouldn't enter the call, due to `max_callstack_depth` setting
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -2212,18 +2957,29 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_simple_caller";
         init_logging();
-        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let proj = Project::from_bc_paths(
+            vec![callee_modname, caller_modname]
+                .into_iter()
+                .map(std::path::Path::new),
+        )
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
-            (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
-            (callee_modname, "simple_callee", 2, Instr(0)),
-            (caller_modname, "cross_module_simple_caller", 1, Terminator),
-        ]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_varying_modules(vec![
+                (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
+                (callee_modname, "simple_callee", 2, Instr(0)),
+                (caller_modname, "cross_module_simple_caller", 1, Terminator),
+            ])
+        );
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -2235,19 +2991,29 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("conditional_caller", 2, Instr(0)),
-            ("conditional_caller", 4, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("conditional_caller", 4, Terminator),
-            ("conditional_caller", 8, Instr(0)),
-        ]));
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("conditional_caller", 2, Instr(0)),
+                    ("conditional_caller", 4, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("conditional_caller", 4, Terminator),
+                    ("conditional_caller", 8, Instr(0)),
+                ]
+            )
+        );
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 6, 8]));
-        assert_eq!(paths.len(), 2);  // ensure there are no more paths
+        assert_eq!(paths.len(), 2); // ensure there are no more paths
 
         Ok(())
     }
@@ -2259,18 +3025,28 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("twice_caller", 1, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("twice_caller", 1, Instr(1)),
-            ("simple_callee", 2, Instr(0)),
-            ("twice_caller", 1, Instr(2)),
-        ]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("twice_caller", 1, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("twice_caller", 1, Instr(1)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("twice_caller", 1, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -2281,20 +3057,31 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_twice_caller";
         init_logging();
-        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let proj = Project::from_bc_paths(
+            vec![callee_modname, caller_modname]
+                .into_iter()
+                .map(std::path::Path::new),
+        )
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
-            (caller_modname, "cross_module_twice_caller", 1, Instr(0)),
-            (callee_modname, "simple_callee", 2, Instr(0)),
-            (caller_modname, "cross_module_twice_caller", 1, Instr(1)),
-            (callee_modname, "simple_callee", 2, Instr(0)),
-            (caller_modname, "cross_module_twice_caller", 1, Instr(2)),
-        ]));
-        assert_eq!(paths.len(), 1);  // enusre there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_varying_modules(vec![
+                (caller_modname, "cross_module_twice_caller", 1, Instr(0)),
+                (callee_modname, "simple_callee", 2, Instr(0)),
+                (caller_modname, "cross_module_twice_caller", 1, Instr(1)),
+                (callee_modname, "simple_callee", 2, Instr(0)),
+                (caller_modname, "cross_module_twice_caller", 1, Instr(2)),
+            ])
+        );
+        assert_eq!(paths.len(), 1); // enusre there are no more paths
 
         Ok(())
     }
@@ -2306,18 +3093,28 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("nested_caller", 2, Instr(0)),
-            ("simple_caller", 1, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("simple_caller", 1, Terminator),
-            ("nested_caller", 2, Terminator),
-        ]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("nested_caller", 2, Instr(0)),
+                    ("simple_caller", 1, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("simple_caller", 1, Terminator),
+                    ("nested_caller", 2, Terminator),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -2329,16 +3126,27 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, max_callstack_depth: Some(1), ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            max_callstack_depth: Some(1),
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("nested_caller", 2, Instr(0)),
-            ("simple_caller", 1, Instr(0)),
-            ("nested_caller", 2, Terminator),  // shouldn't enter `simple_callee` due to the `max_callstack_depth` setting
-        ]));
-        assert_eq!(paths.len(), 1);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("nested_caller", 2, Instr(0)),
+                    ("simple_caller", 1, Instr(0)),
+                    ("nested_caller", 2, Terminator), // shouldn't enter `simple_callee` due to the `max_callstack_depth` setting
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
     }
@@ -2349,20 +3157,41 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_nested_near_caller";
         init_logging();
-        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let proj = Project::from_bc_paths(
+            vec![callee_modname, caller_modname]
+                .into_iter()
+                .map(std::path::Path::new),
+        )
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
-            (caller_modname, "cross_module_nested_near_caller", 2, Instr(0)),
-            (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
-            (callee_modname, "simple_callee", 2, Instr(0)),
-            (caller_modname, "cross_module_simple_caller", 1, Terminator),
-            (caller_modname, "cross_module_nested_near_caller", 2, Terminator),
-        ]));
-        assert_eq!(paths.len(), 1);  // enusre there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_varying_modules(vec![
+                (
+                    caller_modname,
+                    "cross_module_nested_near_caller",
+                    2,
+                    Instr(0)
+                ),
+                (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
+                (callee_modname, "simple_callee", 2, Instr(0)),
+                (caller_modname, "cross_module_simple_caller", 1, Terminator),
+                (
+                    caller_modname,
+                    "cross_module_nested_near_caller",
+                    2,
+                    Terminator
+                ),
+            ])
+        );
+        assert_eq!(paths.len(), 1); // enusre there are no more paths
 
         Ok(())
     }
@@ -2373,20 +3202,41 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_nested_far_caller";
         init_logging();
-        let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let proj = Project::from_bc_paths(
+            vec![callee_modname, caller_modname]
+                .into_iter()
+                .map(std::path::Path::new),
+        )
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
-            (caller_modname, "cross_module_nested_far_caller", 2, Instr(0)),
-            (callee_modname, "simple_caller", 1, Instr(0)),
-            (callee_modname, "simple_callee", 2, Instr(0)),
-            (callee_modname, "simple_caller", 1, Terminator),
-            (caller_modname, "cross_module_nested_far_caller", 2, Terminator),
-        ]));
-        assert_eq!(paths.len(), 1);  // enusre there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_varying_modules(vec![
+                (
+                    caller_modname,
+                    "cross_module_nested_far_caller",
+                    2,
+                    Instr(0)
+                ),
+                (callee_modname, "simple_caller", 1, Instr(0)),
+                (callee_modname, "simple_callee", 2, Instr(0)),
+                (callee_modname, "simple_caller", 1, Terminator),
+                (
+                    caller_modname,
+                    "cross_module_nested_far_caller",
+                    2,
+                    Terminator
+                ),
+            ])
+        );
+        assert_eq!(paths.len(), 1); // enusre there are no more paths
 
         Ok(())
     }
@@ -2398,62 +3248,102 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_of_loop", 1, Instr(0)),
-            ("callee_with_loop", 2, Instr(0)),
-            ("callee_with_loop", 9, Instr(0)),
-            ("caller_of_loop", 1, Terminator),
-        ]));
-        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_of_loop", 1, Instr(0)),
-            ("callee_with_loop", 2, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 9, Instr(0)),
-            ("caller_of_loop", 1, Terminator),
-        ]));
-        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_of_loop", 1, Instr(0)),
-            ("callee_with_loop", 2, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 9, Instr(0)),
-            ("caller_of_loop", 1, Terminator),
-        ]));
-        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_of_loop", 1, Instr(0)),
-            ("callee_with_loop", 2, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 9, Instr(0)),
-            ("caller_of_loop", 1, Terminator),
-        ]));
-        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_of_loop", 1, Instr(0)),
-            ("callee_with_loop", 2, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 9, Instr(0)),
-            ("caller_of_loop", 1, Terminator),
-        ]));
-        assert_eq!(paths[5], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_of_loop", 1, Instr(0)),
-            ("callee_with_loop", 2, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 13, Instr(0)),
-            ("callee_with_loop", 9, Instr(0)),
-            ("caller_of_loop", 1, Terminator),
-        ]));
-        assert_eq!(paths.len(), 6);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_of_loop", 1, Instr(0)),
+                    ("callee_with_loop", 2, Instr(0)),
+                    ("callee_with_loop", 9, Instr(0)),
+                    ("caller_of_loop", 1, Terminator),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_of_loop", 1, Instr(0)),
+                    ("callee_with_loop", 2, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 9, Instr(0)),
+                    ("caller_of_loop", 1, Terminator),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_of_loop", 1, Instr(0)),
+                    ("callee_with_loop", 2, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 9, Instr(0)),
+                    ("caller_of_loop", 1, Terminator),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_of_loop", 1, Instr(0)),
+                    ("callee_with_loop", 2, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 9, Instr(0)),
+                    ("caller_of_loop", 1, Terminator),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[4],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_of_loop", 1, Instr(0)),
+                    ("callee_with_loop", 2, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 9, Instr(0)),
+                    ("caller_of_loop", 1, Terminator),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[5],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_of_loop", 1, Instr(0)),
+                    ("callee_with_loop", 2, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 13, Instr(0)),
+                    ("callee_with_loop", 9, Instr(0)),
+                    ("caller_of_loop", 1, Terminator),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 6); // ensure there are no more paths
 
         Ok(())
     }
@@ -2465,48 +3355,76 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 3, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 3,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_with_loop", 1, Instr(0)),
-            ("caller_with_loop", 8, Instr(0)),
-        ]));
-        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_with_loop", 1, Instr(0)),
-            ("caller_with_loop", 10, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("caller_with_loop", 10, Instr(3)),
-            ("caller_with_loop", 6, Instr(0)),
-            ("caller_with_loop", 8, Instr(0)),
-        ]));
-        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_with_loop", 1, Instr(0)),
-            ("caller_with_loop", 10, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("caller_with_loop", 10, Instr(3)),
-            ("caller_with_loop", 10, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("caller_with_loop", 10, Instr(3)),
-            ("caller_with_loop", 6, Instr(0)),
-            ("caller_with_loop", 8, Instr(0)),
-        ]));
-        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
-            ("caller_with_loop", 1, Instr(0)),
-            ("caller_with_loop", 10, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("caller_with_loop", 10, Instr(3)),
-            ("caller_with_loop", 10, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("caller_with_loop", 10, Instr(3)),
-            ("caller_with_loop", 10, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("caller_with_loop", 10, Instr(3)),
-            ("caller_with_loop", 6, Instr(0)),
-            ("caller_with_loop", 8, Instr(0)),
-        ]));
-        assert_eq!(paths.len(), 4);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_with_loop", 1, Instr(0)),
+                    ("caller_with_loop", 8, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_with_loop", 1, Instr(0)),
+                    ("caller_with_loop", 10, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("caller_with_loop", 10, Instr(3)),
+                    ("caller_with_loop", 6, Instr(0)),
+                    ("caller_with_loop", 8, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_with_loop", 1, Instr(0)),
+                    ("caller_with_loop", 10, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("caller_with_loop", 10, Instr(3)),
+                    ("caller_with_loop", 10, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("caller_with_loop", 10, Instr(3)),
+                    ("caller_with_loop", 6, Instr(0)),
+                    ("caller_with_loop", 8, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("caller_with_loop", 1, Instr(0)),
+                    ("caller_with_loop", 10, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("caller_with_loop", 10, Instr(3)),
+                    ("caller_with_loop", 10, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("caller_with_loop", 10, Instr(3)),
+                    ("caller_with_loop", 10, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("caller_with_loop", 10, Instr(3)),
+                    ("caller_with_loop", 6, Instr(0)),
+                    ("caller_with_loop", 8, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 4); // ensure there are no more paths
 
         Ok(())
     }
@@ -2518,136 +3436,199 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 5, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 5,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[7], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (1, Instr(0)),
-            (9, Instr(0)),
-            (6, Instr(1)),
-        ]));
-        assert_eq!(paths[8], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (9, Instr(0)),
-        ]));
-        assert_eq!(paths[9], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (9, Instr(0)),
-        ]));
-        assert_eq!(paths.len(), 10);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[5],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[6],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[7],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (1, Instr(0)),
+                    (9, Instr(0)),
+                    (6, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[8],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(1, Instr(0)), (4, Instr(0)), (9, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[9],
+            path_from_bbnum_instr_pairs(modname, funcname, vec![(1, Instr(0)), (9, Instr(0)),])
+        );
+        assert_eq!(paths.len(), 10); // ensure there are no more paths
 
         Ok(())
     }
@@ -2659,135 +3640,198 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 4, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 4,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (20, Instr(0)),
-            (8, Instr(2)),
-            (8, Instr(2)),
-            (8, Instr(2)),
-        ]));
-        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (20, Instr(0)),
-            (8, Instr(2)),
-            (8, Instr(2)),
-        ]));
-        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (20, Instr(0)),
-            (8, Instr(2)),
-        ]));
-        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (12, Instr(0)),
-            (14, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (20, Instr(0)),
-            (8, Instr(2)),
-            (8, Instr(2)),
-            (14, Instr(2)),
-        ]));
-        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (12, Instr(0)),
-            (14, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (8, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (20, Instr(0)),
-            (8, Instr(2)),
-            (14, Instr(2)),
-        ]));
-        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (12, Instr(0)),
-            (14, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (12, Instr(0)),
-            (18, Instr(0)),
-            (20, Instr(0)),
-            (14, Instr(2)),
-        ]));
-        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (12, Instr(0)),
-            (14, Instr(0)),
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (20, Instr(0)),
-            (14, Instr(2)),
-        ]));
-        assert_eq!(paths[7], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (6, Instr(0)),
-            (12, Instr(0)),
-            (18, Instr(0)),
-            (20, Instr(0)),
-        ]));
-        assert_eq!(paths[8], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (4, Instr(0)),
-            (20, Instr(0)),
-        ]));
-        assert_eq!(paths[9], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (20, Instr(0)),
-        ]));
-        assert_eq!(paths.len(), 10);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (20, Instr(0)),
+                    (8, Instr(2)),
+                    (8, Instr(2)),
+                    (8, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (20, Instr(0)),
+                    (8, Instr(2)),
+                    (8, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (20, Instr(0)),
+                    (8, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (12, Instr(0)),
+                    (14, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (20, Instr(0)),
+                    (8, Instr(2)),
+                    (8, Instr(2)),
+                    (14, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (12, Instr(0)),
+                    (14, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (8, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (20, Instr(0)),
+                    (8, Instr(2)),
+                    (14, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[5],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (12, Instr(0)),
+                    (14, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (12, Instr(0)),
+                    (18, Instr(0)),
+                    (20, Instr(0)),
+                    (14, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[6],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (12, Instr(0)),
+                    (14, Instr(0)),
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (20, Instr(0)),
+                    (14, Instr(2)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[7],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (4, Instr(0)),
+                    (6, Instr(0)),
+                    (12, Instr(0)),
+                    (18, Instr(0)),
+                    (20, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[8],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(1, Instr(0)), (4, Instr(0)), (20, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[9],
+            path_from_bbnum_instr_pairs(modname, funcname, vec![(1, Instr(0)), (20, Instr(0)),])
+        );
+        assert_eq!(paths.len(), 10); // ensure there are no more paths
 
         Ok(())
     }
@@ -2799,96 +3843,145 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 3, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 3,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (3, Instr(0)),
-            (15, Instr(0)),
-        ]));
-        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (3, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (10, Instr(0)),
-            (15, Instr(0)),
-        ]));
-        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (3, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (12, Instr(0)),
-            (15, Instr(0)),
-        ]));
-        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (3, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (10, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (10, Instr(0)),
-            (15, Instr(0)),
-        ]));
-        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (3, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (10, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (12, Instr(0)),
-            (15, Instr(0)),
-        ]));
-        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (3, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (12, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (10, Instr(0)),
-            (15, Instr(0)),
-        ]));
-        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (5, Instr(0)),
-            (1, Instr(0)),
-            (3, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (12, Instr(0)),
-            (15, Instr(0)),
-            (5, Instr(2)),
-            (12, Instr(0)),
-            (15, Instr(0)),
-        ]));
-        assert_eq!(paths.len(), 7);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![(1, Instr(0)), (3, Instr(0)), (15, Instr(0)),]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (3, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (10, Instr(0)),
+                    (15, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (3, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (12, Instr(0)),
+                    (15, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (3, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (10, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (10, Instr(0)),
+                    (15, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[4],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (3, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (10, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (12, Instr(0)),
+                    (15, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[5],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (3, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (12, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (10, Instr(0)),
+                    (15, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[6],
+            path_from_bbnum_instr_pairs(
+                modname,
+                funcname,
+                vec![
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (5, Instr(0)),
+                    (1, Instr(0)),
+                    (3, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (12, Instr(0)),
+                    (15, Instr(0)),
+                    (5, Instr(2)),
+                    (12, Instr(0)),
+                    (15, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 7); // ensure there are no more paths
 
         Ok(())
     }
@@ -2900,64 +3993,98 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 3, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 3,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(2)),
-            ("recursive_and_normal_caller", 7, Instr(0)),
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(2)),
-            ("recursive_and_normal_caller", 7, Instr(0)),
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(2)),
-            ("recursive_and_normal_caller", 10, Instr(0)),
-            ("recursive_and_normal_caller", 7, Instr(1)),
-            ("recursive_and_normal_caller", 7, Instr(1)),
-        ]));
-        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(2)),
-            ("recursive_and_normal_caller", 7, Instr(0)),
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(2)),
-            ("recursive_and_normal_caller", 10, Instr(0)),
-            ("recursive_and_normal_caller", 7, Instr(1)),
-        ]));
-        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(2)),
-            ("recursive_and_normal_caller", 7, Instr(0)),
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 10, Instr(0)),
-            ("recursive_and_normal_caller", 7, Instr(1)),
-        ]));
-        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(0)),
-            ("simple_callee", 2, Instr(0)),
-            ("recursive_and_normal_caller", 3, Instr(2)),
-            ("recursive_and_normal_caller", 10, Instr(0)),
-        ]));
-        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
-            ("recursive_and_normal_caller", 1, Instr(0)),
-            ("recursive_and_normal_caller", 10, Instr(0)),
-        ]));
-        assert_eq!(paths.len(), 5);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(2)),
+                    ("recursive_and_normal_caller", 7, Instr(0)),
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(2)),
+                    ("recursive_and_normal_caller", 7, Instr(0)),
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(2)),
+                    ("recursive_and_normal_caller", 10, Instr(0)),
+                    ("recursive_and_normal_caller", 7, Instr(1)),
+                    ("recursive_and_normal_caller", 7, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(2)),
+                    ("recursive_and_normal_caller", 7, Instr(0)),
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(2)),
+                    ("recursive_and_normal_caller", 10, Instr(0)),
+                    ("recursive_and_normal_caller", 7, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(2)),
+                    ("recursive_and_normal_caller", 7, Instr(0)),
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 10, Instr(0)),
+                    ("recursive_and_normal_caller", 7, Instr(1)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(0)),
+                    ("simple_callee", 2, Instr(0)),
+                    ("recursive_and_normal_caller", 3, Instr(2)),
+                    ("recursive_and_normal_caller", 10, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[4],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("recursive_and_normal_caller", 1, Instr(0)),
+                    ("recursive_and_normal_caller", 10, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 5); // ensure there are no more paths
 
         Ok(())
     }
@@ -2969,95 +4096,135 @@ mod tests {
         init_logging();
         let proj = Project::from_bc_path(&std::path::Path::new(modname))
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
-        let config = Config { loop_bound: 3, ..Config::default() };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config).collect::<Result<Vec<Path>>>()
+        let config = Config {
+            loop_bound: 3,
+            ..Config::default()
+        };
+        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+            .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(0)),
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(0)),
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(2)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(2)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-        ]));
-        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(0)),
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(0)),
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 7, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(2)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(2)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-        ]));
-        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(0)),
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(2)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-        ]));
-        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(0)),
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 7, Instr(0)),
-            ("mutually_recursive_b", 3, Instr(2)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-        ]));
-        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(0)),
-            ("mutually_recursive_b", 1, Instr(0)),
-            ("mutually_recursive_b", 7, Instr(0)),
-            ("mutually_recursive_a", 3, Instr(2)),
-            ("mutually_recursive_a", 7, Instr(0)),
-        ]));
-        assert_eq!(paths[5], path_from_tuples_with_bbnums(modname, vec![
-            ("mutually_recursive_a", 1, Instr(0)),
-            ("mutually_recursive_a", 7, Instr(0)),
-        ]));
-        assert_eq!(paths.len(), 6);  // ensure there are no more paths
+        assert_eq!(
+            paths[0],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(0)),
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(0)),
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(2)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(2)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[1],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(0)),
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(0)),
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(2)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(2)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[2],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(0)),
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(2)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[3],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(0)),
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                    ("mutually_recursive_b", 3, Instr(2)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[4],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(0)),
+                    ("mutually_recursive_b", 1, Instr(0)),
+                    ("mutually_recursive_b", 7, Instr(0)),
+                    ("mutually_recursive_a", 3, Instr(2)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(
+            paths[5],
+            path_from_tuples_with_bbnums(
+                modname,
+                vec![
+                    ("mutually_recursive_a", 1, Instr(0)),
+                    ("mutually_recursive_a", 7, Instr(0)),
+                ]
+            )
+        );
+        assert_eq!(paths.len(), 6); // ensure there are no more paths
 
         Ok(())
     }

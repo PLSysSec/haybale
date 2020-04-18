@@ -19,12 +19,22 @@ pub fn cxa_allocate_exception<B: Backend>(
 
     // sanity-check argument types
     match bytes.get_type() {
-        Type::IntegerType { .. } => {},
-        ty => return Err(Error::OtherError(format!("__cxa_allocate_exception: expected argument to have integer type, but got {:?}", ty))),
+        Type::IntegerType { .. } => {}
+        ty => {
+            return Err(Error::OtherError(format!(
+                "__cxa_allocate_exception: expected argument to have integer type, but got {:?}",
+                ty
+            )))
+        }
     };
     match call.get_type() {
-        Type::PointerType { .. } => {},
-        ty => return Err(Error::OtherError(format!("__cxa_allocate_exception: expected return type to be a pointer type, but got {:?}", ty))),
+        Type::PointerType { .. } => {}
+        ty => {
+            return Err(Error::OtherError(format!(
+                "__cxa_allocate_exception: expected return type to be a pointer type, but got {:?}",
+                ty
+            )))
+        }
     };
 
     let addr = alloc_utils::zalloc(state, bytes)?;
@@ -42,12 +52,22 @@ pub fn cxa_throw<B: Backend>(
 
     // sanity-check argument types
     match thrown_ptr.get_type() {
-        Type::PointerType { .. } => {},
-        ty => return Err(Error::OtherError(format!("__cxa_throw: expected first argument to be some pointer type, got {:?}", ty))),
+        Type::PointerType { .. } => {}
+        ty => {
+            return Err(Error::OtherError(format!(
+                "__cxa_throw: expected first argument to be some pointer type, got {:?}",
+                ty
+            )))
+        }
     }
     match type_info.get_type() {
-        Type::PointerType { .. } => {},
-        ty => return Err(Error::OtherError(format!("__cxa_throw: expected second argument to be some pointer type, got {:?}", ty))),
+        Type::PointerType { .. } => {}
+        ty => {
+            return Err(Error::OtherError(format!(
+                "__cxa_throw: expected second argument to be some pointer type, got {:?}",
+                ty
+            )))
+        }
     }
 
     let thrown_ptr = state.operand_to_bv(thrown_ptr)?;

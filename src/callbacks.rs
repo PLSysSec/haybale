@@ -11,13 +11,15 @@ pub struct Callbacks<'p, B: Backend> {
     /// LLVM non-terminator instruction.
     ///
     /// If the callback returns an `Err`, `haybale` will propagate it accordingly.
-    pub(crate) instruction_callbacks: Vec<Rc<dyn Fn(&'p llvm_ir::Instruction, &State<B>) -> Result<()> + 'p>>,
+    pub(crate) instruction_callbacks:
+        Vec<Rc<dyn Fn(&'p llvm_ir::Instruction, &State<B>) -> Result<()> + 'p>>,
 
     /// `haybale` will call each of these functions before processing each
     /// LLVM terminator instruction.
     ///
     /// If the callback returns an `Err`, `haybale` will propagate it accordingly.
-    pub(crate) terminator_callbacks: Vec<Rc<dyn Fn(&'p llvm_ir::Terminator, &State<B>) -> Result<()> + 'p>>,
+    pub(crate) terminator_callbacks:
+        Vec<Rc<dyn Fn(&'p llvm_ir::Terminator, &State<B>) -> Result<()> + 'p>>,
 }
 
 impl<'p, B: Backend> Callbacks<'p, B> {
@@ -29,7 +31,10 @@ impl<'p, B: Backend> Callbacks<'p, B> {
     /// instruction.
     ///
     /// If any callback returns an `Err`, `haybale` will propagate it accordingly.
-    pub fn add_instruction_callback(&mut self, cb: impl Fn(&'p llvm_ir::Instruction, &State<B>) -> Result<()> + 'p) {
+    pub fn add_instruction_callback(
+        &mut self,
+        cb: impl Fn(&'p llvm_ir::Instruction, &State<B>) -> Result<()> + 'p,
+    ) {
         self.instruction_callbacks.push(Rc::new(cb))
     }
 
@@ -41,7 +46,10 @@ impl<'p, B: Backend> Callbacks<'p, B> {
     /// terminator.
     ///
     /// If any callback returns an `Err`, `haybale` will propagate it accordingly.
-    pub fn add_terminator_callback(&mut self, cb: impl Fn(&'p llvm_ir::Terminator, &State<B>) -> Result<()> + 'p) {
+    pub fn add_terminator_callback(
+        &mut self,
+        cb: impl Fn(&'p llvm_ir::Terminator, &State<B>) -> Result<()> + 'p,
+    ) {
         self.terminator_callbacks.push(Rc::new(cb))
     }
 }

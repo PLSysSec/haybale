@@ -1,5 +1,5 @@
-use haybale::*;
 use haybale::solver_utils::PossibleSolutions;
+use haybale::*;
 use std::path::Path;
 
 fn init_logging() {
@@ -31,11 +31,13 @@ fn doesnt_throw() {
                 match rval {
                     ReturnValue::Return(rval) => assert!(rval > 0),
                     ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
-                    ReturnValue::Throw(throwval) => panic!("Function shouldn't throw, but it threw {:?}", throwval),
+                    ReturnValue::Throw(throwval) => {
+                        panic!("Function shouldn't throw, but it threw {:?}", throwval)
+                    }
                     ReturnValue::Abort => panic!("Function shouldn't abort, but it did"),
                 }
             }
-        },
+        }
         PossibleSolutions::AtLeast(hs) => panic!("Too many possible solutions: {:?}", hs),
     }
 }
@@ -52,10 +54,14 @@ fn throw_uncaught() {
         Some(32),
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(2),
-        ReturnValue::Throw(20),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![ReturnValue::Return(2), ReturnValue::Throw(20),]
+                .into_iter()
+                .collect()
+        )
+    );
 }
 
 #[test]
@@ -70,12 +76,19 @@ fn throw_multiple_values() {
         Some(32),
         5,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(1),
-        ReturnValue::Return(2),
-        ReturnValue::Throw(3),
-        ReturnValue::Throw(4),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![
+                ReturnValue::Return(1),
+                ReturnValue::Return(2),
+                ReturnValue::Throw(3),
+                ReturnValue::Throw(4),
+            ]
+            .into_iter()
+            .collect()
+        )
+    );
 }
 
 #[test]
@@ -90,14 +103,21 @@ fn throw_uncaught_wrongtype() {
         Some(32),
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(2),
-        ReturnValue::Throw(20),
-        // TODO: This function shouldn't actually be able to Return(10), but
-        // since our matching of catch blocks is currently imprecise, our
-        // current symex allows the exception to be either caught or not-caught
-        ReturnValue::Return(10),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![
+                ReturnValue::Return(2),
+                ReturnValue::Throw(20),
+                // TODO: This function shouldn't actually be able to Return(10), but
+                // since our matching of catch blocks is currently imprecise, our
+                // current symex allows the exception to be either caught or not-caught
+                ReturnValue::Return(10),
+            ]
+            .into_iter()
+            .collect()
+        )
+    );
 }
 
 #[test]
@@ -112,10 +132,14 @@ fn throw_uncaught_caller() {
         Some(32),
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(1),
-        ReturnValue::Throw(20),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![ReturnValue::Return(1), ReturnValue::Throw(20),]
+                .into_iter()
+                .collect()
+        )
+    );
 }
 
 #[test]
@@ -130,10 +154,14 @@ fn throw_and_catch_wildcard() {
         Some(32),
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(2),
-        ReturnValue::Return(5),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![ReturnValue::Return(2), ReturnValue::Return(5),]
+                .into_iter()
+                .collect()
+        )
+    );
 }
 
 #[test]
@@ -148,14 +176,21 @@ fn throw_and_catch_val() {
         Some(32),
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(2),
-        ReturnValue::Return(20),
-        // TODO: This function shouldn't actually be able to Throw(20), but
-        // since our matching of catch blocks is currently imprecise, our
-        // current symex allows the exception to be either caught or not-caught
-        ReturnValue::Throw(20),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![
+                ReturnValue::Return(2),
+                ReturnValue::Return(20),
+                // TODO: This function shouldn't actually be able to Throw(20), but
+                // since our matching of catch blocks is currently imprecise, our
+                // current symex allows the exception to be either caught or not-caught
+                ReturnValue::Throw(20),
+            ]
+            .into_iter()
+            .collect()
+        )
+    );
 }
 
 #[test]
@@ -170,14 +205,21 @@ fn throw_and_catch_in_caller() {
         Some(32),
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(2),
-        ReturnValue::Return(20),
-        // TODO: This function shouldn't actually be able to Throw(20), but
-        // since our matching of catch blocks is currently imprecise, our
-        // current symex allows the exception to be either caught or not-caught
-        ReturnValue::Throw(20),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![
+                ReturnValue::Return(2),
+                ReturnValue::Return(20),
+                // TODO: This function shouldn't actually be able to Throw(20), but
+                // since our matching of catch blocks is currently imprecise, our
+                // current symex allows the exception to be either caught or not-caught
+                ReturnValue::Throw(20),
+            ]
+            .into_iter()
+            .collect()
+        )
+    );
 }
 
 #[test]
@@ -194,8 +236,12 @@ fn throw_and_rethrow_in_caller() {
         Some(32),
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(2),
-        ReturnValue::Throw(20),
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![ReturnValue::Return(2), ReturnValue::Throw(20),]
+                .into_iter()
+                .collect()
+        )
+    );
 }

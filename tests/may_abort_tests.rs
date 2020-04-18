@@ -1,5 +1,5 @@
-use haybale::*;
 use haybale::solver_utils::PossibleSolutions;
+use haybale::*;
 use std::path::Path;
 
 fn init_logging() {
@@ -31,10 +31,14 @@ fn may_exit() {
         None,
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(1),
-        ReturnValue::Abort,
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![ReturnValue::Return(1), ReturnValue::Abort,]
+                .into_iter()
+                .collect()
+        )
+    );
 }
 
 #[test]
@@ -49,8 +53,12 @@ fn may_panic() {
         None,
         3,
     );
-    assert_eq!(rvals, PossibleSolutions::Exactly(vec![
-        ReturnValue::Return(1),
-        ReturnValue::Abort,
-    ].into_iter().collect()));
+    assert_eq!(
+        rvals,
+        PossibleSolutions::Exactly(
+            vec![ReturnValue::Return(1), ReturnValue::Abort,]
+                .into_iter()
+                .collect()
+        )
+    );
 }

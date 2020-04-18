@@ -1,9 +1,9 @@
 //! Simple utilities for interacting with the solver
 
-use boolector::{Btor, BVSolution, SolverResult};
-use boolector::option::{BtorOption, ModelGen};
 use crate::backend::BV;
 use crate::error::*;
+use boolector::option::{BtorOption, ModelGen};
+use boolector::{BVSolution, Btor, SolverResult};
 use log::warn;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -16,7 +16,9 @@ pub fn sat(btor: &Btor) -> Result<bool> {
     match btor.sat() {
         SolverResult::Sat => Ok(true),
         SolverResult::Unsat => Ok(false),
-        SolverResult::Unknown => Err(Error::SolverError("The query was interrupted, timed out, or otherwise failed".to_owned())),
+        SolverResult::Unknown => Err(Error::SolverError(
+            "The query was interrupted, timed out, or otherwise failed".to_owned(),
+        )),
     }
 }
 
@@ -26,8 +28,13 @@ pub fn sat(btor: &Btor) -> Result<bool> {
 /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
 ///
 /// Does not permanently add the constraints in `conds` to the solver.
-pub fn sat_with_extra_constraints<I, B>(btor: &Btor, constraints: impl IntoIterator<Item = I>) -> Result<bool>
-    where I: Deref<Target = B>, B: BV
+pub fn sat_with_extra_constraints<I, B>(
+    btor: &Btor,
+    constraints: impl IntoIterator<Item = I>,
+) -> Result<bool>
+where
+    I: Deref<Target = B>,
+    B: BV,
 {
     btor.push(1);
     for constraint in constraints {
@@ -98,13 +105,19 @@ impl PossibleSolutions<BVSolution> {
     pub fn as_u64_solutions(&self) -> Option<PossibleSolutions<u64>> {
         match self {
             PossibleSolutions::Exactly(v) => {
-                let opt = v.iter().map(|bvs| bvs.as_u64()).collect::<Option<HashSet<u64>>>();
+                let opt = v
+                    .iter()
+                    .map(|bvs| bvs.as_u64())
+                    .collect::<Option<HashSet<u64>>>();
                 opt.map(PossibleSolutions::Exactly)
-            },
+            }
             PossibleSolutions::AtLeast(v) => {
-                let opt = v.iter().map(|bvs| bvs.as_u64()).collect::<Option<HashSet<u64>>>();
+                let opt = v
+                    .iter()
+                    .map(|bvs| bvs.as_u64())
+                    .collect::<Option<HashSet<u64>>>();
                 opt.map(PossibleSolutions::AtLeast)
-            },
+            }
         }
     }
 }
@@ -139,21 +152,28 @@ impl<V: Eq + Hash> PossibleSolutions<V> {
 /// `PossibleSolutions`, rather than returning an `Err` with `Error::Unsat`.
 //
 // Also, this function assumes that initially ModelGen is disabled; and it will always disable ModelGen before returning.
-pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usize) -> Result<PossibleSolutions<BVSolution>> {
+pub fn get_possible_solutions_for_bv<V: BV>(
+    solver: V::SolverRef,
+    bv: &V,
+    n: usize,
+) -> Result<PossibleSolutions<BVSolution>> {
     let ps = if n == 0 {
         warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}", bv);
         solver.set_opt(BtorOption::ModelGen(ModelGen::All));
         if sat(&solver)? {
-            PossibleSolutions::AtLeast(std::iter::once(
-                bv.get_a_solution()?.disambiguate()  // a possible solution
-            ).collect())
+            PossibleSolutions::AtLeast(
+                std::iter::once(
+                    bv.get_a_solution()?.disambiguate(), // a possible solution
+                )
+                .collect(),
+            )
         } else {
-            PossibleSolutions::Exactly(HashSet::new())  // no solutions
+            PossibleSolutions::Exactly(HashSet::new()) // no solutions
         }
     } else {
         match bv.as_binary_str() {
             Some(bstr) => PossibleSolutions::Exactly(
-                std::iter::once(BVSolution::from_01x_str(bstr)).collect()
+                std::iter::once(BVSolution::from_01x_str(bstr)).collect(),
             ),
             None => {
                 let mut solutions = HashSet::new();
@@ -164,7 +184,8 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
                     solver.push(1);
                     for solution in solutions.iter() {
                         // Temporarily constrain that the solution can't be `solution` - we want to see if other solutions exist
-                        bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str())).assert()?;
+                        bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str()))
+                            .assert()?;
                     }
                     warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}", bv);
                     solver.set_opt(BtorOption::ModelGen(ModelGen::All));
@@ -172,7 +193,8 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
                         let val = bv.get_a_solution()?.disambiguate();
                         solutions.insert(val.clone());
                         // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert()?;
+                        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str()))
+                            .assert()?;
                     }
                     solver.pop(1);
                     if solutions.len() > n {
@@ -181,7 +203,7 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
                         PossibleSolutions::Exactly(solutions)
                     }
                 }
-            },
+            }
         }
     };
     solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
@@ -194,52 +216,148 @@ pub fn get_possible_solutions_for_bv<V: BV>(solver: V::SolverRef, bv: &V, n: usi
 ///
 /// Experimental data shows that calls to `sat()` with ModelGen enabled are _so slow_
 /// that it's worth doing this first to try to avoid them.
-fn check_for_common_solutions<V: BV>(solver: V::SolverRef, bv: &V, n: usize, solutions: &mut HashSet<BVSolution>) -> Result<()> {
+fn check_for_common_solutions<V: BV>(
+    solver: V::SolverRef,
+    bv: &V,
+    n: usize,
+    solutions: &mut HashSet<BVSolution>,
+) -> Result<()> {
     let width = bv.get_width();
     if solutions.len() <= n && bvs_can_be_equal(&solver, bv, &BV::zero(solver.clone(), width))? {
         solutions.insert(BVSolution::from_01x_str("0".repeat(width as usize)));
     }
     if solutions.len() <= n && bvs_can_be_equal(&solver, bv, &BV::one(solver.clone(), width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 1, width=width as usize)));
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            1,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 1 && bvs_can_be_equal(&solver, bv, &BV::ones(solver.clone(), width))? {
+    if solutions.len() <= n
+        && width > 1
+        && bvs_can_be_equal(&solver, bv, &BV::ones(solver.clone(), width))?
+    {
         solutions.insert(BVSolution::from_01x_str("1".repeat(width as usize)));
     }
-    if solutions.len() <= n && width > 1 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 2, width=width as usize)));
+    if solutions.len() <= n
+        && width > 1
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            2,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 2 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 4, width=width as usize)));
+    if solutions.len() <= n
+        && width > 2
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            4,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 3 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 8, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 8, width=width as usize)));
+    if solutions.len() <= n
+        && width > 3
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 8, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            8,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 4 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 16, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 16, width=width as usize)));
+    if solutions.len() <= n
+        && width > 4
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 16, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            16,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 5 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 32, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 32, width=width as usize)));
+    if solutions.len() <= n
+        && width > 5
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 32, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            32,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 6 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 64, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 64, width=width as usize)));
+    if solutions.len() <= n
+        && width > 6
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 64, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            64,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 7 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 128, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 128, width=width as usize)));
+    if solutions.len() <= n
+        && width > 7
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 128, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            128,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 8 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 256, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 256, width=width as usize)));
+    if solutions.len() <= n
+        && width > 8
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 256, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            256,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 9 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 512, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 512, width=width as usize)));
+    if solutions.len() <= n
+        && width > 9
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 512, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            512,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 10 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 1024, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 1024, width=width as usize)));
+    if solutions.len() <= n
+        && width > 10
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 1024, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            1024,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 11 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2048, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 2048, width=width as usize)));
+    if solutions.len() <= n
+        && width > 11
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2048, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            2048,
+            width = width as usize
+        )));
     }
-    if solutions.len() <= n && width > 12 && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4096, width))? {
-        solutions.insert(BVSolution::from_01x_str(format!("{:0width$b}", 4096, width=width as usize)));
+    if solutions.len() <= n
+        && width > 12
+        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4096, width))?
+    {
+        solutions.insert(BVSolution::from_01x_str(format!(
+            "{:0width$b}",
+            4096,
+            width = width as usize
+        )));
     }
     Ok(())
 }
@@ -251,7 +369,10 @@ fn check_for_common_solutions<V: BV>(solver: V::SolverRef, bv: &V, n: usize, sol
 /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
 /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
 /// query itself fails. Panics if the `BV` is wider than 64 bits.
-pub fn max_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<u64>> {
+pub fn max_possible_solution_for_bv_as_u64<V: BV>(
+    solver: V::SolverRef,
+    bv: &V,
+) -> Result<Option<u64>> {
     let width = bv.get_width();
     if width > 64 {
         panic!("max_possible_solution_for_bv_as_u64 on a BV with width > 64");
@@ -273,11 +394,15 @@ pub fn max_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) 
     }
     // min is inclusive, max is exclusive (we know all-ones doesn't work)
     let mut min: u64 = 0;
-    let mut max: u64 = if width == 64 { std::u64::MAX } else { (1 << width) - 1 };
+    let mut max: u64 = if width == 64 {
+        std::u64::MAX
+    } else {
+        (1 << width) - 1
+    };
     let mut pushes = 0;
     while (max - min) > 1 {
         let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
-        let mid = if mid / 2 > min { mid / 2 } else { mid };  // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
+        let mid = if mid / 2 > min { mid / 2 } else { mid }; // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
         bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert()?;
@@ -303,7 +428,10 @@ pub fn max_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) 
 /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
 /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
 /// query itself fails. Panics if the `BV` is wider than 64 bits.
-pub fn min_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<u64>> {
+pub fn min_possible_solution_for_bv_as_u64<V: BV>(
+    solver: V::SolverRef,
+    bv: &V,
+) -> Result<Option<u64>> {
     let width = bv.get_width();
     if width > 64 {
         panic!("min_possible_solution_for_bv_as_u64 on a BV with width > 64");
@@ -321,11 +449,15 @@ pub fn min_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) 
     }
     // min is exclusive (we know `0` doesn't work), max is inclusive
     let mut min: u64 = 0;
-    let mut max: u64 = if width == 64 { std::u64::MAX } else { (1 << width) - 1 };
+    let mut max: u64 = if width == 64 {
+        std::u64::MAX
+    } else {
+        (1 << width) - 1
+    };
     let mut pushes = 0;
     while (max - min) > 1 {
         let mid = (min / 2) + (max / 2) + (min % 2 + max % 2) / 2; // (min + max) / 2 would be easier, but fails if (min + max) overflows
-        let mid = if mid / 2 > min { mid / 2 } else { mid };  // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
+        let mid = if mid / 2 > min { mid / 2 } else { mid }; // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
         bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert()?;
@@ -356,7 +488,10 @@ pub fn min_possible_solution_for_bv_as_u64<V: BV>(solver: V::SolverRef, bv: &V) 
 /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
 /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
 /// query itself fails.
-pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<String>> {
+pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(
+    solver: V::SolverRef,
+    bv: &V,
+) -> Result<Option<String>> {
     let mut bv = bv.clone();
     let total_width = bv.get_width();
     let mut retval = String::with_capacity(total_width as usize);
@@ -364,30 +499,45 @@ pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(solver: V::SolverRef, b
     loop {
         let width = bv.get_width();
         if width <= 64 {
-            let max_for_remaining_bits = match max_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
-                Some(max) => max,
-                None => return Ok(None),
-            };
-            retval.push_str(&format!("{val:0width$b}", val = max_for_remaining_bits, width = width as usize));
+            let max_for_remaining_bits =
+                match max_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
+                    Some(max) => max,
+                    None => return Ok(None),
+                };
+            retval.push_str(&format!(
+                "{val:0width$b}",
+                val = max_for_remaining_bits,
+                width = width as usize
+            ));
             break;
         } else {
             let top_bit = bv.get_width() - 1;
             let high_bits = bv.slice(top_bit, top_bit - 63);
             assert_eq!(high_bits.get_width(), 64);
             bv = bv.slice(top_bit - 64, 0);
-            let max_for_high_bits = match max_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
-                Some(max) => max,
-                None => return Ok(None),
-            };
+            let max_for_high_bits =
+                match max_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
+                    Some(max) => max,
+                    None => return Ok(None),
+                };
             retval.push_str(&format!("{:064b}", max_for_high_bits));
             // now (temporarily, thanks to the push() above) constrain that
             // these bits are that max value, to ensure the future calculations
             // return values consistent with that
-            high_bits._eq(&V::from_u64(solver.clone(), max_for_high_bits, 64)).assert()?;
+            high_bits
+                ._eq(&V::from_u64(solver.clone(), max_for_high_bits, 64))
+                .assert()?;
         }
     }
     solver.pop(1);
-    assert_eq!(retval.len(), total_width as usize, "Should have a string of {} characters, but have one of {} characters: {:?}", total_width, retval.len(), retval);
+    assert_eq!(
+        retval.len(),
+        total_width as usize,
+        "Should have a string of {} characters, but have one of {} characters: {:?}",
+        total_width,
+        retval.len(),
+        retval
+    );
     Ok(Some(retval))
 }
 
@@ -403,36 +553,54 @@ pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(solver: V::SolverRef, b
 /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
 /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
 /// query itself fails.
-pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(solver: V::SolverRef, bv: &V) -> Result<Option<String>> {
+pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
+    solver: V::SolverRef,
+    bv: &V,
+) -> Result<Option<String>> {
     let mut bv = bv.clone();
     let total_width = bv.get_width();
     let mut retval = String::with_capacity(total_width as usize);
     loop {
         let width = bv.get_width();
         if width <= 64 {
-            let min_for_remaining_bits = match min_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
-                Some(max) => max,
-                None => return Ok(None),
-            };
-            retval.push_str(&format!("{val:0width$b}", val = min_for_remaining_bits, width = width as usize));
+            let min_for_remaining_bits =
+                match min_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
+                    Some(max) => max,
+                    None => return Ok(None),
+                };
+            retval.push_str(&format!(
+                "{val:0width$b}",
+                val = min_for_remaining_bits,
+                width = width as usize
+            ));
             break;
         } else {
             let top_bit = bv.get_width() - 1;
             let high_bits = bv.slice(top_bit, top_bit - 63);
             assert_eq!(high_bits.get_width(), 64);
             bv = bv.slice(top_bit - 64, 0);
-            let min_for_high_bits = match min_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
-                Some(min) => min,
-                None => return Ok(None),
-            };
+            let min_for_high_bits =
+                match min_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
+                    Some(min) => min,
+                    None => return Ok(None),
+                };
             retval.push_str(&format!("{:064b}", min_for_high_bits));
             // now (temporarily, thanks to the push() above) constrain that
             // these bits are that min value, to ensure the future calculations
             // return values consistent with that
-            high_bits._eq(&V::from_u64(solver.clone(), min_for_high_bits, 64)).assert()?;
+            high_bits
+                ._eq(&V::from_u64(solver.clone(), min_for_high_bits, 64))
+                .assert()?;
         }
     }
-    assert_eq!(retval.len(), total_width as usize, "Should have a string of {} characters, but have one of {} characters: {:?}", total_width, retval.len(), retval);
+    assert_eq!(
+        retval.len(),
+        total_width as usize,
+        "Should have a string of {} characters, but have one of {} characters: {:?}",
+        total_width,
+        retval.len(),
+        retval
+    );
     Ok(Some(retval))
 }
 
@@ -481,7 +649,10 @@ mod tests {
 
         // adding x < 3 constraint should make us unsat
         let bad_constraint = x.ult(&BV::from_u64(btor.clone(), 3, 64));
-        assert_eq!(sat_with_extra_constraints(&btor, std::iter::once(&bad_constraint)), Ok(false));
+        assert_eq!(
+            sat_with_extra_constraints(&btor, std::iter::once(&bad_constraint)),
+            Ok(false)
+        );
 
         // the solver itself should still be sat, extra constraints weren't permanently added
         assert_eq!(sat(&btor), Ok(true));
@@ -527,28 +698,42 @@ mod tests {
         x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // check that there are more than 2 solutions
-        let num_solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().count();
+        let num_solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2)
+            .unwrap()
+            .count();
         assert_eq!(num_solutions, SolutionCount::AtLeast(3));
 
         // add x < 6 constraint
         x.ult(&BV::from_u64(btor.clone(), 6, 64)).assert();
 
         // check that there are now exactly two solutions
-        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly([4,5].iter().copied().collect())));
+        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2)
+            .unwrap()
+            .as_u64_solutions();
+        assert_eq!(
+            solutions,
+            Some(PossibleSolutions::Exactly([4, 5].iter().copied().collect()))
+        );
 
         // add x < 5 constraint
         x.ult(&BV::from_u64(btor.clone(), 5, 64)).assert();
 
         // check that there is now exactly one solution
-        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly(std::iter::once(4).collect())));
+        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2)
+            .unwrap()
+            .as_u64_solutions();
+        assert_eq!(
+            solutions,
+            Some(PossibleSolutions::Exactly(std::iter::once(4).collect()))
+        );
 
         // add x < 3 constraint
         x.ult(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // check that there are now no solutions
-        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2).unwrap().as_u64_solutions();
+        let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2)
+            .unwrap()
+            .as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::new())));
     }
 
@@ -561,19 +746,28 @@ mod tests {
         x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // min possible solution should be 4
-        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(4)));
+        assert_eq!(
+            min_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some(4))
+        );
 
         // add x < 6 constraint
         x.ult(&BV::from_u64(btor.clone(), 6, 64)).assert();
 
         // min possible solution should still be 4
-        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(4)));
+        assert_eq!(
+            min_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some(4))
+        );
 
         // add x < 3 constraint
         x.ult(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // min_possible_solution_for_bv_as_u64 should now return None
-        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(None));
+        assert_eq!(
+            min_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(None)
+        );
     }
 
     #[test]
@@ -585,25 +779,40 @@ mod tests {
         x.ult(&BV::from_u64(btor.clone(), 7, 64)).assert();
 
         // max possible solution should be 6
-        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(6)));
+        assert_eq!(
+            max_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some(6))
+        );
 
         // but min possible solution should be 0
-        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(0)));
+        assert_eq!(
+            min_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some(0))
+        );
 
         // add x > 3 constraint
         x.ugt(&BV::from_u64(btor.clone(), 3, 64)).assert();
 
         // max possible solution should still be 6
-        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(6)));
+        assert_eq!(
+            max_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some(6))
+        );
 
         // and min possible solution should now be 4
-        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some(4)));
+        assert_eq!(
+            min_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some(4))
+        );
 
         // add x > 7 constraint
         x.ugt(&BV::from_u64(btor.clone(), 7, 64)).assert();
 
         // max_possible_solution_for_bv should now return None
-        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(None));
+        assert_eq!(
+            max_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(None)
+        );
     }
 
     #[test]
@@ -645,7 +854,10 @@ mod tests {
         x.sgte(&minustwo).assert();
 
         // The min possible (unsigned) solution should be -2
-        assert_eq!(min_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
+        assert_eq!(
+            min_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some((-2_i64) as u64))
+        );
     }
 
     #[test]
@@ -659,6 +871,9 @@ mod tests {
         x.slte(&minustwo).assert();
 
         // The max possible (unsigned) solution should be -2
-        assert_eq!(max_possible_solution_for_bv_as_u64(btor.clone(), &x), Ok(Some((-2_i64) as u64)));
+        assert_eq!(
+            max_possible_solution_for_bv_as_u64(btor.clone(), &x),
+            Ok(Some((-2_i64) as u64))
+        );
     }
 }

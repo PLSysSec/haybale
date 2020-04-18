@@ -3,7 +3,7 @@
 use crate::backend::*;
 use crate::error::*;
 use crate::project::Project;
-use llvm_ir::types::{Type, FPType};
+use llvm_ir::types::{FPType, Type};
 use std::sync::{Arc, RwLock};
 
 /// our convention is that pointers are 64 bits
@@ -16,15 +16,22 @@ pub fn size(ty: &Type) -> usize {
     match ty {
         Type::IntegerType { bits } => *bits as usize,
         Type::PointerType { .. } => POINTER_SIZE_BITS,
-        Type::ArrayType { element_type, num_elements } => num_elements * size(element_type),
-        Type::VectorType { element_type, num_elements } => num_elements * size(element_type),
+        Type::ArrayType {
+            element_type,
+            num_elements,
+        } => num_elements * size(element_type),
+        Type::VectorType {
+            element_type,
+            num_elements,
+        } => num_elements * size(element_type),
         Type::StructType { element_types, .. } => element_types.iter().map(size).sum(),
-        Type::NamedStructType { ty, .. } => size(&ty.as_ref()
-            .expect("Can't get size of an opaque struct type")
-            .upgrade()
-            .expect("Failed to upgrade weak reference")
-            .read()
-            .unwrap()
+        Type::NamedStructType { ty, .. } => size(
+            &ty.as_ref()
+                .expect("Can't get size of an opaque struct type")
+                .upgrade()
+                .expect("Failed to upgrade weak reference")
+                .read()
+                .unwrap(),
         ),
         Type::FPType(fpt) => fp_size(*fpt),
         ty => panic!("Not sure how to get the size of {:?}", ty),
@@ -43,16 +50,23 @@ pub fn size(ty: &Type) -> usize {
 /// definition in the entire `Project`.
 pub fn size_opaque_aware(ty: &Type, proj: &Project) -> Option<usize> {
     match ty {
-        ty@Type::NamedStructType { .. } => size_opaque_aware(
-            &proj.get_inner_struct_type_from_named(ty)?
-                .read()
-                .unwrap(),
-            proj
+        ty @ Type::NamedStructType { .. } => size_opaque_aware(
+            &proj.get_inner_struct_type_from_named(ty)?.read().unwrap(),
+            proj,
         ),
-        Type::ArrayType { element_type, num_elements } => size_opaque_aware(element_type, proj).map(|s| s * num_elements),
-        Type::VectorType { element_type, num_elements } => size_opaque_aware(element_type, proj).map(|s| s * num_elements),
-        Type::StructType { element_types, .. } => element_types.iter().map(|ty| size_opaque_aware(ty, proj)).sum(),
-        _ => Some(size(ty)),  // for all other cases, just fall back on the basic size()
+        Type::ArrayType {
+            element_type,
+            num_elements,
+        } => size_opaque_aware(element_type, proj).map(|s| s * num_elements),
+        Type::VectorType {
+            element_type,
+            num_elements,
+        } => size_opaque_aware(element_type, proj).map(|s| s * num_elements),
+        Type::StructType { element_types, .. } => element_types
+            .iter()
+            .map(|ty| size_opaque_aware(ty, proj))
+            .sum(),
+        _ => Some(size(ty)), // for all other cases, just fall back on the basic size()
     }
 }
 
@@ -75,50 +89,70 @@ pub fn fp_size(fpt: FPType) -> usize {
 // weak reference in the `NamedStructType` case
 pub fn get_offset_constant_index(base_type: &Type, index: usize) -> Result<(usize, Type)> {
     match base_type {
-        Type::PointerType { pointee_type: element_type, .. }
+        Type::PointerType {
+            pointee_type: element_type,
+            ..
+        }
         | Type::ArrayType { element_type, .. }
-        | Type::VectorType { element_type, .. }
-        => {
+        | Type::VectorType { element_type, .. } => {
             let el_size_bits = size(element_type);
             if el_size_bits % 8 != 0 {
-                Err(Error::UnsupportedInstruction(format!("Encountered a type with size {} bits", el_size_bits)))
+                Err(Error::UnsupportedInstruction(format!(
+                    "Encountered a type with size {} bits",
+                    el_size_bits
+                )))
             } else {
                 let el_size_bytes = el_size_bits / 8;
                 Ok((index * el_size_bytes, (**element_type).clone()))
             }
-        },
+        }
         Type::StructType { element_types, .. } => {
             let mut offset_bits = 0;
             for ty in element_types.iter().take(index) {
                 offset_bits += size(ty);
             }
             if offset_bits % 8 != 0 {
-                Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)))
+                Err(Error::UnsupportedInstruction(format!(
+                    "Struct offset of {} bits",
+                    offset_bits
+                )))
             } else {
                 Ok((offset_bits / 8, element_types[index].clone()))
             }
-        },
+        }
         Type::NamedStructType { ty, .. } => {
-            let arc: Arc<RwLock<Type>> = ty.as_ref()
-                .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
+            let arc: Arc<RwLock<Type>> = ty
+                .as_ref()
+                .ok_or_else(|| {
+                    Error::MalformedInstruction("get_offset on an opaque struct type".to_owned())
+                })?
                 .upgrade()
                 .expect("Failed to upgrade weak reference");
             let actual_ty: &Type = &arc.read().unwrap();
-            if let Type::StructType { ref element_types, .. } = actual_ty {
+            if let Type::StructType {
+                ref element_types, ..
+            } = actual_ty
+            {
                 // this code copied from the StructType case, unfortunately
                 let mut offset_bits = 0;
                 for ty in element_types.iter().take(index) {
                     offset_bits += size(ty);
                 }
                 if offset_bits % 8 != 0 {
-                    Err(Error::UnsupportedInstruction(format!("Struct offset of {} bits", offset_bits)))
+                    Err(Error::UnsupportedInstruction(format!(
+                        "Struct offset of {} bits",
+                        offset_bits
+                    )))
                 } else {
                     Ok((offset_bits / 8, element_types[index].clone()))
                 }
             } else {
-                Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+                Err(Error::MalformedInstruction(format!(
+                    "Expected NamedStructType inner type to be a StructType, but got {:?}",
+                    actual_ty
+                )))
             }
-        },
+        }
         _ => panic!("get_offset_constant_index with base type {:?}", base_type),
     }
 }
@@ -131,7 +165,11 @@ pub fn get_offset_constant_index(base_type: &Type, index: usize) -> Result<(usiz
 /// as a `BV`.
 ///
 /// The result `BV` will have the same width as the input `index`.
-pub fn get_offset_bv_index<'t, V: BV>(base_type: &'t Type, index: &V, solver: V::SolverRef) -> Result<(V, &'t Type)> {
+pub fn get_offset_bv_index<'t, V: BV>(
+    base_type: &'t Type,
+    index: &V,
+    solver: V::SolverRef,
+) -> Result<(V, &'t Type)> {
     match base_type {
         Type::PointerType { pointee_type: element_type, .. }
         | Type::ArrayType { element_type, .. }

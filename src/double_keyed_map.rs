@@ -4,9 +4,9 @@
 // we have some methods on `DoubleKeyedMap` that may not currently be used by callers, but they still make sense to be part of `DoubleKeyedMap`
 #![allow(dead_code)]
 
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::borrow::Borrow;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct Pair<A, B>(A, B);
@@ -60,7 +60,9 @@ pub struct DoubleKeyedMap<A: Eq + Hash, B: Eq + Hash, V> {
 // pass-through for selected HashMap methods. More can be added as needed.
 impl<A: Eq + Hash, B: Eq + Hash, V> DoubleKeyedMap<A, B, V> {
     pub fn new() -> Self {
-        DoubleKeyedMap { map: HashMap::new() }
+        DoubleKeyedMap {
+            map: HashMap::new(),
+        }
     }
 
     pub fn get(&self, a: &A, b: &B) -> Option<&V> {
@@ -93,11 +95,11 @@ impl<A: Eq + Hash, B: Eq + Hash, V> DoubleKeyedMap<A, B, V> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&A, &B, &V)> {
-        self.map.iter().map(|(Pair(a,b), v)| (a,b,v))
+        self.map.iter().map(|(Pair(a, b), v)| (a, b, v))
     }
 
     pub fn keys(&self) -> impl Iterator<Item = (&A, &B)> {
-        self.map.keys().map(|Pair(a,b)| (a,b))
+        self.map.keys().map(|Pair(a, b)| (a, b))
     }
 
     pub fn values(&self) -> impl Iterator<Item = &V> {
@@ -112,7 +114,7 @@ impl<A: Eq + Hash, B: Eq + Hash, V> DoubleKeyedMap<A, B, V> {
 impl<A: Eq + Hash + Clone, B: Eq + Hash + Clone, V: Clone> Clone for DoubleKeyedMap<A, B, V> {
     fn clone(&self) -> Self {
         Self {
-            map: self.map.clone()
+            map: self.map.clone(),
         }
     }
 }

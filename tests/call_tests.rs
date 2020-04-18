@@ -19,8 +19,8 @@ fn simple_call() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -31,11 +31,15 @@ fn cross_module_simple_call() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_simple_caller";
     init_logging();
-    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(
+        vec![callee_modname, caller_modname]
+            .into_iter()
+            .map(std::path::Path::new),
+    )
+    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -46,8 +50,8 @@ fn conditional_call() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[0], SolutionValue::I32(3));
     assert!(args[1].unwrap_to_i32() > 5);
@@ -59,8 +63,8 @@ fn call_twice() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -71,11 +75,15 @@ fn cross_module_call_twice() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_twice_caller";
     init_logging();
-    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(
+        vec![callee_modname, caller_modname]
+            .into_iter()
+            .map(std::path::Path::new),
+    )
+    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -86,8 +94,8 @@ fn nested_call() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -101,11 +109,15 @@ fn cross_module_nested_near_call() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_nested_near_caller";
     init_logging();
-    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(
+        vec![callee_modname, caller_modname]
+            .into_iter()
+            .map(std::path::Path::new),
+    )
+    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -119,11 +131,15 @@ fn cross_module_nested_far_call() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_nested_far_caller";
     init_logging();
-    let proj = Project::from_bc_paths(vec![callee_modname, caller_modname].into_iter().map(std::path::Path::new))
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(
+        vec![callee_modname, caller_modname]
+            .into_iter()
+            .map(std::path::Path::new),
+    )
+    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     let x = Wrapping(args[0].unwrap_to_i32());
     let y = Wrapping(args[1].unwrap_to_i32());
@@ -137,8 +153,8 @@ fn call_of_loop() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -149,8 +165,8 @@ fn call_in_loop() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
@@ -161,8 +177,8 @@ fn recursive_simple() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x.0);
@@ -185,8 +201,8 @@ fn recursive_double() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(-6));
 }
@@ -197,8 +213,8 @@ fn recursive_not_tail() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     let x = Wrapping(args[0].unwrap_to_i32());
     println!("x = {}", x.0);
@@ -224,8 +240,8 @@ fn recursive_and_normal_call() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(11));
 }
@@ -236,8 +252,8 @@ fn mutually_recursive_functions() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     //assert_eq!(args[0], SolutionValue::I32(3))
 }
