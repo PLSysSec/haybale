@@ -2,7 +2,7 @@
 // but they still make sense to be part of `VarMap`
 #![allow(dead_code)]
 
-use crate::backend::{BV, SolverRef};
+use crate::backend::{SolverRef, BV};
 use crate::double_keyed_map::DoubleKeyedMap;
 use crate::error::*;
 use itertools::Itertools;
@@ -52,7 +52,7 @@ impl<V: BV> VarMap<V> {
             solver,
             active_version: DoubleKeyedMap::new(),
             version_num: DoubleKeyedMap::new(),
-            max_version_num: max_versions_of_name - 1,  // because 0 is a version
+            max_version_num: max_versions_of_name - 1, // because 0 is a version
         }
     }
 
@@ -88,9 +88,11 @@ impl<V: BV> VarMap<V> {
     /// of the `BV` would exceed `max_versions_of_name` -- see
     /// [`VarMap::new()`](struct.VarMap.html#method.new).)
     pub fn assign_bv_to_name(&mut self, funcname: String, name: Name, bv: V) -> Result<()> {
-        let new_version_num = self.version_num.entry(funcname.clone(), name.clone())
-            .and_modify(|v| *v += 1)  // increment if it already exists in map
-            .or_insert(0);  // insert a 0 if it didn't exist in map
+        let new_version_num = self
+            .version_num
+            .entry(funcname.clone(), name.clone())
+            .and_modify(|v| *v += 1) // increment if it already exists in map
+            .or_insert(0); // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
             Err(Error::LoopBoundExceeded(self.max_version_num))
         } else {
@@ -103,21 +105,30 @@ impl<V: BV> VarMap<V> {
     }
 
     /// Look up the most recent `BV` created for the given `(String, Name)` pair.
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
+    #[allow(clippy::ptr_arg)] // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn lookup_var(&self, funcname: &String, name: &Name) -> &V {
         self.active_version.get(funcname, name).unwrap_or_else(|| {
             let keys: Vec<(&String, &Name)> = self.active_version.keys().collect();
-            panic!("Failed to find var {:?} from function {:?} in map with keys {:?}", name, funcname, keys);
+            panic!(
+                "Failed to find var {:?} from function {:?} in map with keys {:?}",
+                name, funcname, keys
+            );
         })
     }
 
     /// Overwrite the latest version of the given `(String, Name)` pair to instead be `bv`.
     /// The `(String, Name)` pair must have already been previously assigned a value.
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
+    #[allow(clippy::ptr_arg)] // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
     pub fn overwrite_latest_version_of_bv(&mut self, funcname: &String, name: &Name, bv: V) {
-        let mapvalue: &mut V = self.active_version
+        let mapvalue: &mut V = self
+            .active_version
             .get_mut(funcname, name)
-            .unwrap_or_else(|| panic!("failed to find current active version of {:?} (function {:?}) in map", name, funcname));
+            .unwrap_or_else(|| {
+                panic!(
+                    "failed to find current active version of {:?} (function {:?}) in map",
+                    name, funcname
+                )
+            });
         *mapvalue = bv;
     }
 
@@ -126,7 +137,8 @@ impl<V: BV> VarMap<V> {
     ///
     /// Returned pairs will be sorted by `Name`.
     pub fn get_all_vars_in_fn(&self, funcname: &str) -> impl Iterator<Item = (&Name, &V)> {
-        self.active_version.iter()
+        self.active_version
+            .iter()
             .filter(|&(fname, _, _)| funcname == fname)
             .map(|(_, name, bv)| (name, bv))
             .sorted_by_key(|&(name, _)| name)
@@ -136,9 +148,11 @@ impl<V: BV> VarMap<V> {
     /// and returns the corresponding versioned name
     /// (or `Error::LoopBoundExceeded` if it would exceed the `max_version_num`)
     fn new_version_of_name(&mut self, funcname: &str, name: &Name) -> Result<String> {
-        let new_version_num = self.version_num.entry(funcname.to_owned(), name.clone())
-            .and_modify(|v| *v += 1)  // increment if it already exists in map
-            .or_insert(0);  // insert a 0 if it didn't exist in map
+        let new_version_num = self
+            .version_num
+            .entry(funcname.to_owned(), name.clone())
+            .and_modify(|v| *v += 1) // increment if it already exists in map
+            .or_insert(0); // insert a 0 if it didn't exist in map
         if *new_version_num > self.max_version_num {
             Err(Error::LoopBoundExceeded(self.max_version_num))
         } else {
@@ -169,9 +183,11 @@ impl<V: BV> VarMap<V> {
     /// its local variables (not the callee's versions, which are technically
     /// more recent).
     pub fn get_restore_info_for_fn(&self, funcname: String) -> RestoreInfo<V> {
-        let pairs_to_restore: Vec<_> = self.active_version.iter()
-            .filter(|(f,_,_)| f == &&funcname)
-            .map(|(_,n,v)| (n.clone(), v.clone()))
+        let pairs_to_restore: Vec<_> = self
+            .active_version
+            .iter()
+            .filter(|(f, _, _)| f == &&funcname)
+            .map(|(_, n, v)| (n.clone(), v.clone()))
             .collect();
         RestoreInfo {
             funcname,
@@ -184,7 +200,8 @@ impl<V: BV> VarMap<V> {
     pub fn restore_fn_vars(&mut self, rinfo: RestoreInfo<V>) {
         let funcname = rinfo.funcname.clone();
         for pair in rinfo.pairs_to_restore {
-            let val = self.active_version
+            let val = self
+                .active_version
                 .get_mut(&funcname, &pair.0)
                 .unwrap_or_else(|| panic!("Malformed RestoreInfo: key {:?}", (&funcname, &pair.0)));
             *val = pair.1;
@@ -215,8 +232,8 @@ pub struct RestoreInfo<V: BV> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use boolector::Btor;
     use crate::solver_utils;
+    use boolector::Btor;
     use std::rc::Rc;
 
     type BV = boolector::BV<Rc<Btor>>;
@@ -232,8 +249,12 @@ mod tests {
         let name2 = Name::from(2);
 
         // create corresponding BV values
-        let var1 = varmap.new_bv_with_name(funcname.clone(), name1.clone(), 64).unwrap();
-        let var2 = varmap.new_bv_with_name(funcname.clone(), name2.clone(), 1).unwrap();  // these clone()s wouldn't normally be necessary but we want to compare against the original values later
+        let var1 = varmap
+            .new_bv_with_name(funcname.clone(), name1.clone(), 64)
+            .unwrap();
+        let var2 = varmap
+            .new_bv_with_name(funcname.clone(), name2.clone(), 1)
+            .unwrap(); // these clone()s wouldn't normally be necessary but we want to compare against the original values later
 
         // check that looking up the llvm-ir values gives the correct BV ones
         assert_eq!(varmap.lookup_var(&funcname, &name1), &var1);
@@ -248,7 +269,9 @@ mod tests {
 
         // create two vars with the same name
         let name = Name::from("x");
-        let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
+        let x1 = varmap
+            .new_bv_with_name(funcname.clone(), name.clone(), 64)
+            .unwrap();
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
 
         // constrain with incompatible constraints
@@ -260,7 +283,9 @@ mod tests {
 
         // now repeat with integer names
         let name = Name::from(3);
-        let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
+        let x1 = varmap
+            .new_bv_with_name(funcname.clone(), name.clone(), 64)
+            .unwrap();
         let x2 = varmap.new_bv_with_name(funcname.clone(), name, 64).unwrap();
         x1.ugt(&BV::from_u64(btor.clone().into(), 2, 64)).assert();
         x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
@@ -269,8 +294,12 @@ mod tests {
         // now repeat with the same name but different functions
         let name = Name::from(10);
         let otherfuncname = "bar".to_owned();
-        let x1 = varmap.new_bv_with_name(funcname.clone(), name.clone(), 64).unwrap();
-        let x2 = varmap.new_bv_with_name(otherfuncname.clone(), name.clone(), 64).unwrap();
+        let x1 = varmap
+            .new_bv_with_name(funcname.clone(), name.clone(), 64)
+            .unwrap();
+        let x2 = varmap
+            .new_bv_with_name(otherfuncname.clone(), name.clone(), 64)
+            .unwrap();
         x1.ugt(&BV::from_u64(btor.clone().into(), 2, 64)).assert();
         x2.ult(&BV::from_u64(btor.clone().into(), 1, 64)).assert();
         assert_eq!(solver_utils::sat(&btor), Ok(true));
@@ -310,13 +339,17 @@ mod tests {
 
         // create a var named "foo" in function "func"
         let fooname = Name::from("foo");
-        let foo1 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+        let foo1 = varmap
+            .new_bv_with_name("func".to_owned(), fooname.clone(), 64)
+            .unwrap();
 
         // save restore info for "func"
         let rinfo = varmap.get_restore_info_for_fn("func".to_owned());
 
         // create another var named "foo" in function "func"
-        let foo2 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+        let foo2 = varmap
+            .new_bv_with_name("func".to_owned(), fooname.clone(), 64)
+            .unwrap();
 
         // check that a lookup gives the most recent var
         assert_eq!(varmap.lookup_var(&"func".to_owned(), &fooname), &foo2);
@@ -333,13 +366,17 @@ mod tests {
 
         // create a var named "foo" in function "func"
         let fooname = Name::from("foo");
-        let _foo1 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+        let _foo1 = varmap
+            .new_bv_with_name("func".to_owned(), fooname.clone(), 64)
+            .unwrap();
 
         // save restore info for function "blah"
         let rinfo_blah = varmap.get_restore_info_for_fn("blah".to_owned());
 
         // create another var named "foo" in function "func"
-        let foo2 = varmap.new_bv_with_name("func".to_owned(), fooname.clone(), 64).unwrap();
+        let foo2 = varmap
+            .new_bv_with_name("func".to_owned(), fooname.clone(), 64)
+            .unwrap();
 
         // restore function "blah", and check that lookups in function "func" are unaffected
         assert_eq!(varmap.lookup_var(&"func".to_owned(), &fooname), &foo2);

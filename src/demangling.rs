@@ -42,13 +42,19 @@ impl Demangling {
         // through the demangler unchanged.)
         // TODO figure out a tighter test here, hopefully we can avoid both
         // false positives and false negatives.
-        if proj.module_source_file_names().any(|name| name.ends_with(".rs") || name.ends_with("u.0")) {
+        if proj
+            .module_source_file_names()
+            .any(|name| name.ends_with(".rs") || name.ends_with("u.0"))
+        {
             return Demangling::Rust;
         }
 
         // otherwise, if any file in the `Project` comes from a source
         // file ending in `.cpp`, then use C++ demangling
-        if proj.module_source_file_names().any(|name| name.ends_with(".cpp")) {
+        if proj
+            .module_source_file_names()
+            .any(|name| name.ends_with(".cpp"))
+        {
             return Demangling::CPP;
         }
 
@@ -62,10 +68,10 @@ impl Demangling {
 /// Returns `Some` if successfully demangled, or `None` if any error occurs
 /// (for instance, if `funcname` isn't a valid C++ mangled name)
 pub(crate) fn try_cpp_demangle(funcname: &str) -> Option<String> {
-    let opts = cpp_demangle::DemangleOptions {
-        no_params: true,
-    };
-    cpp_demangle::Symbol::new(funcname).ok().and_then(|sym| sym.demangle(&opts).ok())
+    let opts = cpp_demangle::DemangleOptions { no_params: true };
+    cpp_demangle::Symbol::new(funcname)
+        .ok()
+        .and_then(|sym| sym.demangle(&opts).ok())
 }
 
 /// Like `try_cpp_demangle()`, but just returns the input string unmodified in
@@ -79,9 +85,9 @@ pub(crate) fn cpp_demangle_or_id(funcname: &str) -> String {
 /// Returns `Some` if successfully demangled, or `None` if any error occurs
 /// (for instance, if `funcname` isn't a valid Rust mangled name)
 pub(crate) fn try_rust_demangle(funcname: &str) -> Option<String> {
-    rustc_demangle::try_demangle(funcname).ok().map(|demangled|
-        format!("{:#}", demangled)
-    )
+    rustc_demangle::try_demangle(funcname)
+        .ok()
+        .map(|demangled| format!("{:#}", demangled))
 }
 
 /// Like `try_rust_demangle()`, but just returns the input string unmodified in

@@ -18,12 +18,11 @@ fn simple_linked_list() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }
-
 
 #[test]
 fn indirectly_recursive_type() {
@@ -31,8 +30,8 @@ fn indirectly_recursive_type() {
     init_logging();
     let proj = get_project();
     let args = find_zero_of_func(funcname, &proj, Config::default())
-            .unwrap_or_else(|r| panic!("{}", r))
-            .expect("Failed to find zero of the function");
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], SolutionValue::I32(3));
 }

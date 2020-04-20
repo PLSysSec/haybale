@@ -74,7 +74,7 @@ impl fmt::Display for Error {
 
 impl From<Error> for String {
     fn from(e: Error) -> String {
-        e.to_string()  // use the Display impl
+        e.to_string() // use the Display impl
     }
 }
 

@@ -9,8 +9,8 @@ use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
 use either::Either;
-use llvm_ir::{Name, Operand, Type, Typed, instruction::InlineAssembly};
 use llvm_ir::function::{CallingConvention, FunctionAttribute, ParameterAttribute};
+use llvm_ir::{instruction::InlineAssembly, Name, Operand, Type, Typed};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -93,7 +93,7 @@ pub type Argument = (Operand, Vec<ParameterAttribute>);
 
 /// `IsCall` exists to unify the commonalities between LLVM `Call` and `Invoke`
 /// instructions
-pub trait IsCall : Typed {
+pub trait IsCall: Typed {
     fn get_called_func(&self) -> &Either<InlineAssembly, Operand>;
     fn get_arguments(&self) -> &Vec<Argument>;
     fn get_return_attrs(&self) -> &Vec<ParameterAttribute>;
@@ -157,27 +157,33 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Adds a function hook. The `hook` will be executed instead of the body of
     /// the `hooked_function`.
     pub fn add<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
-        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    where
+        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
-        self.hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
+        self.hooks
+            .insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
         self.cur_id += 1;
     }
 
     /// Exactly like `add()`, but takes the (C++) _demangled_ name of the function
     /// to hook, so you can use a function name like "namespace::function".
     pub fn add_cpp_demangled<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
-        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    where
+        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
-        self.cpp_demangled_hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
+        self.cpp_demangled_hooks
+            .insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
         self.cur_id += 1;
     }
 
     /// Exactly like `add()`, but takes the (Rust) _demangled_ name of the function
     /// to hook, so you can use a function name like "module::function".
     pub fn add_rust_demangled<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
-        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    where
+        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
-        self.rust_demangled_hooks.insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
+        self.rust_demangled_hooks
+            .insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
         self.cur_id += 1;
     }
 
@@ -198,15 +204,16 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// string itself, although it can still inspect function parameters etc.
     /// For now, this is the best we can do.
     pub fn add_inline_asm_hook<H>(&mut self, hook: &'p H) -> bool
-        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    where
+        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
         match &mut self.inline_asm_hook {
-            h@Some(_) => {
+            h @ Some(_) => {
                 *h = Some(FunctionHook::new(self.cur_id, hook));
                 self.cur_id += 1;
                 true
             },
-            h@None => {
+            h @ None => {
                 *h = Some(FunctionHook::new(self.cur_id, hook));
                 self.cur_id += 1;
                 false
@@ -222,15 +229,16 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Returns `true` if a default hook was previously present, or `false` if no
     /// default hook was present.
     pub fn add_default_hook<H>(&mut self, hook: &'p H) -> bool
-        where H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>
+    where
+        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
         match &mut self.default_hook {
-            h@Some(_) => {
+            h @ Some(_) => {
                 *h = Some(FunctionHook::new(self.cur_id, hook));
                 self.cur_id += 1;
                 true
             },
-            h@None => {
+            h @ None => {
                 *h = Some(FunctionHook::new(self.cur_id, hook));
                 self.cur_id += 1;
                 false
@@ -282,14 +290,18 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// Iterate over all function hooks, as (function name, hook) pairs.
     /// Function names may include both mangled and demangled names.
     pub(crate) fn get_all_hooks(&self) -> impl Iterator<Item = (&String, &FunctionHook<'p, B>)> {
-        self.hooks.iter().chain(self.cpp_demangled_hooks.iter()).chain(self.rust_demangled_hooks.iter())
+        self.hooks
+            .iter()
+            .chain(self.cpp_demangled_hooks.iter())
+            .chain(self.rust_demangled_hooks.iter())
     }
 
     /// Get the `FunctionHook` active for the given `funcname`, or `None` if
     /// there is no hook active for the function. `funcname` may be either a
     /// mangled or a demangled function name.
     pub(crate) fn get_hook_for(&self, funcname: &str) -> Option<&FunctionHook<'p, B>> {
-        self.hooks.get(funcname)
+        self.hooks
+            .get(funcname)
             .or_else(|| {
                 demangling::try_rust_demangle(funcname)
                     .and_then(|demangled| self.rust_demangled_hooks.get(&demangled))
@@ -351,7 +363,10 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
         fhooks.add("calloc", &hooks::allocation::calloc_hook);
         fhooks.add("realloc", &hooks::allocation::realloc_hook);
         fhooks.add("free", &hooks::allocation::free_hook);
-        fhooks.add("__cxa_allocate_exception", &hooks::exceptions::cxa_allocate_exception);
+        fhooks.add(
+            "__cxa_allocate_exception",
+            &hooks::exceptions::cxa_allocate_exception,
+        );
         fhooks.add("__cxa_throw", &hooks::exceptions::cxa_throw);
         fhooks.add("__cxa_begin_catch", &hooks::exceptions::cxa_begin_catch);
         fhooks.add("__cxa_end_catch", &hooks::exceptions::cxa_end_catch);
@@ -376,7 +391,9 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
 /// they cannot.
 pub(crate) struct FunctionHook<'p, B: Backend> {
     /// The actual hook to be executed
-    hook: Rc<dyn Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>> + 'p>,
+    hook: Rc<
+        dyn Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>> + 'p,
+    >,
 
     /// A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
@@ -385,7 +402,10 @@ pub(crate) struct FunctionHook<'p, B: Backend> {
 
 impl<'p, B: Backend> Clone for FunctionHook<'p, B> {
     fn clone(&self) -> Self {
-        Self { hook: self.hook.clone(), id: self.id }
+        Self {
+            hook: self.hook.clone(),
+            id: self.id,
+        }
     }
 }
 
@@ -406,11 +426,22 @@ impl<'p, B: Backend> Hash for FunctionHook<'p, B> {
 impl<'p, B: Backend> FunctionHook<'p, B> {
     /// `id`: A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
-    pub fn new(id: usize, f: &'p dyn Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>) -> Self {
-        Self { hook: Rc::new(f), id }
+    pub fn new(
+        id: usize,
+        f: &'p dyn Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
+    ) -> Self {
+        Self {
+            hook: Rc::new(f),
+            id,
+        }
     }
 
-    pub fn call_hook(&self, proj: &'p Project, state: &mut State<'p, B>, call: &'p dyn IsCall) -> Result<ReturnValue<B::BV>> {
+    pub fn call_hook(
+        &self,
+        proj: &'p Project,
+        state: &mut State<'p, B>,
+        call: &'p dyn IsCall,
+    ) -> Result<ReturnValue<B::BV>> {
         (self.hook)(proj, state, call)
     }
 }
@@ -430,7 +461,8 @@ pub fn generic_stub_hook<B: Backend>(
         Type::VoidType => Ok(ReturnValue::ReturnVoid),
         ty => {
             let width = layout::size(&ty);
-            let bv = state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width as u32)?;
+            let bv =
+                state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width as u32)?;
             Ok(ReturnValue::Return(bv))
         },
     }

@@ -67,7 +67,11 @@ pub fn calloc<B: Backend>(state: &mut State<B>, a: &Operand, b: &Operand) -> Res
 ///
 /// Returns the address of the allocation, which may or may not be the same
 /// address which was passed in.
-pub fn realloc<B: Backend>(state: &mut State<B>, addr: &Operand, num_bytes: &Operand) -> Result<B::BV> {
+pub fn realloc<B: Backend>(
+    state: &mut State<B>,
+    addr: &Operand,
+    num_bytes: &Operand,
+) -> Result<B::BV> {
     let addr = state.operand_to_bv(addr)?;
     // As in `malloc()`, note that allocating too much doesn't hurt anything
     let new_size = try_as_u64(num_bytes).unwrap_or(MAX_ALLOCATION_SIZE_BYTES);
@@ -75,7 +79,9 @@ pub fn realloc<B: Backend>(state: &mut State<B>, addr: &Operand, num_bytes: &Ope
         warn!("warning: encountered an allocation of {} bytes, greater than the assumed max of {}. \
             Since this allocation is constant-sized, it's fine in this case, but does draw into question the assumption.", new_size, MAX_ALLOCATION_SIZE_BYTES);
     }
-    let old_size = state.get_allocation_size(&addr)?.ok_or_else(|| Error::OtherError("realloc: failed to get old allocation size".to_owned()))?;
+    let old_size = state.get_allocation_size(&addr)?.ok_or_else(|| {
+        Error::OtherError("realloc: failed to get old allocation size".to_owned())
+    })?;
     if new_size <= old_size {
         // We treat this as a no-op. You get to keep the larger old_size region you already had.
         Ok(addr)

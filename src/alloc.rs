@@ -13,7 +13,7 @@ pub struct Alloc {
 }
 
 impl Alloc {
-    pub const ALLOC_START: u64 = 0x1000_0000;  // we allocate from this address upwards
+    pub const ALLOC_START: u64 = 0x1000_0000; // we allocate from this address upwards
 
     pub fn new() -> Self {
         Self {
@@ -36,7 +36,7 @@ impl Alloc {
         let bytes = {
             let mut bytes = bits / bits_in_byte;
             if bits % bits_in_byte != 0 {
-                bytes += 1;  // round up to nearest byte
+                bytes += 1; // round up to nearest byte
             }
             bytes
         };

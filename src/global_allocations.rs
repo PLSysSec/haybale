@@ -1,11 +1,11 @@
 use crate::backend::{Backend, SolverRef};
 use crate::function_hooks::FunctionHook;
-use llvm_ir::*;
 use llvm_ir::module::{GlobalVariable, Linkage};
+use llvm_ir::*;
 use log::{debug, warn};
 use std::cell::Cell;
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -120,9 +120,7 @@ impl<'p, B: Backend> Clone for Callable<'p, B> {
 impl<'p, B: Backend> fmt::Debug for Callable<'p, B> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Callable::LLVMFunction(func) => {
-                write!(f, "<Function {:?}>", &func.name)
-            },
+            Callable::LLVMFunction(func) => write!(f, "<Function {:?}>", &func.name),
             Callable::FunctionHook(_) => write!(f, "<FunctionHook>"),
         }
     }
@@ -131,7 +129,7 @@ impl<'p, B: Backend> fmt::Debug for Callable<'p, B> {
 impl<'p, B: Backend> PartialEq for Callable<'p, B> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Callable::LLVMFunction(f1), Callable::LLVMFunction(f2)) => f1.name == f2.name,  // assume functions are unique by name
+            (Callable::LLVMFunction(f1), Callable::LLVMFunction(f2)) => f1.name == f2.name, // assume functions are unique by name
             (Callable::FunctionHook(f1), Callable::FunctionHook(f2)) => f1 == f2,
             (_, _) => false,
         }
@@ -144,7 +142,7 @@ impl<'p, B: Backend> Eq for Callable<'p, B> {}
 impl<'p, B: Backend> Hash for Callable<'p, B> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Callable::LLVMFunction(f) => f.name.hash(state),  // assume functions are unique by name
+            Callable::LLVMFunction(f) => f.name.hash(state), // assume functions are unique by name
             Callable::FunctionHook(fh) => fh.hash(state),
         }
     }
@@ -203,9 +201,22 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     ///
     /// The global variable will be assumed not-yet-initialized;
     /// see notes on `get_global_allocation()`.
-    pub fn allocate_global_var(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: B::BV) {
-        let initializer = var.initializer.as_ref().expect("Can't call allocate_global_var() with a global declaration, only a definition").clone();
-        let allocation = GlobalAllocation::GlobalVariable { addr, initializer, initialized: Cell::new(false) };
+    pub fn allocate_global_var(
+        &mut self,
+        var: &'p GlobalVariable,
+        module: &'p Module,
+        addr: B::BV,
+    ) {
+        let initializer = var
+            .initializer
+            .as_ref()
+            .expect("Can't call allocate_global_var() with a global declaration, only a definition")
+            .clone();
+        let allocation = GlobalAllocation::GlobalVariable {
+            addr,
+            initializer,
+            initialized: Cell::new(false),
+        };
         self.allocate_global(var, module, allocation);
     }
 
@@ -218,11 +229,22 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     /// Note that we have to pretend to allocate `Function`s so that we can have
     /// pointers to them. (As of this writing, we actually only allocate 64 bits
     /// for every `Function`)
-    pub fn allocate_function(&mut self, func: &'p Function, module: &'p Module, addr: u64, addr_bv: B::BV) {
-        let allocation = GlobalAllocation::Function { func, module, addr: addr_bv };
+    pub fn allocate_function(
+        &mut self,
+        func: &'p Function,
+        module: &'p Module,
+        addr: u64,
+        addr_bv: B::BV,
+    ) {
+        let allocation = GlobalAllocation::Function {
+            func,
+            module,
+            addr: addr_bv,
+        };
         match self.allocate_global(func, module, allocation) {
             AllocationResult::Public => {
-                self.addr_to_function.insert(addr, Callable::LLVMFunction(func));
+                self.addr_to_function
+                    .insert(addr, Callable::LLVMFunction(func));
             },
             AllocationResult::ModulePrivate => {
                 self.module_private_addr_to_function
@@ -245,16 +267,27 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     /// to all functions of that name in all modules.
     pub fn allocate_function_hook(&mut self, hook: FunctionHook<'p, B>, addr: u64, addr_bv: B::BV) {
         self.allocated_hooks.insert(hook.clone(), addr_bv);
-        self.addr_to_function.insert(addr, Callable::FunctionHook(hook));
+        self.addr_to_function
+            .insert(addr, Callable::FunctionHook(hook));
     }
 
     /// `initialized`: whether the `Global` has been initialized.
     /// Currently, this is always `false` for global variables, and always `true` for functions.
-    fn allocate_global(&mut self, global: &'p impl Global, module: &'p Module, allocation: GlobalAllocation<'p, B::BV>) -> AllocationResult {
+    fn allocate_global(
+        &mut self,
+        global: &'p impl Global,
+        module: &'p Module,
+        allocation: GlobalAllocation<'p, B::BV>,
+    ) -> AllocationResult {
         match global.get_linkage() {
             Linkage::Private | Linkage::Internal => {
                 // Module-private global, strong definition
-                debug!("Allocating {:?} (module-private to {:?}) at {:?}", global.get_name(), &module.name, allocation.get_addr());
+                debug!(
+                    "Allocating {:?} (module-private to {:?}) at {:?}",
+                    global.get_name(),
+                    &module.name,
+                    allocation.get_addr()
+                );
                 match self.module_private_allocated_globals
                     .entry(module.name.clone())
                     .or_default()
@@ -267,7 +300,11 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
             },
             Linkage::External => {
                 // Public global, strong definition
-                debug!("Allocating {:?} (public, strong) at {:?}", global.get_name(), allocation.get_addr());
+                debug!(
+                    "Allocating {:?} (public, strong) at {:?}",
+                    global.get_name(),
+                    allocation.get_addr()
+                );
                 match self.allocated_globals.entry(global.get_name()) {
                     Entry::Vacant(entry) => {
                         entry.insert(Definition::Strong(allocation));
@@ -294,7 +331,11 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
                 // We treat all of these modes as "Public global, weak definition" under our semantics
                 match self.allocated_globals.entry(global.get_name()) {
                     Entry::Vacant(entry) => {
-                        debug!("Allocating {:?} (public, weak) at {:?}", global.get_name(), allocation.get_addr());
+                        debug!(
+                            "Allocating {:?} (public, weak) at {:?}",
+                            global.get_name(),
+                            allocation.get_addr()
+                        );
                         entry.insert(Definition::Weak(allocation));
                         AllocationResult::Public
                     },
@@ -302,7 +343,10 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
                         // don't override an existing definition. If the existing definition
                         // was weak, we arbitrarily choose to leave it rather than replace it
                         // with this weak definition.
-                        debug!("Skipping definition of {:?} (public, weak) as already defined", global.get_name());
+                        debug!(
+                            "Skipping definition of {:?} (public, weak) as already defined",
+                            global.get_name()
+                        );
                         AllocationResult::NoAllocate
                     },
                 }
@@ -310,7 +354,7 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
             Linkage::Appending => {
                 warn!("Global {:?} has 'appending' linkage type, which is not supported. Any attempted use of this global will result in an error.", global.get_name());
                 AllocationResult::NoAllocate
-            }
+            },
             _ => unimplemented!("Linkage type {:?}", global.get_linkage()),
         }
     }
@@ -328,7 +372,11 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     /// If the global variable hasn't been initialized, the caller probably wants
     /// to initialize it. If so, be sure to update the `.initialized` field of
     /// the `GlobalAllocation`.
-    pub fn get_global_allocation(&self, name: &Name, module: &Module) -> Option<&GlobalAllocation<'p, B::BV>> {
+    pub fn get_global_allocation(
+        &self,
+        name: &Name,
+        module: &Module,
+    ) -> Option<&GlobalAllocation<'p, B::BV>> {
         // First look for a module-private definition. We allow this to have precedence over any public definition that may exist.
         self.module_private_allocated_globals
             .get(&module.name)
@@ -352,14 +400,11 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
     /// may have their own module-private functions with the same name, so the
     /// name alone is not sufficient to identify a unique global.
     pub fn get_func_for_address(&self, addr: u64, module: &Module) -> Option<Callable<'p, B>> {
-        self.addr_to_function
-            .get(&addr)
-            .cloned()
-            .or_else(|| {
-                self.module_private_addr_to_function
-                    .get(&module.name)
-                    .and_then(|hm| hm.get(&addr).cloned())
-            })
+        self.addr_to_function.get(&addr).cloned().or_else(|| {
+            self.module_private_addr_to_function
+                .get(&module.name)
+                .and_then(|hm| hm.get(&addr).cloned())
+        })
     }
 
     /// Adapt the `GlobalAllocations` to a new solver instance.

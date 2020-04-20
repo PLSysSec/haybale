@@ -14,36 +14,36 @@ pub use project::Project;
 mod symex;
 pub use symex::*;
 
-pub mod layout;
-use layout::*;
-
 pub mod config;
 pub use config::Config;
-mod demangling;
-pub mod function_hooks;
-pub mod callbacks;
-mod hooks;
-pub mod alloc_utils;
-pub mod hook_utils;
 
-mod state;
-pub mod memory;
-pub mod simple_memory;
-mod alloc;
-mod varmap;
-mod double_keyed_map;
-mod global_allocations;
-pub mod watchpoints;
-
-pub mod solver_utils;
-use solver_utils::PossibleSolutions;
-mod return_value;
-pub use return_value::ReturnValue;
 mod error;
 pub use error::*;
 
+mod return_value;
+pub use return_value::ReturnValue;
+
+mod alloc;
+pub mod alloc_utils;
 pub mod backend;
+pub mod callbacks;
+mod demangling;
+mod double_keyed_map;
+pub mod function_hooks;
+mod global_allocations;
+pub mod hook_utils;
+mod hooks;
+pub mod layout;
+pub mod memory;
+pub mod simple_memory;
+pub mod solver_utils;
+mod state;
+mod varmap;
+pub mod watchpoints;
+
 use backend::*;
+use layout::*;
+use solver_utils::PossibleSolutions;
 
 #[cfg(test)]
 mod test_utils;
@@ -113,12 +113,14 @@ impl SolutionValue {
 pub fn find_zero_of_func<'p>(
     funcname: &str,
     project: &'p Project,
-    config: Config<'p, BtorBackend>
+    config: Config<'p, BtorBackend>,
 ) -> std::result::Result<Option<Vec<SolutionValue>>, String> {
     let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
 
     // constrain pointer arguments to be not-null
-    let (func, _) = project.get_func_by_name(funcname).unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
+    let (func, _) = project
+        .get_func_by_name(funcname)
+        .unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
     for (param, bv) in func.parameters.iter().zip(em.param_bvs()) {
         if let Type::PointerType { .. } = param.get_type() {
             bv._ne(&em.state().zero(bv.get_width())).assert();
@@ -131,7 +133,7 @@ pub fn find_zero_of_func<'p>(
     while let Some(bvretval) = em.next() {
         match bvretval {
             Ok(ReturnValue::ReturnVoid) => panic!("Function shouldn't return void"),
-            Ok(ReturnValue::Throw(_)) => continue,  // we're looking for values that result in _returning_ zero, not _throwing_ zero
+            Ok(ReturnValue::Throw(_)) => continue, // we're looking for values that result in _returning_ zero, not _throwing_ zero
             Ok(ReturnValue::Abort) => continue,
             Ok(ReturnValue::Return(bvretval)) => {
                 let state = em.mut_state();
@@ -141,7 +143,7 @@ pub fn find_zero_of_func<'p>(
                     break;
                 }
             },
-            Err(Error::LoopBoundExceeded(_)) => continue,  // ignore paths that exceed the loop bound, keep looking
+            Err(Error::LoopBoundExceeded(_)) => continue, // ignore paths that exceed the loop bound, keep looking
             Err(e) => return Err(em.state().full_error_message_with_context(e)),
         }
     }
@@ -150,20 +152,27 @@ pub fn find_zero_of_func<'p>(
     let state = em.mut_state();
     if found {
         // in this case state.sat() must have passed
-        Ok(Some(func.parameters.iter().zip(param_bvs.iter()).map(|(p, bv)| {
-            let param_as_u64 = state.get_a_solution_for_bv(bv)?
-                .expect("since state.sat() passed, expected a solution for each var")
-                .as_u64()
-                .expect("parameter more than 64 bits wide");
-            Ok(match &p.ty {
-                Type::IntegerType { bits: 8 } => SolutionValue::I8(param_as_u64 as i8),
-                Type::IntegerType { bits: 16 } => SolutionValue::I16(param_as_u64 as i16),
-                Type::IntegerType { bits: 32 } => SolutionValue::I32(param_as_u64 as i32),
-                Type::IntegerType { bits: 64 } => SolutionValue::I64(param_as_u64 as i64),
-                Type::PointerType { .. } => SolutionValue::Ptr(param_as_u64),
-                ty => unimplemented!("Function parameter with type {:?}", ty)
-            })
-        }).collect::<Result<_>>()?))
+        Ok(Some(
+            func.parameters
+                .iter()
+                .zip(param_bvs.iter())
+                .map(|(p, bv)| {
+                    let param_as_u64 = state
+                        .get_a_solution_for_bv(bv)?
+                        .expect("since state.sat() passed, expected a solution for each var")
+                        .as_u64()
+                        .expect("parameter more than 64 bits wide");
+                    Ok(match &p.ty {
+                        Type::IntegerType { bits: 8 } => SolutionValue::I8(param_as_u64 as i8),
+                        Type::IntegerType { bits: 16 } => SolutionValue::I16(param_as_u64 as i16),
+                        Type::IntegerType { bits: 32 } => SolutionValue::I32(param_as_u64 as i32),
+                        Type::IntegerType { bits: 64 } => SolutionValue::I64(param_as_u64 as i64),
+                        Type::PointerType { .. } => SolutionValue::Ptr(param_as_u64),
+                        ty => unimplemented!("Function parameter with type {:?}", ty),
+                    })
+                })
+                .collect::<Result<_>>()?,
+        ))
     } else {
         Ok(None)
     }
@@ -208,17 +217,20 @@ pub fn get_possible_return_values_of_func<'p>(
 ) -> PossibleSolutions<ReturnValue<u64>> {
     let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
 
-    let (func, _) = project.get_func_by_name(funcname).expect("Failed to find function");
+    let (func, _) = project
+        .get_func_by_name(funcname)
+        .expect("Failed to find function");
     for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
         if let Some(val) = arg {
             let val = em.state().bv_from_u64(val, size(&param.ty) as u32);
-            em.mut_state().overwrite_latest_version_of_bv(&param.name, val);
+            em.mut_state()
+                .overwrite_latest_version_of_bv(&param.name, val);
         }
     }
 
     let return_width = size(&func.return_type);
     let mut candidate_values = HashSet::<ReturnValue<u64>>::new();
-    let mut have_throw = false;  // is there at least one `ReturnValue::Throw` in the `candidate_values`
+    let mut have_throw = false; // is there at least one `ReturnValue::Throw` in the `candidate_values`
     while let Some(bvretval) = em.next() {
         match bvretval {
             Err(e) => panic!("{}", em.state().full_error_message_with_context(e)),
@@ -233,36 +245,46 @@ pub fn get_possible_return_values_of_func<'p>(
                 if candidate_values.len() > n {
                     break;
                 }
-            }
+            },
             Ok(ReturnValue::Return(bvretval)) => {
                 let state = em.mut_state();
                 // rule out all the returned values we already have - we're interested in new values
                 for candidate in candidate_values.iter() {
                     if let ReturnValue::Return(candidate) = candidate {
-                        bvretval._ne(&state.bv_from_u64(*candidate, return_width as u32)).assert();
+                        bvretval
+                            ._ne(&state.bv_from_u64(*candidate, return_width as u32))
+                            .assert();
                     }
                 }
                 match state.get_possible_solutions_for_bv(&bvretval, n).unwrap() {
                     PossibleSolutions::Exactly(v) => {
-                        candidate_values.extend(v.iter().map(|bvsol| ReturnValue::Return(bvsol.as_u64().unwrap())));
+                        candidate_values.extend(
+                            v.iter()
+                                .map(|bvsol| ReturnValue::Return(bvsol.as_u64().unwrap())),
+                        );
                         if candidate_values.len() > n {
                             break;
                         }
                     },
                     PossibleSolutions::AtLeast(v) => {
-                        candidate_values.extend(v.iter().map(|bvsol| ReturnValue::Return(bvsol.as_u64().unwrap())));
-                        break;  // the total must be over n at this point
+                        candidate_values.extend(
+                            v.iter()
+                                .map(|bvsol| ReturnValue::Return(bvsol.as_u64().unwrap())),
+                        );
+                        break; // the total must be over n at this point
                     },
                 };
             },
             Ok(ReturnValue::Throw(bvptr)) => {
                 let state = em.mut_state();
                 match thrown_size {
-                    None => if !have_throw {
-                        candidate_values.insert(ReturnValue::Throw(bvptr.as_u64().unwrap()));
-                        have_throw = true;
-                        if candidate_values.len() > n {
-                            break;
+                    None => {
+                        if !have_throw {
+                            candidate_values.insert(ReturnValue::Throw(bvptr.as_u64().unwrap()));
+                            have_throw = true;
+                            if candidate_values.len() > n {
+                                break;
+                            }
                         }
                     },
                     Some(thrown_size) => {
@@ -270,24 +292,35 @@ pub fn get_possible_return_values_of_func<'p>(
                         // rule out all the thrown values we already have - we're interested in new values
                         for candidate in candidate_values.iter() {
                             if let ReturnValue::Throw(candidate) = candidate {
-                                thrown_value._ne(&state.bv_from_u64(*candidate, return_width as u32)).assert();
+                                thrown_value
+                                    ._ne(&state.bv_from_u64(*candidate, return_width as u32))
+                                    .assert();
                             }
                         }
-                        match state.get_possible_solutions_for_bv(&thrown_value, n).unwrap() {
+                        match state
+                            .get_possible_solutions_for_bv(&thrown_value, n)
+                            .unwrap()
+                        {
                             PossibleSolutions::Exactly(v) => {
-                                candidate_values.extend(v.iter().map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap())));
+                                candidate_values.extend(
+                                    v.iter()
+                                        .map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap())),
+                                );
                                 if candidate_values.len() > n {
                                     break;
                                 }
                             },
                             PossibleSolutions::AtLeast(v) => {
-                                candidate_values.extend(v.iter().map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap())));
-                                break;  // the total must be over n at this point
-                            }
+                                candidate_values.extend(
+                                    v.iter()
+                                        .map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap())),
+                                );
+                                break; // the total must be over n at this point
+                            },
                         }
                     },
                 }
-            }
+            },
         }
     }
     if candidate_values.len() > n {

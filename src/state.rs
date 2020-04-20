@@ -1,5 +1,5 @@
-use boolector::BVSolution;
 use boolector::option::{BtorOption, ModelGen};
+use boolector::BVSolution;
 use either::Either;
 use itertools::Itertools;
 use llvm_ir::*;
@@ -23,7 +23,7 @@ use crate::hooks;
 use crate::layout::*;
 use crate::project::Project;
 use crate::solver_utils::{self, PossibleSolutions};
-use crate::varmap::{VarMap, RestoreInfo};
+use crate::varmap::{RestoreInfo, VarMap};
 use crate::watchpoints::{Watchpoint, Watchpoints};
 
 /// A `State` describes the full program state at a given moment during symbolic
@@ -121,13 +121,16 @@ fn pretty_source_loc(source_loc: &DebugLoc) -> String {
 
 impl<'p> fmt::Debug for LocationDescription<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
+        write!(f, "{}", self.to_string_with_module()) // default to with-module, especially for a Debug representation
     }
 }
 
 impl<'p> LocationDescription<'p> {
     pub(crate) fn to_string_with_module(&self) -> String {
-        format!("{{{}: {}, bb {}, {}}}", self.modname, self.funcname, self.bbname, self.instr)
+        format!(
+            "{{{}: {}, bb {}, {}}}",
+            self.modname, self.funcname, self.bbname, self.instr
+        )
     }
 
     pub(crate) fn to_string_no_module(&self) -> String {
@@ -149,17 +152,23 @@ pub struct PathEntry<'p>(pub Location<'p>);
 
 impl<'p> fmt::Debug for PathEntry<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
+        write!(f, "{}", self.to_string_with_module()) // default to with-module, especially for a Debug representation
     }
 }
 
 impl<'p> PathEntry<'p> {
     pub(crate) fn to_string_with_module(&self) -> String {
-        format!("{{{}: {}, bb {}, starting at {}}}", self.0.module.name, self.0.func.name, self.0.bb.name, self.0.instr)
+        format!(
+            "{{{}: {}, bb {}, starting at {}}}",
+            self.0.module.name, self.0.func.name, self.0.bb.name, self.0.instr
+        )
     }
 
     pub(crate) fn to_string_no_module(&self) -> String {
-        format!("{{{}, bb {}, starting at {}}}", self.0.func.name, self.0.bb.name, self.0.instr)
+        format!(
+            "{{{}, bb {}, starting at {}}}",
+            self.0.func.name, self.0.bb.name, self.0.instr
+        )
     }
 
     /// Get all the source locations touched on this path segment.
@@ -169,7 +178,12 @@ impl<'p> PathEntry<'p> {
     /// The returned iterator may also be empty, for instance if no debuginfo is
     /// present.
     pub(crate) fn get_all_source_locs(&self) -> impl Iterator<Item = &'p DebugLoc> {
-        self.0.bb.instrs.iter().filter_map(|instr| instr.get_debug_loc().as_ref()).dedup()
+        self.0
+            .bb
+            .instrs
+            .iter()
+            .filter_map(|instr| instr.get_debug_loc().as_ref())
+            .dedup()
     }
 }
 
@@ -210,14 +224,17 @@ impl<'p> Hash for Location<'p> {
 
 impl<'p> fmt::Debug for Location<'p> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{}}}", self.to_string_with_module())  // default to with-module, especially for a Debug representation
+        write!(f, "{{{}}}", self.to_string_with_module()) // default to with-module, especially for a Debug representation
     }
 }
 
 impl<'p> Location<'p> {
     /// Format this `Location` as a string, including the full module name
     pub fn to_string_with_module(&self) -> String {
-        format!("{}: {}, bb {}, {}", self.module.name, self.func.name, self.bb.name, self.instr)
+        format!(
+            "{}: {}, bb {}, {}",
+            self.module.name, self.func.name, self.bb.name, self.instr
+        )
     }
 
     /// Format this `Location` as a string, omitting the module name
@@ -229,8 +246,16 @@ impl<'p> Location<'p> {
     /// short module name is the part of the module name after the last `/`, if
     /// any; or the full module name, if the module name does not contain a `/`.
     pub fn to_string_short_module(&self) -> String {
-        let short_module_name = self.module.name.rsplit('/').next().unwrap_or(&self.module.name);
-        format!("{}: {}, bb {}, {}", short_module_name, self.func.name, self.bb.name, self.instr)
+        let short_module_name = self
+            .module
+            .name
+            .rsplit('/')
+            .next()
+            .unwrap_or(&self.module.name);
+        format!(
+            "{}: {}, bb {}, {}",
+            short_module_name, self.func.name, self.bb.name, self.instr
+        )
     }
 }
 
@@ -255,11 +280,12 @@ impl<'p> Location<'p> {
 
     /// Move to the start of the basic block with the given name, in the same function
     pub(crate) fn move_to_start_of_bb_by_name(&mut self, bbname: &Name) {
-        self.move_to_start_of_bb(
-            self.func.get_bb_by_name(bbname).unwrap_or_else(||
-                panic!("Failed to find bb named {} in function {:?}", bbname, self.func.name)
+        self.move_to_start_of_bb(self.func.get_bb_by_name(bbname).unwrap_or_else(|| {
+            panic!(
+                "Failed to find bb named {} in function {:?}",
+                bbname, self.func.name
             )
-        )
+        }))
     }
 
     /// Increment the instruction index in the `Location`.
@@ -268,13 +294,15 @@ impl<'p> Location<'p> {
     pub(crate) fn inc(&mut self) {
         match self.instr {
             BBInstrIndex::Instr(i) => {
-                if i+1 >= self.bb.instrs.len() {
+                if i + 1 >= self.bb.instrs.len() {
                     self.instr = BBInstrIndex::Terminator;
                 } else {
-                    self.instr = BBInstrIndex::Instr(i+1);
+                    self.instr = BBInstrIndex::Instr(i + 1);
                 }
             },
-            BBInstrIndex::Terminator => panic!("called inc() on a Location pointing to a terminator"),
+            BBInstrIndex::Terminator => {
+                panic!("called inc() on a Location pointing to a terminator")
+            },
         }
     }
 }
@@ -329,19 +357,24 @@ struct BacktrackPoint<'p, B: Backend> {
 
 impl<'p, B: Backend> fmt::Display for BacktrackPoint<'p, B> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<BacktrackPoint to execute bb {} with constraint {:?} and {} frames on the callstack>", self.loc.bb.name, self.constraint, self.stack.len())
+        write!(
+            f,
+            "<BacktrackPoint to execute bb {} with constraint {:?} and {} frames on the callstack>",
+            self.loc.bb.name,
+            self.constraint,
+            self.stack.len()
+        )
     }
 }
 
-impl<'p, B: Backend> State<'p, B> where B: 'p {
+impl<'p, B: Backend> State<'p, B>
+where
+    B: 'p,
+{
     /// `start_loc`: the `Location` where the `State` should begin executing.
     /// As of this writing, `start_loc` should be the entry point of a
     /// function, or you will have problems.
-    pub fn new(
-        project: &'p Project,
-        start_loc: Location<'p>,
-        mut config: Config<'p, B>,
-    ) -> Self {
+    pub fn new(project: &'p Project, start_loc: Location<'p>, mut config: Config<'p, B>) -> Self {
         let solver = B::SolverRef::new();
         solver.set_opt(BtorOption::SolverTimeout(config.solver_query_timeout));
         if config.demangling.is_none() {
@@ -357,29 +390,68 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                     NullPointerChecking::SplitPath => true,
                     NullPointerChecking::None => false,
                 },
-                None)
-            ),
+                None,
+            )),
             alloc: Alloc::new(),
             global_allocations: GlobalAllocations::new(),
             intrinsic_hooks: {
                 let mut intrinsic_hooks = FunctionHooks::new();
                 // we use "function names" that are clearly illegal, as an additional precaution to avoid collisions with actual function names
                 intrinsic_hooks.add("intrinsic: llvm.memset", &hooks::intrinsics::symex_memset);
-                intrinsic_hooks.add("intrinsic: llvm.memcpy/memmove", &hooks::intrinsics::symex_memcpy);
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.memcpy/memmove",
+                    &hooks::intrinsics::symex_memcpy,
+                );
                 intrinsic_hooks.add("intrinsic: llvm.bswap", &hooks::intrinsics::symex_bswap);
-                intrinsic_hooks.add("intrinsic: llvm.objectsize", &hooks::intrinsics::symex_objectsize);
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.objectsize",
+                    &hooks::intrinsics::symex_objectsize,
+                );
                 intrinsic_hooks.add("intrinsic: llvm.assume", &hooks::intrinsics::symex_assume);
-                intrinsic_hooks.add("intrinsic: llvm.uadd.with.overflow", &hooks::intrinsics::symex_uadd_with_overflow);
-                intrinsic_hooks.add("intrinsic: llvm.sadd.with.overflow", &hooks::intrinsics::symex_sadd_with_overflow);
-                intrinsic_hooks.add("intrinsic: llvm.usub.with.overflow", &hooks::intrinsics::symex_usub_with_overflow);
-                intrinsic_hooks.add("intrinsic: llvm.ssub.with.overflow", &hooks::intrinsics::symex_ssub_with_overflow);
-                intrinsic_hooks.add("intrinsic: llvm.umul.with.overflow", &hooks::intrinsics::symex_umul_with_overflow);
-                intrinsic_hooks.add("intrinsic: llvm.smul.with.overflow", &hooks::intrinsics::symex_smul_with_overflow);
-                intrinsic_hooks.add("intrinsic: llvm.uadd.sat", &hooks::intrinsics::symex_uadd_sat);
-                intrinsic_hooks.add("intrinsic: llvm.sadd.sat", &hooks::intrinsics::symex_sadd_sat);
-                intrinsic_hooks.add("intrinsic: llvm.usub.sat", &hooks::intrinsics::symex_usub_sat);
-                intrinsic_hooks.add("intrinsic: llvm.ssub.sat", &hooks::intrinsics::symex_ssub_sat);
-                intrinsic_hooks.add("intrinsic: generic_stub_hook", &function_hooks::generic_stub_hook);
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.uadd.with.overflow",
+                    &hooks::intrinsics::symex_uadd_with_overflow,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.sadd.with.overflow",
+                    &hooks::intrinsics::symex_sadd_with_overflow,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.usub.with.overflow",
+                    &hooks::intrinsics::symex_usub_with_overflow,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.ssub.with.overflow",
+                    &hooks::intrinsics::symex_ssub_with_overflow,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.umul.with.overflow",
+                    &hooks::intrinsics::symex_umul_with_overflow,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.smul.with.overflow",
+                    &hooks::intrinsics::symex_smul_with_overflow,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.uadd.sat",
+                    &hooks::intrinsics::symex_uadd_sat,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.sadd.sat",
+                    &hooks::intrinsics::symex_sadd_sat,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.usub.sat",
+                    &hooks::intrinsics::symex_usub_sat,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: llvm.ssub.sat",
+                    &hooks::intrinsics::symex_ssub_sat,
+                );
+                intrinsic_hooks.add(
+                    "intrinsic: generic_stub_hook",
+                    &function_hooks::generic_stub_hook,
+                );
                 intrinsic_hooks.add("intrinsic: abort_hook", &function_hooks::abort_hook);
                 intrinsic_hooks
             },
@@ -414,7 +486,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         // we parsed in way more modules than we actually need).
         info!("Allocating global variables and functions");
         debug!("Allocating global variables");
-        for (var, module) in project.all_global_vars().filter(|(var,_)| var.initializer.is_some()) {
+        for (var, module) in project
+            .all_global_vars()
+            .filter(|(var, _)| var.initializer.is_some())
+        {
             // Allocate the global variable.
             //
             // In the allocation pass, we want to process each global variable
@@ -422,17 +497,23 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             // definitions, since each global variable must have exactly one
             // definition. Hence the `filter()` above.
             if let Type::PointerType { pointee_type, .. } = &var.ty {
-                let size_bits = size_opaque_aware(&*pointee_type, project)
-                    .expect("Global variable has a struct type which is opaque in the entire Project");
+                let size_bits = size_opaque_aware(&*pointee_type, project).expect(
+                    "Global variable has a struct type which is opaque in the entire Project",
+                );
                 let size_bits = if size_bits == 0 {
-                    debug!("Global {:?} has size 0 bits; allocating 8 bits for it anyway", var.name);
+                    debug!(
+                        "Global {:?} has size 0 bits; allocating 8 bits for it anyway",
+                        var.name
+                    );
                     8
                 } else {
                     size_bits
                 };
                 let addr = state.allocate(size_bits as u64);
                 debug!("Allocated {:?} at {:?}", var.name, addr);
-                state.global_allocations.allocate_global_var(var, module, addr);
+                state
+                    .global_allocations
+                    .allocate_global_var(var, module, addr);
             } else {
                 panic!("Global variable has non-pointer type {:?}", &var.ty);
             }
@@ -445,17 +526,21 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         // so that we can have pointers to those hooks.
         debug!("Allocating functions");
         for (func, module) in project.all_functions() {
-            let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
+            let addr: u64 = state.alloc.alloc(64 as u64); // we just allocate 64 bits for each function. No reason to allocate more.
             let addr_bv = state.bv_from_u64(addr, 64);
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
-            state.global_allocations.allocate_function(func, module, addr, addr_bv);
+            state
+                .global_allocations
+                .allocate_function(func, module, addr, addr_bv);
         }
         debug!("Allocating function hooks");
         for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
-            let addr: u64 = state.alloc.alloc(64 as u64);  // we just allocate 64 bits for each function. No reason to allocate more.
+            let addr: u64 = state.alloc.alloc(64 as u64); // we just allocate 64 bits for each function. No reason to allocate more.
             let addr_bv = state.bv_from_u64(addr, 64);
             debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
-            state.global_allocations.allocate_function_hook((*hook).clone(), addr, addr_bv);
+            state
+                .global_allocations
+                .allocate_function_hook((*hook).clone(), addr, addr_bv);
         }
         debug!("Done allocating global variables and functions");
         state
@@ -488,7 +573,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Error::SolverError` if the query failed (e.g., was interrupted or timed out).
     ///
     /// Does not permanently add the given constraints to the solver.
-    pub fn sat_with_extra_constraints<'b>(&'b self, constraints: impl IntoIterator<Item = &'b B::BV>) -> Result<bool> {
+    pub fn sat_with_extra_constraints<'b>(
+        &'b self,
+        constraints: impl IntoIterator<Item = &'b B::BV>,
+    ) -> Result<bool> {
         solver_utils::sat_with_extra_constraints(&self.solver, constraints)
     }
 
@@ -540,7 +628,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                 } else {
                     Ok(None)
                 };
-                self.solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+                self.solver
+                    .set_opt(BtorOption::ModelGen(ModelGen::Disabled));
                 solution
             },
         }
@@ -548,8 +637,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// Get one possible concrete value for the given IR `Name` (from the given `Function` name).
     /// Returns `Ok(None)` if no possible solution, or `Error::SolverError` if the solver query failed.
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_a_solution_for_irname(&mut self, funcname: &String, name: &Name) -> Result<Option<BVSolution>> {
+    #[allow(clippy::ptr_arg)] // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
+    pub fn get_a_solution_for_irname(
+        &mut self,
+        funcname: &String,
+        name: &Name,
+    ) -> Result<Option<BVSolution>> {
         let bv = self.varmap.lookup_var(funcname, name);
         self.get_a_solution_for_bv(bv)
     }
@@ -564,7 +657,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// If there are no possible solutions, this returns `Ok` with an empty
     /// `PossibleSolutions`, rather than returning an `Err` with `Error::Unsat`.
-    pub fn get_possible_solutions_for_bv(&self, bv: &B::BV, n: usize) -> Result<PossibleSolutions<BVSolution>> {
+    pub fn get_possible_solutions_for_bv(
+        &self,
+        bv: &B::BV,
+        n: usize,
+    ) -> Result<PossibleSolutions<BVSolution>> {
         solver_utils::get_possible_solutions_for_bv(self.solver.clone(), bv, n)
     }
 
@@ -578,8 +675,13 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// If there are no possible solutions, this returns `Ok` with an empty
     /// `PossibleSolutions`, rather than returning an `Err` with `Error::Unsat`.
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn get_possible_solutions_for_irname(&mut self, funcname: &String, name: &Name, n: usize) -> Result<PossibleSolutions<BVSolution>> {
+    #[allow(clippy::ptr_arg)] // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
+    pub fn get_possible_solutions_for_irname(
+        &mut self,
+        funcname: &String,
+        name: &Name,
+        n: usize,
+    ) -> Result<PossibleSolutions<BVSolution>> {
         let bv = self.varmap.lookup_var(funcname, name);
         self.get_possible_solutions_for_bv(bv, n)
     }
@@ -603,8 +705,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
     /// query itself fails. Panics if the `BV` is wider than 64 bits.
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn max_possible_solution_for_irname_as_u64(&mut self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+    #[allow(clippy::ptr_arg)] // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
+    pub fn max_possible_solution_for_irname_as_u64(
+        &mut self,
+        funcname: &String,
+        name: &Name,
+    ) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
         solver_utils::max_possible_solution_for_bv_as_u64(self.solver.clone(), bv)
     }
@@ -628,8 +734,12 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `Ok(None)` if there is no solution for the `BV`, that is, if the
     /// current set of constraints is unsatisfiable. Only returns `Err` if a solver
     /// query itself fails. Panics if the `BV` is wider than 64 bits.
-    #[allow(clippy::ptr_arg)]  // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
-    pub fn min_possible_solution_for_irname_as_u64(&self, funcname: &String, name: &Name) -> Result<Option<u64>> {
+    #[allow(clippy::ptr_arg)] // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
+    pub fn min_possible_solution_for_irname_as_u64(
+        &self,
+        funcname: &String,
+        name: &Name,
+    ) -> Result<Option<u64>> {
         let bv = self.varmap.lookup_var(funcname, name);
         solver_utils::min_possible_solution_for_bv_as_u64(self.solver.clone(), bv)
     }
@@ -701,7 +811,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Also, we assume that no two `Function`s share the same name.
     pub fn new_bv_with_name(&mut self, name: Name, bits: u32) -> Result<B::BV> {
-        self.varmap.new_bv_with_name(self.cur_loc.func.name.clone(), name, bits)
+        self.varmap
+            .new_bv_with_name(self.cur_loc.func.name.clone(), name, bits)
     }
 
     /// Assign the given `BV` to the given `Name` (in the current function).
@@ -717,7 +828,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// of the `BV` would exceed `max_versions_of_name` -- see
     /// [`Config`](struct.Config.html).)
     pub fn assign_bv_to_name(&mut self, name: Name, bv: B::BV) -> Result<()> {
-        self.varmap.assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
+        self.varmap
+            .assign_bv_to_name(self.cur_loc.func.name.clone(), name, bv)
     }
 
     /// Record the result of `thing` to be `resultval`.
@@ -725,7 +837,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Will fail with `Error::LoopBoundExceeded` if that would exceed
     /// `max_versions_of_name` (see [`Config`](struct.Config.html)).
     #[cfg(debug_assertions)]
-    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<()> {
+    pub fn record_bv_result(
+        &mut self,
+        thing: &impl instruction::HasResult,
+        resultval: B::BV,
+    ) -> Result<()> {
         if size(&thing.get_type()) as u32 != resultval.get_width() {
             Err(Error::OtherError(format!(
                 "Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}",
@@ -739,14 +855,19 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         }
     }
     #[cfg(not(debug_assertions))]
-    pub fn record_bv_result(&mut self, thing: &impl instruction::HasResult, resultval: B::BV) -> Result<()> {
+    pub fn record_bv_result(
+        &mut self,
+        thing: &impl instruction::HasResult,
+        resultval: B::BV,
+    ) -> Result<()> {
         self.assign_bv_to_name(thing.get_result().clone(), resultval)
     }
 
     /// Overwrite the latest version of the given `Name` to instead be `bv`.
     /// Assumes `Name` is in the current function.
     pub fn overwrite_latest_version_of_bv(&mut self, name: &Name, bv: B::BV) {
-        self.varmap.overwrite_latest_version_of_bv(&self.cur_loc.func.name, name, bv)
+        self.varmap
+            .overwrite_latest_version_of_bv(&self.cur_loc.func.name, name, bv)
     }
 
     /// Convert an `Operand` to the appropriate `BV`.
@@ -755,7 +876,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn operand_to_bv(&self, op: &Operand) -> Result<B::BV> {
         match op {
             Operand::ConstantOperand(c) => self.const_to_bv(c),
-            Operand::LocalOperand { name, .. } => Ok(self.varmap.lookup_var(&self.cur_loc.func.name, name).clone()),
+            Operand::LocalOperand { name, .. } => Ok(self
+                .varmap
+                .lookup_var(&self.cur_loc.func.name, name)
+                .clone()),
             Operand::MetadataOperand => panic!("Can't convert {:?} to BV", op),
         }
     }
@@ -764,22 +888,30 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn const_to_bv(&self, c: &Constant) -> Result<B::BV> {
         match c {
             Constant::Int { bits, value } => Ok(self.bv_from_u64(*value, *bits)),
-            Constant::Null(ty)
-            | Constant::AggregateZero(ty)
-            | Constant::Undef(ty)
-                => Ok(self.zero(size(ty) as u32)),
-            Constant::Struct { values: elements, .. }
+            Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty) => {
+                Ok(self.zero(size(ty) as u32))
+            },
+            Constant::Struct {
+                values: elements, ..
+            }
             | Constant::Array { elements, .. }
-            | Constant::Vector(elements)
-                => elements.iter()
-                    .map(|c| self.const_to_bv(c))  // produces an iterator over Result<B::BV>
-                    .reduce(|a,b| Ok(b?.concat(&a?)))  // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
-                    .unwrap(),  // unwrap the Option<> produced by reduce(), leaving the final return type Result<B::BV>
+            | Constant::Vector(elements) => elements
+                .iter()
+                .map(|c| self.const_to_bv(c)) // produces an iterator over Result<B::BV>
+                .reduce(|a, b| Ok(b?.concat(&a?))) // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
+                .unwrap(), // unwrap the Option<> produced by reduce(), leaving the final return type Result<B::BV>
             Constant::GlobalReference { name, .. } => {
-                if let Some(ga) = self.global_allocations.get_global_allocation(name, self.cur_loc.module) {
+                if let Some(ga) = self
+                    .global_allocations
+                    .get_global_allocation(name, self.cur_loc.module)
+                {
                     match ga {
                         GlobalAllocation::Function { addr, .. } => Ok(addr.clone()),
-                        GlobalAllocation::GlobalVariable { addr, initializer, initialized } => {
+                        GlobalAllocation::GlobalVariable {
+                            addr,
+                            initializer,
+                            initialized,
+                        } => {
                             // First, initialize the global if it hasn't been already.
                             // As mentioned in comments in `State::new()`, we lazily
                             // initialize globals upon first reference to them.
@@ -811,7 +943,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                             // to initialize, but your initializer refers to my address so I try
                             // to initialize, etc.
                             if !initialized.get() {
-                                debug!("Initializing {:?} with initializer {:?}", name, &initializer);
+                                debug!(
+                                    "Initializing {:?} with initializer {:?}",
+                                    name, &initializer
+                                );
                                 initialized.set(true);
                                 let write_val = self.const_to_bv(initializer)?;
                                 self.write_without_mut(addr, write_val)?;
@@ -819,79 +954,146 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                             Ok(addr.clone())
                         },
                     }
-                } else if let Some(alias) = self.cur_loc.module.global_aliases.iter().find(|a| &a.name == name) {
+                } else if let Some(alias) = self
+                    .cur_loc
+                    .module
+                    .global_aliases
+                    .iter()
+                    .find(|a| &a.name == name)
+                {
                     self.const_to_bv(&alias.aliasee)
                 } else {
                     Err(Error::OtherError(format!("const_to_bv: GlobalReference to {:?} which was not found (current module is {:?})", name, &self.cur_loc.module.name)))
                 }
             },
-            Constant::Add(a) => Ok(self.const_to_bv(&a.operand0)?.add(&self.const_to_bv(&a.operand1)?)),
-            Constant::Sub(s) => Ok(self.const_to_bv(&s.operand0)?.sub(&self.const_to_bv(&s.operand1)?)),
-            Constant::Mul(m) => Ok(self.const_to_bv(&m.operand0)?.mul(&self.const_to_bv(&m.operand1)?)),
-            Constant::UDiv(u) => Ok(self.const_to_bv(&u.operand0)?.udiv(&self.const_to_bv(&u.operand1)?)),
-            Constant::SDiv(s) => Ok(self.const_to_bv(&s.operand0)?.sdiv(&self.const_to_bv(&s.operand1)?)),
-            Constant::URem(u) => Ok(self.const_to_bv(&u.operand0)?.urem(&self.const_to_bv(&u.operand1)?)),
-            Constant::SRem(s) => Ok(self.const_to_bv(&s.operand0)?.srem(&self.const_to_bv(&s.operand1)?)),
-            Constant::And(a) => Ok(self.const_to_bv(&a.operand0)?.and(&self.const_to_bv(&a.operand1)?)),
-            Constant::Or(o) => Ok(self.const_to_bv(&o.operand0)?.or(&self.const_to_bv(&o.operand1)?)),
-            Constant::Xor(x) => Ok(self.const_to_bv(&x.operand0)?.xor(&self.const_to_bv(&x.operand1)?)),
-            Constant::Shl(s) => Ok(self.const_to_bv(&s.operand0)?.sll(&self.const_to_bv(&s.operand1)?)),
-            Constant::LShr(s) => Ok(self.const_to_bv(&s.operand0)?.srl(&self.const_to_bv(&s.operand1)?)),
-            Constant::AShr(s) => Ok(self.const_to_bv(&s.operand0)?.sra(&self.const_to_bv(&s.operand1)?)),
+            Constant::Add(a) => Ok(self
+                .const_to_bv(&a.operand0)?
+                .add(&self.const_to_bv(&a.operand1)?)),
+            Constant::Sub(s) => Ok(self
+                .const_to_bv(&s.operand0)?
+                .sub(&self.const_to_bv(&s.operand1)?)),
+            Constant::Mul(m) => Ok(self
+                .const_to_bv(&m.operand0)?
+                .mul(&self.const_to_bv(&m.operand1)?)),
+            Constant::UDiv(u) => Ok(self
+                .const_to_bv(&u.operand0)?
+                .udiv(&self.const_to_bv(&u.operand1)?)),
+            Constant::SDiv(s) => Ok(self
+                .const_to_bv(&s.operand0)?
+                .sdiv(&self.const_to_bv(&s.operand1)?)),
+            Constant::URem(u) => Ok(self
+                .const_to_bv(&u.operand0)?
+                .urem(&self.const_to_bv(&u.operand1)?)),
+            Constant::SRem(s) => Ok(self
+                .const_to_bv(&s.operand0)?
+                .srem(&self.const_to_bv(&s.operand1)?)),
+            Constant::And(a) => Ok(self
+                .const_to_bv(&a.operand0)?
+                .and(&self.const_to_bv(&a.operand1)?)),
+            Constant::Or(o) => Ok(self
+                .const_to_bv(&o.operand0)?
+                .or(&self.const_to_bv(&o.operand1)?)),
+            Constant::Xor(x) => Ok(self
+                .const_to_bv(&x.operand0)?
+                .xor(&self.const_to_bv(&x.operand1)?)),
+            Constant::Shl(s) => Ok(self
+                .const_to_bv(&s.operand0)?
+                .sll(&self.const_to_bv(&s.operand1)?)),
+            Constant::LShr(s) => Ok(self
+                .const_to_bv(&s.operand0)?
+                .srl(&self.const_to_bv(&s.operand1)?)),
+            Constant::AShr(s) => Ok(self
+                .const_to_bv(&s.operand0)?
+                .sra(&self.const_to_bv(&s.operand1)?)),
             Constant::ExtractElement(ee) => match &ee.index {
                 Constant::Int { value: index, .. } => match &ee.vector {
                     Constant::Vector(els) => {
-                        let el = els.get(*index as usize)
-                            .ok_or_else(|| Error::MalformedInstruction("Constant::ExtractElement index out of range".to_owned()))?;
+                        let el = els.get(*index as usize).ok_or_else(|| {
+                            Error::MalformedInstruction(
+                                "Constant::ExtractElement index out of range".to_owned(),
+                            )
+                        })?;
                         self.const_to_bv(el)
                     },
-                    c => Err(Error::MalformedInstruction(format!("Expected ExtractElement.vector to be a Constant::Vector, got {:?}", c))),
+                    c => Err(Error::MalformedInstruction(format!(
+                        "Expected ExtractElement.vector to be a Constant::Vector, got {:?}",
+                        c
+                    ))),
                 },
-                index => Err(Error::MalformedInstruction(format!("Expected ExtractElement.index to be a Constant::Int, but got {:?}", index))),
+                index => Err(Error::MalformedInstruction(format!(
+                    "Expected ExtractElement.index to be a Constant::Int, but got {:?}",
+                    index
+                ))),
             },
             Constant::InsertElement(ie) => match &ie.index {
                 Constant::Int { value: index, .. } => match &ie.vector {
                     Constant::Vector(els) => {
                         let mut els = els.clone();
-                        let el: &mut Constant = els.get_mut(*index as usize)
-                            .ok_or_else(|| Error::MalformedInstruction("Constant::InsertElement index out of range".to_owned()))?;
+                        let el: &mut Constant = els.get_mut(*index as usize).ok_or_else(|| {
+                            Error::MalformedInstruction(
+                                "Constant::InsertElement index out of range".to_owned(),
+                            )
+                        })?;
                         *el = ie.element.clone();
                         self.const_to_bv(&Constant::Vector(els))
                     },
-                    c => Err(Error::MalformedInstruction(format!("Expected InsertElement.vector to be a Constant::Vector, got {:?}", c))),
+                    c => Err(Error::MalformedInstruction(format!(
+                        "Expected InsertElement.vector to be a Constant::Vector, got {:?}",
+                        c
+                    ))),
                 },
-                index => Err(Error::MalformedInstruction(format!("Expected InsertElement.index to be a Constant::Int, but got {:?}", index))),
-            }
-            Constant::ExtractValue(ev) => self.const_to_bv(Self::simplify_const_ev(&ev.aggregate, ev.indices.iter().copied())?),
-            Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(iv.aggregate.clone(), iv.element.clone(), iv.indices.iter().copied())?),
+                index => Err(Error::MalformedInstruction(format!(
+                    "Expected InsertElement.index to be a Constant::Int, but got {:?}",
+                    index
+                ))),
+            },
+            Constant::ExtractValue(ev) => self.const_to_bv(Self::simplify_const_ev(
+                &ev.aggregate,
+                ev.indices.iter().copied(),
+            )?),
+            Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(
+                iv.aggregate.clone(),
+                iv.element.clone(),
+                iv.indices.iter().copied(),
+            )?),
             Constant::GetElementPtr(gep) => {
                 // heavily inspired by `ExecutionManager::symex_gep()` in symex.rs. TODO could try to share more code
                 let bvbase = self.const_to_bv(&gep.address)?;
-                let offset = self.get_offset_recursive(gep.indices.iter(), &gep.address.get_type(), bvbase.get_width())?;
+                let offset = self.get_offset_recursive(
+                    gep.indices.iter(),
+                    &gep.address.get_type(),
+                    bvbase.get_width(),
+                )?;
                 Ok(bvbase.add(&offset))
             },
-            Constant::Trunc(t) => self.const_to_bv(&t.operand).map(|bv| bv.slice(size(&t.to_type) as u32 - 1, 0)),
-            Constant::ZExt(z) => self.const_to_bv(&z.operand).map(|bv| bv.zero_extend_to_bits(size(&z.to_type) as u32)),
-            Constant::SExt(s) => self.const_to_bv(&s.operand).map(|bv| bv.sign_extend_to_bits(size(&s.to_type) as u32)),
+            Constant::Trunc(t) => self
+                .const_to_bv(&t.operand)
+                .map(|bv| bv.slice(size(&t.to_type) as u32 - 1, 0)),
+            Constant::ZExt(z) => self
+                .const_to_bv(&z.operand)
+                .map(|bv| bv.zero_extend_to_bits(size(&z.to_type) as u32)),
+            Constant::SExt(s) => self
+                .const_to_bv(&s.operand)
+                .map(|bv| bv.sign_extend_to_bits(size(&s.to_type) as u32)),
             Constant::PtrToInt(pti) => {
                 let bv = self.const_to_bv(&pti.operand)?;
                 assert_eq!(bv.get_width(), size(&pti.to_type) as u32);
-                Ok(bv)  // just a cast, it's the same bits underneath
+                Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::IntToPtr(itp) => {
                 let bv = self.const_to_bv(&itp.operand)?;
                 assert_eq!(bv.get_width(), size(&itp.to_type) as u32);
-                Ok(bv)  // just a cast, it's the same bits underneath
+                Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::BitCast(bc) => {
                 let bv = self.const_to_bv(&bc.operand)?;
                 assert_eq!(bv.get_width(), size(&bc.to_type) as u32);
-                Ok(bv)  // just a cast, it's the same bits underneath
+                Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::AddrSpaceCast(ac) => {
                 let bv = self.const_to_bv(&ac.operand)?;
                 assert_eq!(bv.get_width(), size(&ac.to_type) as u32);
-                Ok(bv)  // just a cast, it's the same bits underneath
+                Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::ICmp(icmp) => {
                 let bv0 = self.const_to_bv(&icmp.operand0)?;
@@ -912,7 +1114,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             Constant::Select(s) => {
                 let b = self.const_to_bv(&s.condition)?;
                 match b.as_bool() {
-                    None => Err(Error::MalformedInstruction("Constant::Select: Expected a constant condition".to_owned())),
+                    None => Err(Error::MalformedInstruction(
+                        "Constant::Select: Expected a constant condition".to_owned(),
+                    )),
                     Some(true) => self.const_to_bv(&s.true_value),
                     Some(false) => self.const_to_bv(&s.false_value),
                 }
@@ -923,60 +1127,101 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
 
     /// Given a `Constant::Struct` and a series of `ExtractValue` indices, get the
     /// final `Constant` referred to
-    fn simplify_const_ev(s: &Constant, mut indices: impl Iterator<Item = u32>) -> Result<&Constant> {
+    fn simplify_const_ev(
+        s: &Constant,
+        mut indices: impl Iterator<Item = u32>,
+    ) -> Result<&Constant> {
         match indices.next() {
             None => Ok(s),
             Some(index) => {
                 if let Constant::Struct { values, .. } = s {
-                    let val = values.get(index as usize).ok_or_else(|| Error::MalformedInstruction("Constant::ExtractValue index out of range".to_owned()))?;
+                    let val = values.get(index as usize).ok_or_else(|| {
+                        Error::MalformedInstruction(
+                            "Constant::ExtractValue index out of range".to_owned(),
+                        )
+                    })?;
                     Self::simplify_const_ev(val, indices)
                 } else {
                     panic!("simplify_const_ev: not a Constant::Struct: {:?}", s)
                 }
-            }
+            },
         }
-
     }
 
     /// Given a `Constant::Struct`, a value to insert, and a series of
     /// `InsertValue` indices, get the final `Constant` referred to
-    fn simplify_const_iv(s: Constant, val: Constant, mut indices: impl Iterator<Item = u32>) -> Result<Constant> {
+    fn simplify_const_iv(
+        s: Constant,
+        val: Constant,
+        mut indices: impl Iterator<Item = u32>,
+    ) -> Result<Constant> {
         match indices.next() {
             None => Ok(val),
             Some(index) => {
-                if let Constant::Struct { name, mut values, is_packed } = s {
-                    let to_replace = values.get(index as usize).ok_or_else(|| Error::MalformedInstruction("Constant::InsertValue index out of range".to_owned()))?.clone();
+                if let Constant::Struct {
+                    name,
+                    mut values,
+                    is_packed,
+                } = s
+                {
+                    let to_replace = values
+                        .get(index as usize)
+                        .ok_or_else(|| {
+                            Error::MalformedInstruction(
+                                "Constant::InsertValue index out of range".to_owned(),
+                            )
+                        })?
+                        .clone();
                     values[index as usize] = Self::simplify_const_iv(to_replace, val, indices)?;
-                    Ok(Constant::Struct { name, values, is_packed })
+                    Ok(Constant::Struct {
+                        name,
+                        values,
+                        is_packed,
+                    })
                 } else {
                     panic!("simplify_const_iv: not a Constant::Struct: {:?}", s)
                 }
-            }
+            },
         }
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
-    fn get_offset_recursive<'a>(&self, mut indices: impl Iterator<Item = &'a Constant>, base_type: &Type, result_bits: u32) -> Result<B::BV> {
+    fn get_offset_recursive<'a>(
+        &self,
+        mut indices: impl Iterator<Item = &'a Constant>,
+        base_type: &Type,
+        result_bits: u32,
+    ) -> Result<B::BV> {
         match indices.next() {
             None => Ok(self.zero(result_bits)),
             Some(index) => match base_type {
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = self.const_to_bv(index)?.zero_extend_to_bits(result_bits);
-                    let (offset, nested_ty) = get_offset_bv_index(base_type, &index, self.solver.clone())?;
+                    let (offset, nested_ty) =
+                        get_offset_bv_index(base_type, &index, self.solver.clone())?;
                     self.get_offset_recursive(indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
                 },
                 Type::StructType { .. } => match index {
                     Constant::Int { value: index, .. } => {
-                        let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
+                        let (offset, nested_ty) =
+                            get_offset_constant_index(base_type, *index as usize)?;
                         self.get_offset_recursive(indices, &nested_ty, result_bits)
                             .map(|bv| bv.add(&self.bv_from_u64(offset as u64, result_bits)))
                     },
-                    _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
+                    _ => Err(Error::MalformedInstruction(format!(
+                        "Expected index into struct type to be a constant int, but got index {:?}",
+                        index
+                    ))),
                 },
                 Type::NamedStructType { ty, .. } => {
-                    let arc: Arc<RwLock<Type>> = ty.as_ref()
-                        .ok_or_else(|| Error::MalformedInstruction("get_offset on an opaque struct type".to_owned()))?
+                    let arc: Arc<RwLock<Type>> = ty
+                        .as_ref()
+                        .ok_or_else(|| {
+                            Error::MalformedInstruction(
+                                "get_offset on an opaque struct type".to_owned(),
+                            )
+                        })?
                         .upgrade()
                         .expect("Failed to upgrade weak reference");
                     let actual_ty: &Type = &arc.read().unwrap();
@@ -990,11 +1235,14 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
                         }
                     } else {
-                        Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
+                        Err(Error::MalformedInstruction(format!(
+                            "Expected NamedStructType inner type to be a StructType, but got {:?}",
+                            actual_ty
+                        )))
                     }
-                }
+                },
                 _ => panic!("get_offset_recursive with base type {:?}", base_type),
-            }
+            },
         }
     }
 
@@ -1010,39 +1258,57 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///   - `Error::FailedToResolveFunctionPointer` if it finds that it is possible
     ///     that the `BV` points to something that's not a `Function` in the
     ///     `Project`
-    pub(crate) fn interpret_as_function_ptr(&mut self, bv: B::BV, n: usize) -> Result<PossibleSolutions<Callable<'p, B>>> {
+    pub(crate) fn interpret_as_function_ptr(
+        &mut self,
+        bv: B::BV,
+        n: usize,
+    ) -> Result<PossibleSolutions<Callable<'p, B>>> {
         if n == 0 {
             unimplemented!("n == 0 in interpret_as_function_ptr")
         }
 
         // First try to interpret without a full solve (i.e., with `as_u64()`)
         let addrs: Vec<u64> = match bv.as_u64() {
-            Some(addr) => vec![addr],  // there is only one possible solution, and it's this `addr`
+            Some(addr) => vec![addr], // there is only one possible solution, and it's this `addr`
             None => {
                 // Check if whatever solution we used last time for this `Location` still applies
                 // (see notes on the `function_ptr_cache` field of `State`)
                 match self.function_ptr_cache.get(&self.cur_loc) {
-                    Some(addr) if self.bvs_must_be_equal(&bv, &self.bv_from_u64(*addr, bv.get_width()))? => vec![*addr],
+                    Some(addr)
+                        if self
+                            .bvs_must_be_equal(&bv, &self.bv_from_u64(*addr, bv.get_width()))? =>
+                    {
+                        vec![*addr]
+                    },
                     _ => {
                         // Ok, use `get_possible_solutions_for_bv()`
-                        match self.get_possible_solutions_for_bv(&bv, n)?.as_u64_solutions().unwrap() {
+                        match self
+                            .get_possible_solutions_for_bv(&bv, n)?
+                            .as_u64_solutions()
+                            .unwrap()
+                        {
                             PossibleSolutions::Exactly(v) => v.into_iter().collect(),
                             PossibleSolutions::AtLeast(v) => v.into_iter().collect(),
                         }
                     },
                 }
-            }
+            },
         };
 
         // save the value we found into the cache for next time
         if addrs.len() == 1 {
-            self.function_ptr_cache.insert(self.cur_loc.clone(), addrs[0]);
+            self.function_ptr_cache
+                .insert(self.cur_loc.clone(), addrs[0]);
         }
 
-        let callables = addrs.into_iter().map(|addr| {
-            self.global_allocations.get_func_for_address(addr, self.cur_loc.module)
-                .ok_or_else(|| Error::FailedToResolveFunctionPointer(addr))
-        }).collect::<Result<HashSet<_>>>()?;
+        let callables = addrs
+            .into_iter()
+            .map(|addr| {
+                self.global_allocations
+                    .get_func_for_address(addr, self.cur_loc.module)
+                    .ok_or_else(|| Error::FailedToResolveFunctionPointer(addr))
+            })
+            .collect::<Result<HashSet<_>>>()?;
         if callables.len() > n {
             Ok(PossibleSolutions::AtLeast(callables))
         } else {
@@ -1059,7 +1325,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Returns `None` if no function was found with that name.
     pub fn get_pointer_to_function(&self, funcname: impl Into<String>) -> Option<&B::BV> {
-        self.global_allocations.get_global_allocation(&Name::from(funcname.into()), self.cur_loc.module)
+        self.global_allocations
+            .get_global_allocation(&Name::from(funcname.into()), self.cur_loc.module)
             .map(|ga| ga.get_addr())
     }
 
@@ -1068,7 +1335,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Returns `None` if no function was found with that name, _or_ if there is no currently
     /// active hook for that function.
     pub fn get_pointer_to_function_hook(&self, funcname: &str) -> Option<&B::BV> {
-        self.global_allocations.get_function_hook_address(self.config.function_hooks.get_hook_for(funcname)?)
+        self.global_allocations
+            .get_function_hook_address(self.config.function_hooks.get_hook_for(funcname)?)
     }
 
     /// Get a `Function` by name. The name must be the fully-mangled function
@@ -1081,12 +1349,19 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// Also returns the `Module` in which the prevailing definition of the `Function` was found.
     ///
     /// Returns `None` if no function was found with that name.
-    pub fn get_func_by_name(&self, funcname: impl Into<String>) -> Option<(&'p Function, &'p Module)> {
+    pub fn get_func_by_name(
+        &self,
+        funcname: impl Into<String>,
+    ) -> Option<(&'p Function, &'p Module)> {
         let funcname = funcname.into();
-        self.global_allocations.get_global_allocation(&Name::from(funcname.clone()), self.cur_loc.module)
+        self.global_allocations
+            .get_global_allocation(&Name::from(funcname.clone()), self.cur_loc.module)
             .and_then(|ga| match ga {
                 GlobalAllocation::Function { func, module, .. } => Some((*func, *module)),
-                GlobalAllocation::GlobalVariable { .. } => panic!("get_func_by_name: {} refers to a global variable, not a function", funcname),
+                GlobalAllocation::GlobalVariable { .. } => panic!(
+                    "get_func_by_name: {} refers to a global variable, not a function",
+                    funcname
+                ),
             })
     }
 
@@ -1095,19 +1370,19 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn read(&self, addr: &B::BV, bits: u32) -> Result<B::BV> {
         let retval = match self.mem.borrow().read(addr, bits) {
             Ok(val) => val,
-            e@Err(Error::NullPointerDereference) => {
+            e @ Err(Error::NullPointerDereference) => {
                 if self.config.null_pointer_checking == NullPointerChecking::SplitPath {
                     // save a backtracking point to re-execute the current
                     // instruction with the address constrained to be non-null,
                     // and continue from there
                     self.save_backtracking_point_at_location(
                         self.cur_loc.clone(),
-                        addr._ne(&self.zero(addr.get_width()))
+                        addr._ne(&self.zero(addr.get_width())),
                     );
                 }
-                return e;  // report the null-pointer dereference
+                return e; // report the null-pointer dereference
             },
-            e@Err(_) => return e,  // propagate any other kind of error
+            e @ Err(_) => return e, // propagate any other kind of error
         };
         for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(addr, bits)? {
             let pretty_loc = if self.config.print_module_name {
@@ -1115,7 +1390,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             } else {
                 self.cur_loc.to_string_no_module()
             };
-            info!("Memory watchpoint {:?} {} read by {{{}}}", name, watchpoint, pretty_loc);
+            info!(
+                "Memory watchpoint {:?} {} read by {{{}}}",
+                name, watchpoint, pretty_loc
+            );
         }
         Ok(retval)
     }
@@ -1139,21 +1417,24 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         // save_backtracking_point_at_location requires a borrow of self.mem
         match result {
             Ok(()) => (),
-            e@Err(Error::NullPointerDereference) => {
+            e @ Err(Error::NullPointerDereference) => {
                 if self.config.null_pointer_checking == NullPointerChecking::SplitPath {
                     // save a backtracking point to re-execute the current
                     // instruction with the address constrained to be non-null,
                     // and continue from there
                     self.save_backtracking_point_at_location(
                         self.cur_loc.clone(),
-                        addr._ne(&self.zero(addr.get_width()))
+                        addr._ne(&self.zero(addr.get_width())),
                     );
                 }
-                return e;  // report the null-pointer dereference
+                return e; // report the null-pointer dereference
             },
-            e@Err(_) => return e,  // propagate any other kind of error
+            e @ Err(_) => return e, // propagate any other kind of error
         };
-        for (name, watchpoint) in self.mem_watchpoints.get_triggered_watchpoints(addr, write_width)? {
+        for (name, watchpoint) in self
+            .mem_watchpoints
+            .get_triggered_watchpoints(addr, write_width)?
+        {
             let pretty_loc = if self.config.print_module_name {
                 self.cur_loc.to_string_with_module()
             } else {
@@ -1161,10 +1442,20 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             };
             // Log the new value of the watched location (regardless of which part of the watched location the write may have touched).
             // Note that the write operation itself has already been performed, so we get the updated value with a `read()`.
-            let watchpoint_low = self.bv_from_u64(watchpoint.get_lower_bound(), crate::layout::POINTER_SIZE_BITS as u32);
-            let watchpoint_size_bits = (watchpoint.get_upper_bound() - watchpoint.get_lower_bound() + 1) * 8;
-            let new_value = self.mem.borrow().read(&watchpoint_low, watchpoint_size_bits as u32)?;  // performs a read without using `state.read()` which would trigger watchpoints (we don't want to trigger watchpoints with this read)
-            info!("Memory watchpoint {:?} {} written by {{{}}}; new value is {:?}", name, watchpoint, pretty_loc, new_value);
+            let watchpoint_low = self.bv_from_u64(
+                watchpoint.get_lower_bound(),
+                crate::layout::POINTER_SIZE_BITS as u32,
+            );
+            let watchpoint_size_bits =
+                (watchpoint.get_upper_bound() - watchpoint.get_lower_bound() + 1) * 8;
+            let new_value = self
+                .mem
+                .borrow()
+                .read(&watchpoint_low, watchpoint_size_bits as u32)?; // performs a read without using `state.read()` which would trigger watchpoints (we don't want to trigger watchpoints with this read)
+            info!(
+                "Memory watchpoint {:?} {} written by {{{}}}; new value is {:?}",
+                name, watchpoint, pretty_loc, new_value
+            );
         }
         Ok(())
     }
@@ -1224,17 +1515,26 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             Some(addr) => Ok(self.alloc.get_allocation_size(addr)),
             None => {
                 match self.get_possible_solutions_for_bv(addr, 1)? {
-                    PossibleSolutions::AtLeast(_) => Err(Error::OtherError(format!("get_allocation_size: address is not a constant: {:?}", addr))),  // must be at least 2 solutions, since we passed in n==1
+                    PossibleSolutions::AtLeast(_) => Err(Error::OtherError(format!(
+                        "get_allocation_size: address is not a constant: {:?}",
+                        addr
+                    ))), // must be at least 2 solutions, since we passed in n==1
                     PossibleSolutions::Exactly(v) => {
-                        let addr = v.iter()
-                            .next()
-                            .ok_or(Error::Unsat)?
-                            .as_u64()
-                            .ok_or_else(|| Error::OtherError("get_allocation_size: address is more than 64 bits wide".to_owned()))?;
+                        let addr =
+                            v.iter()
+                                .next()
+                                .ok_or(Error::Unsat)?
+                                .as_u64()
+                                .ok_or_else(|| {
+                                    Error::OtherError(
+                                        "get_allocation_size: address is more than 64 bits wide"
+                                            .to_owned(),
+                                    )
+                                })?;
                         Ok(self.alloc.get_allocation_size(addr))
                     },
                 }
-            }
+            },
         }
     }
 
@@ -1260,7 +1560,10 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         self.push_generic_callsite(Either::Right(invoke))
     }
 
-    fn push_generic_callsite(&mut self, instr: Either<&'p instruction::Call, &'p terminator::Invoke>) {
+    fn push_generic_callsite(
+        &mut self,
+        instr: Either<&'p instruction::Call, &'p terminator::Invoke>,
+    ) {
         self.stack.push(StackFrame {
             callsite: Callsite {
                 loc: self.cur_loc.clone(),
@@ -1271,7 +1574,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             // to make will eventually (directly or indirectly) recurse. In the
             // future we could check the LLVM 'norecurse' attribute to know when
             // this is not necessary.
-            restore_info: self.varmap.get_restore_info_for_fn(self.cur_loc.func.name.clone()),
+            restore_info: self
+                .varmap
+                .get_restore_info_for_fn(self.cur_loc.func.name.clone()),
         })
     }
 
@@ -1281,7 +1586,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Also restores the caller's local variables.
     pub fn pop_callsite(&mut self) -> Option<Callsite<'p>> {
-        if let Some(StackFrame { callsite, restore_info }) = self.stack.pop() {
+        if let Some(StackFrame {
+            callsite,
+            restore_info,
+        }) = self.stack.pop()
+        {
             self.varmap.restore_fn_vars(restore_info);
             Some(callsite)
         } else {
@@ -1300,9 +1609,20 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// in the same `Module` and `Function` as `state.cur_loc`), as a backtracking point.
     /// The constraint will be added only if we end up backtracking to this point, and only then.
     pub fn save_backtracking_point(&mut self, bb_to_enter: &Name, constraint: B::BV) {
-        debug!("Saving a backtracking point, which would enter bb {:?} with constraint {:?}", bb_to_enter, constraint);
-        let bb_to_enter = self.cur_loc.func.get_bb_by_name(&bb_to_enter)
-            .unwrap_or_else(|| panic!("Failed to find bb named {} in function {:?}", bb_to_enter, self.cur_loc.func.name));
+        debug!(
+            "Saving a backtracking point, which would enter bb {:?} with constraint {:?}",
+            bb_to_enter, constraint
+        );
+        let bb_to_enter = self
+            .cur_loc
+            .func
+            .get_bb_by_name(&bb_to_enter)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Failed to find bb named {} in function {:?}",
+                    bb_to_enter, self.cur_loc.func.name
+                )
+            });
         let backtrack_loc = Location {
             module: self.cur_loc.module,
             func: self.cur_loc.func,
@@ -1318,7 +1638,11 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     ///
     /// Also it doesn't require `&mut self`. This allows us to save backtracking
     /// points even when we're inside methods that only have `&self`.
-    fn save_backtracking_point_at_location(&self, loc_to_start_at: Location<'p>, constraint: B::BV) {
+    fn save_backtracking_point_at_location(
+        &self,
+        loc_to_start_at: Location<'p>,
+        constraint: B::BV,
+    ) {
         self.solver.push(1);
         self.backtrack_points.borrow_mut().push(BacktrackPoint {
             loc: loc_to_start_at,
@@ -1358,26 +1682,36 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// on the `Config`)
     pub fn pretty_backtrace(&self) -> String {
         let mut locdescrs = std::iter::once(LocationDescription::from(self.cur_loc.clone()))
-            .chain(self.stack.iter().rev().map(|frame| LocationDescription::from(frame.callsite.loc.clone())))
+            .chain(
+                self.stack
+                    .iter()
+                    .rev()
+                    .map(|frame| LocationDescription::from(frame.callsite.loc.clone())),
+            )
             .collect::<Vec<LocationDescription>>();
         for locdescr in locdescrs.iter_mut() {
             self.demangle_locdescr(locdescr);
         }
-        locdescrs.into_iter().zip(1..).map(|(locdescr, framenum)| {
-            let pretty_locdescr = if self.config.print_module_name {
-                locdescr.to_string_with_module()
-            } else {
-                locdescr.to_string_no_module()
-            };
-            let mut frame_string = format!("  #{}: {}\n", framenum, pretty_locdescr);
-            match locdescr.source_loc {
-                Some(source_loc) if self.config.print_source_info => {
-                    frame_string.push_str(&format!("         ({})\n", pretty_source_loc(source_loc)));
-                },
-                _ => {},
-            };
-            frame_string
-        }).collect()
+        locdescrs
+            .into_iter()
+            .zip(1 ..)
+            .map(|(locdescr, framenum)| {
+                let pretty_locdescr = if self.config.print_module_name {
+                    locdescr.to_string_with_module()
+                } else {
+                    locdescr.to_string_no_module()
+                };
+                let mut frame_string = format!("  #{}: {}\n", framenum, pretty_locdescr);
+                match locdescr.source_loc {
+                    Some(source_loc) if self.config.print_source_info => {
+                        frame_string
+                            .push_str(&format!("         ({})\n", pretty_source_loc(source_loc)));
+                    },
+                    _ => {},
+                };
+                frame_string
+            })
+            .collect()
     }
 
     /// returns a `String` containing a formatted view of the full path which led
@@ -1385,7 +1719,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn pretty_path_llvm(&self) -> String {
         let mut path_str = String::new();
         for path_entry in self.get_path() {
-            path_str.push_str(&format!("  {}\n",
+            path_str.push_str(&format!(
+                "  {}\n",
                 if self.config.print_module_name {
                     path_entry.to_string_with_module()
                 } else {
@@ -1400,16 +1735,25 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     /// to this point, in terms of source locations
     pub fn pretty_path_source(&self) -> String {
         let mut path_str = String::new();
-        let mut source_locs = self.get_path().iter().flat_map(|path_entry| path_entry.get_all_source_locs());
-            // handle the first one special, so we can print this help message if necessary
+        let mut source_locs = self
+            .get_path()
+            .iter()
+            .flat_map(|path_entry| path_entry.get_all_source_locs());
+        // handle the first one special, so we can print this help message if necessary
         match source_locs.next() {
             None => {
                 path_str.push_str("  No source locations available in the path.\n");
-                path_str.push_str("  This may be because the LLVM bitcode was not compiled with debuginfo.\n");
-                path_str.push_str("  To compile C/C++ or Rust sources with debuginfo, pass the `-g` flag\n");
+                path_str.push_str(
+                    "  This may be because the LLVM bitcode was not compiled with debuginfo.\n",
+                );
+                path_str.push_str(
+                    "  To compile C/C++ or Rust sources with debuginfo, pass the `-g` flag\n",
+                );
                 path_str.push_str("    to `clang`, `clang++`, or `rustc`.\n");
             },
-            Some(first_source_loc) => path_str.push_str(&format!("  {}\n", pretty_source_loc(first_source_loc))),
+            Some(first_source_loc) => {
+                path_str.push_str(&format!("  {}\n", pretty_source_loc(first_source_loc)))
+            },
         }
         for source_loc in source_locs {
             path_str.push_str(&format!("  {}\n", pretty_source_loc(source_loc)));
@@ -1423,7 +1767,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn pretty_path_interleaved(&self) -> String {
         let mut path_str = String::new();
         for path_entry in self.get_path() {
-            path_str.push_str(&format!("  {}:\n",
+            path_str.push_str(&format!(
+                "  {}:\n",
                 if self.config.print_module_name {
                     path_entry.to_string_with_module()
                 } else {
@@ -1434,7 +1779,9 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             // handle the first one special, so we can print this help message if necessary
             match source_locs.next() {
                 None => path_str.push_str("    (no source locations available)\n"),
-                Some(first_source_loc) => path_str.push_str(&format!("    {}\n", pretty_source_loc(first_source_loc))),
+                Some(first_source_loc) => {
+                    path_str.push_str(&format!("    {}\n", pretty_source_loc(first_source_loc)))
+                },
             }
             for source_loc in source_locs {
                 path_str.push_str(&format!("    {}\n", pretty_source_loc(source_loc)));
@@ -1451,7 +1798,7 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
     pub fn demangle(&self, funcname: &str) -> String {
         match self.config.demangling {
             Some(demangling) => demangling.maybe_demangle(funcname),
-            None => panic!("Demangling shouldn't be None here"),  // we should resolve it to Some() in the State constructor
+            None => panic!("Demangling shouldn't be None here"), // we should resolve it to Some() in the State constructor
         }
     }
 
@@ -1479,7 +1826,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         } else {
             "<state is unsatisfiable>".to_owned()
         };
-        self.solver.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+        self.solver
+            .set_opt(BtorOption::ModelGen(ModelGen::Disabled));
         Ok(string)
     }
 
@@ -1494,10 +1842,15 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
         match PathDumpType::get_from_env_var() {
             PathDumpType::None => {
                 err_msg.push_str("note: For a dump of the path that led to this error, rerun with the environment variable `HAYBALE_DUMP_PATH` set to:\n");
-                err_msg.push_str("        `LLVM` for a list of the LLVM basic blocks in the path\n");
-                err_msg.push_str("        `SRC` for a list of the source-language locations in the path\n");
+                err_msg
+                    .push_str("        `LLVM` for a list of the LLVM basic blocks in the path\n");
+                err_msg.push_str(
+                    "        `SRC` for a list of the source-language locations in the path\n",
+                );
                 err_msg.push_str("        `BOTH` for both of the above\n");
-                err_msg.push_str("      To get source-language locations, the LLVM bitcode must also contain\n");
+                err_msg.push_str(
+                    "      To get source-language locations, the LLVM bitcode must also contain\n",
+                );
                 err_msg.push_str("      debuginfo. For example, C/C++ or Rust sources must be compiled with the\n");
                 err_msg.push_str("      `-g` flag to `clang`, `clang++`, or `rustc`.\n");
             },
@@ -1517,7 +1870,8 @@ impl<'p, B: Backend> State<'p, B> where B: 'p {
             },
         }
         if std::env::var("HAYBALE_DUMP_VARS") == Ok("1".to_owned()) {
-            err_msg.push_str("\nLatest values of variables at time of error, in current function:\n");
+            err_msg
+                .push_str("\nLatest values of variables at time of error, in current function:\n");
             err_msg.push_str("(Ignore any values from past the point of error, they may be from other paths)\n\n");
             for (varname, value) in self.all_vars_in_cur_fn() {
                 err_msg.push_str(&format!("  {}: {:?}\n", varname, value));
@@ -1556,10 +1910,10 @@ impl PathDumpType {
                     "LLVM" => Self::LLVM,
                     "SRC" => Self::Source,
                     "BOTH" => Self::Interleaved,
-                    "1" => Self::Interleaved,  // previous versions of `haybale` used HAYBALE_DUMP_PATH=1, we now treat that equivalently to `BOTH`
+                    "1" => Self::Interleaved, // previous versions of `haybale` used HAYBALE_DUMP_PATH=1, we now treat that equivalently to `BOTH`
                     _ => Self::Interleaved,
                 }
-           },
+            },
         }
     }
 }
@@ -1622,7 +1976,10 @@ mod tests {
 
         // adding x < 3 constraint should make us unsat
         let bad_constraint = x.ult(&state.bv_from_u64(3, 64));
-        assert_eq!(state.sat_with_extra_constraints(std::iter::once(&bad_constraint)), Ok(false));
+        assert_eq!(
+            state.sat_with_extra_constraints(std::iter::once(&bad_constraint)),
+            Ok(false)
+        );
 
         // the state itself should still be sat, extra constraints weren't permanently added
         assert_eq!(state.sat(), Ok(true));
@@ -1641,7 +1998,12 @@ mod tests {
         x.ugt(&state.bv_from_u64(3, 64)).assert();
 
         // check that the computed value of x is > 3
-        let x_value = state.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x").as_u64().unwrap();
+        let x_value = state
+            .get_a_solution_for_bv(&x)
+            .unwrap()
+            .expect("Expected a solution for x")
+            .as_u64()
+            .unwrap();
         assert!(x_value > 3);
 
         Ok(())
@@ -1665,21 +2027,36 @@ mod tests {
         x.ult(&state.bv_from_u64(6, 64)).assert();
 
         // check that there are now exactly two solutions
-        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly(vec![4,5].into_iter().collect())));
+        let solutions = state
+            .get_possible_solutions_for_bv(&x, 2)
+            .unwrap()
+            .as_u64_solutions();
+        assert_eq!(
+            solutions,
+            Some(PossibleSolutions::Exactly(vec![4, 5].into_iter().collect()))
+        );
 
         // add x < 5 constraint
         x.ult(&state.bv_from_u64(5, 64)).assert();
 
         // check that there is now exactly one solution
-        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly(std::iter::once(4).collect())));
+        let solutions = state
+            .get_possible_solutions_for_bv(&x, 2)
+            .unwrap()
+            .as_u64_solutions();
+        assert_eq!(
+            solutions,
+            Some(PossibleSolutions::Exactly(std::iter::once(4).collect()))
+        );
 
         // add x < 3 constraint
         x.ult(&state.bv_from_u64(3, 64)).assert();
 
         // check that there are now no solutions
-        let solutions = state.get_possible_solutions_for_bv(&x, 2).unwrap().as_u64_solutions();
+        let solutions = state
+            .get_possible_solutions_for_bv(&x, 2)
+            .unwrap()
+            .as_u64_solutions();
         assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::new())));
 
         Ok(())
@@ -1697,11 +2074,17 @@ mod tests {
 
         // create corresponding BV values
         let var1 = state.new_bv_with_name(name1.clone(), 64).unwrap();
-        let var2 = state.new_bv_with_name(name2.clone(), 1).unwrap();  // these clone()s wouldn't normally be necessary but we want to reuse the names to create `Operand`s later
+        let var2 = state.new_bv_with_name(name2.clone(), 1).unwrap(); // these clone()s wouldn't normally be necessary but we want to reuse the names to create `Operand`s later
 
         // check that we can look up the correct BV values via LocalOperands
-        let op1 = Operand::LocalOperand { name: name1, ty: Type::i32() };
-        let op2 = Operand::LocalOperand { name: name2, ty: Type::bool() };
+        let op1 = Operand::LocalOperand {
+            name: name1,
+            ty: Type::i32(),
+        };
+        let op2 = Operand::LocalOperand {
+            name: name2,
+            ty: Type::bool(),
+        };
         assert_eq!(state.operand_to_bv(&op1), Ok(var1));
         assert_eq!(state.operand_to_bv(&op2), Ok(var2));
     }
@@ -1716,10 +2099,17 @@ mod tests {
         let constint = Constant::Int { bits: 64, value: 3 };
 
         // this should create a corresponding BV value which is also constant 3
-        let bv = state.operand_to_bv(&Operand::ConstantOperand(constint)).unwrap();
+        let bv = state
+            .operand_to_bv(&Operand::ConstantOperand(constint))
+            .unwrap();
 
         // check that the BV value was evaluated to 3
-        let solution = state.get_a_solution_for_bv(&bv).unwrap().expect("Expected a solution for the bv").as_u64().unwrap();
+        let solution = state
+            .get_a_solution_for_bv(&bv)
+            .unwrap()
+            .expect("Expected a solution for the bv")
+            .as_u64()
+            .unwrap();
         assert_eq!(solution, 3);
     }
 
@@ -1734,16 +2124,30 @@ mod tests {
         let constfalse = Constant::Int { bits: 1, value: 0 };
 
         // this should create BV values true and false
-        let bvtrue = state.operand_to_bv(&Operand::ConstantOperand(consttrue)).unwrap();
-        let bvfalse = state.operand_to_bv(&Operand::ConstantOperand(constfalse)).unwrap();
+        let bvtrue = state
+            .operand_to_bv(&Operand::ConstantOperand(consttrue))
+            .unwrap();
+        let bvfalse = state
+            .operand_to_bv(&Operand::ConstantOperand(constfalse))
+            .unwrap();
 
         // check that the BV values are evaluated to true and false respectively
         assert_eq!(
-            state.get_a_solution_for_bv(&bvtrue).unwrap().expect("Expected a solution for bvtrue").as_bool().unwrap(),
+            state
+                .get_a_solution_for_bv(&bvtrue)
+                .unwrap()
+                .expect("Expected a solution for bvtrue")
+                .as_bool()
+                .unwrap(),
             true,
         );
         assert_eq!(
-            state.get_a_solution_for_bv(&bvfalse).unwrap().expect("Expected a solution for bvfalse").as_bool().unwrap(),
+            state
+                .get_a_solution_for_bv(&bvfalse)
+                .unwrap()
+                .expect("Expected a solution for bvfalse")
+                .as_bool()
+                .unwrap(),
             false,
         );
 
@@ -1758,7 +2162,10 @@ mod tests {
 
     #[test]
     fn backtracking() -> Result<()> {
-        let func = blank_function("test_func", vec![Name::from("bb_start"), Name::from("bb_target")]);
+        let func = blank_function(
+            "test_func",
+            vec![Name::from("bb_start"), Name::from("bb_target")],
+        );
         let project = blank_project("test_mod", func);
         let mut state = blank_state(&project, "test_func");
         state.record_path_entry();
@@ -1770,7 +2177,8 @@ mod tests {
         // create a backtrack point with constraint y > 5
         let y = state.new_bv_with_name(Name::from("y"), 64)?;
         let constraint = y.sgt(&state.bv_from_i64(5, 64));
-        let bb = project.get_func_by_name("test_func")
+        let bb = project
+            .get_func_by_name("test_func")
             .map(|(func, _)| func)
             .expect("Expected to find function named 'test_func'")
             .get_bb_by_name(&Name::from("bb_target"))
@@ -1807,10 +2215,26 @@ mod tests {
         assert_eq!(state.sat(), Ok(true));
 
         // check that the constraint y > 5 was added: y evaluates to something > 5
-        assert!(state.get_a_solution_for_bv(&y).unwrap().expect("Expected a solution for y").as_u64().unwrap() > 5);
+        assert!(
+            state
+                .get_a_solution_for_bv(&y)
+                .unwrap()
+                .expect("Expected a solution for y")
+                .as_u64()
+                .unwrap()
+                > 5
+        );
 
         // check that the first constraint remained in place: x > 11
-        assert!(state.get_a_solution_for_bv(&x).unwrap().expect("Expected a solution for x").as_u64().unwrap() > 11);
+        assert!(
+            state
+                .get_a_solution_for_bv(&x)
+                .unwrap()
+                .expect("Expected a solution for x")
+                .as_u64()
+                .unwrap()
+                > 11
+        );
 
         // check that trying to backtrack again fails
         assert!(!state.revert_to_backtracking_point().unwrap());
@@ -1836,8 +2260,14 @@ mod tests {
         let mut state_2 = state.fork();
 
         // get the copies of `x` and `y` in each state, via operand lookups
-        let op_x = Operand::LocalOperand { name: Name::from("x"), ty: Type::i64() };
-        let op_y = Operand::LocalOperand { name: Name::from("y"), ty: Type::i64() };
+        let op_x = Operand::LocalOperand {
+            name: Name::from("x"),
+            ty: Type::i64(),
+        };
+        let op_y = Operand::LocalOperand {
+            name: Name::from("y"),
+            ty: Type::i64(),
+        };
         let x_1 = state.operand_to_bv(&op_x).unwrap();
         let x_2 = state_2.operand_to_bv(&op_x).unwrap();
         let y_1 = state.operand_to_bv(&op_y).unwrap();
