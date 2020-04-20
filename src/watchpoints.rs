@@ -138,7 +138,7 @@ impl Watchpoints {
         let addr_width = addr.get_width();
         let op_lower = addr;
         let bytes = if bits < 8 { 1 } else { bits / 8 };
-        let op_upper = addr.add(&V::from_u32(btor.clone(), bytes - 1, addr_width));
+        let op_upper = addr.add(&V::from_u32(btor, bytes - 1, addr_width));
         let results = self
             .0
             .iter()

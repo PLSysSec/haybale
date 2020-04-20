@@ -563,11 +563,10 @@ pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
     loop {
         let width = bv.get_width();
         if width <= 64 {
-            let min_for_remaining_bits =
-                match min_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
-                    Some(max) => max,
-                    None => return Ok(None),
-                };
+            let min_for_remaining_bits = match min_possible_solution_for_bv_as_u64(solver, &bv)? {
+                Some(max) => max,
+                None => return Ok(None),
+            };
             retval.push_str(&format!(
                 "{val:0width$b}",
                 val = min_for_remaining_bits,

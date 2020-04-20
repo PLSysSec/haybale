@@ -11,6 +11,7 @@ pub struct Callbacks<'p, B: Backend> {
     /// LLVM non-terminator instruction.
     ///
     /// If the callback returns an `Err`, `haybale` will propagate it accordingly.
+    #[allow(clippy::type_complexity)]
     pub(crate) instruction_callbacks:
         Vec<Rc<dyn Fn(&'p llvm_ir::Instruction, &State<B>) -> Result<()> + 'p>>,
 
@@ -18,6 +19,7 @@ pub struct Callbacks<'p, B: Backend> {
     /// LLVM terminator instruction.
     ///
     /// If the callback returns an `Err`, `haybale` will propagate it accordingly.
+    #[allow(clippy::type_complexity)]
     pub(crate) terminator_callbacks:
         Vec<Rc<dyn Fn(&'p llvm_ir::Terminator, &State<B>) -> Result<()> + 'p>>,
 }

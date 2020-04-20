@@ -175,16 +175,15 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     ///
     /// A default implementation is provided in terms of the other trait methods.
     fn zero_extend_to_bits(&self, bits: u32) -> Self {
+        use std::cmp::Ordering;
         let cur_bits = self.get_width();
-        if cur_bits == bits {
-            self.clone()
-        } else if cur_bits < bits {
-            self.zext(bits - cur_bits)
-        } else {
-            panic!(
+        match cur_bits.cmp(&bits) {
+            Ordering::Equal => self.clone(),
+            Ordering::Less => self.zext(bits - cur_bits),
+            Ordering::Greater => panic!(
                 "tried to zero-extend to {} bits, but already had {} bits",
                 bits, cur_bits
-            )
+            ),
         }
     }
 
@@ -195,16 +194,15 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     ///
     /// A default implementation is provided in terms of the other trait methods.
     fn sign_extend_to_bits(&self, bits: u32) -> Self {
+        use std::cmp::Ordering;
         let cur_bits = self.get_width();
-        if cur_bits == bits {
-            self.clone()
-        } else if cur_bits < bits {
-            self.sext(bits - cur_bits)
-        } else {
-            panic!(
+        match cur_bits.cmp(&bits) {
+            Ordering::Equal => self.clone(),
+            Ordering::Less => self.sext(bits - cur_bits),
+            Ordering::Greater => panic!(
                 "tried to sign-extend to {} bits, but already had {} bits",
                 bits, cur_bits
-            )
+            ),
         }
     }
 

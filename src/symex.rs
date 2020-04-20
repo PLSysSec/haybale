@@ -447,6 +447,7 @@ where
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn binop_to_bvbinop<'a, V: BV + 'a>(
         bop: &instruction::groups::BinaryOp,
     ) -> Result<Box<dyn for<'b> Fn(&'b V, &'b V) -> V + 'a>> {
@@ -469,6 +470,7 @@ where
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn intpred_to_bvpred(pred: IntPredicate) -> Box<dyn Fn(&B::BV, &B::BV) -> B::BV + 'p> {
         match pred {
             IntPredicate::EQ => Box::new(B::BV::_eq),

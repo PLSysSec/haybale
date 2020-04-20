@@ -391,6 +391,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
 /// they cannot.
 pub(crate) struct FunctionHook<'p, B: Backend> {
     /// The actual hook to be executed
+    #[allow(clippy::type_complexity)]
     hook: Rc<
         dyn Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>> + 'p,
     >,
