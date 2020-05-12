@@ -486,53 +486,6 @@ where
         }
     }
 
-    // Apply the given unary scalar operation to a vector
-    fn unary_on_vector<F>(in_vector: &B::BV, num_elements: u32, mut op: F) -> Result<B::BV>
-    where
-        F: FnMut(&B::BV) -> B::BV,
-    {
-        let in_vector_size = in_vector.get_width();
-        assert_eq!(in_vector_size % num_elements, 0);
-        let in_el_size = in_vector_size / num_elements;
-        let in_scalars =
-            (0 .. num_elements).map(|i| in_vector.slice((i + 1) * in_el_size - 1, i * in_el_size));
-        let out_scalars = in_scalars.map(|s| op(&s));
-        out_scalars.reduce(|a, b| b.concat(&a)).ok_or_else(|| {
-            Error::MalformedInstruction("Vector operation with 0 elements".to_owned())
-        }) // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
-    }
-
-    // Apply the given binary scalar operation to a vector
-    fn binary_on_vector<F>(
-        in_vector_0: &B::BV,
-        in_vector_1: &B::BV,
-        num_elements: u32,
-        mut op: F,
-    ) -> Result<B::BV>
-    where
-        F: for<'a> FnMut(&'a B::BV, &'a B::BV) -> B::BV,
-    {
-        let in_vector_0_size = in_vector_0.get_width();
-        let in_vector_1_size = in_vector_1.get_width();
-        if in_vector_0_size != in_vector_1_size {
-            return Err(Error::MalformedInstruction(format!(
-                "Binary operation's vector operands are different total sizes: {} vs. {}",
-                in_vector_0_size, in_vector_1_size
-            )));
-        }
-        let in_vector_size = in_vector_0_size;
-        assert_eq!(in_vector_size % num_elements, 0);
-        let in_el_size = in_vector_size / num_elements;
-        let in_scalars_0 = (0 .. num_elements)
-            .map(|i| in_vector_0.slice((i + 1) * in_el_size - 1, i * in_el_size));
-        let in_scalars_1 = (0 .. num_elements)
-            .map(|i| in_vector_1.slice((i + 1) * in_el_size - 1, i * in_el_size));
-        let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0, s1)| op(&s0, &s1));
-        out_scalars.reduce(|a, b| b.concat(&a)).ok_or_else(|| {
-            Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned())
-        }) // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
-    }
-
     fn symex_binop(&mut self, bop: &instruction::groups::BinaryOp) -> Result<()> {
         debug!("Symexing binop {:?}", bop);
         // We expect these binops to only operate on integers or vectors of integers
@@ -554,7 +507,7 @@ where
             Type::VectorType { element_type, num_elements } => {
                 match *element_type {
                     Type::IntegerType { .. } => {
-                        self.state.record_bv_result(bop, Self::binary_on_vector(&bvop0, &bvop1, num_elements as u32, bvoperation)?)
+                        self.state.record_bv_result(bop, binary_on_vector(&bvop0, &bvop1, num_elements as u32, bvoperation)?)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected binary operation's vector operands to have integer elements, but elements are type {:?}", ty))),
                 }
@@ -588,7 +541,7 @@ where
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
                         let zero = self.state.zero(1);
                         let one = self.state.one(1);
-                        let final_bv = Self::binary_on_vector(&bvfirstop, &bvsecondop, num_elements as u32, |a,b| bvpred(a,b).cond_bv(&one, &zero))?;
+                        let final_bv = binary_on_vector(&bvfirstop, &bvsecondop, num_elements as u32, |a,b| bvpred(a,b).cond_bv(&one, &zero))?;
                         self.state.record_bv_result(icmp, final_bv)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
@@ -632,8 +585,8 @@ where
                         )))
                     },
                 };
-                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
-                    el.zext(out_el_size - in_el_size)
+                let final_bv = unary_on_vector(&in_vector, num_elements as u32, |el| {
+                    Ok(el.zext(out_el_size - in_el_size))
                 })?;
                 self.state.record_bv_result(zext, final_bv)
             },
@@ -677,8 +630,8 @@ where
                         )))
                     },
                 };
-                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
-                    el.sext(out_el_size - in_el_size)
+                let final_bv = unary_on_vector(&in_vector, num_elements as u32, |el| {
+                    Ok(el.sext(out_el_size - in_el_size))
                 })?;
                 self.state.record_bv_result(sext, final_bv)
             },
@@ -717,8 +670,8 @@ where
                         )))
                     },
                 };
-                let final_bv = Self::unary_on_vector(&in_vector, num_elements as u32, |el| {
-                    el.slice(dest_el_size - 1, 0)
+                let final_bv = unary_on_vector(&in_vector, num_elements as u32, |el| {
+                    Ok(el.slice(dest_el_size - 1, 0))
                 })?;
                 self.state.record_bv_result(trunc, final_bv)
             },
@@ -2235,6 +2188,56 @@ where
         self.state
             .record_bv_result(cmpxchg, match_flag.concat(&read_value))
     }
+}
+
+// Apply the given unary scalar operation to a vector
+pub(crate) fn unary_on_vector<F: FnMut(&V) -> Result<V>, V: BV>(
+    in_vector: &V,
+    num_elements: u32,
+    mut op: F,
+) -> Result<V> {
+    let in_vector_size = in_vector.get_width();
+    assert_eq!(in_vector_size % num_elements, 0);
+    let in_el_size = in_vector_size / num_elements;
+    let in_scalars =
+        (0 .. num_elements).map(|i| in_vector.slice((i + 1) * in_el_size - 1, i * in_el_size));
+    let out_scalars = in_scalars.map(|s| op(&s)).collect::<Result<Vec<_>>>()?;
+    out_scalars
+        .into_iter()
+        .reduce(|a, b| b.concat(&a))
+        .ok_or_else(|| Error::MalformedInstruction("Vector operation with 0 elements".to_owned()))
+    // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
+}
+
+// Apply the given binary scalar operation to a vector
+pub(crate) fn binary_on_vector<F, V: BV>(
+    in_vector_0: &V,
+    in_vector_1: &V,
+    num_elements: u32,
+    mut op: F,
+) -> Result<V>
+where
+    F: for<'a> FnMut(&'a V, &'a V) -> V,
+{
+    let in_vector_0_size = in_vector_0.get_width();
+    let in_vector_1_size = in_vector_1.get_width();
+    if in_vector_0_size != in_vector_1_size {
+        return Err(Error::MalformedInstruction(format!(
+            "Binary operation's vector operands are different total sizes: {} vs. {}",
+            in_vector_0_size, in_vector_1_size
+        )));
+    }
+    let in_vector_size = in_vector_0_size;
+    assert_eq!(in_vector_size % num_elements, 0);
+    let in_el_size = in_vector_size / num_elements;
+    let in_scalars_0 =
+        (0 .. num_elements).map(|i| in_vector_0.slice((i + 1) * in_el_size - 1, i * in_el_size));
+    let in_scalars_1 =
+        (0 .. num_elements).map(|i| in_vector_1.slice((i + 1) * in_el_size - 1, i * in_el_size));
+    let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0, s1)| op(&s0, &s1));
+    out_scalars.reduce(|a, b| b.concat(&a)).ok_or_else(|| {
+        Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned())
+    }) // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
 }
 
 #[derive(PartialEq, Eq, Clone)]

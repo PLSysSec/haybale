@@ -8,6 +8,7 @@ use crate::layout;
 use crate::project::Project;
 use crate::return_value::ReturnValue;
 use crate::state::State;
+use crate::symex::unary_on_vector;
 use llvm_ir::{Type, Typed};
 
 pub fn symex_memset<'p, B: Backend>(
@@ -59,7 +60,7 @@ pub fn symex_memcpy<'p, B: Backend>(
 }
 
 pub fn symex_bswap<'p, B: Backend>(
-    _proj: &'p Project,
+    proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -75,63 +76,76 @@ pub fn symex_bswap<'p, B: Backend>(
 
     let arg = state.operand_to_bv(arg)?;
     match argty {
-        Type::IntegerType { bits: 16 } => {
-            assert_eq!(arg.get_width(), 16);
-            let high_byte = arg.slice(15, 8);
-            let low_byte = arg.slice(7, 0);
-            Ok(ReturnValue::Return(low_byte.concat(&high_byte)))
+        Type::IntegerType { bits } => {
+            assert_eq!(arg.get_width(), bits);
+            Ok(ReturnValue::Return(bswap(&arg, bits)?))
         },
-        Type::IntegerType { bits: 32 } => {
-            assert_eq!(arg.get_width(), 32);
-            let byte_0 = arg.slice(7, 0);
-            let byte_1 = arg.slice(15, 8);
-            let byte_2 = arg.slice(23, 16);
-            let byte_3 = arg.slice(31, 24);
-            Ok(ReturnValue::Return(
-                byte_0.concat(&byte_1).concat(&byte_2).concat(&byte_3),
-            ))
-        },
-        Type::IntegerType { bits: 48 } => {
-            assert_eq!(arg.get_width(), 48);
-            let byte_0 = arg.slice(7, 0);
-            let byte_1 = arg.slice(15, 8);
-            let byte_2 = arg.slice(23, 16);
-            let byte_3 = arg.slice(31, 24);
-            let byte_4 = arg.slice(39, 32);
-            let byte_5 = arg.slice(47, 40);
-            Ok(ReturnValue::Return(
-                byte_0
-                    .concat(&byte_1)
-                    .concat(&byte_2)
-                    .concat(&byte_3)
-                    .concat(&byte_4)
-                    .concat(&byte_5),
-            ))
-        },
-        Type::IntegerType { bits: 64 } => {
-            assert_eq!(arg.get_width(), 64);
-            let byte_0 = arg.slice(7, 0);
-            let byte_1 = arg.slice(15, 8);
-            let byte_2 = arg.slice(23, 16);
-            let byte_3 = arg.slice(31, 24);
-            let byte_4 = arg.slice(39, 32);
-            let byte_5 = arg.slice(47, 40);
-            let byte_6 = arg.slice(55, 48);
-            let byte_7 = arg.slice(63, 56);
-            Ok(ReturnValue::Return(
-                byte_0
-                    .concat(&byte_1)
-                    .concat(&byte_2)
-                    .concat(&byte_3)
-                    .concat(&byte_4)
-                    .concat(&byte_5)
-                    .concat(&byte_6)
-                    .concat(&byte_7),
-            ))
+        Type::VectorType {
+            element_type,
+            num_elements,
+        } => {
+            let element_size = layout::size_opaque_aware(&element_type, proj).ok_or(Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
+            let final_bv = unary_on_vector(&arg, num_elements as u32, |element| {
+                bswap(element, element_size as u32)
+            })?;
+            Ok(ReturnValue::Return(final_bv))
         },
         _ => Err(Error::UnsupportedInstruction(format!(
             "llvm.bswap with argument type {:?}",
             argty
+        ))),
+    }
+}
+
+fn bswap<V: BV>(bv: &V, bits: u32) -> Result<V> {
+    match bits {
+        16 => {
+            let high_byte = bv.slice(15, 8);
+            let low_byte = bv.slice(7, 0);
+            Ok(low_byte.concat(&high_byte))
+        },
+        32 => {
+            let byte_0 = bv.slice(7, 0);
+            let byte_1 = bv.slice(15, 8);
+            let byte_2 = bv.slice(23, 16);
+            let byte_3 = bv.slice(31, 24);
+            Ok(byte_0.concat(&byte_1).concat(&byte_2).concat(&byte_3))
+        },
+        48 => {
+            let byte_0 = bv.slice(7, 0);
+            let byte_1 = bv.slice(15, 8);
+            let byte_2 = bv.slice(23, 16);
+            let byte_3 = bv.slice(31, 24);
+            let byte_4 = bv.slice(39, 32);
+            let byte_5 = bv.slice(47, 40);
+            Ok(byte_0
+                .concat(&byte_1)
+                .concat(&byte_2)
+                .concat(&byte_3)
+                .concat(&byte_4)
+                .concat(&byte_5))
+        },
+        64 => {
+            let byte_0 = bv.slice(7, 0);
+            let byte_1 = bv.slice(15, 8);
+            let byte_2 = bv.slice(23, 16);
+            let byte_3 = bv.slice(31, 24);
+            let byte_4 = bv.slice(39, 32);
+            let byte_5 = bv.slice(47, 40);
+            let byte_6 = bv.slice(55, 48);
+            let byte_7 = bv.slice(63, 56);
+            Ok(byte_0
+                .concat(&byte_1)
+                .concat(&byte_2)
+                .concat(&byte_3)
+                .concat(&byte_4)
+                .concat(&byte_5)
+                .concat(&byte_6)
+                .concat(&byte_7))
+        },
+        _ => Err(Error::UnsupportedInstruction(format!(
+            "bswap on bitwidth {}",
+            bits
         ))),
     }
 }
