@@ -151,7 +151,7 @@ fn bswap<V: BV>(bv: &V, bits: u32) -> Result<V> {
 }
 
 pub fn symex_objectsize<'p, B: Backend>(
-    _proj: &'p Project,
+    proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -159,7 +159,9 @@ pub fn symex_objectsize<'p, B: Backend>(
     // intended answers for this intrinsic. Instead, we just always return
     // 'unknown', as this is valid behavior according to the LLVM spec.
     let arg1 = state.operand_to_bv(&call.get_arguments()[1].0)?;
-    let width = layout::size(&call.get_type());
+    let width = layout::size_opaque_aware(&call.get_type(), proj).ok_or(
+        Error::OtherError("symex_objectsize: return value of this call involves a struct type with no definition in the Project".into())
+    )?;
     let zero = state.zero(width as u32);
     let minusone = state.ones(width as u32);
     Ok(ReturnValue::Return(arg1.cond_bv(&zero, &minusone)))
