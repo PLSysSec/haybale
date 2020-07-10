@@ -1498,6 +1498,7 @@ where
                         || funcname.starts_with("llvm.launder.invariant")
                         || funcname.starts_with("llvm.strip.invariant")
                         || funcname.starts_with("llvm.dbg")
+                        || funcname.starts_with("llvm.expect")
                     {
                         // these are all safe to ignore
                         Ok(ResolvedFunction::HookActive {

@@ -1,4 +1,5 @@
 use haybale::*;
+use haybale::solver_utils::PossibleSolutions;
 use std::num::Wrapping;
 use std::path::Path;
 
@@ -9,6 +10,12 @@ fn init_logging() {
 
 fn get_project() -> Project {
     let modname = "tests/bcfiles/basic.bc";
+    Project::from_bc_path(&Path::new(modname))
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
+}
+
+fn get_basic_rust_project() -> Project {
+    let modname = "tests/bcfiles/basic_rust.bc";
     Project::from_bc_path(&Path::new(modname))
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
@@ -266,4 +273,13 @@ fn mixed_bitwidths() {
     let arg4 = args[3].unwrap_to_i64();
     let sum: i64 = i64::from(i32::from(arg1) + i32::from(arg2) + arg3) + arg4;
     assert_eq!(sum, 3);
+}
+
+#[test]
+fn basic_rust() {
+    let funcname = "basic_rust::ez";
+    init_logging();
+    let proj = get_basic_rust_project();
+    let ret = get_possible_return_values_of_func(funcname, vec!(Some(1)), &proj, Config::default(), None, 10);
+    assert_eq!(ret, PossibleSolutions::Exactly([ReturnValue::Return(2), ReturnValue::Abort].iter().cloned().collect()));
 }

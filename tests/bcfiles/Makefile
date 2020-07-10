@@ -6,6 +6,7 @@ RUSTFLAGS=--crate-type=lib
 
 .PHONY: all
 all: basic.bc basic.ll \
+			basic_rust.bc basic_rust.ll \
 			memory.bc memory.ll \
 			loop.bc loop.ll \
 			struct.bc struct.ll \
