@@ -281,5 +281,5 @@ fn basic_rust() {
     init_logging();
     let proj = get_basic_rust_project();
     let ret = get_possible_return_values_of_func(funcname, vec!(Some(1)), &proj, Config::default(), None, 10);
-    assert_eq!(ret, PossibleSolutions::Exactly([ReturnValue::Return(2), ReturnValue::Abort].iter().cloned().collect()));
+    assert_eq!(ret, PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort));
 }

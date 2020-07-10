@@ -33,11 +33,7 @@ fn may_exit() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::Exactly(
-            vec![ReturnValue::Return(1), ReturnValue::Abort,]
-                .into_iter()
-                .collect()
-        )
+        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Abort),
     );
 }
 
@@ -55,10 +51,6 @@ fn may_panic() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::Exactly(
-            vec![ReturnValue::Return(1), ReturnValue::Abort,]
-                .into_iter()
-                .collect()
-        )
+        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Abort),
     );
 }

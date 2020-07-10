@@ -56,11 +56,7 @@ fn throw_uncaught() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::Exactly(
-            vec![ReturnValue::Return(2), ReturnValue::Throw(20),]
-                .into_iter()
-                .collect()
-        )
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Throw(20)),
     );
 }
 
@@ -134,11 +130,7 @@ fn throw_uncaught_caller() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::Exactly(
-            vec![ReturnValue::Return(1), ReturnValue::Throw(20),]
-                .into_iter()
-                .collect()
-        )
+        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Throw(20)),
     );
 }
 
@@ -156,11 +148,7 @@ fn throw_and_catch_wildcard() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::Exactly(
-            vec![ReturnValue::Return(2), ReturnValue::Return(5),]
-                .into_iter()
-                .collect()
-        )
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Return(5)),
     );
 }
 
@@ -238,10 +226,6 @@ fn throw_and_rethrow_in_caller() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::Exactly(
-            vec![ReturnValue::Return(2), ReturnValue::Throw(20),]
-                .into_iter()
-                .collect()
-        )
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Throw(20)),
     );
 }

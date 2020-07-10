@@ -2,8 +2,6 @@ use haybale::backend::Backend;
 use haybale::function_hooks::IsCall;
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
-use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -42,7 +40,7 @@ fn hook_a_function() {
             None,
             3
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(5)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(5)),
     );
 }
 
@@ -95,6 +93,6 @@ fn hook_a_function_ptr() {
             None,
             3
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(15)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(15)),
     );
 }

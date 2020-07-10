@@ -7,6 +7,7 @@ use boolector::{BVSolution, Btor, SolverResult};
 use log::warn;
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::iter::FromIterator;
 use std::ops::Deref;
 
 /// Returns `true` if current constraints are satisfiable, `false` if not.
@@ -97,6 +98,26 @@ pub enum PossibleSolutions<V: Eq + Hash> {
     AtLeast(HashSet<V>),
 }
 
+impl<V: Eq + Hash> PossibleSolutions<V> {
+    /// Create a new, empty, `PossibleSolutions` (representing no possible solution)
+    pub fn empty() -> Self {
+        Self::Exactly(HashSet::new())
+    }
+
+    /// Create a new `PossibleSolutions` representing exactly one possible solution
+    pub fn exactly_one(sol: V) -> Self {
+        Self::from_iter(std::iter::once(sol))
+    }
+
+    /// Create a new `PossibleSolutions` repesenting exactly two possible solutions
+    pub fn exactly_two(sol1: V, sol2: V) -> Self {
+        if sol1 == sol2 {
+            panic!("expected two different solutions")
+        }
+        Self::from_iter(std::iter::once(sol1).chain(std::iter::once(sol2)))
+    }
+}
+
 impl PossibleSolutions<BVSolution> {
     /// Convert a `PossibleSolutions` over `BVSolution` into a
     /// `PossibleSolutions` over `u64`, by applying `as_u64()` to each
@@ -119,6 +140,13 @@ impl PossibleSolutions<BVSolution> {
                 opt.map(PossibleSolutions::AtLeast)
             },
         }
+    }
+}
+
+impl<V: Eq + Hash> FromIterator<V> for PossibleSolutions<V> {
+    /// Create a `PossibleSolutions::Exactly` from the contents of an iterator
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        Self::Exactly(HashSet::from_iter(iter))
     }
 }
 

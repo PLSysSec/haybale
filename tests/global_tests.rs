@@ -1,7 +1,5 @@
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
-use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -38,7 +36,7 @@ fn read_global() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     );
 }
 
@@ -56,7 +54,7 @@ fn modify_global() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     )
 }
 
@@ -74,7 +72,7 @@ fn modify_global_with_call() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     )
 }
 
@@ -92,7 +90,7 @@ fn dont_confuse_globals() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     )
 }
 
@@ -112,7 +110,7 @@ fn cross_module_read_global() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     );
 }
 
@@ -130,7 +128,7 @@ fn cross_module_read_global_via_call() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     );
 }
 
@@ -148,7 +146,7 @@ fn cross_module_modify_global() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     );
 }
 
@@ -166,7 +164,7 @@ fn cross_module_modify_global_via_call() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(3)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(3)),
     );
 }
 
@@ -189,8 +187,6 @@ fn globals_initialization() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(
-            1052
-        )))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(1052)),
     )
 }

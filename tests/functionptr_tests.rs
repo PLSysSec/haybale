@@ -1,7 +1,5 @@
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
-use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -29,7 +27,7 @@ fn call_through_function_ptr() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(22)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(22)),
     );
 }
 
@@ -46,6 +44,6 @@ fn call_through_function_ptr_struct() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(15)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(15)),
     );
 }

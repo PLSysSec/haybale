@@ -1,7 +1,5 @@
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
-use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::path::Path;
 
 fn init_logging() {
@@ -21,7 +19,7 @@ fn simd_add() {
     let args = std::iter::once(3).chain(std::iter::once(5)).map(Some);
     assert_eq!(
         get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(38)))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(38)),
     );
 }
 
@@ -65,9 +63,7 @@ fn simd_ops() {
     let retval: u32 = g_1 + g_2 + g_3 + g_4;
     assert_eq!(
         get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(
-            retval as u64
-        )))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(retval as u64)),
     );
 }
 
@@ -95,9 +91,7 @@ fn simd_select() {
     let retval = c_1 + c_2 + c_3 + c_4;
     assert_eq!(
         get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(
-            retval as u64
-        )))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(retval as u64)),
     );
 }
 
@@ -120,9 +114,7 @@ fn simd_add_autovectorized() {
             None,
             5
         ),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(
-            z_sum as u64
-        )))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(z_sum as u64)),
     );
 }
 
@@ -162,8 +154,6 @@ fn simd_typeconversions() {
     let retval = f_1 + f_2 + f_3 + f_4;
     assert_eq!(
         get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
-        PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(ReturnValue::Return(
-            retval as u64
-        )))),
+        PossibleSolutions::exactly_one(ReturnValue::Return(retval as u64)),
     )
 }
