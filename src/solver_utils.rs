@@ -196,13 +196,11 @@ pub fn get_possible_solutions_for_bv<V: BV>(
                 .collect(),
             )
         } else {
-            PossibleSolutions::Exactly(HashSet::new()) // no solutions
+            PossibleSolutions::empty()
         }
     } else {
         match bv.as_binary_str() {
-            Some(bstr) => PossibleSolutions::Exactly(
-                std::iter::once(BVSolution::from_01x_str(bstr)).collect(),
-            ),
+            Some(bstr) => PossibleSolutions::exactly_one(BVSolution::from_01x_str(bstr)),
             None => {
                 let mut solutions = HashSet::new();
                 check_for_common_solutions(solver.clone(), bv, n, &mut solutions)?;
@@ -530,7 +528,7 @@ pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(
             let max_for_remaining_bits =
                 match max_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
                     Some(max) => max,
-                    None => return Ok(None),
+                    None => { solver.pop(1); return Ok(None) },
                 };
             retval.push_str(&format!(
                 "{val:0width$b}",
@@ -546,7 +544,7 @@ pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(
             let max_for_high_bits =
                 match max_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
                     Some(max) => max,
-                    None => return Ok(None),
+                    None => { solver.pop(1); return Ok(None) },
                 };
             retval.push_str(&format!("{:064b}", max_for_high_bits));
             // now (temporarily, thanks to the push() above) constrain that
@@ -588,12 +586,13 @@ pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
     let mut bv = bv.clone();
     let total_width = bv.get_width();
     let mut retval = String::with_capacity(total_width as usize);
+    solver.push(1);
     loop {
         let width = bv.get_width();
         if width <= 64 {
-            let min_for_remaining_bits = match min_possible_solution_for_bv_as_u64(solver, &bv)? {
+            let min_for_remaining_bits = match min_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
                 Some(max) => max,
-                None => return Ok(None),
+                None => { solver.pop(1); return Ok(None) },
             };
             retval.push_str(&format!(
                 "{val:0width$b}",
@@ -609,7 +608,7 @@ pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
             let min_for_high_bits =
                 match min_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
                     Some(min) => min,
-                    None => return Ok(None),
+                    None => { solver.pop(1); return Ok(None) },
                 };
             retval.push_str(&format!("{:064b}", min_for_high_bits));
             // now (temporarily, thanks to the push() above) constrain that
@@ -620,6 +619,7 @@ pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
                 .assert()?;
         }
     }
+    solver.pop(1);
     assert_eq!(
         retval.len(),
         total_width as usize,
@@ -865,6 +865,9 @@ mod tests {
             min_possible_solution_for_bv_as_binary_str(btor.clone(), &y),
             Ok(Some("000100001010000010100001010000010100001010000000100011010000011100001010000000000101000010100011".into())),
         );
+
+        // make sure we've popped solver state correctly: all-ones should still be a possible solution for y
+        assert!(bvs_can_be_equal(&btor, &y, &BV::ones(btor.clone(), 96)).unwrap());
     }
 
     #[test]
