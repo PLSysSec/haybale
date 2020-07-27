@@ -528,7 +528,10 @@ pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(
             let max_for_remaining_bits =
                 match max_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
                     Some(max) => max,
-                    None => { solver.pop(1); return Ok(None) },
+                    None => {
+                        solver.pop(1);
+                        return Ok(None);
+                    },
                 };
             retval.push_str(&format!(
                 "{val:0width$b}",
@@ -544,7 +547,10 @@ pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(
             let max_for_high_bits =
                 match max_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
                     Some(max) => max,
-                    None => { solver.pop(1); return Ok(None) },
+                    None => {
+                        solver.pop(1);
+                        return Ok(None);
+                    },
                 };
             retval.push_str(&format!("{:064b}", max_for_high_bits));
             // now (temporarily, thanks to the push() above) constrain that
@@ -590,10 +596,14 @@ pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
     loop {
         let width = bv.get_width();
         if width <= 64 {
-            let min_for_remaining_bits = match min_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
-                Some(max) => max,
-                None => { solver.pop(1); return Ok(None) },
-            };
+            let min_for_remaining_bits =
+                match min_possible_solution_for_bv_as_u64(solver.clone(), &bv)? {
+                    Some(max) => max,
+                    None => {
+                        solver.pop(1);
+                        return Ok(None);
+                    },
+                };
             retval.push_str(&format!(
                 "{val:0width$b}",
                 val = min_for_remaining_bits,
@@ -608,7 +618,10 @@ pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
             let min_for_high_bits =
                 match min_possible_solution_for_bv_as_u64(solver.clone(), &high_bits)? {
                     Some(min) => min,
-                    None => { solver.pop(1); return Ok(None) },
+                    None => {
+                        solver.pop(1);
+                        return Ok(None);
+                    },
                 };
             retval.push_str(&format!("{:064b}", min_for_high_bits));
             // now (temporarily, thanks to the push() above) constrain that

@@ -1,5 +1,5 @@
-use haybale::*;
 use haybale::solver_utils::PossibleSolutions;
+use haybale::*;
 use std::num::Wrapping;
 use std::path::Path;
 
@@ -280,6 +280,16 @@ fn basic_rust() {
     let funcname = "basic_rust::ez";
     init_logging();
     let proj = get_basic_rust_project();
-    let ret = get_possible_return_values_of_func(funcname, vec!(Some(1)), &proj, Config::default(), None, 10);
-    assert_eq!(ret, PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort));
+    let ret = get_possible_return_values_of_func(
+        funcname,
+        vec![Some(1)],
+        &proj,
+        Config::default(),
+        None,
+        10,
+    );
+    assert_eq!(
+        ret,
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort)
+    );
 }
