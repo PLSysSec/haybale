@@ -41,7 +41,15 @@ impl Memory {
     /// if NULL is a possible solution for the address
     ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
-    pub fn new_uninitialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
+    ///
+    /// `addr_bits`: e.g. `64` for a `Memory` which uses 64-bit addresses
+    pub fn new_uninitialized(
+        btor: Rc<Btor>,
+        null_detection: bool,
+        name: Option<&str>,
+        addr_bits: u32,
+    ) -> Self {
+        assert_eq!(addr_bits, Self::INDEX_BITS, "This `Memory` is only compatible with {}-bit pointers. Try `SimpleMemoryBackend` instead of `BtorBackend` for a `Memory` which works with more pointer sizes.", Self::INDEX_BITS);
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES; // 2 to this number gives the number of memory cells
         let default_name = "mem";
         Self {
@@ -79,7 +87,15 @@ impl Memory {
     /// if NULL is a possible solution for the address
     ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem_initialized')
-    pub fn new_zero_initialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
+    ///
+    /// `addr_bits`: e.g. `64` for a `Memory` which uses 64-bit addresses
+    pub fn new_zero_initialized(
+        btor: Rc<Btor>,
+        null_detection: bool,
+        name: Option<&str>,
+        addr_bits: u32,
+    ) -> Self {
+        assert_eq!(addr_bits, Self::INDEX_BITS, "This `Memory` is only compatible with {}-bit pointers. Try `SimpleMemoryBackend` instead of `BtorBackend` for a `Memory` which works with more pointer sizes.", Self::INDEX_BITS);
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES; // 2 to this number gives the number of memory cells
         let default_name = "mem_initialized";
         Self {
@@ -485,7 +501,7 @@ mod tests {
     fn uninitialized() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
         let zero = BV::zero(btor.clone(), Memory::CELL_BITS);
@@ -520,7 +536,7 @@ mod tests {
     fn zero_initialized() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mem = Memory::new_zero_initialized(btor.clone(), true, None);
+        let mem = Memory::new_zero_initialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         let addr = BV::from_u64(btor.clone(), 0x10000, Memory::INDEX_BITS);
 
@@ -542,7 +558,7 @@ mod tests {
     fn read_and_write_to_cell_zero() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), false, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), false, None, Memory::INDEX_BITS);
 
         // Store a cell's worth of data to address 0
         let data_val = 0x1234_5678;
@@ -568,7 +584,7 @@ mod tests {
     fn read_and_write_cell_aligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store a cell's worth of data to a nonzero, but aligned, address
         let data_val = 0x1234_5678;
@@ -594,7 +610,7 @@ mod tests {
     fn read_and_write_small() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 8 bits of data to an aligned address
         let data_val = 0x4F;
@@ -620,7 +636,7 @@ mod tests {
     fn read_single_bit() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 8 bits of data to an aligned address
         let data_val = 0x55;
@@ -646,7 +662,7 @@ mod tests {
     fn read_and_write_unaligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
@@ -672,7 +688,7 @@ mod tests {
     fn read_and_write_across_cell_boundaries() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 64 bits of data such that half is in one cell and half in the next
         let data_val: u64 = 0x12345678_9abcdef0;
@@ -698,7 +714,7 @@ mod tests {
     fn read_and_write_symbolic_addr() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), false, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), false, None, Memory::INDEX_BITS);
 
         // Store 64 bits of data to a symbolic address
         let data_val: u64 = 0x12345678_9abcdef0;
@@ -724,7 +740,7 @@ mod tests {
     fn read_and_write_twocells() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store two cells' worth of data to an aligned address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -763,7 +779,7 @@ mod tests {
     fn read_and_write_200bits() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 200 bits of data to an aligned address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -809,7 +825,7 @@ mod tests {
     fn read_and_write_200bits_unaligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 200 bits of data to an unaligned address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -855,7 +871,7 @@ mod tests {
     fn read_and_write_200bits_symbolic_addr() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), false, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), false, None, Memory::INDEX_BITS);
 
         // Store 200 bits of data to a symbolic address
         let data_val_0: u64 = 0x12345678_9abcdef0;
@@ -901,7 +917,7 @@ mod tests {
     fn write_twice_read_once() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 8 bits of data
         let data_val = 0x4F;
@@ -932,7 +948,7 @@ mod tests {
     fn write_different_cells() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
@@ -973,7 +989,7 @@ mod tests {
     fn write_different_places_within_cell() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 32 bits of data to a cell
         let data_val = 0x1234_5678;
@@ -1014,7 +1030,7 @@ mod tests {
     fn write_small_read_big() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_zero_initialized(btor.clone(), true, None);
+        let mut mem = Memory::new_zero_initialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 8 bits of data to offset 1 in a cell
         let data_val = 0x4F;
@@ -1074,7 +1090,7 @@ mod tests {
     fn write_big_read_small() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Store 32 bits of data to offset 2 in a cell
         let data_val = 0x1234_5678;
@@ -1126,7 +1142,7 @@ mod tests {
     fn partial_overwrite_aligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Write an entire cell
         let data = BV::from_u64(btor.clone(), 0x12345678_12345678, Memory::CELL_BITS);
@@ -1167,7 +1183,7 @@ mod tests {
     fn partial_overwrite_unaligned() -> Result<()> {
         let _ = env_logger::builder().is_test(true).try_init();
         let btor = <Rc<Btor> as SolverRef>::new();
-        let mut mem = Memory::new_uninitialized(btor.clone(), true, None);
+        let mut mem = Memory::new_uninitialized(btor.clone(), true, None, Memory::INDEX_BITS);
 
         // Write an entire cell
         let data = BV::from_u64(btor.clone(), 0x12345678_12345678, Memory::CELL_BITS);

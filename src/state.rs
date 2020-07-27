@@ -2,6 +2,7 @@ use boolector::option::{BtorOption, ModelGen};
 use boolector::BVSolution;
 use either::Either;
 use itertools::Itertools;
+use llvm_ir::types::FPType;
 use llvm_ir::*;
 use log::{debug, info, warn};
 use reduce::Reduce;
@@ -20,7 +21,6 @@ use crate::error::*;
 use crate::function_hooks::{self, FunctionHooks};
 use crate::global_allocations::*;
 use crate::hooks;
-use crate::layout::*;
 use crate::project::Project;
 use crate::solver_utils::{self, PossibleSolutions};
 use crate::varmap::{RestoreInfo, VarMap};
@@ -42,6 +42,10 @@ pub struct State<'p, B: Backend> {
     mem: RefCell<B::Memory>,
     alloc: Alloc,
     global_allocations: GlobalAllocations<'p, B>,
+    /// Pointer size in bits.
+    /// E.g., this will be `64` if we're analyzing code which was compiled for a
+    /// 64-bit platform.
+    pointer_size_bits: u32,
     /// Separate from the user-defined hooks in the `config`, these are built-in
     /// hooks for LLVM intrinsics. They can be overridden by hooks in the
     /// `config`; see notes on function resolution in function_hooks.rs.
@@ -382,6 +386,7 @@ where
         }
         let mut state = Self {
             cur_loc: start_loc.clone(),
+            pointer_size_bits: project.pointer_size_bits(),
             varmap: VarMap::new(solver.clone(), config.loop_bound),
             mem: RefCell::new(Memory::new_uninitialized(
                 solver.clone(),
@@ -391,6 +396,7 @@ where
                     NullPointerChecking::None => false,
                 },
                 None,
+                project.pointer_size_bits(),
             )),
             alloc: Alloc::new(),
             global_allocations: GlobalAllocations::new(),
@@ -497,7 +503,7 @@ where
             // definitions, since each global variable must have exactly one
             // definition. Hence the `filter()` above.
             if let Type::PointerType { pointee_type, .. } = &var.ty {
-                let size_bits = size_opaque_aware(&*pointee_type, project).expect(
+                let size_bits = state.size_opaque_aware(&*pointee_type, project).expect(
                     "Global variable has a struct type which is opaque in the entire Project",
                 );
                 let size_bits = if size_bits == 0 {
@@ -842,11 +848,11 @@ where
         thing: &impl instruction::HasResult,
         resultval: B::BV,
     ) -> Result<()> {
-        if size(&thing.get_type()) as u32 != resultval.get_width() {
+        if self.size(&thing.get_type()) as u32 != resultval.get_width() {
             Err(Error::OtherError(format!(
                 "Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}",
                 thing,
-                size(&thing.get_type()),
+                self.size(&thing.get_type()),
                 resultval,
                 resultval.get_width()
             )))
@@ -889,7 +895,7 @@ where
         match c {
             Constant::Int { bits, value } => Ok(self.bv_from_u64(*value, *bits)),
             Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty) => {
-                Ok(self.zero(size(ty) as u32))
+                Ok(self.zero(self.size(ty) as u32))
             },
             Constant::Struct {
                 values: elements, ..
@@ -1068,31 +1074,31 @@ where
             },
             Constant::Trunc(t) => self
                 .const_to_bv(&t.operand)
-                .map(|bv| bv.slice(size(&t.to_type) as u32 - 1, 0)),
+                .map(|bv| bv.slice(self.size(&t.to_type) as u32 - 1, 0)),
             Constant::ZExt(z) => self
                 .const_to_bv(&z.operand)
-                .map(|bv| bv.zero_extend_to_bits(size(&z.to_type) as u32)),
+                .map(|bv| bv.zero_extend_to_bits(self.size(&z.to_type) as u32)),
             Constant::SExt(s) => self
                 .const_to_bv(&s.operand)
-                .map(|bv| bv.sign_extend_to_bits(size(&s.to_type) as u32)),
+                .map(|bv| bv.sign_extend_to_bits(self.size(&s.to_type) as u32)),
             Constant::PtrToInt(pti) => {
                 let bv = self.const_to_bv(&pti.operand)?;
-                assert_eq!(bv.get_width(), size(&pti.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&pti.to_type) as u32);
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::IntToPtr(itp) => {
                 let bv = self.const_to_bv(&itp.operand)?;
-                assert_eq!(bv.get_width(), size(&itp.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&itp.to_type) as u32);
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::BitCast(bc) => {
                 let bv = self.const_to_bv(&bc.operand)?;
-                assert_eq!(bv.get_width(), size(&bc.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&bc.to_type) as u32);
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::AddrSpaceCast(ac) => {
                 let bv = self.const_to_bv(&ac.operand)?;
-                assert_eq!(bv.get_width(), size(&ac.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&ac.to_type) as u32);
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::ICmp(icmp) => {
@@ -1198,14 +1204,14 @@ where
                 Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
                     let index = self.const_to_bv(index)?.zero_extend_to_bits(result_bits);
                     let (offset, nested_ty) =
-                        get_offset_bv_index(base_type, &index, self.solver.clone())?;
+                        self.get_offset_bv_index(base_type, &index, self.solver.clone())?;
                     self.get_offset_recursive(indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
                 },
                 Type::StructType { .. } => match index {
                     Constant::Int { value: index, .. } => {
                         let (offset, nested_ty) =
-                            get_offset_constant_index(base_type, *index as usize)?;
+                            self.get_offset_constant_index(base_type, *index as usize)?;
                         self.get_offset_recursive(indices, &nested_ty, result_bits)
                             .map(|bv| bv.add(&self.bv_from_u64(offset as u64, result_bits)))
                     },
@@ -1229,7 +1235,7 @@ where
                         // this code copied from the StructType case
                         match index {
                             Constant::Int { value: index, .. } => {
-                                let (offset, nested_ty) = get_offset_constant_index(base_type, *index as usize)?;
+                                let (offset, nested_ty) = self.get_offset_constant_index(base_type, *index as usize)?;
                                 self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&self.bv_from_u64(offset as u64, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
@@ -1442,10 +1448,8 @@ where
             };
             // Log the new value of the watched location (regardless of which part of the watched location the write may have touched).
             // Note that the write operation itself has already been performed, so we get the updated value with a `read()`.
-            let watchpoint_low = self.bv_from_u64(
-                watchpoint.get_lower_bound(),
-                crate::layout::POINTER_SIZE_BITS as u32,
-            );
+            let watchpoint_low =
+                self.bv_from_u64(watchpoint.get_lower_bound(), self.pointer_size_bits);
             let watchpoint_size_bits =
                 (watchpoint.get_upper_bound() - watchpoint.get_lower_bound() + 1) * 8;
             let new_value = self
@@ -1458,6 +1462,200 @@ where
             );
         }
         Ok(())
+    }
+
+    /// Get the size of the `Type`, in bits.
+    ///
+    /// Will panic if given an opaque struct type.
+    pub fn size(&self, ty: &Type) -> usize {
+        match ty {
+            Type::IntegerType { bits } => *bits as usize,
+            Type::PointerType { .. } => self.pointer_size_bits as usize,
+            Type::ArrayType {
+                element_type,
+                num_elements,
+            } => num_elements * self.size(element_type),
+            Type::VectorType {
+                element_type,
+                num_elements,
+            } => num_elements * self.size(element_type),
+            Type::StructType { element_types, .. } => {
+                element_types.iter().map(|ty| self.size(ty)).sum()
+            },
+            Type::NamedStructType { ty, .. } => self.size(
+                &ty.as_ref()
+                    .expect("Can't get size of an opaque struct type")
+                    .upgrade()
+                    .expect("Failed to upgrade weak reference")
+                    .read()
+                    .unwrap(),
+            ),
+            Type::FPType(fpt) => Self::fp_size(*fpt),
+            ty => panic!("Not sure how to get the size of {:?}", ty),
+        }
+    }
+
+    /// Get the size of the `Type`, in bits.
+    ///
+    /// Differs from the basic `size` method above in how it handles opaque struct
+    /// types.
+    /// While `size` will simply panic, this will search the given `Project` for a
+    /// definition of the struct and use that.
+    ///
+    /// Returns `None` for structs which have no definition in the entire `Project`,
+    /// or for structs/arrays/vectors where one of the elements is a struct with no
+    /// definition in the entire `Project`.
+    pub fn size_opaque_aware(&self, ty: &Type, proj: &Project) -> Option<usize> {
+        match ty {
+            ty @ Type::NamedStructType { .. } => self.size_opaque_aware(
+                &proj.get_inner_struct_type_from_named(ty)?.read().unwrap(),
+                proj,
+            ),
+            Type::ArrayType {
+                element_type,
+                num_elements,
+            } => self
+                .size_opaque_aware(element_type, proj)
+                .map(|s| s * num_elements),
+            Type::VectorType {
+                element_type,
+                num_elements,
+            } => self
+                .size_opaque_aware(element_type, proj)
+                .map(|s| s * num_elements),
+            Type::StructType { element_types, .. } => element_types
+                .iter()
+                .map(|ty| self.size_opaque_aware(ty, proj))
+                .sum(),
+            _ => Some(self.size(ty)), // for all other cases, just fall back on the basic size()
+        }
+    }
+
+    /// Get the size of the `FPType`, in bits
+    pub fn fp_size(fpt: FPType) -> usize {
+        match fpt {
+            FPType::Half => 16,
+            FPType::Single => 32,
+            FPType::Double => 64,
+            FPType::FP128 => 128,
+            FPType::X86_FP80 => 80,
+            FPType::PPC_FP128 => 128,
+        }
+    }
+
+    /// Get the offset (in _bytes_) of the element at the given index, as well as the
+    /// `Type` of the element at that index.
+    //
+    // TODO: how to return `&Type` here (like get_offset_bv_index below) despite the
+    // weak reference in the `NamedStructType` case
+    pub fn get_offset_constant_index(
+        &self,
+        base_type: &Type,
+        index: usize,
+    ) -> Result<(usize, Type)> {
+        match base_type {
+            Type::PointerType {
+                pointee_type: element_type,
+                ..
+            }
+            | Type::ArrayType { element_type, .. }
+            | Type::VectorType { element_type, .. } => {
+                let el_size_bits = self.size(element_type);
+                if el_size_bits % 8 != 0 {
+                    Err(Error::UnsupportedInstruction(format!(
+                        "Encountered a type with size {} bits",
+                        el_size_bits
+                    )))
+                } else {
+                    let el_size_bytes = el_size_bits / 8;
+                    Ok((index * el_size_bytes, (**element_type).clone()))
+                }
+            },
+            Type::StructType { element_types, .. } => {
+                let mut offset_bits = 0;
+                for ty in element_types.iter().take(index) {
+                    offset_bits += self.size(ty);
+                }
+                if offset_bits % 8 != 0 {
+                    Err(Error::UnsupportedInstruction(format!(
+                        "Struct offset of {} bits",
+                        offset_bits
+                    )))
+                } else {
+                    Ok((offset_bits / 8, element_types[index].clone()))
+                }
+            },
+            Type::NamedStructType { ty, .. } => {
+                let arc: Arc<RwLock<Type>> = ty
+                    .as_ref()
+                    .ok_or_else(|| {
+                        Error::MalformedInstruction(
+                            "get_offset on an opaque struct type".to_owned(),
+                        )
+                    })?
+                    .upgrade()
+                    .expect("Failed to upgrade weak reference");
+                let actual_ty: &Type = &arc.read().unwrap();
+                if let Type::StructType {
+                    ref element_types, ..
+                } = actual_ty
+                {
+                    // this code copied from the StructType case, unfortunately
+                    let mut offset_bits = 0;
+                    for ty in element_types.iter().take(index) {
+                        offset_bits += self.size(ty);
+                    }
+                    if offset_bits % 8 != 0 {
+                        Err(Error::UnsupportedInstruction(format!(
+                            "Struct offset of {} bits",
+                            offset_bits
+                        )))
+                    } else {
+                        Ok((offset_bits / 8, element_types[index].clone()))
+                    }
+                } else {
+                    Err(Error::MalformedInstruction(format!(
+                        "Expected NamedStructType inner type to be a StructType, but got {:?}",
+                        actual_ty
+                    )))
+                }
+            },
+            _ => panic!("get_offset_constant_index with base type {:?}", base_type),
+        }
+    }
+
+    /// Get the offset (in _bytes_) of the element at the given index, as well as a
+    /// reference to the `Type` of the element at that index.
+    ///
+    /// This function differs from `get_offset_constant_index` in that it takes an
+    /// arbitrary `BV` as index instead of a `usize`, and likewise returns its offset
+    /// as a `BV`.
+    ///
+    /// The result `BV` will have the same width as the input `index`.
+    pub fn get_offset_bv_index<'t, V: BV>(
+        &self,
+        base_type: &'t Type,
+        index: &V,
+        solver: V::SolverRef,
+    ) -> Result<(V, &'t Type)> {
+        match base_type {
+            Type::PointerType { pointee_type: element_type, .. }
+            | Type::ArrayType { element_type, .. }
+            | Type::VectorType { element_type, .. }
+            => {
+                let el_size_bits = self.size(element_type);
+                if el_size_bits % 8 != 0 {
+                    Err(Error::UnsupportedInstruction(format!("Encountered a type with size {} bits", el_size_bits)))
+                } else {
+                    let el_size_bytes = el_size_bits / 8;
+                    Ok((index.mul(&V::from_u64(solver, el_size_bytes as u64, index.get_width())), &element_type))
+                }
+            },
+            Type::StructType { .. } | Type::NamedStructType { .. } => {
+                Err(Error::MalformedInstruction("Index into struct type must be constant; consider using `get_offset_constant_index` instead of `get_offset_bv_index`".to_owned()))
+            },
+            _ => panic!("get_offset_bv_index with base type {:?}", base_type),
+        }
     }
 
     /// Add a memory watchpoint. It will be enabled unless/until

@@ -4,7 +4,6 @@ use crate::backend::{Backend, BV};
 use crate::error::*;
 use crate::function_hooks::IsCall;
 use crate::hook_utils;
-use crate::layout;
 use crate::project::Project;
 use crate::return_value::ReturnValue;
 use crate::state::State;
@@ -84,7 +83,7 @@ pub fn symex_bswap<'p, B: Backend>(
             element_type,
             num_elements,
         } => {
-            let element_size = layout::size_opaque_aware(&element_type, proj).ok_or(Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
+            let element_size = state.size_opaque_aware(&element_type, proj).ok_or(Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
             let final_bv = unary_on_vector(&arg, num_elements as u32, |element| {
                 bswap(element, element_size as u32)
             })?;
@@ -159,7 +158,7 @@ pub fn symex_objectsize<'p, B: Backend>(
     // intended answers for this intrinsic. Instead, we just always return
     // 'unknown', as this is valid behavior according to the LLVM spec.
     let arg1 = state.operand_to_bv(&call.get_arguments()[1].0)?;
-    let width = layout::size_opaque_aware(&call.get_type(), proj).ok_or(
+    let width = state.size_opaque_aware(&call.get_type(), proj).ok_or(
         Error::OtherError("symex_objectsize: return value of this call involves a struct type with no definition in the Project".into())
     )?;
     let zero = state.zero(width as u32);

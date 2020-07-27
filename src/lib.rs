@@ -33,7 +33,6 @@ pub mod function_hooks;
 mod global_allocations;
 pub mod hook_utils;
 mod hooks;
-pub mod layout;
 pub mod memory;
 pub mod simple_memory;
 pub mod solver_utils;
@@ -42,7 +41,6 @@ mod varmap;
 pub mod watchpoints;
 
 use backend::*;
-use layout::*;
 use solver_utils::PossibleSolutions;
 
 #[cfg(test)]
@@ -127,7 +125,7 @@ pub fn find_zero_of_func<'p>(
         }
     }
 
-    let returnwidth = size(&func.return_type);
+    let returnwidth = em.state().size(&func.return_type);
     let zero = em.state().zero(returnwidth as u32);
     let mut found = false;
     while let Some(bvretval) = em.next() {
@@ -222,13 +220,15 @@ pub fn get_possible_return_values_of_func<'p>(
         .expect("Failed to find function");
     for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
         if let Some(val) = arg {
-            let val = em.state().bv_from_u64(val, size(&param.ty) as u32);
+            let val = em
+                .state()
+                .bv_from_u64(val, em.state().size(&param.ty) as u32);
             em.mut_state()
                 .overwrite_latest_version_of_bv(&param.name, val);
         }
     }
 
-    let return_width = size(&func.return_type);
+    let return_width = em.state().size(&func.return_type);
     let mut candidate_values = HashSet::<ReturnValue<u64>>::new();
     let mut have_throw = false; // is there at least one `ReturnValue::Throw` in the `candidate_values`
     while let Some(bvretval) = em.next() {

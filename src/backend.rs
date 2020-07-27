@@ -322,8 +322,14 @@ pub trait Memory: Clone + PartialEq + Eq {
     /// if NULL is a possible solution for the address
     ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
-    fn new_uninitialized(solver: Self::SolverRef, null_detection: bool, name: Option<&str>)
-        -> Self;
+    ///
+    /// `addr_bits`: e.g. `64` for a `Memory` which uses 64-bit addresses
+    fn new_uninitialized(
+        solver: Self::SolverRef,
+        null_detection: bool,
+        name: Option<&str>,
+        addr_bits: u32,
+    ) -> Self;
 
     /// A new `Memory`, whose contents at all addresses are initialized to be `0`
     ///
@@ -332,10 +338,13 @@ pub trait Memory: Clone + PartialEq + Eq {
     /// if NULL is a possible solution for the address
     ///
     /// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, 'mem')
+    ///
+    /// `addr_bits`: e.g. `64` for a `Memory` which uses 64-bit addresses
     fn new_zero_initialized(
         solver: Self::SolverRef,
         null_detection: bool,
         name: Option<&str>,
+        addr_bits: u32,
     ) -> Self;
 
     /// Read any number (>0) of bits of memory, at any alignment.
@@ -600,11 +609,21 @@ impl Memory for crate::memory::Memory {
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
 
-    fn new_uninitialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
-        crate::memory::Memory::new_uninitialized(btor, null_detection, name)
+    fn new_uninitialized(
+        btor: Rc<Btor>,
+        null_detection: bool,
+        name: Option<&str>,
+        addr_bits: u32,
+    ) -> Self {
+        crate::memory::Memory::new_uninitialized(btor, null_detection, name, addr_bits)
     }
-    fn new_zero_initialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
-        crate::memory::Memory::new_zero_initialized(btor, null_detection, name)
+    fn new_zero_initialized(
+        btor: Rc<Btor>,
+        null_detection: bool,
+        name: Option<&str>,
+        addr_bits: u32,
+    ) -> Self {
+        crate::memory::Memory::new_zero_initialized(btor, null_detection, name, addr_bits)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
         self.read(index, bits)
@@ -625,11 +644,21 @@ impl Memory for crate::simple_memory::Memory {
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
 
-    fn new_uninitialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
-        crate::simple_memory::Memory::new_uninitialized(btor, null_detection, name)
+    fn new_uninitialized(
+        btor: Rc<Btor>,
+        null_detection: bool,
+        name: Option<&str>,
+        addr_bits: u32,
+    ) -> Self {
+        crate::simple_memory::Memory::new_uninitialized(btor, null_detection, name, addr_bits)
     }
-    fn new_zero_initialized(btor: Rc<Btor>, null_detection: bool, name: Option<&str>) -> Self {
-        crate::simple_memory::Memory::new_zero_initialized(btor, null_detection, name)
+    fn new_zero_initialized(
+        btor: Rc<Btor>,
+        null_detection: bool,
+        name: Option<&str>,
+        addr_bits: u32,
+    ) -> Self {
+        crate::simple_memory::Memory::new_zero_initialized(btor, null_detection, name, addr_bits)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
         self.read(index, bits)

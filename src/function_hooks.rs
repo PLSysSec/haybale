@@ -4,7 +4,6 @@ use crate::backend::Backend;
 use crate::demangling;
 use crate::error::*;
 use crate::hooks;
-use crate::layout;
 use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
@@ -461,7 +460,7 @@ pub fn generic_stub_hook<B: Backend>(
     match call.get_type() {
         Type::VoidType => Ok(ReturnValue::ReturnVoid),
         ty => {
-            let width = layout::size(&ty);
+            let width = state.size(&ty);
             let bv =
                 state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width as u32)?;
             Ok(ReturnValue::Return(bv))

@@ -3,6 +3,7 @@ CXX=$$LLVMPATH/bin/clang++
 CFLAGS=-O3
 RUSTC=rustc
 RUSTFLAGS=--crate-type=lib
+RUST32BIT=--target i686-unknown-linux-gnu
 
 .PHONY: all
 all: basic.bc basic.ll \
@@ -22,6 +23,7 @@ all: basic.bc basic.ll \
 			throwcatch.bc throwcatch.ll \
 			abort.bc abort.ll \
 			panic.bc panic.ll \
+			32bit/basic_rust.bc 32bit/basic_rust.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
@@ -46,6 +48,14 @@ all: basic.bc basic.ll \
 
 %.bc : %.rs
 	$(RUSTC) $(RUSTFLAGS) --emit=llvm-bc $^ -o $@
+
+32bit/%.ll : %.rs
+	mkdir -p 32bit
+	$(RUSTC) $(RUSTFLAGS) $(RUST32BIT) --emit=llvm-ir $^ -o $@
+
+32bit/%.bc : %.rs
+	mkdir -p 32bit
+	$(RUSTC) $(RUSTFLAGS) $(RUST32BIT) --emit=llvm-bc $^ -o $@
 
 # use -O1 on loop.c
 loop.ll : loop.c
