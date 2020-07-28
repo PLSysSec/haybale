@@ -134,13 +134,13 @@ will also analyze any functions called by `foo`, as necessary and depending
 on the [`Config`] settings.
 
 ```rust
-let mut em = symex_function("foo", &project, Config::<BtorBackend>::default());
+let mut em = symex_function("foo", &project, Config::<DefaultBackend>::default());
 ```
 
 Here it was necessary to not only specify the default `haybale`
 configuration, as we did when calling `find_zero_of_func()`, but also what
 "backend" we want to use.
-The default `BtorBackend` should be fine for most purposes.
+The `DefaultBackend` should be fine for most purposes.
 
 ### Paths
 

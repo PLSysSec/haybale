@@ -49,7 +49,7 @@ impl Memory {
         name: Option<&str>,
         addr_bits: u32,
     ) -> Self {
-        assert_eq!(addr_bits, Self::INDEX_BITS, "This `Memory` is only compatible with {}-bit pointers. Try `SimpleMemoryBackend` instead of `BtorBackend` for a `Memory` which works with more pointer sizes.", Self::INDEX_BITS);
+        assert_eq!(addr_bits, Self::INDEX_BITS, "This `Memory` is only compatible with {}-bit pointers. Try `DefaultBackend` instead of `CellMemoryBackend` for a `Memory` which works with more pointer sizes.", Self::INDEX_BITS);
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES; // 2 to this number gives the number of memory cells
         let default_name = "mem";
         Self {
@@ -95,7 +95,7 @@ impl Memory {
         name: Option<&str>,
         addr_bits: u32,
     ) -> Self {
-        assert_eq!(addr_bits, Self::INDEX_BITS, "This `Memory` is only compatible with {}-bit pointers. Try `SimpleMemoryBackend` instead of `BtorBackend` for a `Memory` which works with more pointer sizes.", Self::INDEX_BITS);
+        assert_eq!(addr_bits, Self::INDEX_BITS, "This `Memory` is only compatible with {}-bit pointers. Try `DefaultBackend` instead of `CellMemoryBackend` for a `Memory` which works with more pointer sizes.", Self::INDEX_BITS);
         let log_num_cells = Self::INDEX_BITS - Self::LOG_CELL_BYTES; // 2 to this number gives the number of memory cells
         let default_name = "mem_initialized";
         Self {

@@ -1,4 +1,4 @@
-use crate::memory::Memory;
+use crate::cell_memory::Memory;
 use log::{debug, warn};
 use std::collections::HashMap;
 

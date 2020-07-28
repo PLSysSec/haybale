@@ -33,7 +33,7 @@ pub mod function_hooks;
 mod global_allocations;
 pub mod hook_utils;
 mod hooks;
-pub mod memory;
+pub mod cell_memory;
 pub mod simple_memory;
 pub mod solver_utils;
 mod state;
@@ -111,9 +111,9 @@ impl SolutionValue {
 pub fn find_zero_of_func<'p>(
     funcname: &str,
     project: &'p Project,
-    config: Config<'p, BtorBackend>,
+    config: Config<'p, DefaultBackend>,
 ) -> std::result::Result<Option<Vec<SolutionValue>>, String> {
-    let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
+    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config);
 
     // constrain pointer arguments to be not-null
     let (func, _) = project
@@ -209,11 +209,11 @@ pub fn get_possible_return_values_of_func<'p>(
     funcname: &str,
     args: impl IntoIterator<Item = Option<u64>>,
     project: &'p Project,
-    config: Config<'p, BtorBackend>,
+    config: Config<'p, DefaultBackend>,
     thrown_size: Option<u32>,
     n: usize,
 ) -> PossibleSolutions<ReturnValue<u64>> {
-    let mut em: ExecutionManager<BtorBackend> = symex_function(funcname, project, config);
+    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config);
 
     let (func, _) = project
         .get_func_by_name(funcname)

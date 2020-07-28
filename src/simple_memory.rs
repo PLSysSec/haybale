@@ -1,7 +1,9 @@
 //! Simple implementation of a `Memory` based on a Boolector array and 8-bit cells.
-//! Like the more complicated `Memory` in `memory.rs`, this handles fully
+//! Like the more complicated `Memory` in `cell_memory.rs`, this handles fully
 //! general read and write operations: arbitrary addresses, sizes, and
 //! alignments.
+//! Despite being simpler, it seems to outperform the `Memory` in `cell_memory.rs`
+//! in many situations.
 
 use crate::backend::SolverRef;
 use crate::error::*;
@@ -224,7 +226,7 @@ impl Memory {
 }
 
 #[cfg(test)]
-/// These tests are adapted directly from those in memory.rs, because the two
+/// These tests are adapted directly from those in cell_memory.rs, because the two
 /// modules should have exactly the same behavior, potentially with different
 /// performance characteristics
 mod tests {

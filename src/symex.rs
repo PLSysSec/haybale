@@ -2503,7 +2503,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2524,7 +2524,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2552,7 +2552,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2585,7 +2585,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2657,7 +2657,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2697,7 +2697,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2735,7 +2735,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2780,7 +2780,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2832,7 +2832,7 @@ mod tests {
             loop_bound: 30,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2860,7 +2860,7 @@ mod tests {
             loop_bound: 30,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2911,7 +2911,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2943,7 +2943,7 @@ mod tests {
             max_callstack_depth: Some(0),
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2978,7 +2978,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3006,7 +3006,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3040,7 +3040,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3078,7 +3078,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3108,7 +3108,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3142,7 +3142,7 @@ mod tests {
             max_callstack_depth: Some(1),
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3178,7 +3178,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3223,7 +3223,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3263,7 +3263,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3370,7 +3370,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3451,7 +3451,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3655,7 +3655,7 @@ mod tests {
             loop_bound: 4,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3858,7 +3858,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -4008,7 +4008,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -4111,7 +4111,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<BtorBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();

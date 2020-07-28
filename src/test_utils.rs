@@ -1,10 +1,10 @@
-use crate::backend::BtorBackend;
+use crate::backend::DefaultBackend;
 use crate::{BBInstrIndex, Config, Location, Project, State};
 use llvm_ir::*;
 use std::collections::HashMap;
 
 /// utility to initialize a `State` out of a `Project` and a function name
-pub fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, BtorBackend> {
+pub fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, DefaultBackend> {
     let (func, module) = project
         .get_func_by_name(funcname)
         .expect("Failed to find function");

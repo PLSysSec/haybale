@@ -368,7 +368,7 @@ pub trait Memory: Clone + PartialEq + Eq {
 }
 
 /// Some prototypical `BV` and `Memory` implementations:
-///   `boolector::BV<Rc<Btor>>`, `crate::memory::Memory`, and `crate::simple_memory::Memory`
+///   `boolector::BV<Rc<Btor>>`, `crate::simple_memory::Memory`, and `crate::cell_memory::Memory`
 
 impl BV for boolector::BV<Rc<Btor>> {
     type SolverRef = Rc<Btor>;
@@ -604,7 +604,7 @@ impl BV for boolector::BV<Rc<Btor>> {
     }
 }
 
-impl Memory for crate::memory::Memory {
+impl Memory for crate::cell_memory::Memory {
     type SolverRef = Rc<Btor>;
     type Index = boolector::BV<Rc<Btor>>;
     type Value = boolector::BV<Rc<Btor>>;
@@ -615,7 +615,7 @@ impl Memory for crate::memory::Memory {
         name: Option<&str>,
         addr_bits: u32,
     ) -> Self {
-        crate::memory::Memory::new_uninitialized(btor, null_detection, name, addr_bits)
+        crate::cell_memory::Memory::new_uninitialized(btor, null_detection, name, addr_bits)
     }
     fn new_zero_initialized(
         btor: Rc<Btor>,
@@ -623,7 +623,7 @@ impl Memory for crate::memory::Memory {
         name: Option<&str>,
         addr_bits: u32,
     ) -> Self {
-        crate::memory::Memory::new_zero_initialized(btor, null_detection, name, addr_bits)
+        crate::cell_memory::Memory::new_zero_initialized(btor, null_detection, name, addr_bits)
     }
     fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
         self.read(index, bits)
@@ -675,18 +675,18 @@ impl Memory for crate::simple_memory::Memory {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct BtorBackend {}
+pub struct CellMemoryBackend {}
 
-impl Backend for BtorBackend {
+impl Backend for CellMemoryBackend {
     type SolverRef = Rc<Btor>;
     type BV = boolector::BV<Rc<Btor>>;
-    type Memory = crate::memory::Memory;
+    type Memory = crate::cell_memory::Memory;
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct SimpleMemoryBackend {}
+pub struct DefaultBackend {}
 
-impl Backend for SimpleMemoryBackend {
+impl Backend for DefaultBackend {
     type SolverRef = Rc<Btor>;
     type BV = boolector::BV<Rc<Btor>>;
     type Memory = crate::simple_memory::Memory;

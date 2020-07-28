@@ -20,6 +20,12 @@ fn get_basic_rust_project() -> Project {
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
+fn get_basic_rust_32bit_project() -> Project {
+    let modname = "tests/bcfiles/32bit/basic_rust.bc";
+    Project::from_bc_path(&Path::new(modname))
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
+}
+
 #[test]
 fn no_args_nozero() {
     let funcname = "no_args_nozero";
@@ -280,6 +286,25 @@ fn basic_rust() {
     let funcname = "basic_rust::ez";
     init_logging();
     let proj = get_basic_rust_project();
+    let ret = get_possible_return_values_of_func(
+        funcname,
+        vec![Some(1)],
+        &proj,
+        Config::default(),
+        None,
+        10,
+    );
+    assert_eq!(
+        ret,
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort)
+    );
+}
+
+#[test]
+fn basic_rust_32bit() {
+    let funcname = "basic_rust::ez";
+    init_logging();
+    let proj = get_basic_rust_32bit_project();
     let ret = get_possible_return_values_of_func(
         funcname,
         vec![Some(1)],
