@@ -126,7 +126,7 @@ pub fn find_zero_of_func<'p>(
     }
 
     let returnwidth = em.state().size(&func.return_type);
-    let zero = em.state().zero(returnwidth as u32);
+    let zero = em.state().zero(returnwidth);
     let mut found = false;
     while let Some(bvretval) = em.next() {
         match bvretval {
@@ -222,7 +222,7 @@ pub fn get_possible_return_values_of_func<'p>(
         if let Some(val) = arg {
             let val = em
                 .state()
-                .bv_from_u64(val, em.state().size(&param.ty) as u32);
+                .bv_from_u64(val, em.state().size(&param.ty));
             em.mut_state()
                 .overwrite_latest_version_of_bv(&param.name, val);
         }
@@ -252,7 +252,7 @@ pub fn get_possible_return_values_of_func<'p>(
                 for candidate in candidate_values.iter() {
                     if let ReturnValue::Return(candidate) = candidate {
                         bvretval
-                            ._ne(&state.bv_from_u64(*candidate, return_width as u32))
+                            ._ne(&state.bv_from_u64(*candidate, return_width))
                             .assert();
                     }
                 }
@@ -293,7 +293,7 @@ pub fn get_possible_return_values_of_func<'p>(
                         for candidate in candidate_values.iter() {
                             if let ReturnValue::Throw(candidate) = candidate {
                                 thrown_value
-                                    ._ne(&state.bv_from_u64(*candidate, return_width as u32))
+                                    ._ne(&state.bv_from_u64(*candidate, return_width))
                                     .assert();
                             }
                         }

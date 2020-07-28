@@ -53,7 +53,7 @@ pub fn symex_function<'p, B: Backend>(
                 .size_opaque_aware(&param.ty, project)
                 .expect("Parameter type is a struct opaque in the entire Project");
             state
-                .new_bv_with_name(param.name.clone(), param_size as u32)
+                .new_bv_with_name(param.name.clone(), param_size)
                 .unwrap()
         })
         .collect();
@@ -558,7 +558,7 @@ where
             Type::IntegerType { bits } => {
                 let bvop = self.state.operand_to_bv(&zext.operand)?;
                 let source_size = bits;
-                let dest_size = self.state.size(&zext.get_type()) as u32;
+                let dest_size = self.state.size(&zext.get_type());
                 self.state
                     .record_bv_result(zext, bvop.zext(dest_size - source_size))
             },
@@ -567,7 +567,7 @@ where
                 num_elements,
             } => {
                 let in_vector = self.state.operand_to_bv(&zext.operand)?;
-                let in_el_size = self.state.size(&element_type) as u32;
+                let in_el_size = self.state.size(&element_type);
                 let out_el_size = match zext.get_type() {
                     Type::VectorType {
                         element_type: out_el_type,
@@ -576,7 +576,7 @@ where
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("ZExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
-                        self.state.size(&out_el_type) as u32
+                        self.state.size(&out_el_type)
                     },
                     ty => {
                         return Err(Error::MalformedInstruction(format!(
@@ -603,7 +603,7 @@ where
             Type::IntegerType { bits } => {
                 let bvop = self.state.operand_to_bv(&sext.operand)?;
                 let source_size = bits;
-                let dest_size = self.state.size(&sext.get_type()) as u32;
+                let dest_size = self.state.size(&sext.get_type());
                 self.state
                     .record_bv_result(sext, bvop.sext(dest_size - source_size))
             },
@@ -612,7 +612,7 @@ where
                 num_elements,
             } => {
                 let in_vector = self.state.operand_to_bv(&sext.operand)?;
-                let in_el_size = self.state.size(&element_type) as u32;
+                let in_el_size = self.state.size(&element_type);
                 let out_el_size = match sext.get_type() {
                     Type::VectorType {
                         element_type: out_el_type,
@@ -621,7 +621,7 @@ where
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("SExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
-                        self.state.size(&out_el_type) as u32
+                        self.state.size(&out_el_type)
                     },
                     ty => {
                         return Err(Error::MalformedInstruction(format!(
@@ -647,7 +647,7 @@ where
         match trunc.operand.get_type() {
             Type::IntegerType { .. } => {
                 let bvop = self.state.operand_to_bv(&trunc.operand)?;
-                let dest_size = self.state.size(&trunc.get_type()) as u32;
+                let dest_size = self.state.size(&trunc.get_type());
                 self.state
                     .record_bv_result(trunc, bvop.slice(dest_size - 1, 0))
             },
@@ -661,7 +661,7 @@ where
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("Trunc operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
-                        self.state.size(&out_el_type) as u32
+                        self.state.size(&out_el_type)
                     },
                     ty => {
                         return Err(Error::MalformedInstruction(format!(
@@ -694,7 +694,7 @@ where
         let bvaddr = self.state.operand_to_bv(&load.address)?;
         let dest_size = self.state.size(&load.get_type());
         self.state
-            .record_bv_result(load, self.state.read(&bvaddr, dest_size as u32)?)
+            .record_bv_result(load, self.state.read(&bvaddr, dest_size)?)
     }
 
     fn symex_store(&mut self, store: &'p instruction::Store) -> Result<()> {
@@ -750,7 +750,7 @@ where
                             let (offset, nested_ty) =
                                 state.get_offset_constant_index(base_type, *index as usize)?;
                             Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                                .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
+                                .map(|bv| bv.add(&state.bv_from_u32(offset, result_bits)))
                         },
                         _ => Err(Error::MalformedInstruction(format!(
                             "Expected index into struct type to be constant, but got index {:?}",
@@ -774,7 +774,7 @@ where
                             Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
                                 let (offset, nested_ty) = state.get_offset_constant_index(actual_ty, *index as usize)?;
                                 Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                                    .map(|bv| bv.add(&state.bv_from_u32(offset as u32, result_bits)))
+                                    .map(|bv| bv.add(&state.bv_from_u32(offset, result_bits)))
                             },
                             _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
                         }
@@ -835,7 +835,7 @@ where
                                 index, num_elements
                             )))
                         } else {
-                            let el_size = self.state.size(&element_type) as u32;
+                            let el_size = self.state.size(&element_type);
                             self.state.record_bv_result(
                                 ee,
                                 vector.slice((index + 1) * el_size - 1, index * el_size),
@@ -874,7 +874,7 @@ where
                             )))
                         } else {
                             let vec_size = vector.get_width();
-                            let el_size = self.state.size(&element_type) as u32;
+                            let el_size = self.state.size(&element_type);
                             assert_eq!(vec_size, el_size * num_elements as u32);
                             let insertion_bitindex_low = index * el_size; // lowest bit number in the vector which will be overwritten
                             let insertion_bitindex_high = (index + 1) * el_size - 1; // highest bit number in the vector which will be overwritten
@@ -937,7 +937,7 @@ where
                 if op0.get_width() != op1.get_width() {
                     return Err(Error::OtherError(format!("ShuffleVector operands are the same type, but somehow we got two different sizes: {} bits and {} bits", op0.get_width(), op1.get_width())));
                 }
-                let el_size = self.state.size(&element_type) as u32;
+                let el_size = self.state.size(&element_type);
                 let num_elements = num_elements as u32;
                 assert_eq!(op0.get_width(), el_size * num_elements);
                 let final_bv = mask
@@ -972,10 +972,10 @@ where
         )?;
         let low_offset_bits = offset_bytes * 8; // inclusive
         let high_offset_bits = low_offset_bits + size_bits; // exclusive
-        assert!(aggregate.get_width() >= high_offset_bits as u32, "Trying to extractvalue from an aggregate with total size {} bits, extracting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits - 1);
+        assert!(aggregate.get_width() >= high_offset_bits, "Trying to extractvalue from an aggregate with total size {} bits, extracting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits - 1);
         self.state.record_bv_result(
             ev,
-            aggregate.slice((high_offset_bits - 1) as u32, low_offset_bits as u32),
+            aggregate.slice(high_offset_bits - 1, low_offset_bits),
         )
     }
 
@@ -989,14 +989,14 @@ where
         )?;
         let low_offset_bits = offset_bytes * 8; // inclusive
         let high_offset_bits = low_offset_bits + size_bits - 1; // inclusive
-        assert!(aggregate.get_width() >= high_offset_bits as u32, "Trying to insertvalue into an aggregate with total size {} bits, inserting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits);
+        assert!(aggregate.get_width() >= high_offset_bits, "Trying to insertvalue into an aggregate with total size {} bits, inserting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits);
 
         let new_aggregate = Self::overwrite_bv_segment(
             &mut self.state,
             &aggregate,
             element,
-            low_offset_bits as u32,
-            high_offset_bits as u32,
+            low_offset_bits,
+            high_offset_bits,
         );
 
         self.state.record_bv_result(iv, new_aggregate)
@@ -1009,7 +1009,7 @@ where
         &self,
         mut indices: impl Iterator<Item = usize>,
         base_type: &Type,
-    ) -> Result<(usize, usize)> {
+    ) -> Result<(u32, u32)> {
         match indices.next() {
             None => Ok((0, self.state.size(base_type))),
             Some(index) => {
@@ -1170,7 +1170,7 @@ where
                             let width = self.state.size(&ty);
                             let bv = self.state.new_bv_with_name(
                                 Name::from(format!("{}_retval", called_funcname)),
-                                width as u32,
+                                width,
                             )?;
                             self.state
                                 .assign_bv_to_name(call.dest.as_ref().unwrap().clone(), bv)?;
@@ -1571,7 +1571,7 @@ where
                     )))
                 } else {
                     let retwidth = self.state.size(&ret_type);
-                    if retval.get_width() != retwidth as u32 {
+                    if retval.get_width() != retwidth {
                         Err(Error::HookReturnValueMismatch(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", hooked_funcname, retval.get_width(), retwidth)))
                     } else {
                         Ok(ReturnValue::Return(retval))
@@ -1783,7 +1783,7 @@ where
                             let width = self.state.size(&ty);
                             let bv = self.state.new_bv_with_name(
                                 Name::from(format!("{}_retval", called_funcname)),
-                                width as u32,
+                                width,
                             )?;
                             self.state.assign_bv_to_name(invoke.result.clone(), bv)?;
                         },
@@ -2032,7 +2032,7 @@ where
                     return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct of 2 elements, got a struct of {} elements: {:?}", element_types.len(), element_types)));
                 }
                 match &element_types[0] {
-                    ty@Type::PointerType { .. } => assert_eq!(thrown_ptr.get_width(), self.state.size(ty) as u32, "Expected thrown_ptr to be a pointer, got a value of width {:?}", thrown_ptr.get_width()),
+                    ty@Type::PointerType { .. } => assert_eq!(thrown_ptr.get_width(), self.state.size(ty), "Expected thrown_ptr to be a pointer, got a value of width {:?}", thrown_ptr.get_width()),
                     ty => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct with first element a pointer, got first element {:?}", ty))),
                 }
                 match &element_types[1] {
@@ -2123,7 +2123,7 @@ where
                         if num_elements != op_num_els {
                             return Err(Error::MalformedInstruction(format!("Select condition is a vector of {} elements but operands are vectors with {} elements", num_elements, op_num_els)));
                         }
-                        self.state.size(&op_el_type) as u32
+                        self.state.size(&op_el_type)
                     },
                     _ => return Err(Error::MalformedInstruction(format!("Expected Select with vector condition to have vector operands, but operands are of type {:?}", optype))),
                 };

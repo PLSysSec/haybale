@@ -9,7 +9,7 @@ use crate::state::State;
 use llvm_ir::Operand;
 use log::{debug, info, warn};
 use reduce::Reduce;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 /// Set `num_bytes` bytes of memory at address `addr` each to the value `val`.
 /// Each individual byte will be set to `val`, so only the lowest 8 bits of `val`
@@ -144,8 +144,9 @@ pub fn memcpy_bv<B: Backend>(
                 "Processing a memcpy or memmove of size {} bytes",
                 length_bytes
             );
+            let length_bytes: u32 = length_bytes.try_into().unwrap();
             // Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.
-            let val = state.read(&src, length_bytes as u32 * 8)?;
+            let val = state.read(&src, length_bytes * 8)?;
             state.write(&dest, val)?;
         },
         MemcpyLength::Symbolic => {

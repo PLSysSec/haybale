@@ -8,6 +8,7 @@ use log::{debug, info, warn};
 use reduce::Reduce;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -848,7 +849,7 @@ where
         thing: &impl instruction::HasResult,
         resultval: B::BV,
     ) -> Result<()> {
-        if self.size(&thing.get_type()) as u32 != resultval.get_width() {
+        if self.size(&thing.get_type()) != resultval.get_width() {
             Err(Error::OtherError(format!(
                 "Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}",
                 thing,
@@ -895,7 +896,7 @@ where
         match c {
             Constant::Int { bits, value } => Ok(self.bv_from_u64(*value, *bits)),
             Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty) => {
-                Ok(self.zero(self.size(ty) as u32))
+                Ok(self.zero(self.size(ty)))
             },
             Constant::Struct {
                 values: elements, ..
@@ -1074,31 +1075,31 @@ where
             },
             Constant::Trunc(t) => self
                 .const_to_bv(&t.operand)
-                .map(|bv| bv.slice(self.size(&t.to_type) as u32 - 1, 0)),
+                .map(|bv| bv.slice(self.size(&t.to_type) - 1, 0)),
             Constant::ZExt(z) => self
                 .const_to_bv(&z.operand)
-                .map(|bv| bv.zero_extend_to_bits(self.size(&z.to_type) as u32)),
+                .map(|bv| bv.zero_extend_to_bits(self.size(&z.to_type))),
             Constant::SExt(s) => self
                 .const_to_bv(&s.operand)
-                .map(|bv| bv.sign_extend_to_bits(self.size(&s.to_type) as u32)),
+                .map(|bv| bv.sign_extend_to_bits(self.size(&s.to_type))),
             Constant::PtrToInt(pti) => {
                 let bv = self.const_to_bv(&pti.operand)?;
-                assert_eq!(bv.get_width(), self.size(&pti.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&pti.to_type));
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::IntToPtr(itp) => {
                 let bv = self.const_to_bv(&itp.operand)?;
-                assert_eq!(bv.get_width(), self.size(&itp.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&itp.to_type));
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::BitCast(bc) => {
                 let bv = self.const_to_bv(&bc.operand)?;
-                assert_eq!(bv.get_width(), self.size(&bc.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&bc.to_type));
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::AddrSpaceCast(ac) => {
                 let bv = self.const_to_bv(&ac.operand)?;
-                assert_eq!(bv.get_width(), self.size(&ac.to_type) as u32);
+                assert_eq!(bv.get_width(), self.size(&ac.to_type));
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::ICmp(icmp) => {
@@ -1467,18 +1468,21 @@ where
     /// Get the size of the `Type`, in bits.
     ///
     /// Will panic if given an opaque struct type.
-    pub fn size(&self, ty: &Type) -> usize {
+    pub fn size(&self, ty: &Type) -> u32 {
         match ty {
-            Type::IntegerType { bits } => *bits as usize,
-            Type::PointerType { .. } => self.pointer_size_bits as usize,
+            Type::IntegerType { bits } => *bits,
+            Type::PointerType { .. } => self.pointer_size_bits,
             Type::ArrayType {
                 element_type,
                 num_elements,
-            } => num_elements * self.size(element_type),
-            Type::VectorType {
+            }
+            | Type::VectorType {
                 element_type,
                 num_elements,
-            } => num_elements * self.size(element_type),
+            } => {
+                let num_elements: u32 = (*num_elements).try_into().unwrap();
+                num_elements * self.size(element_type)
+            },
             Type::StructType { element_types, .. } => {
                 element_types.iter().map(|ty| self.size(ty)).sum()
             },
@@ -1505,7 +1509,7 @@ where
     /// Returns `None` for structs which have no definition in the entire `Project`,
     /// or for structs/arrays/vectors where one of the elements is a struct with no
     /// definition in the entire `Project`.
-    pub fn size_opaque_aware(&self, ty: &Type, proj: &Project) -> Option<usize> {
+    pub fn size_opaque_aware(&self, ty: &Type, proj: &Project) -> Option<u32> {
         match ty {
             ty @ Type::NamedStructType { .. } => self.size_opaque_aware(
                 &proj.get_inner_struct_type_from_named(ty)?.read().unwrap(),
@@ -1514,15 +1518,16 @@ where
             Type::ArrayType {
                 element_type,
                 num_elements,
-            } => self
-                .size_opaque_aware(element_type, proj)
-                .map(|s| s * num_elements),
-            Type::VectorType {
+            }
+            | Type::VectorType {
                 element_type,
                 num_elements,
-            } => self
-                .size_opaque_aware(element_type, proj)
-                .map(|s| s * num_elements),
+            } => {
+                let num_elements: u32 = (*num_elements).try_into().unwrap();
+                self
+                    .size_opaque_aware(element_type, proj)
+                    .map(|s| s * num_elements)
+            },
             Type::StructType { element_types, .. } => element_types
                 .iter()
                 .map(|ty| self.size_opaque_aware(ty, proj))
@@ -1532,7 +1537,7 @@ where
     }
 
     /// Get the size of the `FPType`, in bits
-    pub fn fp_size(fpt: FPType) -> usize {
+    pub fn fp_size(fpt: FPType) -> u32 {
         match fpt {
             FPType::Half => 16,
             FPType::Single => 32,
@@ -1552,7 +1557,7 @@ where
         &self,
         base_type: &Type,
         index: usize,
-    ) -> Result<(usize, Type)> {
+    ) -> Result<(u32, Type)> {
         match base_type {
             Type::PointerType {
                 pointee_type: element_type,
@@ -1568,6 +1573,7 @@ where
                     )))
                 } else {
                     let el_size_bytes = el_size_bits / 8;
+                    let index: u32 = index.try_into().unwrap();
                     Ok((index * el_size_bytes, (**element_type).clone()))
                 }
             },

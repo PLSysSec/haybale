@@ -462,7 +462,7 @@ pub fn generic_stub_hook<B: Backend>(
         ty => {
             let width = state.size(&ty);
             let bv =
-                state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width as u32)?;
+                state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width)?;
             Ok(ReturnValue::Return(bv))
         },
     }

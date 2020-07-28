@@ -9,6 +9,7 @@ use crate::return_value::ReturnValue;
 use crate::state::State;
 use crate::symex::unary_on_vector;
 use llvm_ir::{Type, Typed};
+use std::convert::TryInto;
 
 pub fn symex_memset<'p, B: Backend>(
     _proj: &'p Project,
@@ -84,8 +85,8 @@ pub fn symex_bswap<'p, B: Backend>(
             num_elements,
         } => {
             let element_size = state.size_opaque_aware(&element_type, proj).ok_or(Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
-            let final_bv = unary_on_vector(&arg, num_elements as u32, |element| {
-                bswap(element, element_size as u32)
+            let final_bv = unary_on_vector(&arg, num_elements.try_into().unwrap(), |element| {
+                bswap(element, element_size)
             })?;
             Ok(ReturnValue::Return(final_bv))
         },
@@ -161,8 +162,8 @@ pub fn symex_objectsize<'p, B: Backend>(
     let width = state.size_opaque_aware(&call.get_type(), proj).ok_or(
         Error::OtherError("symex_objectsize: return value of this call involves a struct type with no definition in the Project".into())
     )?;
-    let zero = state.zero(width as u32);
-    let minusone = state.ones(width as u32);
+    let zero = state.zero(width);
+    let minusone = state.ones(width);
     Ok(ReturnValue::Return(arg1.cond_bv(&zero, &minusone)))
 }
 
