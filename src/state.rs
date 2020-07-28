@@ -1524,8 +1524,7 @@ where
                 num_elements,
             } => {
                 let num_elements: u32 = (*num_elements).try_into().unwrap();
-                self
-                    .size_opaque_aware(element_type, proj)
+                self.size_opaque_aware(element_type, proj)
                     .map(|s| s * num_elements)
             },
             Type::StructType { element_types, .. } => element_types
@@ -1553,11 +1552,7 @@ where
     //
     // TODO: how to return `&Type` here (like get_offset_bv_index below) despite the
     // weak reference in the `NamedStructType` case
-    pub fn get_offset_constant_index(
-        &self,
-        base_type: &Type,
-        index: usize,
-    ) -> Result<(u32, Type)> {
+    pub fn get_offset_constant_index(&self, base_type: &Type, index: usize) -> Result<(u32, Type)> {
         match base_type {
             Type::PointerType {
                 pointee_type: element_type,
@@ -2235,10 +2230,7 @@ mod tests {
             .get_possible_solutions_for_bv(&x, 2)
             .unwrap()
             .as_u64_solutions();
-        assert_eq!(
-            solutions,
-            Some([4, 5].iter().copied().collect())
-        );
+        assert_eq!(solutions, Some([4, 5].iter().copied().collect()));
 
         // add x < 5 constraint
         x.ult(&state.bv_from_u64(5, 64)).assert();
@@ -2248,10 +2240,7 @@ mod tests {
             .get_possible_solutions_for_bv(&x, 2)
             .unwrap()
             .as_u64_solutions();
-        assert_eq!(
-            solutions,
-            Some(PossibleSolutions::exactly_one(4)),
-        );
+        assert_eq!(solutions, Some(PossibleSolutions::exactly_one(4)));
 
         // add x < 3 constraint
         x.ult(&state.bv_from_u64(3, 64)).assert();

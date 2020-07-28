@@ -973,10 +973,8 @@ where
         let low_offset_bits = offset_bytes * 8; // inclusive
         let high_offset_bits = low_offset_bits + size_bits; // exclusive
         assert!(aggregate.get_width() >= high_offset_bits, "Trying to extractvalue from an aggregate with total size {} bits, extracting offset {} bits to {} bits (inclusive) is out of bounds", aggregate.get_width(), low_offset_bits, high_offset_bits - 1);
-        self.state.record_bv_result(
-            ev,
-            aggregate.slice(high_offset_bits - 1, low_offset_bits),
-        )
+        self.state
+            .record_bv_result(ev, aggregate.slice(high_offset_bits - 1, low_offset_bits))
     }
 
     fn symex_insertvalue(&mut self, iv: &'p instruction::InsertValue) -> Result<()> {

@@ -27,13 +27,13 @@ mod alloc;
 pub mod alloc_utils;
 pub mod backend;
 pub mod callbacks;
+pub mod cell_memory;
 mod demangling;
 mod double_keyed_map;
 pub mod function_hooks;
 mod global_allocations;
 pub mod hook_utils;
 mod hooks;
-pub mod cell_memory;
 pub mod simple_memory;
 pub mod solver_utils;
 mod state;
@@ -220,9 +220,7 @@ pub fn get_possible_return_values_of_func<'p>(
         .expect("Failed to find function");
     for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
         if let Some(val) = arg {
-            let val = em
-                .state()
-                .bv_from_u64(val, em.state().size(&param.ty));
+            let val = em.state().bv_from_u64(val, em.state().size(&param.ty));
             em.mut_state()
                 .overwrite_latest_version_of_bv(&param.name, val);
         }

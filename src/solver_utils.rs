@@ -750,10 +750,7 @@ mod tests {
         let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2)
             .unwrap()
             .as_u64_solutions();
-        assert_eq!(
-            solutions,
-            Some([4, 5].iter().copied().collect())
-        );
+        assert_eq!(solutions, Some([4, 5].iter().copied().collect()));
 
         // add x < 5 constraint
         x.ult(&BV::from_u64(btor.clone(), 5, 64)).assert();
@@ -762,10 +759,7 @@ mod tests {
         let solutions = get_possible_solutions_for_bv(btor.clone(), &x, 2)
             .unwrap()
             .as_u64_solutions();
-        assert_eq!(
-            solutions,
-            Some(PossibleSolutions::exactly_one(4)),
-        );
+        assert_eq!(solutions, Some(PossibleSolutions::exactly_one(4)));
 
         // add x < 3 constraint
         x.ult(&BV::from_u64(btor.clone(), 3, 64)).assert();

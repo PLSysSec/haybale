@@ -35,16 +35,23 @@ impl Project {
         let (modules, ptr_sizes): (Vec<Module>, Vec<u32>) = paths
             .into_iter()
             .map(|p| Module::from_bc_path(p.as_ref()))
-            .map(|r| r.map(|m| {
-                let ptr_size = get_ptr_size(&m);
-                (m, ptr_size)
-            }))
+            .map(|r| {
+                r.map(|m| {
+                    let ptr_size = get_ptr_size(&m);
+                    (m, ptr_size)
+                })
+            })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .unzip();
         let mut ptr_sizes = ptr_sizes.into_iter();
-        let pointer_size_bits = ptr_sizes.next().expect("Project::from_bc_paths: at least one path is required");
-        assert!(ptr_sizes.all(|size| size == pointer_size_bits), "Project::from_bc_paths: modules have conflicting pointer sizes");
+        let pointer_size_bits = ptr_sizes
+            .next()
+            .expect("Project::from_bc_paths: at least one path is required");
+        assert!(
+            ptr_sizes.all(|size| size == pointer_size_bits),
+            "Project::from_bc_paths: modules have conflicting pointer sizes"
+        );
         Ok(Self {
             modules,
             pointer_size_bits,
@@ -59,7 +66,10 @@ impl Project {
     pub fn from_bc_dir(path: impl AsRef<Path>, extn: &str) -> Result<Self, io::Error> {
         info!("Parsing bitcode from directory {}", path.as_ref().display());
         let (modules, pointer_size_bits) = Self::modules_from_bc_dir(path, extn, |_| false)?;
-        Ok(Self { modules, pointer_size_bits })
+        Ok(Self {
+            modules,
+            pointer_size_bits,
+        })
     }
 
     /// Construct a new `Project` from a path to a directory containing LLVM
@@ -78,14 +88,21 @@ impl Project {
             path.as_ref().display()
         );
         let (modules, pointer_size_bits) = Self::modules_from_bc_dir(path, extn, exclude)?;
-        Ok(Self { modules, pointer_size_bits })
+        Ok(Self {
+            modules,
+            pointer_size_bits,
+        })
     }
 
     /// Add the code in the given LLVM bitcode file to the `Project`
     pub fn add_bc_path(&mut self, path: impl AsRef<Path>) -> Result<(), String> {
         info!("Parsing bitcode in file {}", path.as_ref().display());
         let module = Module::from_bc_path(path)?;
-        assert_eq!(get_ptr_size(&module), self.pointer_size_bits, "Modules have conflicting pointer sizes");
+        assert_eq!(
+            get_ptr_size(&module),
+            self.pointer_size_bits,
+            "Modules have conflicting pointer sizes"
+        );
         self.modules.push(module);
         Ok(())
     }
@@ -95,7 +112,10 @@ impl Project {
     pub fn add_bc_dir(&mut self, path: impl AsRef<Path>, extn: &str) -> Result<(), io::Error> {
         info!("Parsing bitcode from directory {}", path.as_ref().display());
         let (modules, pointer_size_bits) = Self::modules_from_bc_dir(path, extn, |_| false)?;
-        assert_eq!(pointer_size_bits, self.pointer_size_bits, "Modules have conflicting pointer sizes");
+        assert_eq!(
+            pointer_size_bits, self.pointer_size_bits,
+            "Modules have conflicting pointer sizes"
+        );
         self.modules.extend(modules);
         Ok(())
     }
@@ -113,7 +133,10 @@ impl Project {
             path.as_ref().display()
         );
         let (modules, pointer_size_bits) = Self::modules_from_bc_dir(path, extn, exclude)?;
-        assert_eq!(pointer_size_bits, self.pointer_size_bits, "Modules have conflicting pointer sizes");
+        assert_eq!(
+            pointer_size_bits, self.pointer_size_bits,
+            "Modules have conflicting pointer sizes"
+        );
         self.modules.extend(modules);
         Ok(())
     }
@@ -339,7 +362,8 @@ impl Project {
         exclude: impl Fn(&Path) -> bool,
     ) -> Result<(Vec<Module>, u32), io::Error> {
         // warning, we use both `Iterator::map` and `Result::map` in here, and it's easy to get them confused
-        let (modules, ptr_sizes): (Vec<Module>, Vec<u32>) = path.as_ref()
+        let (modules, ptr_sizes): (Vec<Module>, Vec<u32>) = path
+            .as_ref()
             .read_dir()?
             .filter(|entry| match entry_is_dir(entry) {
                 Some(true) => false, // filter out if it is a directory
@@ -359,16 +383,21 @@ impl Project {
                     Module::from_bc_path(path).map_err(|s| io::Error::new(io::ErrorKind::Other, s))
                 })
             })
-            .map(|r| r.map(|m| {
-                let ptr_size = get_ptr_size(&m);
-                (m, ptr_size)
-            }))
+            .map(|r| {
+                r.map(|m| {
+                    let ptr_size = get_ptr_size(&m);
+                    (m, ptr_size)
+                })
+            })
             .collect::<Result<Vec<(Module, u32)>, _>>()?
             .into_iter()
             .unzip();
         let mut ptr_sizes = ptr_sizes.into_iter();
         let pointer_size_bits = ptr_sizes.next().expect("at least one path is required");
-        assert!(ptr_sizes.all(|size| size == pointer_size_bits), "modules have conflicting pointer sizes");
+        assert!(
+            ptr_sizes.all(|size| size == pointer_size_bits),
+            "modules have conflicting pointer sizes"
+        );
         Ok((modules, pointer_size_bits))
     }
 
@@ -402,10 +431,10 @@ fn get_ptr_size(module: &Module) -> u32 {
     let default = 64;
     let d = &module.data_layout;
     d.find("-p").map_or(default, |idx| {
-        d.get(idx..).map_or(default, |substr| {
+        d.get(idx ..).map_or(default, |substr| {
             substr.find(":").map_or(default, |colon_idx| {
                 let start = colon_idx + idx + 1;
-                d.get(start..start + 2).map_or(default, |ptr_width_str| {
+                d.get(start .. start + 2).map_or(default, |ptr_width_str| {
                     ptr_width_str.parse::<u32>().unwrap_or(default)
                 })
             })
