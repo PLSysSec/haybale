@@ -2237,7 +2237,7 @@ mod tests {
             .as_u64_solutions();
         assert_eq!(
             solutions,
-            Some(PossibleSolutions::Exactly(vec![4, 5].into_iter().collect()))
+            Some([4, 5].iter().copied().collect())
         );
 
         // add x < 5 constraint
@@ -2250,7 +2250,7 @@ mod tests {
             .as_u64_solutions();
         assert_eq!(
             solutions,
-            Some(PossibleSolutions::Exactly(std::iter::once(4).collect()))
+            Some(PossibleSolutions::exactly_one(4)),
         );
 
         // add x < 3 constraint
@@ -2261,7 +2261,7 @@ mod tests {
             .get_possible_solutions_for_bv(&x, 2)
             .unwrap()
             .as_u64_solutions();
-        assert_eq!(solutions, Some(PossibleSolutions::Exactly(HashSet::new())));
+        assert_eq!(solutions, Some(PossibleSolutions::empty()));
 
         Ok(())
     }

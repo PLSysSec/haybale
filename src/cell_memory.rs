@@ -478,8 +478,6 @@ mod tests {
     use crate::solver_utils::{self, PossibleSolutions};
     use boolector::option::{BtorOption, ModelGen};
     use boolector::{BVSolution, BV};
-    use std::collections::HashSet;
-    use std::iter::FromIterator;
     use std::rc::Rc;
 
     // Basically the `get_a_solution_for_bv()` method from `State`,
@@ -546,10 +544,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0));
 
         Ok(())
     }
@@ -572,10 +567,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
 
         Ok(())
     }
@@ -598,10 +590,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
 
         Ok(())
     }
@@ -624,10 +613,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
 
         Ok(())
     }
@@ -650,10 +636,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(1)))
-        ); // we should read the least significant bit, which should have value 1
+        assert_eq!(ps, PossibleSolutions::exactly_one(1)); // we should read the least significant bit, which should have value 1
 
         Ok(())
     }
@@ -676,10 +659,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
 
         Ok(())
     }
@@ -702,10 +682,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
 
         Ok(())
     }
@@ -728,10 +705,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
 
         Ok(())
     }
@@ -936,10 +910,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
 
         Ok(())
     }
@@ -968,19 +939,13 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
         let read_bv = mem.read(&addr_2, 32)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val_2)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val_2));
 
         Ok(())
     }
@@ -1009,19 +974,13 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val));
         let read_bv = mem.read(&addr_2, 32)?;
         assert_eq!(solver_utils::sat(&btor), Ok(true));
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(data_val_2)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(data_val_2));
 
         Ok(())
     }
@@ -1046,10 +1005,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x4F00)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x4F00));
 
         // Ensure that reading extra bits adds zeroed high-order bits
         let read_bv = mem.read(&unaligned, 16)?;
@@ -1057,10 +1013,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x004F)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x004F));
 
         // Ensure that reading elsewhere gives all zeroes
         let garbage_addr_1 = BV::from_u64(btor.clone(), 0x10004, Memory::INDEX_BITS);
@@ -1074,14 +1027,8 @@ mod tests {
         let ps_2 = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv_2, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps_1,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0)))
-        );
-        assert_eq!(
-            ps_2,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0)))
-        );
+        assert_eq!(ps_1, PossibleSolutions::exactly_one(0));
+        assert_eq!(ps_2, PossibleSolutions::exactly_one(0));
 
         Ok(())
     }
@@ -1105,10 +1052,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x78)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x78));
 
         // Ensure that reading 8 bits from offset 5 gives the high-order byte
         // (we are little-endian)
@@ -1118,10 +1062,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x12));
 
         // Ensure that reading 16 bits from offset 3 gives the middle two bytes
         let offset_3 = BV::from_u64(btor.clone(), 0x10003, Memory::INDEX_BITS);
@@ -1130,10 +1071,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x3456)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x3456));
 
         Ok(())
     }
@@ -1160,10 +1098,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(overwrite_data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(overwrite_data_val));
 
         // Ensure that reading the whole cell back reflects the partial overwrite
         let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
@@ -1171,10 +1106,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12345678_1234dcba)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x12345678_1234dcba));
 
         Ok(())
     }
@@ -1202,10 +1134,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(overwrite_data_val)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(overwrite_data_val));
 
         // Ensure that reading the whole cell back reflects the partial overwrite
         let read_bv = mem.read(&addr, Memory::CELL_BITS)?;
@@ -1213,10 +1142,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x12345678_dcba5678)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x12345678_dcba5678));
 
         // Now a different partial read with some original data and some overwritten
         let new_addr = BV::from_u64(btor.clone(), 0x10003, Memory::INDEX_BITS);
@@ -1225,10 +1151,7 @@ mod tests {
         let ps = solver_utils::get_possible_solutions_for_bv(btor.clone(), &read_bv, 1)?
             .as_u64_solutions()
             .unwrap();
-        assert_eq!(
-            ps,
-            PossibleSolutions::Exactly(HashSet::from_iter(std::iter::once(0x78dc)))
-        );
+        assert_eq!(ps, PossibleSolutions::exactly_one(0x78dc));
 
         Ok(())
     }
