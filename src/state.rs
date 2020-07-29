@@ -533,8 +533,8 @@ where
         // so that we can have pointers to those hooks.
         debug!("Allocating functions");
         for (func, module) in project.all_functions() {
-            let addr: u64 = state.alloc.alloc(64 as u64); // we just allocate 64 bits for each function. No reason to allocate more.
-            let addr_bv = state.bv_from_u64(addr, 64);
+            let addr: u64 = state.alloc.alloc(64_u64); // we just allocate 64 bits for each function. No reason to allocate more.
+            let addr_bv = state.bv_from_u64(addr, project.pointer_size_bits());
             debug!("Allocated {:?} at {:?}", func.name, addr_bv);
             state
                 .global_allocations
@@ -542,8 +542,8 @@ where
         }
         debug!("Allocating function hooks");
         for (funcname, hook) in state.config.function_hooks.get_all_hooks() {
-            let addr: u64 = state.alloc.alloc(64 as u64); // we just allocate 64 bits for each function. No reason to allocate more.
-            let addr_bv = state.bv_from_u64(addr, 64);
+            let addr: u64 = state.alloc.alloc(64_u64); // we just allocate 64 bits for each function. No reason to allocate more.
+            let addr_bv = state.bv_from_u64(addr, project.pointer_size_bits());
             debug!("Allocated hook for {:?} at {:?}", funcname, addr_bv);
             state
                 .global_allocations
@@ -1703,7 +1703,7 @@ where
     /// Allocate a value of size `bits`; return a pointer to the newly allocated object
     pub fn allocate(&mut self, bits: impl Into<u64>) -> B::BV {
         let raw_ptr = self.alloc.alloc(bits);
-        self.bv_from_u64(raw_ptr, 64)
+        self.bv_from_u64(raw_ptr, self.pointer_size_bits)
     }
 
     /// Get the size, in bits, of the allocation at the given address, or `None`
