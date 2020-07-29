@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.4.0"
+haybale = "0.5.0"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 10 and Boolector libraries, which
@@ -291,6 +291,39 @@ LLVM 7 and earlier are not supported.
 solver (via the Rust [`boolector`] crate).
 
 ## Changelog
+
+### Version 0.5.0 (Jul 29, 2020)
+
+Compatibility:
+- `haybale` now depends on LLVM 10 by default (up from LLVM 9). LLVM 9 is
+still supported on a separate branch; see "Compatibility" above.
+- Updated `boolector` dependency to crate version 0.4.0, which requires
+Boolector version 3.2.1 (up from 3.1.0).
+
+Renames which affect the public API:
+- Rename `SimpleMemoryBackend` to `DefaultBackend` and make it default.
+Rename `BtorBackend` to `CellMemoryBackend`, and the `memory` module to
+`cell_memory`.
+- Remove the `layout` module. Its functions are now available as methods on
+[`State`]. Also, many of these functions now return `u32` instead of `usize`.
+
+32-bit targets and related changes:
+- With `DefaultBackend`, `haybale` now supports LLVM bitcode which was
+compiled for 32-bit targets (previously only supported 64-bit targets).
+- The [`new_uninitialized()`] and [`new_zero_initialized()`] methods on the
+[`backend::Memory`] trait, `simple_memory::Memory`, and `cell_memory::Memory`
+now take an additional parameter indicating the pointer size.
+- `Project` has a new public method [`pointer_size_bits()`].
+
+Other:
+- Built-in support for the `llvm.expect` intrinsic, and built-in support for
+the `llvm.bswap` intrinsic with vector operands (previously only supported
+scalar operands)
+- [`solver_utils::PossibleSolutions`] has new constructors `empty()`,
+`exactly_one()`, and `exactly_two()` (useful for testing), and also
+implements `FromIterator`, allowing you to `.collect()` an iterator into it
+- Bugfix for the `{min,max}_possible_solution_for_bv_as_binary_str()`
+functions in the `solver_utils` module
 
 ### Version 0.4.0 (Mar 31, 2020)
 
@@ -552,7 +585,12 @@ Initial release!
 [`Config.callbacks`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.callbacks
 [`Config.null_pointer_checking`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.null_pointer_checking
 [`backend::BV`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.BV.html
+[`backend::Memory`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.Memory.html
+[`new_uninitialized()`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.Memory.html#tymethod.new_uninitialized
+[`new_zero_initialized()`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.Memory.html#tymethod.new_zero_initialized
 [`State.full_error_message_with_context()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.full_error_message_with_context
 [`memcpy_bv`]: https://PLSysSec.github.io/haybale/haybale/hook_utils/fn.memcpy_bv.html
 [`memset_bv`]: https://PLSysSec.github.io/haybale/haybale/hook_utils/fn.memset_bv.html
-[`layout::size_opaque_aware`]: https://PLSysSec.github.io/haybale/haybale/layout/fn.size_opaque_aware.html
+[`layout::size_opaque_aware`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.size_opaque_aware
+[`pointer_size_bits()`]: https://PLSysSec.github.io/haybale/haybale/struct.Project.html#method.pointer_size_bits
+[`solver_utils::PossibleSolutions`]: https://PLSysSec.github.io/haybale/haybale/solver_utils/enum.PossibleSolutions.html
