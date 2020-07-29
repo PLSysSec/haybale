@@ -41,9 +41,11 @@ add it as a dependency in your `Cargo.toml`:
 haybale = "0.4.0"
 ```
 
-`haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
+`haybale` also depends (indirectly) on the LLVM 10 and Boolector libraries, which
 must both be available on your system.
 See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
+(LLVM 10 is only the default; `haybale` does support other LLVM versions. For
+LLVM versions other than 10, see "Compatibility" below.)
 
 ### 2. Acquire bitcode to analyze
 
@@ -266,12 +268,22 @@ or of course you can generate local documentation with `cargo doc --open`.
 
 ## Compatibility
 
-Currently, `haybale` only supports LLVM 9. A version of `haybale` supporting
-LLVM 8 is available on the `llvm-8` branch of this repo; it is approximately
-at feature parity with `haybale` 0.2.1, and will likely be stuck at that
-point indefinitely unless there is demand for additional backported features.
+Currently, the official crates.io releases of `haybale` depend on LLVM 10 and
+Boolector 3.2.1.
 
-`haybale` works on stable Rust, and requires Rust 1.40+.
+LLVM 9 is supported on the `llvm-9` branch of this repo. As of this writing,
+this branch is at complete feature parity with `master`: you get the same
+features with LLVM 9 as you do with LLVM 10, except for being able to analyze
+bitcode generated with LLVM 10.
+
+LLVM 8 is supported on the `llvm-8` branch of this repo. This version is
+approximately at feature parity with `haybale` 0.2.1, and will likely be
+stuck at that point indefinitely unless there is demand for additional
+backported features.
+
+LLVM 7 and earlier are not supported.
+
+`haybale` works on stable Rust, and requires Rust 1.40 or later.
 
 ## Under the hood
 
