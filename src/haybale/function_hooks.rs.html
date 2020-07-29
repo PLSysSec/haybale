@@ -446,6 +446,37 @@
 <span id="446">446</span>
 <span id="447">447</span>
 <span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Functions and structures for defining and activating function hooks</span>
 
@@ -453,13 +484,12 @@
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">demangling</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">hooks</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">layout</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">return_value</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::<span class="ident">State</span>;
 <span class="kw">use</span> <span class="ident">either</span>::<span class="ident">Either</span>;
-<span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">Name</span>, <span class="ident">Operand</span>, <span class="ident">Type</span>, <span class="ident">Typed</span>, <span class="ident">instruction</span>::<span class="ident">InlineAssembly</span>};
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">function</span>::{<span class="ident">CallingConvention</span>, <span class="ident">FunctionAttribute</span>, <span class="ident">ParameterAttribute</span>};
+<span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">instruction</span>::<span class="ident">InlineAssembly</span>, <span class="ident">Name</span>, <span class="ident">Operand</span>, <span class="ident">Type</span>, <span class="ident">Typed</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashMap</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">hash</span>::{<span class="ident">Hash</span>, <span class="ident">Hasher</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">rc</span>::<span class="ident">Rc</span>;
@@ -542,7 +572,7 @@
 
 <span class="doccomment">/// `IsCall` exists to unify the commonalities between LLVM `Call` and `Invoke`</span>
 <span class="doccomment">/// instructions</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">IsCall</span> : <span class="ident">Typed</span> {
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">IsCall</span>: <span class="ident">Typed</span> {
     <span class="kw">fn</span> <span class="ident">get_called_func</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Either</span><span class="op">&lt;</span><span class="ident">InlineAssembly</span>, <span class="ident">Operand</span><span class="op">&gt;</span>;
     <span class="kw">fn</span> <span class="ident">get_arguments</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Argument</span><span class="op">&gt;</span>;
     <span class="kw">fn</span> <span class="ident">get_return_attrs</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ParameterAttribute</span><span class="op">&gt;</span>;
@@ -606,27 +636,33 @@
     <span class="doccomment">/// Adds a function hook. The `hook` will be executed instead of the body of</span>
     <span class="doccomment">/// the `hooked_function`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add</span><span class="op">&lt;</span><span class="ident">H</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">hooked_function</span>: <span class="kw">impl</span> <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span>, <span class="ident">hook</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">H</span>)
-        <span class="kw">where</span> <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     {
-        <span class="self">self</span>.<span class="ident">hooks</span>.<span class="ident">insert</span>(<span class="ident">hooked_function</span>.<span class="ident">into</span>(), <span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
+        <span class="self">self</span>.<span class="ident">hooks</span>
+            .<span class="ident">insert</span>(<span class="ident">hooked_function</span>.<span class="ident">into</span>(), <span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
         <span class="self">self</span>.<span class="ident">cur_id</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
     }
 
     <span class="doccomment">/// Exactly like `add()`, but takes the (C++) _demangled_ name of the function</span>
     <span class="doccomment">/// to hook, so you can use a function name like &quot;namespace::function&quot;.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_cpp_demangled</span><span class="op">&lt;</span><span class="ident">H</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">hooked_function</span>: <span class="kw">impl</span> <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span>, <span class="ident">hook</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">H</span>)
-        <span class="kw">where</span> <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     {
-        <span class="self">self</span>.<span class="ident">cpp_demangled_hooks</span>.<span class="ident">insert</span>(<span class="ident">hooked_function</span>.<span class="ident">into</span>(), <span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
+        <span class="self">self</span>.<span class="ident">cpp_demangled_hooks</span>
+            .<span class="ident">insert</span>(<span class="ident">hooked_function</span>.<span class="ident">into</span>(), <span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
         <span class="self">self</span>.<span class="ident">cur_id</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
     }
 
     <span class="doccomment">/// Exactly like `add()`, but takes the (Rust) _demangled_ name of the function</span>
     <span class="doccomment">/// to hook, so you can use a function name like &quot;module::function&quot;.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_rust_demangled</span><span class="op">&lt;</span><span class="ident">H</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">hooked_function</span>: <span class="kw">impl</span> <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span>, <span class="ident">hook</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">H</span>)
-        <span class="kw">where</span> <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     {
-        <span class="self">self</span>.<span class="ident">rust_demangled_hooks</span>.<span class="ident">insert</span>(<span class="ident">hooked_function</span>.<span class="ident">into</span>(), <span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
+        <span class="self">self</span>.<span class="ident">rust_demangled_hooks</span>
+            .<span class="ident">insert</span>(<span class="ident">hooked_function</span>.<span class="ident">into</span>(), <span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
         <span class="self">self</span>.<span class="ident">cur_id</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
     }
 
@@ -647,15 +683,16 @@
     <span class="doccomment">/// string itself, although it can still inspect function parameters etc.</span>
     <span class="doccomment">/// For now, this is the best we can do.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_inline_asm_hook</span><span class="op">&lt;</span><span class="ident">H</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">hook</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">H</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span>
-        <span class="kw">where</span> <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     {
         <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">inline_asm_hook</span> {
-            <span class="ident">h</span>@<span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="ident">h</span> @ <span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw-2">*</span><span class="ident">h</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
                 <span class="self">self</span>.<span class="ident">cur_id</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
                 <span class="bool-val">true</span>
             },
-            <span class="ident">h</span>@<span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="ident">h</span> @ <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw-2">*</span><span class="ident">h</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
                 <span class="self">self</span>.<span class="ident">cur_id</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
                 <span class="bool-val">false</span>
@@ -671,15 +708,16 @@
     <span class="doccomment">/// Returns `true` if a default hook was previously present, or `false` if no</span>
     <span class="doccomment">/// default hook was present.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_default_hook</span><span class="op">&lt;</span><span class="ident">H</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">hook</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">H</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span>
-        <span class="kw">where</span> <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="ident">H</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     {
         <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">default_hook</span> {
-            <span class="ident">h</span>@<span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="ident">h</span> @ <span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw-2">*</span><span class="ident">h</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
                 <span class="self">self</span>.<span class="ident">cur_id</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
                 <span class="bool-val">true</span>
             },
-            <span class="ident">h</span>@<span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="ident">h</span> @ <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw-2">*</span><span class="ident">h</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">FunctionHook</span>::<span class="ident">new</span>(<span class="self">self</span>.<span class="ident">cur_id</span>, <span class="ident">hook</span>));
                 <span class="self">self</span>.<span class="ident">cur_id</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
                 <span class="bool-val">false</span>
@@ -731,14 +769,18 @@
     <span class="doccomment">/// Iterate over all function hooks, as (function name, hook) pairs.</span>
     <span class="doccomment">/// Function names may include both mangled and demangled names.</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">get_all_hooks</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="kw-2">&amp;</span><span class="ident">String</span>, <span class="kw-2">&amp;</span><span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>)<span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">hooks</span>.<span class="ident">iter</span>().<span class="ident">chain</span>(<span class="self">self</span>.<span class="ident">cpp_demangled_hooks</span>.<span class="ident">iter</span>()).<span class="ident">chain</span>(<span class="self">self</span>.<span class="ident">rust_demangled_hooks</span>.<span class="ident">iter</span>())
+        <span class="self">self</span>.<span class="ident">hooks</span>
+            .<span class="ident">iter</span>()
+            .<span class="ident">chain</span>(<span class="self">self</span>.<span class="ident">cpp_demangled_hooks</span>.<span class="ident">iter</span>())
+            .<span class="ident">chain</span>(<span class="self">self</span>.<span class="ident">rust_demangled_hooks</span>.<span class="ident">iter</span>())
     }
 
     <span class="doccomment">/// Get the `FunctionHook` active for the given `funcname`, or `None` if</span>
     <span class="doccomment">/// there is no hook active for the function. `funcname` may be either a</span>
     <span class="doccomment">/// mangled or a demangled function name.</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">get_hook_for</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">hooks</span>.<span class="ident">get</span>(<span class="ident">funcname</span>)
+        <span class="self">self</span>.<span class="ident">hooks</span>
+            .<span class="ident">get</span>(<span class="ident">funcname</span>)
             .<span class="ident">or_else</span>(<span class="op">|</span><span class="op">|</span> {
                 <span class="ident">demangling</span>::<span class="ident">try_rust_demangle</span>(<span class="ident">funcname</span>)
                     .<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">demangled</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">rust_demangled_hooks</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">demangled</span>))
@@ -800,7 +842,10 @@
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;calloc&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">allocation</span>::<span class="ident">calloc_hook</span>);
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;realloc&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">allocation</span>::<span class="ident">realloc_hook</span>);
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;free&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">allocation</span>::<span class="ident">free_hook</span>);
-        <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;__cxa_allocate_exception&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">exceptions</span>::<span class="ident">cxa_allocate_exception</span>);
+        <span class="ident">fhooks</span>.<span class="ident">add</span>(
+            <span class="string">&quot;__cxa_allocate_exception&quot;</span>,
+            <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">exceptions</span>::<span class="ident">cxa_allocate_exception</span>,
+        );
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;__cxa_throw&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">exceptions</span>::<span class="ident">cxa_throw</span>);
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;__cxa_begin_catch&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">exceptions</span>::<span class="ident">cxa_begin_catch</span>);
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;__cxa_end_catch&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">exceptions</span>::<span class="ident">cxa_end_catch</span>);
@@ -825,7 +870,10 @@
 <span class="doccomment">/// they cannot.</span>
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> {
     <span class="doccomment">/// The actual hook to be executed</span>
-    <span class="ident">hook</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;p</span><span class="op">&gt;</span>,
+    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy</span>::<span class="ident">type_complexity</span>)]</span>
+    <span class="ident">hook</span>: <span class="ident">Rc</span><span class="op">&lt;</span>
+        <span class="kw">dyn</span> <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;p</span>,
+    <span class="op">&gt;</span>,
 
     <span class="doccomment">/// A unique id, used for nothing except equality comparisons between `FunctionHook`s.</span>
     <span class="doccomment">/// This `id` should be globally unique across all created `FunctionHook`s.</span>
@@ -834,7 +882,10 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> <span class="ident">Clone</span> <span class="kw">for</span> <span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">clone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span> { <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">hook</span>.<span class="ident">clone</span>(), <span class="ident">id</span>: <span class="self">self</span>.<span class="ident">id</span> }
+        <span class="self">Self</span> {
+            <span class="ident">hook</span>: <span class="self">self</span>.<span class="ident">hook</span>.<span class="ident">clone</span>(),
+            <span class="ident">id</span>: <span class="self">self</span>.<span class="ident">id</span>,
+        }
     }
 }
 
@@ -855,11 +906,22 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> <span class="ident">FunctionHook</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> {
     <span class="doccomment">/// `id`: A unique id, used for nothing except equality comparisons between `FunctionHook`s.</span>
     <span class="doccomment">/// This `id` should be globally unique across all created `FunctionHook`s.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">id</span>: <span class="ident">usize</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span> { <span class="ident">hook</span>: <span class="ident">Rc</span>::<span class="ident">new</span>(<span class="ident">f</span>), <span class="ident">id</span> }
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
+        <span class="ident">id</span>: <span class="ident">usize</span>,
+        <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="self">Self</span> {
+            <span class="ident">hook</span>: <span class="ident">Rc</span>::<span class="ident">new</span>(<span class="ident">f</span>),
+            <span class="ident">id</span>,
+        }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">call_hook</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">call_hook</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+        <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+        <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         (<span class="self">self</span>.<span class="ident">hook</span>)(<span class="ident">proj</span>, <span class="ident">state</span>, <span class="ident">call</span>)
     }
 }
@@ -878,8 +940,8 @@
     <span class="kw">match</span> <span class="ident">call</span>.<span class="ident">get_type</span>() {
         <span class="ident">Type</span>::<span class="ident">VoidType</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>),
         <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">width</span> <span class="op">=</span> <span class="ident">layout</span>::<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>);
-            <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">new_bv_with_name</span>(<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;generic_stub_hook_retval&quot;</span>), <span class="ident">width</span> <span class="kw">as</span> <span class="ident">u32</span>)<span class="question-mark">?</span>;
+            <span class="kw">let</span> <span class="ident">width</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>);
+            <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">new_bv_with_name</span>(<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;generic_stub_hook_retval&quot;</span>), <span class="ident">width</span>)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>))
         },
     }

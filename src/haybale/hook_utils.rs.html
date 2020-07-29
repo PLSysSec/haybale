@@ -193,6 +193,81 @@
 <span id="193">193</span>
 <span id="194">194</span>
 <span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Utility functions for performing memset or memcpy operations.</span>
 <span class="doccomment">//! These may be useful in implementing hooks for other functions.</span>
@@ -205,7 +280,7 @@
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">Operand</span>;
 <span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">debug</span>, <span class="ident">info</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">reduce</span>::<span class="ident">Reduce</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::<span class="ident">TryFrom</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::{<span class="ident">TryFrom</span>, <span class="ident">TryInto</span>};
 
 <span class="doccomment">/// Set `num_bytes` bytes of memory at address `addr` each to the value `val`.</span>
 <span class="doccomment">/// Each individual byte will be set to `val`, so only the lowest 8 bits of `val`</span>
@@ -215,7 +290,12 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// Respects the `state.config.concretize_memcpy_lengths` and</span>
 <span class="doccomment">/// `state.config.max_memcpy_length` settings.</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memset</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>, <span class="ident">val</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>, <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memset</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>,
+    <span class="ident">val</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>,
+    <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
     <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="ident">addr</span>)<span class="question-mark">?</span>;
     <span class="kw">let</span> <span class="ident">val</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="ident">val</span>)<span class="question-mark">?</span>;
     <span class="kw">let</span> <span class="ident">num_bytes</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>;
@@ -224,7 +304,12 @@
 }
 
 <span class="doccomment">/// Just like `memset()` above, but takes `BV`s instead of `Operand`s for its arguments.</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memset_bv</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">val</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memset_bv</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">addr</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>,
+    <span class="ident">val</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>,
+    <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
     <span class="kw">let</span> <span class="ident">val</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">val</span>.<span class="ident">get_width</span>() <span class="op">&gt;</span> <span class="number">8</span> {
         <span class="comment">// some memset declarations have a larger type here, but it&#39;s still intended to be a byte value; we ignore any upper bits</span>
         <span class="ident">val</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>)
@@ -240,21 +325,46 @@
             <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">val</span>.<span class="ident">get_width</span>(), <span class="number">8</span>);
             <span class="kw">let</span> <span class="ident">big_val</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">bvs_must_be_equal</span>(<span class="kw-2">&amp;</span><span class="ident">val</span>, <span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">zero</span>(<span class="number">8</span>))<span class="question-mark">?</span> {
                 <span class="comment">// optimize this special case</span>
-                <span class="ident">state</span>.<span class="ident">zero</span>(<span class="number">8</span> <span class="op">*</span> <span class="ident">u32</span>::<span class="ident">try_from</span>(<span class="ident">length_bytes</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;memset too big: {} bytes (error: {})&quot;</span>, <span class="ident">length_bytes</span>, <span class="ident">e</span>)))<span class="question-mark">?</span>)
+                <span class="ident">state</span>.<span class="ident">zero</span>(
+                    <span class="number">8</span> <span class="op">*</span> <span class="ident">u32</span>::<span class="ident">try_from</span>(<span class="ident">length_bytes</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
+                        <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                            <span class="string">&quot;memset too big: {} bytes (error: {})&quot;</span>,
+                            <span class="ident">length_bytes</span>, <span class="ident">e</span>
+                        ))
+                    })<span class="question-mark">?</span>,
+                )
             } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">bvs_must_be_equal</span>(<span class="kw-2">&amp;</span><span class="ident">val</span>, <span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">ones</span>(<span class="number">8</span>))<span class="question-mark">?</span> {
                 <span class="comment">// optimize this special case</span>
-                <span class="ident">state</span>.<span class="ident">ones</span>(<span class="number">8</span> <span class="op">*</span> <span class="ident">u32</span>::<span class="ident">try_from</span>(<span class="ident">length_bytes</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;memset too big: {} bytes (error: {})&quot;</span>, <span class="ident">length_bytes</span>, <span class="ident">e</span>)))<span class="question-mark">?</span>)
+                <span class="ident">state</span>.<span class="ident">ones</span>(
+                    <span class="number">8</span> <span class="op">*</span> <span class="ident">u32</span>::<span class="ident">try_from</span>(<span class="ident">length_bytes</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
+                        <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                            <span class="string">&quot;memset too big: {} bytes (error: {})&quot;</span>,
+                            <span class="ident">length_bytes</span>, <span class="ident">e</span>
+                        ))
+                    })<span class="question-mark">?</span>,
+                )
             } <span class="kw">else</span> {
-                <span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">repeat</span>(<span class="ident">val</span>).<span class="ident">take</span>(<span class="ident">length_bytes</span> <span class="kw">as</span> <span class="ident">usize</span>).<span class="ident">reduce</span>(<span class="op">|</span><span class="ident">a</span>,<span class="ident">b</span><span class="op">|</span> <span class="ident">a</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">b</span>)).<span class="ident">unwrap</span>()
+                <span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">repeat</span>(<span class="ident">val</span>)
+                    .<span class="ident">take</span>(<span class="ident">length_bytes</span> <span class="kw">as</span> <span class="ident">usize</span>)
+                    .<span class="ident">reduce</span>(<span class="op">|</span><span class="ident">a</span>, <span class="ident">b</span><span class="op">|</span> <span class="ident">a</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">b</span>))
+                    .<span class="ident">unwrap</span>()
             };
             <span class="ident">state</span>.<span class="ident">write</span>(<span class="ident">addr</span>, <span class="ident">big_val</span>)<span class="question-mark">?</span>;
         },
         <span class="ident">MemcpyLength</span>::<span class="ident">Symbolic</span> <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">max_num_bytes</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">max_possible_solution_for_bv_as_u64</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">max_num_bytes</span> <span class="op">=</span> <span class="ident">state</span>
+                .<span class="ident">max_possible_solution_for_bv_as_u64</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>
+                .<span class="ident">unwrap</span>();
             <span class="kw">if</span> <span class="ident">max_num_bytes</span> <span class="op">&gt;</span> <span class="number">0x4000</span> {
-                <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;Encountered a memset with symbolic size, up to {} bytes. This may be slow.&quot;</span>, <span class="ident">max_num_bytes</span>);
+                <span class="macro">warn</span><span class="macro">!</span>(
+                    <span class="string">&quot;Encountered a memset with symbolic size, up to {} bytes. This may be slow.&quot;</span>,
+                    <span class="ident">max_num_bytes</span>
+                );
             } <span class="kw">else</span> {
-                <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Processing a memset of symbolic size, up to {} bytes&quot;</span>, <span class="ident">max_num_bytes</span>);
+                <span class="macro">debug</span><span class="macro">!</span>(
+                    <span class="string">&quot;Processing a memset of symbolic size, up to {} bytes&quot;</span>,
+                    <span class="ident">max_num_bytes</span>
+                );
             }
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">addr</span>.<span class="ident">clone</span>();
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bytes_written</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">zero</span>(<span class="ident">num_bytes</span>.<span class="ident">get_width</span>());
@@ -278,7 +388,12 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// Respects the `state.config.concretize_memcpy_lengths` and</span>
 <span class="doccomment">/// `state.config.max_memcpy_length` settings.</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memcpy</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">dest</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>, <span class="ident">src</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>, <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memcpy</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">dest</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>,
+    <span class="ident">src</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>,
+    <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">Operand</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
     <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">dest</span>)<span class="question-mark">?</span>;
     <span class="kw">let</span> <span class="ident">src</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">src</span>)<span class="question-mark">?</span>;
     <span class="kw">let</span> <span class="ident">num_bytes</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>;
@@ -287,21 +402,35 @@
 }
 
 <span class="doccomment">/// Just like `memcpy()` above, but takes `BV`s instead of `Operand`s for its arguments.</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memcpy_bv</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">dest</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">src</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">memcpy_bv</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">dest</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>,
+    <span class="ident">src</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>,
+    <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
     <span class="kw">match</span> <span class="ident">get_memcpy_length</span>(<span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">num_bytes</span>, <span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">concretize_memcpy_lengths</span>)<span class="question-mark">?</span> {
         <span class="ident">MemcpyLength</span>::<span class="ident">Concrete</span>(<span class="number">0</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Ignoring a memcpy or memmove of size 0 bytes&quot;</span>),
         <span class="ident">MemcpyLength</span>::<span class="ident">Concrete</span>(<span class="ident">length_bytes</span>) <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Processing a memcpy or memmove of size {} bytes&quot;</span>, <span class="ident">length_bytes</span>);
+            <span class="macro">debug</span><span class="macro">!</span>(
+                <span class="string">&quot;Processing a memcpy or memmove of size {} bytes&quot;</span>,
+                <span class="ident">length_bytes</span>
+            );
+            <span class="kw">let</span> <span class="ident">length_bytes</span>: <span class="ident">u32</span> <span class="op">=</span> <span class="ident">length_bytes</span>.<span class="ident">try_into</span>().<span class="ident">unwrap</span>();
             <span class="comment">// Do the operation as just one large read and one large write; let the memory choose the most efficient way to implement these.</span>
-            <span class="kw">let</span> <span class="ident">val</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="ident">src</span>, <span class="ident">length_bytes</span> <span class="kw">as</span> <span class="ident">u32</span> <span class="op">*</span> <span class="number">8</span>)<span class="question-mark">?</span>;
+            <span class="kw">let</span> <span class="ident">val</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="ident">src</span>, <span class="ident">length_bytes</span> <span class="op">*</span> <span class="number">8</span>)<span class="question-mark">?</span>;
             <span class="ident">state</span>.<span class="ident">write</span>(<span class="kw-2">&amp;</span><span class="ident">dest</span>, <span class="ident">val</span>)<span class="question-mark">?</span>;
         },
         <span class="ident">MemcpyLength</span>::<span class="ident">Symbolic</span> <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">max_num_bytes</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">max_possible_solution_for_bv_as_u64</span>(<span class="kw-2">&amp;</span><span class="ident">num_bytes</span>)<span class="question-mark">?</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">max_num_bytes</span> <span class="op">=</span> <span class="ident">state</span>
+                .<span class="ident">max_possible_solution_for_bv_as_u64</span>(<span class="kw-2">&amp;</span><span class="ident">num_bytes</span>)<span class="question-mark">?</span>
+                .<span class="ident">unwrap</span>();
             <span class="kw">if</span> <span class="ident">max_num_bytes</span> <span class="op">&gt;</span> <span class="number">0x4000</span> {
                 <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;Encountered a memcpy or memmove with symbolic size, up to {} bytes. This may be slow.&quot;</span>, <span class="ident">max_num_bytes</span>);
             } <span class="kw">else</span> {
-                <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Processing a memcpy or memmove of symbolic size, up to {} bytes&quot;</span>, <span class="ident">max_num_bytes</span>);
+                <span class="macro">info</span><span class="macro">!</span>(
+                    <span class="string">&quot;Processing a memcpy or memmove of symbolic size, up to {} bytes&quot;</span>,
+                    <span class="ident">max_num_bytes</span>
+                );
             }
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">src_addr</span> <span class="op">=</span> <span class="ident">src</span>.<span class="ident">clone</span>();
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">dest_addr</span> <span class="op">=</span> <span class="ident">dest</span>.<span class="ident">clone</span>();
@@ -333,7 +462,11 @@
 <span class="doccomment">/// that should be performed, considering the given `Concretize` option.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Also accounts for the `max_memcpy_length` option in `state.config`.</span>
-<span class="kw">fn</span> <span class="ident">get_memcpy_length</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>, <span class="ident">concretize</span>: <span class="kw-2">&amp;</span><span class="ident">Concretize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">MemcpyLength</span><span class="op">&gt;</span> {
+<span class="kw">fn</span> <span class="ident">get_memcpy_length</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="ident">State</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">num_bytes</span>: <span class="kw-2">&amp;</span><span class="ident">B</span>::<span class="ident">BV</span>,
+    <span class="ident">concretize</span>: <span class="kw-2">&amp;</span><span class="ident">Concretize</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">MemcpyLength</span><span class="op">&gt;</span> {
     <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">get_possible_solutions_for_bv</span>(<span class="ident">num_bytes</span>, <span class="number">1</span>)<span class="question-mark">?</span> {
         <span class="ident">PossibleSolutions</span>::<span class="ident">Exactly</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">let</span> <span class="ident">single_val</span> <span class="op">=</span> <span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">next</span>().<span class="ident">ok_or</span>(<span class="ident">Error</span>::<span class="ident">Unsat</span>)<span class="question-mark">?</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
@@ -346,30 +479,45 @@
         },
         <span class="ident">PossibleSolutions</span>::<span class="ident">AtLeast</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">max_memcpy_length</span>) <span class="op">=</span> <span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">max_memcpy_length</span> {
-                <span class="kw">let</span> <span class="ident">max_memcpy_length_bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">max_memcpy_length</span>, <span class="ident">num_bytes</span>.<span class="ident">get_width</span>());
-                <span class="kw">if</span> <span class="op">!</span><span class="ident">state</span>.<span class="ident">sat_with_extra_constraints</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(<span class="kw-2">&amp;</span><span class="ident">num_bytes</span>.<span class="ident">ulte</span>(<span class="kw-2">&amp;</span><span class="ident">max_memcpy_length_bv</span>)))<span class="question-mark">?</span> {
+                <span class="kw">let</span> <span class="ident">max_memcpy_length_bv</span> <span class="op">=</span>
+                    <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">max_memcpy_length</span>, <span class="ident">num_bytes</span>.<span class="ident">get_width</span>());
+                <span class="kw">if</span> <span class="op">!</span><span class="ident">state</span>.<span class="ident">sat_with_extra_constraints</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(
+                    <span class="kw-2">&amp;</span><span class="ident">num_bytes</span>.<span class="ident">ulte</span>(<span class="kw-2">&amp;</span><span class="ident">max_memcpy_length_bv</span>),
+                ))<span class="question-mark">?</span> {
                     <span class="kw">let</span> <span class="ident">arbitrary_val</span> <span class="op">=</span> <span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">next</span>().<span class="ident">unwrap</span>().<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                     <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Encountered a memcpy/memset/memmove with multiple possible lengths, but all of them are larger than max_memcpy_length {} bytes. One possible length is {} bytes.&quot;</span>, <span class="ident">max_memcpy_length</span>, <span class="ident">arbitrary_val</span>)));
                 }
-                <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">sat_with_extra_constraints</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(<span class="kw-2">&amp;</span><span class="ident">num_bytes</span>.<span class="ident">ugt</span>(<span class="kw-2">&amp;</span><span class="ident">max_memcpy_length_bv</span>)))<span class="question-mark">?</span> {
+                <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">sat_with_extra_constraints</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(
+                    <span class="kw-2">&amp;</span><span class="ident">num_bytes</span>.<span class="ident">ugt</span>(<span class="kw-2">&amp;</span><span class="ident">max_memcpy_length_bv</span>),
+                ))<span class="question-mark">?</span> {
                     <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;Encountered a memcpy/memset/memmove with multiple possible lengths, some of which are larger than max_memcpy_length {} bytes. Constraining the length to be at most {} bytes.&quot;</span>, <span class="ident">max_memcpy_length</span>, <span class="ident">max_memcpy_length</span>);
                     <span class="ident">num_bytes</span>.<span class="ident">ulte</span>(<span class="kw-2">&amp;</span><span class="ident">max_memcpy_length_bv</span>).<span class="ident">assert</span>()<span class="question-mark">?</span>;
                 }
             }
             <span class="kw">let</span> <span class="ident">num_bytes_concrete</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">concretize</span> {
-                <span class="ident">Concretize</span>::<span class="ident">Arbitrary</span> <span class="op">=</span><span class="op">&gt;</span> {
-                    <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">max_memcpy_length</span> {
-                        <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">next</span>().<span class="ident">unwrap</span>().<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(),
-                        <span class="prelude-val">Some</span>(<span class="ident">max_memcpy_length</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                            <span class="kw">match</span> <span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">val</span><span class="op">|</span> <span class="ident">val</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>()).<span class="ident">find</span>(<span class="op">|</span><span class="ident">val</span><span class="op">|</span> <span class="kw-2">*</span><span class="ident">val</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">max_memcpy_length</span>) {
-                                <span class="prelude-val">Some</span>(<span class="ident">val</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">val</span>,
-                                <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">state</span>.<span class="ident">get_a_solution_for_bv</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>.<span class="ident">unwrap</span>().<span class="ident">as_u64</span>().<span class="ident">unwrap</span>()
-                            }
-                        },
-                    }
+                <span class="ident">Concretize</span>::<span class="ident">Arbitrary</span> <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">max_memcpy_length</span> {
+                    <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">v</span>.<span class="ident">iter</span>().<span class="ident">next</span>().<span class="ident">unwrap</span>().<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(),
+                    <span class="prelude-val">Some</span>(<span class="ident">max_memcpy_length</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                        <span class="kw">match</span> <span class="ident">v</span>
+                            .<span class="ident">iter</span>()
+                            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">val</span><span class="op">|</span> <span class="ident">val</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>())
+                            .<span class="ident">find</span>(<span class="op">|</span><span class="ident">val</span><span class="op">|</span> <span class="kw-2">*</span><span class="ident">val</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">max_memcpy_length</span>)
+                        {
+                            <span class="prelude-val">Some</span>(<span class="ident">val</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">val</span>,
+                            <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">state</span>
+                                .<span class="ident">get_a_solution_for_bv</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>
+                                .<span class="ident">unwrap</span>()
+                                .<span class="ident">as_u64</span>()
+                                .<span class="ident">unwrap</span>(),
+                        }
+                    },
                 },
-                <span class="ident">Concretize</span>::<span class="ident">Minimum</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">state</span>.<span class="ident">min_possible_solution_for_bv_as_u64</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>.<span class="ident">unwrap</span>(),
-                <span class="ident">Concretize</span>::<span class="ident">Maximum</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">state</span>.<span class="ident">max_possible_solution_for_bv_as_u64</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>.<span class="ident">unwrap</span>(),
+                <span class="ident">Concretize</span>::<span class="ident">Minimum</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">state</span>
+                    .<span class="ident">min_possible_solution_for_bv_as_u64</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>
+                    .<span class="ident">unwrap</span>(),
+                <span class="ident">Concretize</span>::<span class="ident">Maximum</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">state</span>
+                    .<span class="ident">max_possible_solution_for_bv_as_u64</span>(<span class="ident">num_bytes</span>)<span class="question-mark">?</span>
+                    .<span class="ident">unwrap</span>(),
                 <span class="ident">Concretize</span>::<span class="ident">Prefer</span>(<span class="ident">val</span>, <span class="ident">backup</span>) <span class="op">=</span><span class="op">&gt;</span> {
                     <span class="kw">let</span> <span class="ident">val_as_bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="kw-2">*</span><span class="ident">val</span>, <span class="ident">num_bytes</span>.<span class="ident">get_width</span>());
                     <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">bvs_can_be_equal</span>(<span class="kw-2">&amp;</span><span class="ident">num_bytes</span>, <span class="kw-2">&amp;</span><span class="ident">val_as_bv</span>)<span class="question-mark">?</span> {
@@ -384,9 +532,11 @@
             };
             <span class="macro">info</span><span class="macro">!</span>(<span class="string">&quot;Encountered a memcpy/memset/memmove with multiple possible lengths; according to the concretization policy {:?}, chose a length of {} bytes and will constrain the length argument to be {} going forward&quot;</span>, <span class="ident">concretize</span>, <span class="ident">num_bytes_concrete</span>, <span class="ident">num_bytes_concrete</span>);
             <span class="comment">// actually constrain that `num_bytes` has to now be equal to our chosen concrete value</span>
-            <span class="ident">num_bytes</span>.<span class="ident">_eq</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">num_bytes_concrete</span>, <span class="ident">num_bytes</span>.<span class="ident">get_width</span>())).<span class="ident">assert</span>()<span class="question-mark">?</span>;
+            <span class="ident">num_bytes</span>
+                .<span class="ident">_eq</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">num_bytes_concrete</span>, <span class="ident">num_bytes</span>.<span class="ident">get_width</span>()))
+                .<span class="ident">assert</span>()<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="ident">MemcpyLength</span>::<span class="ident">Concrete</span>(<span class="ident">num_bytes_concrete</span>))
-        }
+        },
     }
 }
 </pre></div>

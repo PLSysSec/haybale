@@ -327,7 +327,7 @@
 <span class="doccomment">/// constructing a `Config` directly.</span>
 <span class="attribute">#[<span class="ident">non_exhaustive</span>]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> <span class="kw">where</span> <span class="ident">B</span>: <span class="ident">Backend</span> {
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Maximum number of times to execute any given line of LLVM IR.</span>
     <span class="doccomment">/// This bounds both the number of iterations of loops, and also the depth of recursion.</span>
     <span class="doccomment">/// For inner loops, this bounds the number of total iterations across all invocations of the loop.</span>

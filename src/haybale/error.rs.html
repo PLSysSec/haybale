@@ -157,7 +157,7 @@
 
 <span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">Error</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">String</span> {
     <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">Error</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
-        <span class="ident">e</span>.<span class="ident">to_string</span>()  <span class="comment">// use the Display impl</span>
+        <span class="ident">e</span>.<span class="ident">to_string</span>() <span class="comment">// use the Display impl</span>
     }
 }
 

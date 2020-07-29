@@ -137,6 +137,12 @@
 <span id="137">137</span>
 <span id="138">138</span>
 <span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
 
@@ -182,13 +188,19 @@
         <span class="comment">// through the demangler unchanged.)</span>
         <span class="comment">// TODO figure out a tighter test here, hopefully we can avoid both</span>
         <span class="comment">// false positives and false negatives.</span>
-        <span class="kw">if</span> <span class="ident">proj</span>.<span class="ident">module_source_file_names</span>().<span class="ident">any</span>(<span class="op">|</span><span class="ident">name</span><span class="op">|</span> <span class="ident">name</span>.<span class="ident">ends_with</span>(<span class="string">&quot;.rs&quot;</span>) <span class="op">|</span><span class="op">|</span> <span class="ident">name</span>.<span class="ident">ends_with</span>(<span class="string">&quot;u.0&quot;</span>)) {
+        <span class="kw">if</span> <span class="ident">proj</span>
+            .<span class="ident">module_source_file_names</span>()
+            .<span class="ident">any</span>(<span class="op">|</span><span class="ident">name</span><span class="op">|</span> <span class="ident">name</span>.<span class="ident">ends_with</span>(<span class="string">&quot;.rs&quot;</span>) <span class="op">|</span><span class="op">|</span> <span class="ident">name</span>.<span class="ident">ends_with</span>(<span class="string">&quot;u.0&quot;</span>))
+        {
             <span class="kw">return</span> <span class="ident">Demangling</span>::<span class="ident">Rust</span>;
         }
 
         <span class="comment">// otherwise, if any file in the `Project` comes from a source</span>
         <span class="comment">// file ending in `.cpp`, then use C++ demangling</span>
-        <span class="kw">if</span> <span class="ident">proj</span>.<span class="ident">module_source_file_names</span>().<span class="ident">any</span>(<span class="op">|</span><span class="ident">name</span><span class="op">|</span> <span class="ident">name</span>.<span class="ident">ends_with</span>(<span class="string">&quot;.cpp&quot;</span>)) {
+        <span class="kw">if</span> <span class="ident">proj</span>
+            .<span class="ident">module_source_file_names</span>()
+            .<span class="ident">any</span>(<span class="op">|</span><span class="ident">name</span><span class="op">|</span> <span class="ident">name</span>.<span class="ident">ends_with</span>(<span class="string">&quot;.cpp&quot;</span>))
+        {
             <span class="kw">return</span> <span class="ident">Demangling</span>::<span class="ident">CPP</span>;
         }
 
@@ -202,10 +214,10 @@
 <span class="doccomment">/// Returns `Some` if successfully demangled, or `None` if any error occurs</span>
 <span class="doccomment">/// (for instance, if `funcname` isn&#39;t a valid C++ mangled name)</span>
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">try_cpp_demangle</span>(<span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span> {
-    <span class="kw">let</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">cpp_demangle</span>::<span class="ident">DemangleOptions</span> {
-        <span class="ident">no_params</span>: <span class="bool-val">true</span>,
-    };
-    <span class="ident">cpp_demangle</span>::<span class="ident">Symbol</span>::<span class="ident">new</span>(<span class="ident">funcname</span>).<span class="ident">ok</span>().<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">sym</span><span class="op">|</span> <span class="ident">sym</span>.<span class="ident">demangle</span>(<span class="kw-2">&amp;</span><span class="ident">opts</span>).<span class="ident">ok</span>())
+    <span class="kw">let</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">cpp_demangle</span>::<span class="ident">DemangleOptions</span> { <span class="ident">no_params</span>: <span class="bool-val">true</span> };
+    <span class="ident">cpp_demangle</span>::<span class="ident">Symbol</span>::<span class="ident">new</span>(<span class="ident">funcname</span>)
+        .<span class="ident">ok</span>()
+        .<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">sym</span><span class="op">|</span> <span class="ident">sym</span>.<span class="ident">demangle</span>(<span class="kw-2">&amp;</span><span class="ident">opts</span>).<span class="ident">ok</span>())
 }
 
 <span class="doccomment">/// Like `try_cpp_demangle()`, but just returns the input string unmodified in</span>
@@ -219,9 +231,9 @@
 <span class="doccomment">/// Returns `Some` if successfully demangled, or `None` if any error occurs</span>
 <span class="doccomment">/// (for instance, if `funcname` isn&#39;t a valid Rust mangled name)</span>
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">try_rust_demangle</span>(<span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span> {
-    <span class="ident">rustc_demangle</span>::<span class="ident">try_demangle</span>(<span class="ident">funcname</span>).<span class="ident">ok</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">demangled</span><span class="op">|</span>
-        <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{:#}&quot;</span>, <span class="ident">demangled</span>)
-    )
+    <span class="ident">rustc_demangle</span>::<span class="ident">try_demangle</span>(<span class="ident">funcname</span>)
+        .<span class="ident">ok</span>()
+        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">demangled</span><span class="op">|</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{:#}&quot;</span>, <span class="ident">demangled</span>))
 }
 
 <span class="doccomment">/// Like `try_rust_demangle()`, but just returns the input string unmodified in</span>

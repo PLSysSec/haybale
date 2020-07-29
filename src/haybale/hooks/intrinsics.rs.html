@@ -472,20 +472,161 @@
 <span id="472">472</span>
 <span id="473">473</span>
 <span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Default hooks for some LLVM intrinsics</span>
 
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::{<span class="ident">Backend</span>, <span class="ident">BV</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">IsCall</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">layout</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">hook_utils</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">return_value</span>::<span class="ident">ReturnValue</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::<span class="ident">State</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">hook_utils</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">symex</span>::<span class="ident">unary_on_vector</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">Type</span>, <span class="ident">Typed</span>};
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::<span class="ident">TryInto</span>;
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_memset</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_memset</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">4</span>);
     <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">val</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -496,13 +637,20 @@
 
     <span class="comment">// if the call should return a pointer, it returns `addr`. If it&#39;s void-typed, that&#39;s fine too.</span>
     <span class="kw">match</span> <span class="ident">call</span>.<span class="ident">get_type</span>() {
-       <span class="ident">Type</span>::<span class="ident">VoidType</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>),
-       <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">addr</span>)),
-       <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Unexpected return type for a memset: {:?}&quot;</span>, <span class="ident">ty</span>))),
+        <span class="ident">Type</span>::<span class="ident">VoidType</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>),
+        <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">addr</span>)),
+        <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+            <span class="string">&quot;Unexpected return type for a memset: {:?}&quot;</span>,
+            <span class="ident">ty</span>
+        ))),
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_memcpy</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_memcpy</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">src</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">num_bytes</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">2</span>].<span class="number">0</span>;
@@ -513,86 +661,138 @@
 
     <span class="comment">// if the call should return a pointer, it returns `dest`. If it&#39;s void-typed, that&#39;s fine too.</span>
     <span class="kw">match</span> <span class="ident">call</span>.<span class="ident">get_type</span>() {
-       <span class="ident">Type</span>::<span class="ident">VoidType</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>),
-       <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">dest</span>)),
-       <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Unexpected return type for a memcpy or memmove: {:?}&quot;</span>, <span class="ident">ty</span>))),
+        <span class="ident">Type</span>::<span class="ident">VoidType</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>),
+        <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">dest</span>)),
+        <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+            <span class="string">&quot;Unexpected return type for a memcpy or memmove: {:?}&quot;</span>,
+            <span class="ident">ty</span>
+        ))),
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_bswap</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_bswap</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">1</span>);
     <span class="kw">let</span> <span class="ident">arg</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">argty</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">get_type</span>();
     <span class="kw">let</span> <span class="ident">retty</span> <span class="op">=</span> <span class="ident">call</span>.<span class="ident">get_type</span>();
     <span class="kw">if</span> <span class="ident">argty</span> <span class="op">!</span><span class="op">=</span> <span class="ident">retty</span> {
-        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="string">&quot;Expected bswap argument to be the same type as its return type&quot;</span>.<span class="ident">to_owned</span>()));
+        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(
+            <span class="string">&quot;Expected bswap argument to be the same type as its return type&quot;</span>.<span class="ident">to_owned</span>(),
+        ));
     }
 
     <span class="kw">let</span> <span class="ident">arg</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="ident">arg</span>)<span class="question-mark">?</span>;
     <span class="kw">match</span> <span class="ident">argty</span> {
-        <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">16</span> } <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">arg</span>.<span class="ident">get_width</span>(), <span class="number">16</span>);
-            <span class="kw">let</span> <span class="ident">high_byte</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
-            <span class="kw">let</span> <span class="ident">low_byte</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
-            <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">low_byte</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">high_byte</span>)))
+        <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span> } <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">arg</span>.<span class="ident">get_width</span>(), <span class="ident">bits</span>);
+            <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bswap</span>(<span class="kw-2">&amp;</span><span class="ident">arg</span>, <span class="ident">bits</span>)<span class="question-mark">?</span>))
         },
-        <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">32</span> } <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">arg</span>.<span class="ident">get_width</span>(), <span class="number">32</span>);
-            <span class="kw">let</span> <span class="ident">byte_0</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
-            <span class="kw">let</span> <span class="ident">byte_1</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
-            <span class="kw">let</span> <span class="ident">byte_2</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">23</span>, <span class="number">16</span>);
-            <span class="kw">let</span> <span class="ident">byte_3</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">31</span>, <span class="number">24</span>);
-            <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(
-                <span class="ident">byte_0</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_2</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_3</span>)
-            ))
+        <span class="ident">Type</span>::<span class="ident">VectorType</span> {
+            <span class="ident">element_type</span>,
+            <span class="ident">num_elements</span>,
+        } <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="kw">let</span> <span class="ident">element_size</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">element_type</span>, <span class="ident">proj</span>).<span class="ident">ok_or</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="string">&quot;llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project&quot;</span>.<span class="ident">into</span>()))<span class="question-mark">?</span>;
+            <span class="kw">let</span> <span class="ident">final_bv</span> <span class="op">=</span> <span class="ident">unary_on_vector</span>(<span class="kw-2">&amp;</span><span class="ident">arg</span>, <span class="ident">num_elements</span>.<span class="ident">try_into</span>().<span class="ident">unwrap</span>(), <span class="op">|</span><span class="ident">element</span><span class="op">|</span> {
+                <span class="ident">bswap</span>(<span class="ident">element</span>, <span class="ident">element_size</span>)
+            })<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">final_bv</span>))
         },
-        <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">48</span> } <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">arg</span>.<span class="ident">get_width</span>(), <span class="number">48</span>);
-            <span class="kw">let</span> <span class="ident">byte_0</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
-            <span class="kw">let</span> <span class="ident">byte_1</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
-            <span class="kw">let</span> <span class="ident">byte_2</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">23</span>, <span class="number">16</span>);
-            <span class="kw">let</span> <span class="ident">byte_3</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">31</span>, <span class="number">24</span>);
-            <span class="kw">let</span> <span class="ident">byte_4</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">39</span>, <span class="number">32</span>);
-            <span class="kw">let</span> <span class="ident">byte_5</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">47</span>, <span class="number">40</span>);
-            <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(
-                <span class="ident">byte_0</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_2</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_3</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_4</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_5</span>)
-            ))
-        },
-        <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">64</span> } <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">arg</span>.<span class="ident">get_width</span>(), <span class="number">64</span>);
-            <span class="kw">let</span> <span class="ident">byte_0</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
-            <span class="kw">let</span> <span class="ident">byte_1</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
-            <span class="kw">let</span> <span class="ident">byte_2</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">23</span>, <span class="number">16</span>);
-            <span class="kw">let</span> <span class="ident">byte_3</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">31</span>, <span class="number">24</span>);
-            <span class="kw">let</span> <span class="ident">byte_4</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">39</span>, <span class="number">32</span>);
-            <span class="kw">let</span> <span class="ident">byte_5</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">47</span>, <span class="number">40</span>);
-            <span class="kw">let</span> <span class="ident">byte_6</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">55</span>, <span class="number">48</span>);
-            <span class="kw">let</span> <span class="ident">byte_7</span> <span class="op">=</span> <span class="ident">arg</span>.<span class="ident">slice</span>(<span class="number">63</span>, <span class="number">56</span>);
-            <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(
-                <span class="ident">byte_0</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_2</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_3</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_4</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_5</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_6</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_7</span>)
-            ))
-        },
-        <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;llvm.bswap with argument type {:?}&quot;</span>, <span class="ident">argty</span>))),
+        <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
+            <span class="string">&quot;llvm.bswap with argument type {:?}&quot;</span>,
+            <span class="ident">argty</span>
+        ))),
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_objectsize</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">fn</span> <span class="ident">bswap</span><span class="op">&lt;</span><span class="ident">V</span>: <span class="ident">BV</span><span class="op">&gt;</span>(<span class="ident">bv</span>: <span class="kw-2">&amp;</span><span class="ident">V</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">V</span><span class="op">&gt;</span> {
+    <span class="kw">match</span> <span class="ident">bits</span> {
+        <span class="number">16</span> <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="kw">let</span> <span class="ident">high_byte</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
+            <span class="kw">let</span> <span class="ident">low_byte</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
+            <span class="prelude-val">Ok</span>(<span class="ident">low_byte</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">high_byte</span>))
+        },
+        <span class="number">32</span> <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="kw">let</span> <span class="ident">byte_0</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
+            <span class="kw">let</span> <span class="ident">byte_1</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
+            <span class="kw">let</span> <span class="ident">byte_2</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">23</span>, <span class="number">16</span>);
+            <span class="kw">let</span> <span class="ident">byte_3</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">31</span>, <span class="number">24</span>);
+            <span class="prelude-val">Ok</span>(<span class="ident">byte_0</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_2</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_3</span>))
+        },
+        <span class="number">48</span> <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="kw">let</span> <span class="ident">byte_0</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
+            <span class="kw">let</span> <span class="ident">byte_1</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
+            <span class="kw">let</span> <span class="ident">byte_2</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">23</span>, <span class="number">16</span>);
+            <span class="kw">let</span> <span class="ident">byte_3</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">31</span>, <span class="number">24</span>);
+            <span class="kw">let</span> <span class="ident">byte_4</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">39</span>, <span class="number">32</span>);
+            <span class="kw">let</span> <span class="ident">byte_5</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">47</span>, <span class="number">40</span>);
+            <span class="prelude-val">Ok</span>(<span class="ident">byte_0</span>
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_1</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_2</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_3</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_4</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_5</span>))
+        },
+        <span class="number">64</span> <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="kw">let</span> <span class="ident">byte_0</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>);
+            <span class="kw">let</span> <span class="ident">byte_1</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">15</span>, <span class="number">8</span>);
+            <span class="kw">let</span> <span class="ident">byte_2</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">23</span>, <span class="number">16</span>);
+            <span class="kw">let</span> <span class="ident">byte_3</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">31</span>, <span class="number">24</span>);
+            <span class="kw">let</span> <span class="ident">byte_4</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">39</span>, <span class="number">32</span>);
+            <span class="kw">let</span> <span class="ident">byte_5</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">47</span>, <span class="number">40</span>);
+            <span class="kw">let</span> <span class="ident">byte_6</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">55</span>, <span class="number">48</span>);
+            <span class="kw">let</span> <span class="ident">byte_7</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">63</span>, <span class="number">56</span>);
+            <span class="prelude-val">Ok</span>(<span class="ident">byte_0</span>
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_1</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_2</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_3</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_4</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_5</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_6</span>)
+                .<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">byte_7</span>))
+        },
+        <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
+            <span class="string">&quot;bswap on bitwidth {}&quot;</span>,
+            <span class="ident">bits</span>
+        ))),
+    }
+}
+
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_objectsize</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="comment">// We have no way of tracking in-memory types, so we can&#39;t provide the</span>
     <span class="comment">// intended answers for this intrinsic. Instead, we just always return</span>
     <span class="comment">// &#39;unknown&#39;, as this is valid behavior according to the LLVM spec.</span>
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>)<span class="question-mark">?</span>;
-    <span class="kw">let</span> <span class="ident">width</span> <span class="op">=</span> <span class="ident">layout</span>::<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_type</span>());
-    <span class="kw">let</span> <span class="ident">zero</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">zero</span>(<span class="ident">width</span> <span class="kw">as</span> <span class="ident">u32</span>);
-    <span class="kw">let</span> <span class="ident">minusone</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">ones</span>(<span class="ident">width</span> <span class="kw">as</span> <span class="ident">u32</span>);
+    <span class="kw">let</span> <span class="ident">width</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_type</span>(), <span class="ident">proj</span>).<span class="ident">ok_or</span>(
+        <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="string">&quot;symex_objectsize: return value of this call involves a struct type with no definition in the Project&quot;</span>.<span class="ident">into</span>())
+    )<span class="question-mark">?</span>;
+    <span class="kw">let</span> <span class="ident">zero</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">zero</span>(<span class="ident">width</span>);
+    <span class="kw">let</span> <span class="ident">minusone</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">ones</span>(<span class="ident">width</span>);
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">arg1</span>.<span class="ident">cond_bv</span>(<span class="kw-2">&amp;</span><span class="ident">zero</span>, <span class="kw-2">&amp;</span><span class="ident">minusone</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_assume</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_assume</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">1</span>);
     <span class="kw">let</span> <span class="ident">arg</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">match</span> <span class="ident">arg</span>.<span class="ident">get_type</span>() {
         <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span>: <span class="number">1</span> } <span class="op">=</span><span class="op">&gt;</span> {},
-        <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;symex_assume: expected arg to be of type i1, got type {:?}&quot;</span>, <span class="ident">ty</span>))),
+        <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                <span class="string">&quot;symex_assume: expected arg to be of type i1, got type {:?}&quot;</span>,
+                <span class="ident">ty</span>
+            )))
+        },
     }
 
     <span class="kw">if</span> <span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">trust_llvm_assumes</span> {
@@ -604,7 +804,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>)
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_uadd_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_uadd_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -621,7 +825,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">overflow</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">result</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_sadd_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_sadd_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -638,7 +846,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">overflow</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">result</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_usub_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_usub_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -655,7 +867,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">overflow</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">result</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_ssub_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_ssub_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -672,7 +888,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">overflow</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">result</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_umul_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_umul_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -689,7 +909,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">overflow</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">result</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_smul_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_smul_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -706,7 +930,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">overflow</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">result</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_uadd_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_uadd_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -720,7 +948,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">arg0</span>.<span class="ident">uadds</span>(<span class="kw-2">&amp;</span><span class="ident">arg1</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_sadd_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_sadd_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -734,7 +966,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">arg0</span>.<span class="ident">sadds</span>(<span class="kw-2">&amp;</span><span class="ident">arg1</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_usub_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_usub_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -748,7 +984,11 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">arg0</span>.<span class="ident">usubs</span>(<span class="kw-2">&amp;</span><span class="ident">arg1</span>)))
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_ssub_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(<span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>, <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_ssub_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
+    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+    <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">call</span>.<span class="ident">get_arguments</span>().<span class="ident">len</span>(), <span class="number">2</span>);
     <span class="kw">let</span> <span class="ident">arg0</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
     <span class="kw">let</span> <span class="ident">arg1</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
@@ -778,10 +1018,7 @@
     <span class="kw">impl</span> <span class="ident">DummyCall</span> {
         <span class="kw">fn</span> <span class="ident">new_twoarg_call</span>(<span class="ident">arg0</span>: <span class="ident">Operand</span>, <span class="ident">arg1</span>: <span class="ident">Operand</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
             <span class="self">Self</span> {
-                <span class="ident">args</span>: <span class="macro">vec</span><span class="macro">!</span>[
-                    (<span class="ident">arg0</span>, <span class="macro">vec</span><span class="macro">!</span>[]),
-                    (<span class="ident">arg1</span>, <span class="macro">vec</span><span class="macro">!</span>[]),
-                ]
+                <span class="ident">args</span>: <span class="macro">vec</span><span class="macro">!</span>[(<span class="ident">arg0</span>, <span class="macro">vec</span><span class="macro">!</span>[]), (<span class="ident">arg1</span>, <span class="macro">vec</span><span class="macro">!</span>[])],
             }
         }
     }
@@ -793,23 +1030,37 @@
     }
 
     <span class="kw">impl</span> <span class="ident">IsCall</span> <span class="kw">for</span> <span class="ident">DummyCall</span> {
-        <span class="kw">fn</span> <span class="ident">get_called_func</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Either</span><span class="op">&lt;</span><span class="ident">instruction</span>::<span class="ident">InlineAssembly</span>, <span class="ident">Operand</span><span class="op">&gt;</span> { <span class="macro">unimplemented</span><span class="macro">!</span>() }
+        <span class="kw">fn</span> <span class="ident">get_called_func</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Either</span><span class="op">&lt;</span><span class="ident">instruction</span>::<span class="ident">InlineAssembly</span>, <span class="ident">Operand</span><span class="op">&gt;</span> {
+            <span class="macro">unimplemented</span><span class="macro">!</span>()
+        }
         <span class="kw">fn</span> <span class="ident">get_arguments</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Argument</span><span class="op">&gt;</span> {
             <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">args</span>
         }
-        <span class="kw">fn</span> <span class="ident">get_return_attrs</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">function</span>::<span class="ident">ParameterAttribute</span><span class="op">&gt;</span> { <span class="macro">unimplemented</span><span class="macro">!</span>() }
-        <span class="kw">fn</span> <span class="ident">get_fn_attrs</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">function</span>::<span class="ident">FunctionAttribute</span><span class="op">&gt;</span> { <span class="macro">unimplemented</span><span class="macro">!</span>() }
-        <span class="kw">fn</span> <span class="ident">get_calling_convention</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">function</span>::<span class="ident">CallingConvention</span> { <span class="macro">unimplemented</span><span class="macro">!</span>() }
+        <span class="kw">fn</span> <span class="ident">get_return_attrs</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">function</span>::<span class="ident">ParameterAttribute</span><span class="op">&gt;</span> {
+            <span class="macro">unimplemented</span><span class="macro">!</span>()
+        }
+        <span class="kw">fn</span> <span class="ident">get_fn_attrs</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">function</span>::<span class="ident">FunctionAttribute</span><span class="op">&gt;</span> {
+            <span class="macro">unimplemented</span><span class="macro">!</span>()
+        }
+        <span class="kw">fn</span> <span class="ident">get_calling_convention</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">function</span>::<span class="ident">CallingConvention</span> {
+            <span class="macro">unimplemented</span><span class="macro">!</span>()
+        }
     }
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">sadd_with_overflow</span>() {
-        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(<span class="string">&quot;test_mod&quot;</span>, <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]));
+        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(
+            <span class="string">&quot;test_mod&quot;</span>,
+            <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]),
+        );
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">blank_state</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="string">&quot;test_func&quot;</span>);
 
         <span class="kw">let</span> <span class="ident">four</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">8</span>, <span class="ident">value</span>: <span class="number">4</span> });
         <span class="kw">let</span> <span class="ident">sixty_four</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">8</span>, <span class="ident">value</span>: <span class="number">64</span> });
-        <span class="kw">let</span> <span class="ident">one_hundred</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">8</span>, <span class="ident">value</span>: <span class="number">100</span> });
+        <span class="kw">let</span> <span class="ident">one_hundred</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> {
+            <span class="ident">bits</span>: <span class="number">8</span>,
+            <span class="ident">value</span>: <span class="number">100</span>,
+        });
 
         {
             <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">four</span>.<span class="ident">clone</span>(), <span class="ident">one_hundred</span>.<span class="ident">clone</span>());
@@ -830,7 +1081,7 @@
                 <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                     <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                     <span class="kw">let</span> <span class="ident">overflow</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">8</span>, <span class="number">8</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
-                    <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">result</span>, <span class="number">164</span>);  <span class="comment">// 164 unsigned, which is a negative value for 8-bit signed</span>
+                    <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">result</span>, <span class="number">164</span>); <span class="comment">// 164 unsigned, which is a negative value for 8-bit signed</span>
                     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">overflow</span>, <span class="number">1</span>);
                 },
                 <span class="ident">ret</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Unexpected return value: {:?}&quot;</span>, <span class="ident">ret</span>),
@@ -840,7 +1091,10 @@
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">umul_with_overflow</span>() {
-        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(<span class="string">&quot;test_mod&quot;</span>, <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]));
+        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(
+            <span class="string">&quot;test_mod&quot;</span>,
+            <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]),
+        );
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">blank_state</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="string">&quot;test_func&quot;</span>);
 
         <span class="kw">let</span> <span class="ident">four</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">8</span>, <span class="ident">value</span>: <span class="number">4</span> });
@@ -876,7 +1130,10 @@
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">usubs</span>() {
-        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(<span class="string">&quot;test_mod&quot;</span>, <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]));
+        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(
+            <span class="string">&quot;test_mod&quot;</span>,
+            <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]),
+        );
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">blank_state</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="string">&quot;test_func&quot;</span>);
 
         <span class="comment">// these are the examples from the LLVM 9 docs</span>
@@ -903,7 +1160,10 @@
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">sadds</span>() {
-        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(<span class="string">&quot;test_mod&quot;</span>, <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]));
+        <span class="kw">let</span> <span class="ident">project</span> <span class="op">=</span> <span class="ident">blank_project</span>(
+            <span class="string">&quot;test_mod&quot;</span>,
+            <span class="ident">blank_function</span>(<span class="string">&quot;test_func&quot;</span>, <span class="macro">vec</span><span class="macro">!</span>[<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;test_bb&quot;</span>)]),
+        );
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">blank_state</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="string">&quot;test_func&quot;</span>);
 
         <span class="comment">// these are the examples from the LLVM 9 docs</span>
@@ -911,8 +1171,14 @@
         <span class="kw">let</span> <span class="ident">two</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">4</span>, <span class="ident">value</span>: <span class="number">2</span> });
         <span class="kw">let</span> <span class="ident">five</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">4</span>, <span class="ident">value</span>: <span class="number">5</span> });
         <span class="kw">let</span> <span class="ident">six</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">4</span>, <span class="ident">value</span>: <span class="number">6</span> });
-        <span class="kw">let</span> <span class="ident">minusfour</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">4</span>, <span class="ident">value</span>: (<span class="op">-</span><span class="number">4_i64</span>) <span class="kw">as</span> <span class="ident">u64</span> });
-        <span class="kw">let</span> <span class="ident">minusfive</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">4</span>, <span class="ident">value</span>: (<span class="op">-</span><span class="number">5_i64</span>) <span class="kw">as</span> <span class="ident">u64</span> });
+        <span class="kw">let</span> <span class="ident">minusfour</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> {
+            <span class="ident">bits</span>: <span class="number">4</span>,
+            <span class="ident">value</span>: (<span class="op">-</span><span class="number">4_i64</span>) <span class="kw">as</span> <span class="ident">u64</span>,
+        });
+        <span class="kw">let</span> <span class="ident">minusfive</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> {
+            <span class="ident">bits</span>: <span class="number">4</span>,
+            <span class="ident">value</span>: (<span class="op">-</span><span class="number">5_i64</span>) <span class="kw">as</span> <span class="ident">u64</span>,
+        });
 
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">one</span>.<span class="ident">clone</span>(), <span class="ident">two</span>.<span class="ident">clone</span>());
         <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
@@ -933,7 +1199,10 @@
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">minusfour</span>.<span class="ident">clone</span>(), <span class="ident">two</span>.<span class="ident">clone</span>());
         <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(), <span class="ident">u64</span>::<span class="ident">from_str_radix</span>(<span class="string">&quot;1110&quot;</span>, <span class="number">2</span>).<span class="ident">unwrap</span>());  <span class="comment">// -2</span>
+                <span class="macro">assert_eq</span><span class="macro">!</span>(
+                    <span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(),
+                    <span class="ident">u64</span>::<span class="ident">from_str_radix</span>(<span class="string">&quot;1110&quot;</span>, <span class="number">2</span>).<span class="ident">unwrap</span>()
+                ); <span class="comment">// -2</span>
             },
             <span class="ident">ret</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Unexpected return value: {:?}&quot;</span>, <span class="ident">ret</span>),
         }
@@ -941,7 +1210,10 @@
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">minusfour</span>.<span class="ident">clone</span>(), <span class="ident">minusfive</span>.<span class="ident">clone</span>());
         <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(), <span class="ident">u64</span>::<span class="ident">from_str_radix</span>(<span class="string">&quot;1000&quot;</span>, <span class="number">2</span>).<span class="ident">unwrap</span>());  <span class="comment">// -8</span>
+                <span class="macro">assert_eq</span><span class="macro">!</span>(
+                    <span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(),
+                    <span class="ident">u64</span>::<span class="ident">from_str_radix</span>(<span class="string">&quot;1000&quot;</span>, <span class="number">2</span>).<span class="ident">unwrap</span>()
+                ); <span class="comment">// -8</span>
             },
             <span class="ident">ret</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Unexpected return value: {:?}&quot;</span>, <span class="ident">ret</span>),
         }

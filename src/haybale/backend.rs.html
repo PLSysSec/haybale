@@ -648,29 +648,72 @@
 <span id="648">648</span>
 <span id="649">649</span>
 <span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
+<span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
+<span id="683">683</span>
+<span id="684">684</span>
+<span id="685">685</span>
+<span id="686">686</span>
+<span id="687">687</span>
+<span id="688">688</span>
+<span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Traits which abstract over the backend (BV types, memory implementation,</span>
 <span class="doccomment">//! etc) being used.</span>
 
-<span class="kw">use</span> <span class="ident">boolector</span>::{<span class="ident">Btor</span>, <span class="ident">BVSolution</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="prelude-ty">Result</span>;
+<span class="kw">use</span> <span class="ident">boolector</span>::{<span class="ident">BVSolution</span>, <span class="ident">Btor</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::<span class="ident">Deref</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">rc</span>::<span class="ident">Rc</span>;
 
 <span class="doccomment">/// A `Backend` is just a collection of types which together implement the necessary traits</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Backend</span>: <span class="ident">Clone</span> {
-    <span class="kw">type</span> <span class="ident">SolverRef</span>: <span class="ident">SolverRef</span><span class="op">&lt;</span><span class="ident">BV</span><span class="op">=</span><span class="self">Self</span>::<span class="ident">BV</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">BV</span>: <span class="ident">BV</span><span class="op">&lt;</span><span class="ident">SolverRef</span><span class="op">=</span><span class="self">Self</span>::<span class="ident">SolverRef</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">Memory</span>: <span class="ident">Memory</span><span class="op">&lt;</span><span class="ident">SolverRef</span><span class="op">=</span><span class="self">Self</span>::<span class="ident">SolverRef</span>, <span class="ident">Index</span><span class="op">=</span><span class="self">Self</span>::<span class="ident">BV</span>, <span class="ident">Value</span><span class="op">=</span><span class="self">Self</span>::<span class="ident">BV</span><span class="op">&gt;</span>;
+    <span class="kw">type</span> <span class="ident">SolverRef</span>: <span class="ident">SolverRef</span><span class="op">&lt;</span><span class="ident">BV</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">BV</span><span class="op">&gt;</span>;
+    <span class="kw">type</span> <span class="ident">BV</span>: <span class="ident">BV</span><span class="op">&lt;</span><span class="ident">SolverRef</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">SolverRef</span><span class="op">&gt;</span>;
+    <span class="kw">type</span> <span class="ident">Memory</span>: <span class="ident">Memory</span><span class="op">&lt;</span><span class="ident">SolverRef</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">SolverRef</span>, <span class="ident">Index</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">BV</span>, <span class="ident">Value</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">BV</span><span class="op">&gt;</span>;
 }
 
 <span class="doccomment">/// Trait for something which acts as a reference to a `boolector::Btor` (and</span>
 <span class="doccomment">/// possibly may carry other information as well).</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// This module provides an implementation of `SolverRef` for `Rc&lt;Btor&gt;`.</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">SolverRef</span>: <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Deref</span><span class="op">&lt;</span><span class="ident">Target</span><span class="op">=</span><span class="ident">Btor</span><span class="op">&gt;</span> {
-    <span class="kw">type</span> <span class="ident">BV</span>: <span class="ident">BV</span><span class="op">&lt;</span><span class="ident">SolverRef</span><span class="op">=</span><span class="self">Self</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">SolverRef</span>: <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Deref</span><span class="op">&lt;</span><span class="ident">Target</span> <span class="op">=</span> <span class="ident">Btor</span><span class="op">&gt;</span> {
+    <span class="kw">type</span> <span class="ident">BV</span>: <span class="ident">BV</span><span class="op">&lt;</span><span class="ident">SolverRef</span> <span class="op">=</span> <span class="self">Self</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">Array</span>;
 
     <span class="doccomment">/// Create a new `Btor` instance, initialize it as necessary, and return a</span>
@@ -727,7 +770,10 @@
         <span class="ident">Btor</span>::<span class="ident">get_matching_bv</span>(<span class="self">self</span>.<span class="ident">clone</span>(), <span class="ident">bv</span>)
     }
 
-    <span class="kw">fn</span> <span class="ident">match_array</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">array</span>: <span class="kw-2">&amp;</span><span class="ident">boolector</span>::<span class="ident">Array</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">boolector</span>::<span class="ident">Array</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">match_array</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">array</span>: <span class="kw-2">&amp;</span><span class="ident">boolector</span>::<span class="ident">Array</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">boolector</span>::<span class="ident">Array</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="ident">Btor</span>::<span class="ident">get_matching_array</span>(<span class="self">self</span>.<span class="ident">clone</span>(), <span class="ident">array</span>)
     }
 }
@@ -737,7 +783,7 @@
 <span class="doccomment">/// These methods mirror the methods available on `boolector::BV`;</span>
 <span class="doccomment">/// detailed docs are available there.</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">BV</span>: <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">PartialEq</span> <span class="op">+</span> <span class="ident">Eq</span> <span class="op">+</span> <span class="ident">fmt</span>::<span class="ident">Debug</span> {
-    <span class="kw">type</span> <span class="ident">SolverRef</span>: <span class="ident">SolverRef</span><span class="op">&lt;</span><span class="ident">BV</span><span class="op">=</span><span class="self">Self</span><span class="op">&gt;</span>;
+    <span class="kw">type</span> <span class="ident">SolverRef</span>: <span class="ident">SolverRef</span><span class="op">&lt;</span><span class="ident">BV</span> <span class="op">=</span> <span class="self">Self</span><span class="op">&gt;</span>;
 
     <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">solver</span>: <span class="self">Self</span>::<span class="ident">SolverRef</span>, <span class="ident">width</span>: <span class="ident">u32</span>, <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span>;
     <span class="kw">fn</span> <span class="ident">from_bool</span>(<span class="ident">solver</span>: <span class="self">Self</span>::<span class="ident">SolverRef</span>, <span class="ident">b</span>: <span class="ident">bool</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span>;
@@ -823,13 +869,15 @@
     <span class="doccomment">///</span>
     <span class="doccomment">/// A default implementation is provided in terms of the other trait methods.</span>
     <span class="kw">fn</span> <span class="ident">zero_extend_to_bits</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">cmp</span>::<span class="ident">Ordering</span>;
         <span class="kw">let</span> <span class="ident">cur_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">get_width</span>();
-        <span class="kw">if</span> <span class="ident">cur_bits</span> <span class="op">=</span><span class="op">=</span> <span class="ident">bits</span> {
-            <span class="self">self</span>.<span class="ident">clone</span>()
-        } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">cur_bits</span> <span class="op">&lt;</span> <span class="ident">bits</span> {
-            <span class="self">self</span>.<span class="ident">zext</span>(<span class="ident">bits</span> <span class="op">-</span> <span class="ident">cur_bits</span>)
-        } <span class="kw">else</span> {
-            <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;tried to zero-extend to {} bits, but already had {} bits&quot;</span>, <span class="ident">bits</span>, <span class="ident">cur_bits</span>)
+        <span class="kw">match</span> <span class="ident">cur_bits</span>.<span class="ident">cmp</span>(<span class="kw-2">&amp;</span><span class="ident">bits</span>) {
+            <span class="ident">Ordering</span>::<span class="ident">Equal</span> <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">clone</span>(),
+            <span class="ident">Ordering</span>::<span class="ident">Less</span> <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">zext</span>(<span class="ident">bits</span> <span class="op">-</span> <span class="ident">cur_bits</span>),
+            <span class="ident">Ordering</span>::<span class="ident">Greater</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(
+                <span class="string">&quot;tried to zero-extend to {} bits, but already had {} bits&quot;</span>,
+                <span class="ident">bits</span>, <span class="ident">cur_bits</span>
+            ),
         }
     }
 
@@ -840,13 +888,15 @@
     <span class="doccomment">///</span>
     <span class="doccomment">/// A default implementation is provided in terms of the other trait methods.</span>
     <span class="kw">fn</span> <span class="ident">sign_extend_to_bits</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">cmp</span>::<span class="ident">Ordering</span>;
         <span class="kw">let</span> <span class="ident">cur_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">get_width</span>();
-        <span class="kw">if</span> <span class="ident">cur_bits</span> <span class="op">=</span><span class="op">=</span> <span class="ident">bits</span> {
-            <span class="self">self</span>.<span class="ident">clone</span>()
-        } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">cur_bits</span> <span class="op">&lt;</span> <span class="ident">bits</span> {
-            <span class="self">self</span>.<span class="ident">sext</span>(<span class="ident">bits</span> <span class="op">-</span> <span class="ident">cur_bits</span>)
-        } <span class="kw">else</span> {
-            <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;tried to sign-extend to {} bits, but already had {} bits&quot;</span>, <span class="ident">bits</span>, <span class="ident">cur_bits</span>)
+        <span class="kw">match</span> <span class="ident">cur_bits</span>.<span class="ident">cmp</span>(<span class="kw-2">&amp;</span><span class="ident">bits</span>) {
+            <span class="ident">Ordering</span>::<span class="ident">Equal</span> <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">clone</span>(),
+            <span class="ident">Ordering</span>::<span class="ident">Less</span> <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">sext</span>(<span class="ident">bits</span> <span class="op">-</span> <span class="ident">cur_bits</span>),
+            <span class="ident">Ordering</span>::<span class="ident">Greater</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(
+                <span class="string">&quot;tried to sign-extend to {} bits, but already had {} bits&quot;</span>,
+                <span class="ident">bits</span>, <span class="ident">cur_bits</span>
+            ),
         }
     }
 
@@ -871,8 +921,8 @@
         <span class="kw">let</span> <span class="ident">max_value</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">ones</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="ident">width</span>);
 
         <span class="ident">overflow</span>.<span class="ident">cond_bv</span>(
-            <span class="kw-2">&amp;</span><span class="ident">max_value</span>,  <span class="comment">// overflow: return the max value</span>
-            <span class="kw-2">&amp;</span><span class="ident">result</span>,  <span class="comment">// no overflow: return the ordinary result</span>
+            <span class="kw-2">&amp;</span><span class="ident">max_value</span>, <span class="comment">// overflow: return the max value</span>
+            <span class="kw-2">&amp;</span><span class="ident">result</span>,    <span class="comment">// no overflow: return the ordinary result</span>
         )
     }
 
@@ -897,18 +947,20 @@
         <span class="comment">//   adding two negative values: if there was overflow, we saturate; return the max negative value</span>
         <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">add</span>(<span class="ident">other</span>);
         <span class="kw">let</span> <span class="ident">overflow</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">saddo</span>(<span class="ident">other</span>);
-        <span class="kw">let</span> <span class="ident">max_positive</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">zero</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="number">1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="self">Self</span>::<span class="ident">ones</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="ident">width</span> <span class="op">-</span> <span class="number">1</span>));
+        <span class="kw">let</span> <span class="ident">max_positive</span> <span class="op">=</span>
+            <span class="self">Self</span>::<span class="ident">zero</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="number">1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="self">Self</span>::<span class="ident">ones</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="ident">width</span> <span class="op">-</span> <span class="number">1</span>));
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">max_positive</span>.<span class="ident">get_width</span>(), <span class="ident">width</span>);
-        <span class="kw">let</span> <span class="ident">max_negative</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">one</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="number">1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="self">Self</span>::<span class="ident">zero</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="ident">width</span> <span class="op">-</span> <span class="number">1</span>));
+        <span class="kw">let</span> <span class="ident">max_negative</span> <span class="op">=</span>
+            <span class="self">Self</span>::<span class="ident">one</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="number">1</span>).<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="self">Self</span>::<span class="ident">zero</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="ident">width</span> <span class="op">-</span> <span class="number">1</span>));
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">max_negative</span>.<span class="ident">get_width</span>(), <span class="ident">width</span>);
-        <span class="kw">let</span> <span class="ident">self_negative</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">slice</span>(<span class="ident">width</span><span class="op">-</span><span class="number">1</span>, <span class="ident">width</span><span class="op">-</span><span class="number">1</span>);  <span class="comment">// `true` if the sign bit of `self` is set, meaning `self` is negative</span>
+        <span class="kw">let</span> <span class="ident">self_negative</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">slice</span>(<span class="ident">width</span> <span class="op">-</span> <span class="number">1</span>, <span class="ident">width</span> <span class="op">-</span> <span class="number">1</span>); <span class="comment">// `true` if the sign bit of `self` is set, meaning `self` is negative</span>
 
         <span class="ident">overflow</span>.<span class="ident">cond_bv</span>(
             <span class="kw-2">&amp;</span><span class="ident">self_negative</span>.<span class="ident">cond_bv</span>(
-                <span class="kw-2">&amp;</span><span class="ident">max_negative</span>,  <span class="comment">// overflow, and `self` was negative, so `other` must also have been negative, so return the max negative value</span>
-                <span class="kw-2">&amp;</span><span class="ident">max_positive</span>,  <span class="comment">// overflow, and `self` was positive, so `other` must also have been positive, so return the max positive value</span>
+                <span class="kw-2">&amp;</span><span class="ident">max_negative</span>, <span class="comment">// overflow, and `self` was negative, so `other` must also have been negative, so return the max negative value</span>
+                <span class="kw-2">&amp;</span><span class="ident">max_positive</span>, <span class="comment">// overflow, and `self` was positive, so `other` must also have been positive, so return the max positive value</span>
             ),
-            <span class="kw-2">&amp;</span><span class="ident">result</span>,  <span class="comment">// no overflow: just return the ordinary result</span>
+            <span class="kw-2">&amp;</span><span class="ident">result</span>, <span class="comment">// no overflow: just return the ordinary result</span>
         )
     }
 
@@ -933,8 +985,8 @@
         <span class="kw">let</span> <span class="ident">zero</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">zero</span>(<span class="self">self</span>.<span class="ident">get_solver</span>(), <span class="ident">width</span>);
 
         <span class="ident">overflow</span>.<span class="ident">cond_bv</span>(
-            <span class="kw-2">&amp;</span><span class="ident">zero</span>,  <span class="comment">// overflow: return zero</span>
-            <span class="kw-2">&amp;</span><span class="ident">result</span>,  <span class="comment">// no overflow: return the ordinary result</span>
+            <span class="kw-2">&amp;</span><span class="ident">zero</span>,   <span class="comment">// overflow: return zero</span>
+            <span class="kw-2">&amp;</span><span class="ident">result</span>, <span class="comment">// no overflow: return the ordinary result</span>
         )
     }
 
@@ -952,9 +1004,9 @@
 }
 
 <span class="doccomment">/// Trait for things which can act like &#39;memories&#39;, that is, maps from bitvector (addresses) to bitvector (values)</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Memory</span> : <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">PartialEq</span> <span class="op">+</span> <span class="ident">Eq</span> {
-    <span class="kw">type</span> <span class="ident">SolverRef</span>: <span class="ident">SolverRef</span><span class="op">&lt;</span><span class="ident">BV</span><span class="op">=</span><span class="self">Self</span>::<span class="ident">Index</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">Index</span>: <span class="ident">BV</span><span class="op">&lt;</span><span class="ident">SolverRef</span><span class="op">=</span><span class="self">Self</span>::<span class="ident">SolverRef</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Memory</span>: <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">PartialEq</span> <span class="op">+</span> <span class="ident">Eq</span> {
+    <span class="kw">type</span> <span class="ident">SolverRef</span>: <span class="ident">SolverRef</span><span class="op">&lt;</span><span class="ident">BV</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">Index</span><span class="op">&gt;</span>;
+    <span class="kw">type</span> <span class="ident">Index</span>: <span class="ident">BV</span><span class="op">&lt;</span><span class="ident">SolverRef</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">SolverRef</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">Value</span>: <span class="ident">BV</span>;
 
     <span class="doccomment">/// A new `Memory`, whose contents at all addresses are completely uninitialized (unconstrained)</span>
@@ -964,7 +1016,14 @@
     <span class="doccomment">/// if NULL is a possible solution for the address</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, &#39;mem&#39;)</span>
-    <span class="kw">fn</span> <span class="ident">new_uninitialized</span>(<span class="ident">solver</span>: <span class="self">Self</span>::<span class="ident">SolverRef</span>, <span class="ident">null_detection</span>: <span class="ident">bool</span>, <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span>;
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// `addr_bits`: e.g. `64` for a `Memory` which uses 64-bit addresses</span>
+    <span class="kw">fn</span> <span class="ident">new_uninitialized</span>(
+        <span class="ident">solver</span>: <span class="self">Self</span>::<span class="ident">SolverRef</span>,
+        <span class="ident">null_detection</span>: <span class="ident">bool</span>,
+        <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>,
+        <span class="ident">addr_bits</span>: <span class="ident">u32</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span>;
 
     <span class="doccomment">/// A new `Memory`, whose contents at all addresses are initialized to be `0`</span>
     <span class="doccomment">///</span>
@@ -973,7 +1032,14 @@
     <span class="doccomment">/// if NULL is a possible solution for the address</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// `name`: a name for this `Memory`, or `None` to use the default name (as of this writing, &#39;mem&#39;)</span>
-    <span class="kw">fn</span> <span class="ident">new_zero_initialized</span>(<span class="ident">solver</span>: <span class="self">Self</span>::<span class="ident">SolverRef</span>, <span class="ident">null_detection</span>: <span class="ident">bool</span>, <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span>;
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// `addr_bits`: e.g. `64` for a `Memory` which uses 64-bit addresses</span>
+    <span class="kw">fn</span> <span class="ident">new_zero_initialized</span>(
+        <span class="ident">solver</span>: <span class="self">Self</span>::<span class="ident">SolverRef</span>,
+        <span class="ident">null_detection</span>: <span class="ident">bool</span>,
+        <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>,
+        <span class="ident">addr_bits</span>: <span class="ident">u32</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span>;
 
     <span class="doccomment">/// Read any number (&gt;0) of bits of memory, at any alignment.</span>
     <span class="doccomment">/// Returned `BV` will have size `bits`.</span>
@@ -996,7 +1062,7 @@
 }
 
 <span class="doccomment">/// Some prototypical `BV` and `Memory` implementations:</span>
-<span class="doccomment">///   `boolector::BV&lt;Rc&lt;Btor&gt;&gt;`, `crate::memory::Memory`, and `crate::simple_memory::Memory`</span>
+<span class="doccomment">///   `boolector::BV&lt;Rc&lt;Btor&gt;&gt;`, `crate::simple_memory::Memory`, and `crate::cell_memory::Memory`</span>
 
 <span class="kw">impl</span> <span class="ident">BV</span> <span class="kw">for</span> <span class="ident">boolector</span>::<span class="ident">BV</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="kw">type</span> <span class="ident">SolverRef</span> <span class="op">=</span> <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>;
@@ -1232,16 +1298,26 @@
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Memory</span> <span class="kw">for</span> <span class="kw">crate</span>::<span class="ident">memory</span>::<span class="ident">Memory</span> {
+<span class="kw">impl</span> <span class="ident">Memory</span> <span class="kw">for</span> <span class="kw">crate</span>::<span class="ident">cell_memory</span>::<span class="ident">Memory</span> {
     <span class="kw">type</span> <span class="ident">SolverRef</span> <span class="op">=</span> <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">Index</span> <span class="op">=</span> <span class="ident">boolector</span>::<span class="ident">BV</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">boolector</span>::<span class="ident">BV</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>;
 
-    <span class="kw">fn</span> <span class="ident">new_uninitialized</span>(<span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>, <span class="ident">null_detection</span>: <span class="ident">bool</span>, <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="kw">crate</span>::<span class="ident">memory</span>::<span class="ident">Memory</span>::<span class="ident">new_uninitialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>)
+    <span class="kw">fn</span> <span class="ident">new_uninitialized</span>(
+        <span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>,
+        <span class="ident">null_detection</span>: <span class="ident">bool</span>,
+        <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>,
+        <span class="ident">addr_bits</span>: <span class="ident">u32</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">crate</span>::<span class="ident">cell_memory</span>::<span class="ident">Memory</span>::<span class="ident">new_uninitialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>, <span class="ident">addr_bits</span>)
     }
-    <span class="kw">fn</span> <span class="ident">new_zero_initialized</span>(<span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>, <span class="ident">null_detection</span>: <span class="ident">bool</span>, <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="kw">crate</span>::<span class="ident">memory</span>::<span class="ident">Memory</span>::<span class="ident">new_zero_initialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>)
+    <span class="kw">fn</span> <span class="ident">new_zero_initialized</span>(
+        <span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>,
+        <span class="ident">null_detection</span>: <span class="ident">bool</span>,
+        <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>,
+        <span class="ident">addr_bits</span>: <span class="ident">u32</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">crate</span>::<span class="ident">cell_memory</span>::<span class="ident">Memory</span>::<span class="ident">new_zero_initialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>, <span class="ident">addr_bits</span>)
     }
     <span class="kw">fn</span> <span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">index</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>::<span class="ident">Index</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>::<span class="ident">Value</span><span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">read</span>(<span class="ident">index</span>, <span class="ident">bits</span>)
@@ -1262,11 +1338,21 @@
     <span class="kw">type</span> <span class="ident">Index</span> <span class="op">=</span> <span class="ident">boolector</span>::<span class="ident">BV</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">boolector</span>::<span class="ident">BV</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>;
 
-    <span class="kw">fn</span> <span class="ident">new_uninitialized</span>(<span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>, <span class="ident">null_detection</span>: <span class="ident">bool</span>, <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="kw">crate</span>::<span class="ident">simple_memory</span>::<span class="ident">Memory</span>::<span class="ident">new_uninitialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>)
+    <span class="kw">fn</span> <span class="ident">new_uninitialized</span>(
+        <span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>,
+        <span class="ident">null_detection</span>: <span class="ident">bool</span>,
+        <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>,
+        <span class="ident">addr_bits</span>: <span class="ident">u32</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">crate</span>::<span class="ident">simple_memory</span>::<span class="ident">Memory</span>::<span class="ident">new_uninitialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>, <span class="ident">addr_bits</span>)
     }
-    <span class="kw">fn</span> <span class="ident">new_zero_initialized</span>(<span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>, <span class="ident">null_detection</span>: <span class="ident">bool</span>, <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="kw">crate</span>::<span class="ident">simple_memory</span>::<span class="ident">Memory</span>::<span class="ident">new_zero_initialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>)
+    <span class="kw">fn</span> <span class="ident">new_zero_initialized</span>(
+        <span class="ident">btor</span>: <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>,
+        <span class="ident">null_detection</span>: <span class="ident">bool</span>,
+        <span class="ident">name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>,
+        <span class="ident">addr_bits</span>: <span class="ident">u32</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">crate</span>::<span class="ident">simple_memory</span>::<span class="ident">Memory</span>::<span class="ident">new_zero_initialized</span>(<span class="ident">btor</span>, <span class="ident">null_detection</span>, <span class="ident">name</span>, <span class="ident">addr_bits</span>)
     }
     <span class="kw">fn</span> <span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">index</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>::<span class="ident">Index</span>, <span class="ident">bits</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>::<span class="ident">Value</span><span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">read</span>(<span class="ident">index</span>, <span class="ident">bits</span>)
@@ -1283,18 +1369,18 @@
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BtorBackend</span> {}
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">CellMemoryBackend</span> {}
 
-<span class="kw">impl</span> <span class="ident">Backend</span> <span class="kw">for</span> <span class="ident">BtorBackend</span> {
+<span class="kw">impl</span> <span class="ident">Backend</span> <span class="kw">for</span> <span class="ident">CellMemoryBackend</span> {
     <span class="kw">type</span> <span class="ident">SolverRef</span> <span class="op">=</span> <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">BV</span> <span class="op">=</span> <span class="ident">boolector</span>::<span class="ident">BV</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">Memory</span> <span class="op">=</span> <span class="kw">crate</span>::<span class="ident">memory</span>::<span class="ident">Memory</span>;
+    <span class="kw">type</span> <span class="ident">Memory</span> <span class="op">=</span> <span class="kw">crate</span>::<span class="ident">cell_memory</span>::<span class="ident">Memory</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SimpleMemoryBackend</span> {}
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DefaultBackend</span> {}
 
-<span class="kw">impl</span> <span class="ident">Backend</span> <span class="kw">for</span> <span class="ident">SimpleMemoryBackend</span> {
+<span class="kw">impl</span> <span class="ident">Backend</span> <span class="kw">for</span> <span class="ident">DefaultBackend</span> {
     <span class="kw">type</span> <span class="ident">SolverRef</span> <span class="op">=</span> <span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">BV</span> <span class="op">=</span> <span class="ident">boolector</span>::<span class="ident">BV</span><span class="op">&lt;</span><span class="ident">Rc</span><span class="op">&lt;</span><span class="ident">Btor</span><span class="op">&gt;</span><span class="op">&gt;</span>;
     <span class="kw">type</span> <span class="ident">Memory</span> <span class="op">=</span> <span class="kw">crate</span>::<span class="ident">simple_memory</span>::<span class="ident">Memory</span>;
