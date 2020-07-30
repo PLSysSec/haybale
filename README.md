@@ -33,17 +33,23 @@ as the questions listed above.
 
 ### 1. Install
 
-`haybale` is on [crates.io](https://crates.io/crates/haybale), so you can simply
-add it as a dependency in your `Cargo.toml`:
+You're looking at the `llvm-9` branch of `haybale`, which is not published on
+[crates.io](https://crates.io/crates/haybale). Instead, you'll have to add a
+Git dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.4.0"
+haybale = { git = "https://github.com/PLSysSec/haybale", branch = "llvm-9" }
 ```
 
-`haybale` also depends (indirectly) on the LLVM 9 and Boolector libraries, which
-must both be available on your system.
+This branch of `haybale` also depends (indirectly) on the LLVM 9 and
+Boolector libraries, which must both be available on your system.
 See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
+
+Alternately, the `master` branch of `haybale` and the current
+[crates.io](https://crates.io/crates/haybale) releases support/require LLVM
+10.
+For more information, see "Compatibility" below.
 
 ### 2. Acquire bitcode to analyze
 
@@ -266,12 +272,23 @@ or of course you can generate local documentation with `cargo doc --open`.
 
 ## Compatibility
 
-Currently, `haybale` only supports LLVM 9. A version of `haybale` supporting
-LLVM 8 is available on the `llvm-8` branch of this repo; it is approximately
-at feature parity with `haybale` 0.2.1, and will likely be stuck at that
-point indefinitely unless there is demand for additional backported features.
+You're looking at the `llvm-9` branch of `haybale`, which only supports LLVM 9.
 
-`haybale` works on stable Rust, and requires Rust 1.40+.
+LLVM 10 is supported on the `master` branch; the current
+[crates.io](https://crates.io/crates/haybale) releases are also from this
+branch.
+As of this writing, the `llvm-9` and `master` branches are at complete
+feature parity: you get the same features with LLVM 9 as you do with LLVM 10,
+except for being able to analyze bitcode generated with LLVM 10.
+
+LLVM 8 is supported on the `llvm-8` branch of `haybale`. The `llvm-8` branch
+is approximately at feature parity with `haybale` 0.2.1, and will likely be
+stuck at that point indefinitely unless there is demand for additional
+backported features.
+
+LLVM 7 and earlier are not supported.
+
+`haybale` works on stable Rust, and requires Rust 1.40 or later.
 
 ## Under the hood
 
@@ -279,6 +296,39 @@ point indefinitely unless there is demand for additional backported features.
 solver (via the Rust [`boolector`] crate).
 
 ## Changelog
+
+### Version 0.5.0 (Jul 29, 2020)
+
+Compatibility:
+- The `master` branch of `haybale` now depends on LLVM 10 (up from LLVM 9).
+LLVM 9 is still supported on a separate branch; see "Compatibility" above.
+- Updated `boolector` dependency to crate version 0.4.0, which requires
+Boolector version 3.2.1 (up from 3.1.0).
+
+Renames which affect the public API:
+- Rename `SimpleMemoryBackend` to `DefaultBackend` and make it default.
+Rename `BtorBackend` to `CellMemoryBackend`, and the `memory` module to
+`cell_memory`.
+- Remove the `layout` module. Its functions are now available as methods on
+[`State`]. Also, many of these functions now return `u32` instead of `usize`.
+
+32-bit targets and related changes:
+- With `DefaultBackend`, `haybale` now supports LLVM bitcode which was
+compiled for 32-bit targets (previously only supported 64-bit targets).
+- The [`new_uninitialized()`] and [`new_zero_initialized()`] methods on the
+[`backend::Memory`] trait, `simple_memory::Memory`, and `cell_memory::Memory`
+now take an additional parameter indicating the pointer size.
+- `Project` has a new public method [`pointer_size_bits()`].
+
+Other:
+- Built-in support for the `llvm.expect` intrinsic, and built-in support for
+the `llvm.bswap` intrinsic with vector operands (previously only supported
+scalar operands)
+- [`solver_utils::PossibleSolutions`] has new constructors `empty()`,
+`exactly_one()`, and `exactly_two()` (useful for testing), and also
+implements `FromIterator`, allowing you to `.collect()` an iterator into it
+- Bugfix for the `{min,max}_possible_solution_for_bv_as_binary_str()`
+functions in the `solver_utils` module
 
 ### Version 0.4.0 (Mar 31, 2020)
 
