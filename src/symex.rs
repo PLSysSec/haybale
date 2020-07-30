@@ -2526,14 +2526,8 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnums(modname, funcname, vec![2, 4, 12])
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnums(modname, funcname, vec![2, 8, 12])
-        );
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 12]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 8, 12]));
         assert_eq!(paths.len(), 2); // ensure there are no more paths
 
         Ok(())
@@ -2554,18 +2548,9 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnums(modname, funcname, vec![2, 4, 6, 14])
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14])
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14])
-        );
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![2, 4, 6, 14]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 4, 8, 10, 14]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![2, 4, 8, 12, 14]));
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![2, 14]));
         assert_eq!(paths.len(), 4); // ensure there are no more paths
 
@@ -2587,58 +2572,40 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(2, Instr(0)), (4, Terminator), (14, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(2, Instr(0)), (5, Instr(0)), (14, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(2, Instr(0)), (7, Instr(0)), (14, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(2, Instr(0)), (10, Terminator), (14, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(2, Instr(0)), (11, Terminator), (14, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[5],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(2, Instr(0)), (12, Instr(0)), (14, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[6],
-            path_from_bbnum_instr_pairs(modname, funcname, vec![(2, Instr(0)), (14, Instr(0)),])
-        );
+        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (2, Instr(0)),
+            (4, Terminator),
+            (14, Instr(0)),
+        ]));
+        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (2, Instr(0)),
+            (5, Instr(0)),
+            (14, Instr(0)),
+        ]));
+        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (2, Instr(0)),
+            (7, Instr(0)),
+            (14, Instr(0)),
+        ]));
+        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (2, Instr(0)),
+            (10, Terminator),
+            (14, Instr(0)),
+        ]));
+        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (2, Instr(0)),
+            (11, Terminator),
+            (14, Instr(0)),
+        ]));
+        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (2, Instr(0)),
+            (12, Instr(0)),
+            (14, Instr(0)),
+        ]));
+        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (2, Instr(0)),
+            (14, Instr(0)),
+        ]));
         assert_eq!(paths.len(), 7); // ensure there are no more paths
 
         Ok(())
@@ -2659,26 +2626,11 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12])
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12])
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12])
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnums(modname, funcname, vec![1, 6, 6, 12])
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnums(modname, funcname, vec![1, 6, 12])
-        );
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 6, 12]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 6, 12]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 6, 6, 12]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 6, 6, 12]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 12]));
         assert_eq!(paths.len(), 5); // ensure there are no more paths
 
         Ok(())
@@ -2701,22 +2653,10 @@ mod tests {
         paths.sort();
         assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 9, 6]));
-        assert_eq!(
-            paths[2],
-            path_from_bbnums(modname, funcname, vec![1, 9, 9, 6])
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 6])
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 6])
-        );
-        assert_eq!(
-            paths[5],
-            path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 9, 6])
-        );
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 9, 9, 6]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 6]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 6]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 9, 9, 9, 9, 9, 6]));
         assert_eq!(paths.len(), 6); // ensure there are no more paths
 
         Ok(())
@@ -2737,30 +2677,12 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnums(modname, funcname, vec![1, 5, 8, 18])
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18])
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18])
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 8, 18])
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 8, 18])
-        );
-        assert_eq!(
-            paths[5],
-            path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 11, 8, 18])
-        );
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 8, 18]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 11, 8, 18]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 8, 18]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 8, 18]));
+        assert_eq!(paths[5], path_from_bbnums(modname, funcname, vec![1, 5, 11, 11, 11, 11, 11, 8, 18]));
         assert_eq!(paths[6], path_from_bbnums(modname, funcname, vec![1, 18]));
         assert_eq!(paths.len(), 7); // ensure there are no more paths
 
@@ -2782,38 +2704,21 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnums(
-                modname,
-                funcname,
-                vec![1, 6, 13, 16, 6, 10, 16, 6, 10, 16, 6, 13, 16, 6, 10, 16, 20]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnums(
-                modname,
-                funcname,
-                vec![1, 6, 13, 16, 6, 10, 16, 6, 10, 16, 6, 13, 16, 20]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnums(
-                modname,
-                funcname,
-                vec![1, 6, 13, 16, 6, 10, 16, 6, 10, 16, 20]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 6, 10, 16, 20])
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 20])
-        );
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16,
+                                                                         6, 10, 16,
+                                                                         6, 13, 16,
+                                                                         6, 10, 16, 20]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16,
+                                                                         6, 10, 16,
+                                                                         6, 13, 16, 20]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16,
+                                                                         6, 10, 16, 20]));
+        assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16,
+                                                                         6, 10, 16, 20]));
+        assert_eq!(paths[4], path_from_bbnums(modname, funcname, vec![1, 6, 13, 16, 20]));
         assert_eq!(paths.len(), 5); // ensure there are no more paths
 
         Ok(())
@@ -2834,14 +2739,8 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnums(
-                modname,
-                funcname,
-                vec![1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]
-            )
-        );
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+                                                                         11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 9]));
         assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
@@ -2862,36 +2761,15 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnums(
-                modname,
-                funcname,
-                vec![
-                    1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 5, 13, 13, 13, 13, 13, 13,
-                    13, 13, 13, 13, 10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 7
-                ]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnums(
-                modname,
-                funcname,
-                vec![
-                    1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 5, 13, 13, 13, 13, 13, 13,
-                    13, 13, 13, 13, 10, 7
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnums(
-                modname,
-                funcname,
-                vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 10, 7]
-            )
-        );
+        assert_eq!(paths[0], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 7]));
+        assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 7]));
+        assert_eq!(paths[2], path_from_bbnums(modname, funcname, vec![1, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+                                                                     10, 7]));
         assert_eq!(paths[3], path_from_bbnums(modname, funcname, vec![1, 7]));
         assert_eq!(paths.len(), 4); // ensure there are no more paths
 
@@ -2913,17 +2791,11 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                &modname,
-                vec![
-                    ("simple_caller", 1, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("simple_caller", 1, Terminator),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
+            ("simple_caller", 1, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("simple_caller", 1, Terminator),
+        ]));
         assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
@@ -2945,16 +2817,10 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                &modname,
-                vec![
-                    ("simple_caller", 1, Instr(0)),
-                    // shouldn't enter the call, due to `max_callstack_depth` setting
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(&modname, vec![
+            ("simple_caller", 1, Instr(0)),
+            // shouldn't enter the call, due to `max_callstack_depth` setting
+        ]));
         assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
@@ -2980,14 +2846,11 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_varying_modules(vec![
-                (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
-                (callee_modname, "simple_callee", 2, Instr(0)),
-                (caller_modname, "cross_module_simple_caller", 1, Terminator),
-            ])
-        );
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
+            (callee_modname, "simple_callee", 2, Instr(0)),
+            (caller_modname, "cross_module_simple_caller", 1, Terminator),
+        ]));
         assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
@@ -3008,19 +2871,13 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("conditional_caller", 2, Instr(0)),
-                    ("conditional_caller", 4, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("conditional_caller", 4, Terminator),
-                    ("conditional_caller", 8, Instr(0)),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("conditional_caller", 2, Instr(0)),
+            ("conditional_caller", 4, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("conditional_caller", 4, Terminator),
+            ("conditional_caller", 8, Instr(0)),
+        ]));
         assert_eq!(paths[1], path_from_bbnums(modname, funcname, vec![2, 6, 8]));
         assert_eq!(paths.len(), 2); // ensure there are no more paths
 
@@ -3042,19 +2899,13 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("twice_caller", 1, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("twice_caller", 1, Instr(1)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("twice_caller", 1, Instr(2)),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("twice_caller", 1, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("twice_caller", 1, Instr(1)),
+            ("simple_callee", 2, Instr(0)),
+            ("twice_caller", 1, Instr(2)),
+        ]));
         assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
@@ -3080,16 +2931,13 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_varying_modules(vec![
-                (caller_modname, "cross_module_twice_caller", 1, Instr(0)),
-                (callee_modname, "simple_callee", 2, Instr(0)),
-                (caller_modname, "cross_module_twice_caller", 1, Instr(1)),
-                (callee_modname, "simple_callee", 2, Instr(0)),
-                (caller_modname, "cross_module_twice_caller", 1, Instr(2)),
-            ])
-        );
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_twice_caller", 1, Instr(0)),
+            (callee_modname, "simple_callee", 2, Instr(0)),
+            (caller_modname, "cross_module_twice_caller", 1, Instr(1)),
+            (callee_modname, "simple_callee", 2, Instr(0)),
+            (caller_modname, "cross_module_twice_caller", 1, Instr(2)),
+        ]));
         assert_eq!(paths.len(), 1); // enusre there are no more paths
 
         Ok(())
@@ -3110,19 +2958,13 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("nested_caller", 2, Instr(0)),
-                    ("simple_caller", 1, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("simple_caller", 1, Terminator),
-                    ("nested_caller", 2, Terminator),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("nested_caller", 2, Instr(0)),
+            ("simple_caller", 1, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("simple_caller", 1, Terminator),
+            ("nested_caller", 2, Terminator),
+        ]));
         assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
@@ -3144,17 +2986,11 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("nested_caller", 2, Instr(0)),
-                    ("simple_caller", 1, Instr(0)),
-                    ("nested_caller", 2, Terminator), // shouldn't enter `simple_callee` due to the `max_callstack_depth` setting
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("nested_caller", 2, Instr(0)),
+            ("simple_caller", 1, Instr(0)),
+            ("nested_caller", 2, Terminator), // shouldn't enter `simple_callee` due to the `max_callstack_depth` setting
+        ]));
         assert_eq!(paths.len(), 1); // ensure there are no more paths
 
         Ok(())
@@ -3180,26 +3016,13 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_varying_modules(vec![
-                (
-                    caller_modname,
-                    "cross_module_nested_near_caller",
-                    2,
-                    Instr(0)
-                ),
-                (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
-                (callee_modname, "simple_callee", 2, Instr(0)),
-                (caller_modname, "cross_module_simple_caller", 1, Terminator),
-                (
-                    caller_modname,
-                    "cross_module_nested_near_caller",
-                    2,
-                    Terminator
-                ),
-            ])
-        );
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_nested_near_caller", 2, Instr(0)),
+            (caller_modname, "cross_module_simple_caller", 1, Instr(0)),
+            (callee_modname, "simple_callee", 2, Instr(0)),
+            (caller_modname, "cross_module_simple_caller", 1, Terminator),
+            (caller_modname, "cross_module_nested_near_caller", 2, Terminator),
+        ]));
         assert_eq!(paths.len(), 1); // enusre there are no more paths
 
         Ok(())
@@ -3225,26 +3048,13 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_varying_modules(vec![
-                (
-                    caller_modname,
-                    "cross_module_nested_far_caller",
-                    2,
-                    Instr(0)
-                ),
-                (callee_modname, "simple_caller", 1, Instr(0)),
-                (callee_modname, "simple_callee", 2, Instr(0)),
-                (callee_modname, "simple_caller", 1, Terminator),
-                (
-                    caller_modname,
-                    "cross_module_nested_far_caller",
-                    2,
-                    Terminator
-                ),
-            ])
-        );
+        assert_eq!(paths[0], path_from_tuples_varying_modules(vec![
+            (caller_modname, "cross_module_nested_far_caller", 2, Instr(0)),
+            (callee_modname, "simple_caller", 1, Instr(0)),
+            (callee_modname, "simple_callee", 2, Instr(0)),
+            (callee_modname, "simple_caller", 1, Terminator),
+            (caller_modname, "cross_module_nested_far_caller", 2, Terminator),
+        ]));
         assert_eq!(paths.len(), 1); // enusre there are no more paths
 
         Ok(())
@@ -3265,93 +3075,57 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_of_loop", 1, Instr(0)),
-                    ("callee_with_loop", 2, Instr(0)),
-                    ("callee_with_loop", 9, Instr(0)),
-                    ("caller_of_loop", 1, Terminator),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_of_loop", 1, Instr(0)),
-                    ("callee_with_loop", 2, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 9, Instr(0)),
-                    ("caller_of_loop", 1, Terminator),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_of_loop", 1, Instr(0)),
-                    ("callee_with_loop", 2, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 9, Instr(0)),
-                    ("caller_of_loop", 1, Terminator),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_of_loop", 1, Instr(0)),
-                    ("callee_with_loop", 2, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 9, Instr(0)),
-                    ("caller_of_loop", 1, Terminator),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[4],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_of_loop", 1, Instr(0)),
-                    ("callee_with_loop", 2, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 9, Instr(0)),
-                    ("caller_of_loop", 1, Terminator),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[5],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_of_loop", 1, Instr(0)),
-                    ("callee_with_loop", 2, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 13, Instr(0)),
-                    ("callee_with_loop", 9, Instr(0)),
-                    ("caller_of_loop", 1, Terminator),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, Instr(0)),
+            ("callee_with_loop", 2, Instr(0)),
+            ("callee_with_loop", 9, Instr(0)),
+            ("caller_of_loop", 1, Terminator),
+        ]));
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, Instr(0)),
+            ("callee_with_loop", 2, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 9, Instr(0)),
+            ("caller_of_loop", 1, Terminator),
+        ]));
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, Instr(0)),
+            ("callee_with_loop", 2, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 9, Instr(0)),
+            ("caller_of_loop", 1, Terminator),
+        ]));
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, Instr(0)),
+            ("callee_with_loop", 2, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 9, Instr(0)),
+            ("caller_of_loop", 1, Terminator),
+        ]));
+        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, Instr(0)),
+            ("callee_with_loop", 2, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 9, Instr(0)),
+            ("caller_of_loop", 1, Terminator),
+        ]));
+        assert_eq!(paths[5], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_of_loop", 1, Instr(0)),
+            ("callee_with_loop", 2, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 13, Instr(0)),
+            ("callee_with_loop", 9, Instr(0)),
+            ("caller_of_loop", 1, Terminator),
+        ]));
         assert_eq!(paths.len(), 6); // ensure there are no more paths
 
         Ok(())
@@ -3372,67 +3146,43 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_with_loop", 1, Instr(0)),
-                    ("caller_with_loop", 8, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_with_loop", 1, Instr(0)),
-                    ("caller_with_loop", 10, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("caller_with_loop", 10, Instr(3)),
-                    ("caller_with_loop", 6, Instr(0)),
-                    ("caller_with_loop", 8, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_with_loop", 1, Instr(0)),
-                    ("caller_with_loop", 10, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("caller_with_loop", 10, Instr(3)),
-                    ("caller_with_loop", 10, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("caller_with_loop", 10, Instr(3)),
-                    ("caller_with_loop", 6, Instr(0)),
-                    ("caller_with_loop", 8, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("caller_with_loop", 1, Instr(0)),
-                    ("caller_with_loop", 10, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("caller_with_loop", 10, Instr(3)),
-                    ("caller_with_loop", 10, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("caller_with_loop", 10, Instr(3)),
-                    ("caller_with_loop", 10, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("caller_with_loop", 10, Instr(3)),
-                    ("caller_with_loop", 6, Instr(0)),
-                    ("caller_with_loop", 8, Instr(0)),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, Instr(0)),
+            ("caller_with_loop", 8, Instr(0)),
+        ]));
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, Instr(0)),
+            ("caller_with_loop", 10, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("caller_with_loop", 10, Instr(3)),
+            ("caller_with_loop", 6, Instr(0)),
+            ("caller_with_loop", 8, Instr(0)),
+        ]));
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, Instr(0)),
+            ("caller_with_loop", 10, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("caller_with_loop", 10, Instr(3)),
+            ("caller_with_loop", 10, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("caller_with_loop", 10, Instr(3)),
+            ("caller_with_loop", 6, Instr(0)),
+            ("caller_with_loop", 8, Instr(0)),
+        ]));
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("caller_with_loop", 1, Instr(0)),
+            ("caller_with_loop", 10, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("caller_with_loop", 10, Instr(3)),
+            ("caller_with_loop", 10, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("caller_with_loop", 10, Instr(3)),
+            ("caller_with_loop", 10, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("caller_with_loop", 10, Instr(3)),
+            ("caller_with_loop", 6, Instr(0)),
+            ("caller_with_loop", 8, Instr(0)),
+        ]));
         assert_eq!(paths.len(), 4); // ensure there are no more paths
 
         Ok(())
@@ -3453,190 +3203,131 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[5],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[6],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[7],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (1, Instr(0)),
-                    (9, Instr(0)),
-                    (6, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[8],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(1, Instr(0)), (4, Instr(0)), (9, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[9],
-            path_from_bbnum_instr_pairs(modname, funcname, vec![(1, Instr(0)), (9, Instr(0)),])
-        );
+        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[7], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (1, Instr(0)),
+            (9, Instr(0)),
+            (6, Instr(1)),
+        ]));
+        assert_eq!(paths[8], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (9, Instr(0)),
+        ]));
+        assert_eq!(paths[9], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (9, Instr(0)),
+        ]));
         assert_eq!(paths.len(), 10); // ensure there are no more paths
 
         Ok(())
@@ -3657,189 +3348,130 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (20, Instr(0)),
-                    (8, Instr(2)),
-                    (8, Instr(2)),
-                    (8, Instr(2)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (20, Instr(0)),
-                    (8, Instr(2)),
-                    (8, Instr(2)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (20, Instr(0)),
-                    (8, Instr(2)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (12, Instr(0)),
-                    (14, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (20, Instr(0)),
-                    (8, Instr(2)),
-                    (8, Instr(2)),
-                    (14, Instr(2)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (12, Instr(0)),
-                    (14, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (8, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (20, Instr(0)),
-                    (8, Instr(2)),
-                    (14, Instr(2)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[5],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (12, Instr(0)),
-                    (14, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (12, Instr(0)),
-                    (18, Instr(0)),
-                    (20, Instr(0)),
-                    (14, Instr(2)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[6],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (12, Instr(0)),
-                    (14, Instr(0)),
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (20, Instr(0)),
-                    (14, Instr(2)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[7],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (4, Instr(0)),
-                    (6, Instr(0)),
-                    (12, Instr(0)),
-                    (18, Instr(0)),
-                    (20, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[8],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(1, Instr(0)), (4, Instr(0)), (20, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[9],
-            path_from_bbnum_instr_pairs(modname, funcname, vec![(1, Instr(0)), (20, Instr(0)),])
-        );
+        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (20, Instr(0)),
+            (8, Instr(2)),
+            (8, Instr(2)),
+            (8, Instr(2)),
+        ]));
+        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (20, Instr(0)),
+            (8, Instr(2)),
+            (8, Instr(2)),
+        ]));
+        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (20, Instr(0)),
+            (8, Instr(2)),
+        ]));
+        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (12, Instr(0)),
+            (14, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (20, Instr(0)),
+            (8, Instr(2)),
+            (8, Instr(2)),
+            (14, Instr(2)),
+        ]));
+        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (12, Instr(0)),
+            (14, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (8, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (20, Instr(0)),
+            (8, Instr(2)),
+            (14, Instr(2)),
+        ]));
+        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (12, Instr(0)),
+            (14, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (12, Instr(0)),
+            (18, Instr(0)),
+            (20, Instr(0)),
+            (14, Instr(2)),
+        ]));
+        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (12, Instr(0)),
+            (14, Instr(0)),
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (20, Instr(0)),
+            (14, Instr(2)),
+        ]));
+        assert_eq!(paths[7], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (6, Instr(0)),
+            (12, Instr(0)),
+            (18, Instr(0)),
+            (20, Instr(0)),
+        ]));
+        assert_eq!(paths[8], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (4, Instr(0)),
+            (20, Instr(0)),
+        ]));
+        assert_eq!(paths[9], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (20, Instr(0)),
+        ]));
         assert_eq!(paths.len(), 10); // ensure there are no more paths
 
         Ok(())
@@ -3860,136 +3492,91 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![(1, Instr(0)), (3, Instr(0)), (15, Instr(0)),]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (3, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (10, Instr(0)),
-                    (15, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (3, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (12, Instr(0)),
-                    (15, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (3, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (10, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (10, Instr(0)),
-                    (15, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[4],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (3, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (10, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (12, Instr(0)),
-                    (15, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[5],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (3, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (12, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (10, Instr(0)),
-                    (15, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[6],
-            path_from_bbnum_instr_pairs(
-                modname,
-                funcname,
-                vec![
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (5, Instr(0)),
-                    (1, Instr(0)),
-                    (3, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (12, Instr(0)),
-                    (15, Instr(0)),
-                    (5, Instr(2)),
-                    (12, Instr(0)),
-                    (15, Instr(0)),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (3, Instr(0)),
+            (15, Instr(0)),
+        ]));
+        assert_eq!(paths[1], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (3, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (10, Instr(0)),
+            (15, Instr(0)),
+        ]));
+        assert_eq!(paths[2], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (3, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (12, Instr(0)),
+            (15, Instr(0)),
+        ]));
+        assert_eq!(paths[3], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (3, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (10, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (10, Instr(0)),
+            (15, Instr(0)),
+        ]));
+        assert_eq!(paths[4], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (3, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (10, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (12, Instr(0)),
+            (15, Instr(0)),
+        ]));
+        assert_eq!(paths[5], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (3, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (12, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (10, Instr(0)),
+            (15, Instr(0)),
+        ]));
+        assert_eq!(paths[6], path_from_bbnum_instr_pairs(modname, funcname, vec![
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (5, Instr(0)),
+            (1, Instr(0)),
+            (3, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (12, Instr(0)),
+            (15, Instr(0)),
+            (5, Instr(2)),
+            (12, Instr(0)),
+            (15, Instr(0)),
+        ]));
         assert_eq!(paths.len(), 7); // ensure there are no more paths
 
         Ok(())
@@ -4010,89 +3597,59 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(2)),
-                    ("recursive_and_normal_caller", 7, Instr(0)),
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(2)),
-                    ("recursive_and_normal_caller", 7, Instr(0)),
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(2)),
-                    ("recursive_and_normal_caller", 10, Instr(0)),
-                    ("recursive_and_normal_caller", 7, Instr(1)),
-                    ("recursive_and_normal_caller", 7, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(2)),
-                    ("recursive_and_normal_caller", 7, Instr(0)),
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(2)),
-                    ("recursive_and_normal_caller", 10, Instr(0)),
-                    ("recursive_and_normal_caller", 7, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(2)),
-                    ("recursive_and_normal_caller", 7, Instr(0)),
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 10, Instr(0)),
-                    ("recursive_and_normal_caller", 7, Instr(1)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(0)),
-                    ("simple_callee", 2, Instr(0)),
-                    ("recursive_and_normal_caller", 3, Instr(2)),
-                    ("recursive_and_normal_caller", 10, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[4],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("recursive_and_normal_caller", 1, Instr(0)),
-                    ("recursive_and_normal_caller", 10, Instr(0)),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(2)),
+            ("recursive_and_normal_caller", 7, Instr(0)),
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(2)),
+            ("recursive_and_normal_caller", 7, Instr(0)),
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(2)),
+            ("recursive_and_normal_caller", 10, Instr(0)),
+            ("recursive_and_normal_caller", 7, Instr(1)),
+            ("recursive_and_normal_caller", 7, Instr(1)),
+        ]));
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(2)),
+            ("recursive_and_normal_caller", 7, Instr(0)),
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(2)),
+            ("recursive_and_normal_caller", 10, Instr(0)),
+            ("recursive_and_normal_caller", 7, Instr(1)),
+        ]));
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(2)),
+            ("recursive_and_normal_caller", 7, Instr(0)),
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 10, Instr(0)),
+            ("recursive_and_normal_caller", 7, Instr(1)),
+        ]));
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(0)),
+            ("simple_callee", 2, Instr(0)),
+            ("recursive_and_normal_caller", 3, Instr(2)),
+            ("recursive_and_normal_caller", 10, Instr(0)),
+        ]));
+        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
+            ("recursive_and_normal_caller", 1, Instr(0)),
+            ("recursive_and_normal_caller", 10, Instr(0)),
+        ]));
         assert_eq!(paths.len(), 5); // ensure there are no more paths
 
         Ok(())
@@ -4113,126 +3670,90 @@ mod tests {
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
-        assert_eq!(
-            paths[0],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(0)),
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(0)),
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(2)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(2)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[1],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(0)),
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(0)),
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(2)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(2)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[2],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(0)),
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(2)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[3],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(0)),
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                    ("mutually_recursive_b", 3, Instr(2)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[4],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(0)),
-                    ("mutually_recursive_b", 1, Instr(0)),
-                    ("mutually_recursive_b", 7, Instr(0)),
-                    ("mutually_recursive_a", 3, Instr(2)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                ]
-            )
-        );
-        assert_eq!(
-            paths[5],
-            path_from_tuples_with_bbnums(
-                modname,
-                vec![
-                    ("mutually_recursive_a", 1, Instr(0)),
-                    ("mutually_recursive_a", 7, Instr(0)),
-                ]
-            )
-        );
+        assert_eq!(paths[0], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(0)),
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(0)),
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(2)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(2)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+        ]));
+        assert_eq!(paths[1], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(0)),
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(0)),
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 7, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(2)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(2)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+        ]));
+        assert_eq!(paths[2], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(0)),
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(2)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+        ]));
+        assert_eq!(paths[3], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(0)),
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 7, Instr(0)),
+            ("mutually_recursive_b", 3, Instr(2)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+        ]));
+        assert_eq!(paths[4], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(0)),
+            ("mutually_recursive_b", 1, Instr(0)),
+            ("mutually_recursive_b", 7, Instr(0)),
+            ("mutually_recursive_a", 3, Instr(2)),
+            ("mutually_recursive_a", 7, Instr(0)),
+        ]));
+        assert_eq!(paths[5], path_from_tuples_with_bbnums(modname, vec![
+            ("mutually_recursive_a", 1, Instr(0)),
+            ("mutually_recursive_a", 7, Instr(0)),
+        ]));
         assert_eq!(paths.len(), 6); // ensure there are no more paths
 
         Ok(())
