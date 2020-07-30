@@ -46,9 +46,13 @@ This branch of `haybale` also depends (indirectly) on the LLVM 8 and
 Boolector libraries, which must both be available on your system.
 See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
 
-Alternately, the `master` branch of `haybale` supports/requires LLVM 9 and is
-guaranteed to have all the latest and greatest `haybale` features.
-You can find it on [crates.io](https://crates.io/crates/haybale) as `haybale`.
+Alternately, versions of `haybale` supporting/requiring LLVM 9 and LLVM 10
+are available on the `llvm-9` branch and the `master` branch respectively;
+the current [crates.io](https://crates.io/crates/haybale) releases are from
+the `master` branch.
+As of this writing, the LLVM 9 and LLVM 10 branches are at feature parity
+with each other, while this branch lacks many features present on the other
+two branches.
 
 As one final note, the [official documentation](https://PLSysSec.github.io/haybale),
 including many of the links scattered throughout the rest of this README, is
@@ -260,14 +264,18 @@ of `haybale` with `cargo doc --open`.
 ## Compatibility
 
 You're looking at the `llvm-8` branch of `haybale`, which only supports LLVM 8.
-The `master` branch of `haybale` currently only supports LLVM 9.
+
+LLVM 9 and LLVM 10 are supported on the `llvm-9` branch and `master` branch
+respectively; the current [crates.io](https://crates.io/crates/haybale)
+releases are from the `master` branch.
+
 This `llvm-8` branch is approximately at feature parity with `haybale`
 version 0.2.1, and will likely be stuck at that point indefinitely unless
 there is demand for additional features.
 If there is a particular feature you would like backported to the `llvm-8`
 branch, please open an issue to discuss!
 
-`haybale` works on stable Rust, and requires Rust 1.36+.
+This branch of `haybale` requires Rust 1.36 or later.
 
 ## Under the hood
 
