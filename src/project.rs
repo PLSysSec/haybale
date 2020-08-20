@@ -212,7 +212,7 @@ impl Project {
     /// or demangled function name.
     ///
     /// If you have a `State` handy, you may want to use
-    /// `state.get_func_by_name()` instead, which will get the appopriate
+    /// `state.get_func_by_name()` instead, which will get the appropriate
     /// (potentially module-private) definition based on the current LLVM module.
     pub fn get_func_by_name<'p>(&'p self, name: &str) -> Option<(&'p Function, &'p Module)> {
         let mut retval = None;
