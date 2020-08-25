@@ -426,7 +426,7 @@ fn entry_is_dir(entry: &io::Result<DirEntry>) -> Option<bool> {
 /// Extracts the pointer width from an LLVM module, or returns a default of 64 bits
 /// if the width is not specified.
 ///
-/// See [LLVM 9 docs on Data Layout](https://releases.llvm.org/10.0.0/docs/LangRef.html#data-layout)
+/// See [LLVM 10 docs on Data Layout](https://releases.llvm.org/10.0.0/docs/LangRef.html#data-layout)
 //
 // This function originally thanks to Hudson Ayers (github.com/hudson-ayers)
 fn get_ptr_size(module: &Module) -> u32 {

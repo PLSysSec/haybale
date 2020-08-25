@@ -201,6 +201,7 @@ pub struct Config<'p, B: Backend> {
     pub print_module_name: bool,
 }
 
+/// Enum used for the `null_pointer_checking` option in `Config`.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum NullPointerChecking {
     /// All memory accesses will be checked to ensure their addresses cannot be
