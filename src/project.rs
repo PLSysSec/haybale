@@ -431,7 +431,7 @@ fn entry_is_dir(entry: &io::Result<DirEntry>) -> Option<bool> {
 // This function originally thanks to Hudson Ayers (github.com/hudson-ayers)
 fn get_ptr_size(module: &Module) -> u32 {
     for spec in module.data_layout.split('-') {
-        if spec.chars().nth(0) != Some('p') {
+        if !spec.starts_with('p') {
             continue;
         }
         let colon_idx = spec
