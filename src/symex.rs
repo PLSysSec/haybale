@@ -1363,6 +1363,26 @@ where
                                 .expect("Failed to find LLVM intrinsic bswap hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
+                    } else if funcname.starts_with("llvm.ctlz") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.ctlz")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic ctlz hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
+                     } else if funcname.starts_with("llvm.cttz") {
+                        Ok(ResolvedFunction::HookActive {
+                            hook: self
+                                .state
+                                .intrinsic_hooks
+                                .get_hook_for("intrinsic: llvm.cttz")
+                                .cloned()
+                                .expect("Failed to find LLVM intrinsic cttz hook"),
+                            hooked_thing: HookedThing::Intrinsic(funcname),
+                        })
                     } else if funcname.starts_with("llvm.objectsize") {
                         Ok(ResolvedFunction::HookActive {
                             hook: self

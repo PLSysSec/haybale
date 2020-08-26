@@ -410,6 +410,8 @@ where
                     &hooks::intrinsics::symex_memcpy,
                 );
                 intrinsic_hooks.add("intrinsic: llvm.bswap", &hooks::intrinsics::symex_bswap);
+                intrinsic_hooks.add("intrinsic: llvm.ctlz", &hooks::intrinsics::symex_ctlz);
+                intrinsic_hooks.add("intrinsic: llvm.cttz", &hooks::intrinsics::symex_cttz);
                 intrinsic_hooks.add(
                     "intrinsic: llvm.objectsize",
                     &hooks::intrinsics::symex_objectsize,
