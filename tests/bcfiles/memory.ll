@@ -1,7 +1,7 @@
 ; ModuleID = 'memory.c'
 source_filename = "memory.c"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-apple-macosx10.14.0"
+target triple = "x86_64-apple-macosx10.15.0"
 
 ; Function Attrs: nofree norecurse nounwind ssp uwtable
 define i32 @load_and_store(i32*, i32) local_unnamed_addr #0 {
@@ -131,7 +131,7 @@ attributes #3 = { nounwind }
 
 !0 = !{i32 1, !"wchar_size", i32 4}
 !1 = !{i32 7, !"PIC Level", i32 2}
-!2 = !{!"clang version 9.0.0 (tags/RELEASE_900/final)"}
+!2 = !{!"clang version 9.0.1 "}
 !3 = !{!4, !4, i64 0}
 !4 = !{!"int", !5, i64 0}
 !5 = !{!"omnipotent char", !6, i64 0}

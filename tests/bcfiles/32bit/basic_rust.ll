@@ -1,6 +1,6 @@
 ; ModuleID = 'basic_rust.3a1fbbbh-cgu.0'
 source_filename = "basic_rust.3a1fbbbh-cgu.0"
-target datalayout = "e-m:e-p:32:32-f64:32:64-f80:32-n8:16:32-S128"
+target datalayout = "e-m:e-p:32:32-p270:32:32-p271:32:32-p272:64:64-f64:32:64-f80:32-n8:16:32-S128"
 target triple = "i686-unknown-linux-gnu"
 
 %"core::fmt::Formatter" = type { [0 x i32], i32, [0 x i32], i32, [0 x i32], { i32, i32 }, [0 x i32], { i32, i32 }, [0 x i32], { {}*, [3 x i32]* }, [0 x i8], i8, [3 x i8] }
@@ -18,7 +18,7 @@ target triple = "i686-unknown-linux-gnu"
 
 ; core::fmt::ArgumentV1::new
 ; Function Attrs: nonlazybind uwtable
-define { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17hc32a35413e2c67bbE(i32* noalias readonly align 4 dereferenceable(4) %x, i1 (i32*, %"core::fmt::Formatter"*)* nonnull %f) unnamed_addr #0 {
+define { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17h73cf485f640832c9E(i32* noalias readonly align 4 dereferenceable(4) %x, i1 (i32*, %"core::fmt::Formatter"*)* nonnull %f) unnamed_addr #0 {
 start:
   %0 = alloca %"core::fmt::::Opaque"*, align 4
   %1 = alloca i1 (%"core::fmt::::Opaque"*, %"core::fmt::Formatter"*)*, align 4
@@ -51,7 +51,7 @@ bb2:                                              ; preds = %bb1
 
 ; core::fmt::Arguments::new_v1
 ; Function Attrs: inlinehint nonlazybind uwtable
-define internal void @_ZN4core3fmt9Arguments6new_v117h845f25d808dc7cbcE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(24), [0 x { [0 x i8]*, i32 }]* noalias nonnull readonly align 4 %pieces.0, i32 %pieces.1, [0 x { i8*, i8* }]* noalias nonnull readonly align 4 %args.0, i32 %args.1) unnamed_addr #1 {
+define internal void @_ZN4core3fmt9Arguments6new_v117hdfc69fab17c9400aE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(24) %0, [0 x { [0 x i8]*, i32 }]* noalias nonnull readonly align 4 %pieces.0, i32 %pieces.1, [0 x { i8*, i8* }]* noalias nonnull readonly align 4 %args.0, i32 %args.1) unnamed_addr #1 {
 start:
   %_4 = alloca { i32*, i32 }, align 4
   %1 = bitcast { i32*, i32 }* %_4 to {}**
@@ -93,7 +93,7 @@ bb1:                                              ; preds = %start
 
 panic:                                            ; preds = %start
 ; call core::panicking::panic
-  call void @_ZN4core9panicking5panic17h3b8f0272c5f55497E([0 x i8]* noalias nonnull readonly align 1 bitcast ([33 x i8]* @str.0 to [0 x i8]*), i32 33, %"core::panic::Location"* noalias readonly align 4 dereferenceable(16) bitcast (<{ i8*, [12 x i8] }>* @alloc9 to %"core::panic::Location"*))
+  call void @_ZN4core9panicking5panic17hdaab655da8250769E([0 x i8]* noalias nonnull readonly align 1 bitcast ([33 x i8]* @str.0 to [0 x i8]*), i32 33, %"core::panic::Location"* noalias readonly align 4 dereferenceable(16) bitcast (<{ i8*, [12 x i8] }>* @alloc9 to %"core::panic::Location"*))
   unreachable
 }
 
@@ -116,7 +116,7 @@ bb1:                                              ; preds = %start
   store i32* %out, i32** %_11, align 4
   %arg0 = load i32*, i32** %_11, align 4, !nonnull !2
 ; call core::fmt::ArgumentV1::new
-  %1 = call { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17hc32a35413e2c67bbE(i32* noalias readonly align 4 dereferenceable(4) %arg0, i1 (i32*, %"core::fmt::Formatter"*)* nonnull @"_ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$3fmt17h76355ae77a916d7aE")
+  %1 = call { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17h73cf485f640832c9E(i32* noalias readonly align 4 dereferenceable(4) %arg0, i1 (i32*, %"core::fmt::Formatter"*)* nonnull @"_ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$3fmt17h2720722ff93c563bE")
   %_14.0 = extractvalue { i8*, i8* } %1, 0
   %_14.1 = extractvalue { i8*, i8* } %1, 1
   br label %bb2
@@ -129,40 +129,40 @@ bb2:                                              ; preds = %bb1
   store i8* %_14.1, i8** %4, align 4
   %_7.0 = bitcast [1 x { i8*, i8* }]* %_10 to [0 x { i8*, i8* }]*
 ; call core::fmt::Arguments::new_v1
-  call void @_ZN4core3fmt9Arguments6new_v117h845f25d808dc7cbcE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(24) %_3, [0 x { [0 x i8]*, i32 }]* noalias nonnull readonly align 4 %_4.0, i32 2, [0 x { i8*, i8* }]* noalias nonnull readonly align 4 %_7.0, i32 1)
+  call void @_ZN4core3fmt9Arguments6new_v117hdfc69fab17c9400aE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(24) %_3, [0 x { [0 x i8]*, i32 }]* noalias nonnull readonly align 4 %_4.0, i32 2, [0 x { i8*, i8* }]* noalias nonnull readonly align 4 %_7.0, i32 1)
   br label %bb3
 
 bb3:                                              ; preds = %bb2
 ; call std::io::stdio::_print
-  call void @_ZN3std2io5stdio6_print17hf1f90f9bd6aa4eebE(%"core::fmt::Arguments"* noalias nocapture dereferenceable(24) %_3)
+  call void @_ZN3std2io5stdio6_print17h2812396d3cb60f3cE(%"core::fmt::Arguments"* noalias nocapture dereferenceable(24) %_3)
   br label %bb4
 
 bb4:                                              ; preds = %bb3
   ret void
 }
 
-; Function Attrs: nounwind readnone speculatable
+; Function Attrs: nounwind readnone speculatable willreturn
 declare { i32, i1 } @llvm.umul.with.overflow.i32(i32, i32) #2
 
-; Function Attrs: nounwind readnone
+; Function Attrs: nounwind readnone willreturn
 declare i1 @llvm.expect.i1(i1, i1) #3
 
 ; core::panicking::panic
 ; Function Attrs: cold noinline noreturn nonlazybind uwtable
-declare void @_ZN4core9panicking5panic17h3b8f0272c5f55497E([0 x i8]* noalias nonnull readonly align 1, i32, %"core::panic::Location"* noalias readonly align 4 dereferenceable(16)) unnamed_addr #4
+declare void @_ZN4core9panicking5panic17hdaab655da8250769E([0 x i8]* noalias nonnull readonly align 1, i32, %"core::panic::Location"* noalias readonly align 4 dereferenceable(16)) unnamed_addr #4
 
 ; core::fmt::num::imp::<impl core::fmt::Display for u32>::fmt
 ; Function Attrs: nonlazybind uwtable
-declare zeroext i1 @"_ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$3fmt17h76355ae77a916d7aE"(i32* noalias readonly align 4 dereferenceable(4), %"core::fmt::Formatter"* align 4 dereferenceable(36)) unnamed_addr #0
+declare zeroext i1 @"_ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$3fmt17h2720722ff93c563bE"(i32* noalias readonly align 4 dereferenceable(4), %"core::fmt::Formatter"* align 4 dereferenceable(36)) unnamed_addr #0
 
 ; std::io::stdio::_print
 ; Function Attrs: nonlazybind uwtable
-declare void @_ZN3std2io5stdio6_print17hf1f90f9bd6aa4eebE(%"core::fmt::Arguments"* noalias nocapture dereferenceable(24)) unnamed_addr #0
+declare void @_ZN3std2io5stdio6_print17h2812396d3cb60f3cE(%"core::fmt::Arguments"* noalias nocapture dereferenceable(24)) unnamed_addr #0
 
 attributes #0 = { nonlazybind uwtable "probe-stack"="__rust_probestack" "target-cpu"="pentium4" }
 attributes #1 = { inlinehint nonlazybind uwtable "probe-stack"="__rust_probestack" "target-cpu"="pentium4" }
-attributes #2 = { nounwind readnone speculatable }
-attributes #3 = { nounwind readnone }
+attributes #2 = { nounwind readnone speculatable willreturn }
+attributes #3 = { nounwind readnone willreturn }
 attributes #4 = { cold noinline noreturn nonlazybind uwtable "probe-stack"="__rust_probestack" "target-cpu"="pentium4" }
 
 !llvm.module.flags = !{!0, !1}

@@ -1,5 +1,5 @@
 CC=clang-9
-CXX=$$LLVMPATH/bin/clang++
+CXX=$$LLVM9PATH/bin/clang++
 CFLAGS=-O3
 RUSTC=rustc
 RUSTFLAGS=--crate-type=lib

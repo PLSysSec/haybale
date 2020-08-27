@@ -1,7 +1,7 @@
 ; ModuleID = 'loop.c'
 source_filename = "loop.c"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-apple-macosx10.14.0"
+target triple = "x86_64-apple-macosx10.15.0"
 
 ; Function Attrs: nounwind ssp uwtable
 define i32 @while_loop(i32) local_unnamed_addr #0 {
@@ -312,7 +312,7 @@ attributes #2 = { nounwind }
 
 !0 = !{i32 1, !"wchar_size", i32 4}
 !1 = !{i32 7, !"PIC Level", i32 2}
-!2 = !{!"clang version 9.0.0 (tags/RELEASE_900/final)"}
+!2 = !{!"clang version 9.0.1 "}
 !3 = !{!4, !4, i64 0}
 !4 = !{!"int", !5, i64 0}
 !5 = !{!"omnipotent char", !6, i64 0}

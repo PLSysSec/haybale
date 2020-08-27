@@ -1,7 +1,7 @@
 ; ModuleID = 'globals_initialization_2.c'
 source_filename = "globals_initialization_2.c"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-apple-macosx10.14.0"
+target triple = "x86_64-apple-macosx10.15.0"
 
 %struct.SomeStruct = type { i32, i32, i32 }
 %struct.StructWithPointers = type { i32, i32*, %struct.SomeStruct*, %struct.StructWithPointers* }
@@ -30,4 +30,4 @@ attributes #0 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-
 
 !0 = !{i32 1, !"wchar_size", i32 4}
 !1 = !{i32 7, !"PIC Level", i32 2}
-!2 = !{!"clang version 9.0.0 (tags/RELEASE_900/final)"}
+!2 = !{!"clang version 9.0.1 "}
