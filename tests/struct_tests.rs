@@ -12,6 +12,13 @@ fn get_project() -> Project {
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
+#[allow(non_snake_case)]
+fn get_O3_project() -> Project {
+    let modname = "tests/bcfiles/struct-O3.bc";
+    Project::from_bc_path(modname)
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
+}
+
 #[test]
 fn one_int() {
     let funcname = "one_int";
@@ -303,4 +310,16 @@ fn changeptr() {
     let _ti1el2 = Wrapping(100);
     let result = ti2el2;
     assert_eq!(result.0, 0);
+}
+
+#[test]
+fn withptr() {
+    let funcname = "with_ptr";
+    init_logging();
+    let proj = get_O3_project();
+    let args = find_zero_of_func(funcname, &proj, Config::default())
+        .unwrap_or_else(|r| panic!("{}", r))
+        .expect("Failed to find zero of the function");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], SolutionValue::I32(3));
 }

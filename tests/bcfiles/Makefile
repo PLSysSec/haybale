@@ -12,6 +12,7 @@ all: basic.bc basic.ll \
 			memory.bc memory.ll \
 			loop.bc loop.ll \
 			struct.bc struct.ll \
+			struct-O3.bc struct-O3.ll \
 			linkedlist.bc linkedlist.ll \
 			call.bc call.ll \
 			crossmod.bc crossmod.ll \
