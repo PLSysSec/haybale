@@ -198,7 +198,7 @@ int structelptr(int x) {
 int changeptr(int x) {
   volatile struct ThreeInts _ti1 = { 0 };
   volatile struct ThreeInts _ti2 = { 0 };
-  volatile struct ThreeInts* ti = &_ti1;
+  volatile struct ThreeInts* volatile ti = &_ti1;
   ti->el2 = 7;
   ti = &_ti2;
   ti->el2 = x - 3 - ti->el2;

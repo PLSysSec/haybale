@@ -591,22 +591,22 @@ define i32 @changeptr(i32) #0 {
   call void @llvm.memset.p0i8.i64(i8* align 4 %6, i8 0, i64 12, i1 true)
   %7 = bitcast %struct.ThreeInts* %4 to i8*
   call void @llvm.memset.p0i8.i64(i8* align 4 %7, i8 0, i64 12, i1 true)
-  store %struct.ThreeInts* %3, %struct.ThreeInts** %5, align 8
-  %8 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  store volatile %struct.ThreeInts* %3, %struct.ThreeInts** %5, align 8
+  %8 = load volatile %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
   %9 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %8, i32 0, i32 1
   store volatile i32 7, i32* %9, align 4
-  store %struct.ThreeInts* %4, %struct.ThreeInts** %5, align 8
+  store volatile %struct.ThreeInts* %4, %struct.ThreeInts** %5, align 8
   %10 = load i32, i32* %2, align 4
   %11 = sub nsw i32 %10, 3
-  %12 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  %12 = load volatile %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
   %13 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %12, i32 0, i32 1
   %14 = load volatile i32, i32* %13, align 4
   %15 = sub nsw i32 %11, %14
-  %16 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  %16 = load volatile %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
   %17 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %16, i32 0, i32 1
   store volatile i32 %15, i32* %17, align 4
-  store %struct.ThreeInts* %3, %struct.ThreeInts** %5, align 8
-  %18 = load %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
+  store volatile %struct.ThreeInts* %3, %struct.ThreeInts** %5, align 8
+  %18 = load volatile %struct.ThreeInts*, %struct.ThreeInts** %5, align 8
   %19 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %18, i32 0, i32 1
   store volatile i32 100, i32* %19, align 4
   %20 = getelementptr inbounds %struct.ThreeInts, %struct.ThreeInts* %4, i32 0, i32 1
