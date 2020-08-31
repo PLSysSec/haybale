@@ -271,8 +271,6 @@ impl<'p, B: Backend> GlobalAllocations<'p, B> {
             .insert(addr, Callable::FunctionHook(hook));
     }
 
-    /// `initialized`: whether the `Global` has been initialized.
-    /// Currently, this is always `false` for global variables, and always `true` for functions.
     fn allocate_global(
         &mut self,
         global: &'p impl Global,
