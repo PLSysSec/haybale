@@ -1,6 +1,6 @@
 [package]
 name = "haybale"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Craig Disselkoen <craigdissel@gmail.com>"]
 edition = "2018"
 description = "Symbolic execution of LLVM IR, written in Rust"

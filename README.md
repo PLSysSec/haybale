@@ -38,7 +38,7 @@ add it as a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-haybale = "0.5.0"
+haybale = "0.5.1"
 ```
 
 `haybale` also depends (indirectly) on the LLVM 10 and Boolector libraries, which
@@ -291,6 +291,12 @@ LLVM 7 and earlier are not supported.
 solver (via the Rust [`boolector`] crate).
 
 ## Changelog
+
+### Version 0.5.1 (Aug 31, 2020)
+
+- Fix for [issue #9](https://github.com/PLSysSec/haybale/issues/9) regarding
+zero-element arrays (which particularly may appear when analyzing Rust code)
+- Built-in support for the `llvm.ctlz` and `llvm.cttz` intrinsics
 
 ### Version 0.5.0 (Jul 29, 2020)
 
