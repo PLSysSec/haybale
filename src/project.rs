@@ -455,7 +455,7 @@ mod tests {
 
     #[test]
     fn single_file_project() {
-        let proj = Project::from_bc_path(Path::new("tests/bcfiles/basic.bc"))
+        let proj = Project::from_bc_path("tests/bcfiles/basic.bc")
             .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
         assert_eq!(proj.pointer_size_bits(), 64);
         let (func, module) = proj
@@ -467,12 +467,8 @@ mod tests {
 
     #[test]
     fn double_file_project() {
-        let proj = Project::from_bc_paths(
-            vec!["tests/bcfiles/basic.bc", "tests/bcfiles/loop.bc"]
-                .into_iter()
-                .map(Path::new),
-        )
-        .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
+        let proj = Project::from_bc_paths(&["tests/bcfiles/basic.bc", "tests/bcfiles/loop.bc"])
+            .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
         assert_eq!(proj.pointer_size_bits(), 64);
         let (func, module) = proj
             .get_func_by_name("no_args_zero")

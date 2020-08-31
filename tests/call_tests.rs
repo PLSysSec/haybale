@@ -1,6 +1,5 @@
 use haybale::*;
 use std::num::Wrapping;
-use std::path::Path;
 
 fn init_logging() {
     // capture log messages with test harness
@@ -9,7 +8,7 @@ fn init_logging() {
 
 fn get_project() -> Project {
     let modname = "tests/bcfiles/call.bc";
-    Project::from_bc_path(&Path::new(modname))
+    Project::from_bc_path(modname)
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
@@ -31,12 +30,8 @@ fn cross_module_simple_call() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_simple_caller";
     init_logging();
-    let proj = Project::from_bc_paths(
-        vec![callee_modname, caller_modname]
-            .into_iter()
-            .map(std::path::Path::new),
-    )
-    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
@@ -75,12 +70,8 @@ fn cross_module_call_twice() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_twice_caller";
     init_logging();
-    let proj = Project::from_bc_paths(
-        vec![callee_modname, caller_modname]
-            .into_iter()
-            .map(std::path::Path::new),
-    )
-    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
@@ -109,12 +100,8 @@ fn cross_module_nested_near_call() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_nested_near_caller";
     init_logging();
-    let proj = Project::from_bc_paths(
-        vec![callee_modname, caller_modname]
-            .into_iter()
-            .map(std::path::Path::new),
-    )
-    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
@@ -131,12 +118,8 @@ fn cross_module_nested_far_call() {
     let caller_modname = "tests/bcfiles/crossmod.bc";
     let funcname = "cross_module_nested_far_caller";
     init_logging();
-    let proj = Project::from_bc_paths(
-        vec![callee_modname, caller_modname]
-            .into_iter()
-            .map(std::path::Path::new),
-    )
-    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+    let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
     let args = find_zero_of_func(funcname, &proj, Config::default())
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");

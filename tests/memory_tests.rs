@@ -1,6 +1,5 @@
 use haybale::config::NullPointerChecking;
 use haybale::*;
-use std::path::Path;
 
 fn init_logging() {
     // capture log messages with test harness
@@ -9,7 +8,7 @@ fn init_logging() {
 
 fn get_project() -> Project {
     let modname = "tests/bcfiles/memory.bc";
-    Project::from_bc_path(&Path::new(modname))
+    Project::from_bc_path(modname)
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 

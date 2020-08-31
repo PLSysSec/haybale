@@ -1,7 +1,6 @@
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
 use std::num::Wrapping;
-use std::path::Path;
 
 fn init_logging() {
     // capture log messages with test harness
@@ -10,25 +9,25 @@ fn init_logging() {
 
 fn get_project() -> Project {
     let modname = "tests/bcfiles/basic.bc";
-    Project::from_bc_path(&Path::new(modname))
+    Project::from_bc_path(modname)
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 fn get_issue_4_project() -> Project {
     let modname = "tests/bcfiles/issue_4.bc";
-    Project::from_bc_path(&Path::new(modname))
+    Project::from_bc_path(modname)
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 fn get_issue_4_32bit_project() -> Project {
     let modname = "tests/bcfiles/32bit/issue_4.bc";
-    Project::from_bc_path(&Path::new(modname))
+    Project::from_bc_path(modname)
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 fn get_issue_9_project() -> Project {
     let modname = "tests/bcfiles/issue_9.bc";
-    Project::from_bc_path(&Path::new(modname))
+    Project::from_bc_path(modname)
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 

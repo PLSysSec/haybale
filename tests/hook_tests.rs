@@ -2,7 +2,6 @@ use haybale::backend::Backend;
 use haybale::function_hooks::IsCall;
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
-use std::path::Path;
 
 fn init_logging() {
     // capture log messages with test harness
@@ -24,7 +23,7 @@ fn hook_for_simple_callee<'p, B: Backend>(
 #[test]
 fn hook_a_function() {
     init_logging();
-    let proj = Project::from_bc_path(&Path::new("tests/bcfiles/call.bc"))
+    let proj = Project::from_bc_path("tests/bcfiles/call.bc")
         .unwrap_or_else(|e| panic!("Failed to parse module call.bc: {}", e));
     let mut config = Config::default();
     config
@@ -72,7 +71,7 @@ fn target_hook<'p, B: Backend>(
 #[test]
 fn hook_a_function_ptr() {
     init_logging();
-    let proj = Project::from_bc_path(&Path::new("tests/bcfiles/functionptr.bc"))
+    let proj = Project::from_bc_path("tests/bcfiles/functionptr.bc")
         .unwrap_or_else(|e| panic!("Failed to parse module functionptr.bc: {}", e));
     let mut config = Config::default();
     config

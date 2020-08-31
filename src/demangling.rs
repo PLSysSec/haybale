@@ -99,44 +99,43 @@ pub(crate) fn rust_demangle_or_id(funcname: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn autodetect() -> Result<(), String> {
         // A `Project` from a single C file
-        let c_proj = Project::from_bc_path(&Path::new("tests/bcfiles/basic.bc"))?;
+        let c_proj = Project::from_bc_path("tests/bcfiles/basic.bc")?;
         assert_eq!(Demangling::autodetect(&c_proj), Demangling::NoDemangling);
 
         // A `Project` from a single C++ file
-        let cpp_proj = Project::from_bc_path(&Path::new("tests/bcfiles/throwcatch.bc"))?;
+        let cpp_proj = Project::from_bc_path("tests/bcfiles/throwcatch.bc")?;
         assert_eq!(Demangling::autodetect(&cpp_proj), Demangling::CPP);
 
         // A `Project` from a single Rust file
-        let rust_proj = Project::from_bc_path(&Path::new("tests/bcfiles/panic.bc"))?;
+        let rust_proj = Project::from_bc_path("tests/bcfiles/panic.bc")?;
         assert_eq!(Demangling::autodetect(&rust_proj), Demangling::Rust);
 
         // A `Project` containing multiple C files
-        let c_proj = Project::from_bc_paths(vec![
-            &Path::new("tests/bcfiles/basic.bc"),
-            &Path::new("tests/bcfiles/call.bc"),
-            &Path::new("tests/bcfiles/globals.bc"),
-            &Path::new("tests/bcfiles/simd.bc"),
+        let c_proj = Project::from_bc_paths(&[
+            "tests/bcfiles/basic.bc",
+            "tests/bcfiles/call.bc",
+            "tests/bcfiles/globals.bc",
+            "tests/bcfiles/simd.bc",
         ])?;
         assert_eq!(Demangling::autodetect(&c_proj), Demangling::NoDemangling);
 
         // A `Project` containing both C and Rust files
-        let c_rust_proj = Project::from_bc_paths(vec![
-            &Path::new("tests/bcfiles/basic.bc"),
-            &Path::new("tests/bcfiles/call.bc"),
-            &Path::new("tests/bcfiles/panic.bc"),
+        let c_rust_proj = Project::from_bc_paths(&[
+            "tests/bcfiles/basic.bc",
+            "tests/bcfiles/call.bc",
+            "tests/bcfiles/panic.bc",
         ])?;
         assert_eq!(Demangling::autodetect(&c_rust_proj), Demangling::Rust);
 
         // A `Project` containing both C and C++ files
-        let c_cpp_proj = Project::from_bc_paths(vec![
-            &Path::new("tests/bcfiles/basic.bc"),
-            &Path::new("tests/bcfiles/call.bc"),
-            &Path::new("tests/bcfiles/throwcatch.bc"),
+        let c_cpp_proj = Project::from_bc_paths(&[
+            "tests/bcfiles/basic.bc",
+            "tests/bcfiles/call.bc",
+            "tests/bcfiles/throwcatch.bc",
         ])?;
         assert_eq!(Demangling::autodetect(&c_cpp_proj), Demangling::CPP);
 

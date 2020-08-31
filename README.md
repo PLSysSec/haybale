@@ -80,7 +80,7 @@ may be one or more LLVM modules.
 To get started, simply create a `Project` from a single bitcode file:
 
 ```rust
-let project = Project::from_bc_path(&Path::new("/path/to/file.bc"))?;
+let project = Project::from_bc_path("/path/to/file.bc")?;
 ```
 
 For more ways to create `Project`s, including analyzing entire libraries, see

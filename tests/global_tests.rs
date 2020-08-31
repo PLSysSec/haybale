@@ -1,6 +1,5 @@
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
-use std::path::Path;
 
 fn init_logging() {
     // capture log messages with test harness
@@ -9,17 +8,13 @@ fn init_logging() {
 
 fn get_project() -> Project {
     let modname = "tests/bcfiles/globals.bc";
-    Project::from_bc_path(&Path::new(modname))
+    Project::from_bc_path(modname)
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
 fn get_cross_module_project() -> Project {
-    Project::from_bc_paths(
-        vec!["tests/bcfiles/globals.bc", "tests/bcfiles/crossmod.bc"]
-            .into_iter()
-            .map(std::path::Path::new),
-    )
-    .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e))
+    Project::from_bc_paths(&["tests/bcfiles/globals.bc", "tests/bcfiles/crossmod.bc"])
+        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e))
 }
 
 #[test]
@@ -170,13 +165,13 @@ fn cross_module_modify_global_via_call() {
 
 #[test]
 fn globals_initialization() {
-    let modnames = vec![
+    let modnames = &[
         "tests/bcfiles/globals_initialization_1.bc",
         "tests/bcfiles/globals_initialization_2.bc",
     ];
     let funcname = "foo";
     init_logging();
-    let proj = Project::from_bc_paths(modnames.into_iter().map(Path::new))
+    let proj = Project::from_bc_paths(modnames)
         .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
     assert_eq!(
         get_possible_return_values_of_func(

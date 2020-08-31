@@ -1,6 +1,5 @@
 use haybale::solver_utils::PossibleSolutions;
 use haybale::*;
-use std::path::Path;
 
 fn init_logging() {
     // capture log messages with test harness
@@ -11,7 +10,7 @@ fn init_logging() {
 fn simd_add() {
     let funcname = "simd_add";
     init_logging();
-    let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
+    let proj = Project::from_bc_path("tests/bcfiles/simd_cl.bc")
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
 
     // This function effectively computes 4x + 4y + 6.
@@ -27,7 +26,7 @@ fn simd_add() {
 fn simd_ops() {
     let funcname = "simd_ops";
     init_logging();
-    let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
+    let proj = Project::from_bc_path("tests/bcfiles/simd_cl.bc")
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
 
     // We compute the function's output for x=4, y=7
@@ -71,7 +70,7 @@ fn simd_ops() {
 fn simd_select() {
     let funcname = "simd_select";
     init_logging();
-    let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
+    let proj = Project::from_bc_path("tests/bcfiles/simd_cl.bc")
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
 
     // We compute the function's output for x=4, y=3
@@ -99,7 +98,7 @@ fn simd_select() {
 fn simd_add_autovectorized() {
     let funcname = "simd_add_autovectorized";
     init_logging();
-    let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd.bc"))
+    let proj = Project::from_bc_path("tests/bcfiles/simd.bc")
         .unwrap_or_else(|e| panic!("Failed to parse simd.bc module: {}", e));
 
     let x_sum: u32 = (0 .. 16).sum();
@@ -122,7 +121,7 @@ fn simd_add_autovectorized() {
 fn simd_typeconversions() {
     let funcname = "simd_typeconversions";
     init_logging();
-    let proj = Project::from_bc_path(&Path::new("tests/bcfiles/simd_cl.bc"))
+    let proj = Project::from_bc_path("tests/bcfiles/simd_cl.bc")
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
 
     // We compute the function's output for x=3, y=5

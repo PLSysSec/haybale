@@ -2516,7 +2516,7 @@ mod tests {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "one_arg";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2538,7 +2538,7 @@ mod tests {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "conditional_true";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2561,7 +2561,7 @@ mod tests {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "conditional_nozero";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2586,7 +2586,7 @@ mod tests {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "has_switch";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2641,7 +2641,7 @@ mod tests {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "while_loop";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2667,7 +2667,7 @@ mod tests {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "for_loop";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2694,7 +2694,7 @@ mod tests {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "loop_zero_iterations";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2722,7 +2722,7 @@ mod tests {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "loop_with_cond";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2758,7 +2758,7 @@ mod tests {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "sum_of_array";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 30,
@@ -2781,7 +2781,7 @@ mod tests {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "nested_loop";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 30,
@@ -2812,7 +2812,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "simple_caller";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2838,7 +2838,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "simple_caller";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2865,12 +2865,8 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_simple_caller";
         init_logging();
-        let proj = Project::from_bc_paths(
-            vec![callee_modname, caller_modname]
-                .into_iter()
-                .map(std::path::Path::new),
-        )
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config {
             loop_bound: 5,
             ..Config::default()
@@ -2895,7 +2891,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "conditional_caller";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2924,7 +2920,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "twice_caller";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -2953,12 +2949,8 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_twice_caller";
         init_logging();
-        let proj = Project::from_bc_paths(
-            vec![callee_modname, caller_modname]
-                .into_iter()
-                .map(std::path::Path::new),
-        )
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config {
             loop_bound: 5,
             ..Config::default()
@@ -2985,7 +2977,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "nested_caller";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -3013,7 +3005,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "nested_caller";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -3041,12 +3033,8 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_nested_near_caller";
         init_logging();
-        let proj = Project::from_bc_paths(
-            vec![callee_modname, caller_modname]
-                .into_iter()
-                .map(std::path::Path::new),
-        )
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config {
             loop_bound: 5,
             ..Config::default()
@@ -3074,12 +3062,8 @@ mod tests {
         let caller_modname = "tests/bcfiles/crossmod.bc";
         let funcname = "cross_module_nested_far_caller";
         init_logging();
-        let proj = Project::from_bc_paths(
-            vec![callee_modname, caller_modname]
-                .into_iter()
-                .map(std::path::Path::new),
-        )
-        .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
+        let proj = Project::from_bc_paths(&[callee_modname, caller_modname])
+            .unwrap_or_else(|e| panic!("Failed to parse modules: {}", e));
         let config = Config {
             loop_bound: 5,
             ..Config::default()
@@ -3106,7 +3090,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "caller_of_loop";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -3178,7 +3162,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "caller_with_loop";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 3,
@@ -3236,7 +3220,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_simple";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 5,
@@ -3382,7 +3366,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_double";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 4,
@@ -3527,7 +3511,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_not_tail";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 3,
@@ -3633,7 +3617,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_and_normal_caller";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 3,
@@ -3707,7 +3691,7 @@ mod tests {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "mutually_recursive_a";
         init_logging();
-        let proj = Project::from_bc_path(&std::path::Path::new(modname))
+        let proj = Project::from_bc_path(modname)
             .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e));
         let config = Config {
             loop_bound: 3,
