@@ -26,6 +26,12 @@ fn get_issue_4_32bit_project() -> Project {
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
+fn get_issue_9_project() -> Project {
+    let modname = "tests/bcfiles/issue_9.bc";
+    Project::from_bc_path(&Path::new(modname))
+        .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
+}
+
 #[test]
 fn no_args_nozero() {
     let funcname = "no_args_nozero";
@@ -316,5 +322,24 @@ fn issue_4_32bit() {
     assert_eq!(
         ret,
         PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort)
+    );
+}
+
+#[test]
+fn issue_9() {
+    let funcname = "issue_9::Foo::ez3";
+    init_logging();
+    let proj = get_issue_9_project();
+    let ret = get_possible_return_values_of_func(
+        funcname,
+        vec![Some(1)],
+        &proj,
+        Config::default(),
+        None,
+        10,
+    );
+    assert_eq!(
+        ret,
+        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Abort)
     );
 }

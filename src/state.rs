@@ -957,8 +957,15 @@ where
                                     name, &initializer
                                 );
                                 initialized.set(true);
-                                let write_val = self.const_to_bv(initializer)?;
-                                self.write_without_mut(addr, write_val)?;
+                                // Global variables could be zero-element arrays, or structs
+                                // containing zero-element arrays, so we use
+                                // `const_to_bv_maybe_zerowidth()`
+                                if let Some(bv) = self.const_to_bv_maybe_zerowidth(initializer)? {
+                                    // If that returned `None`, the global is a zero-element array,
+                                    // in which case we don't want to initialize it (and can't, or
+                                    // we'd get a panic about a 0-width BV)
+                                    self.write_without_mut(addr, bv)?;
+                                }
                             }
                             Ok(addr.clone())
                         },
@@ -1131,6 +1138,34 @@ where
                 }
             },
             _ => unimplemented!("const_to_bv for {:?}", c),
+        }
+    }
+
+    /// Convert a `Constant` to the appropriate `BV`, allowing for the `Constant`
+    /// to possibly be zero-width (LLVM 0-element array is the only way for that
+    /// to happen) or be a struct with zero-width elements (i.e., struct with one
+    /// or more elements being a 0-element array).
+    ///
+    /// Returns `Ok(None)` if the result would be a zero-width `BV`.
+    fn const_to_bv_maybe_zerowidth(&self, c: &Constant) -> Result<Option<B::BV>> {
+        match c {
+            Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty) => {
+                match self.size(ty) {
+                    0 => Ok(None),
+                    bits => Ok(Some(self.zero(bits))),
+                }
+            },
+            Constant::Struct { values, .. } => {
+                values
+                    .iter()
+                    .filter(|v| self.size(&v.get_type()) > 0)
+                    .map(|v| self.const_to_bv_maybe_zerowidth(v).transpose().unwrap()) // since we `filter()`'d first, we should have all `Some`s here. We transpose-unwrap Result<Option<BV>> to Result<BV>
+                    .reduce(|a, b| Ok(b?.concat(&a?))) // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
+                    .transpose()
+            },
+            Constant::Array { elements, .. } if elements.is_empty() => Ok(None),
+            // note that Constant::Vector cannot have 0 elements, per LLVM LangRef
+            _ => self.const_to_bv(c).map(|bv| Some(bv)),
         }
     }
 
