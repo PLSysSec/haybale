@@ -1373,7 +1373,7 @@ where
                                 .expect("Failed to find LLVM intrinsic ctlz hook"),
                             hooked_thing: HookedThing::Intrinsic(funcname),
                         })
-                     } else if funcname.starts_with("llvm.cttz") {
+                    } else if funcname.starts_with("llvm.cttz") {
                         Ok(ResolvedFunction::HookActive {
                             hook: self
                                 .state
@@ -2511,6 +2511,7 @@ mod tests {
     use BBInstrIndex::{Instr, Terminator};
 
     #[test]
+    #[rustfmt::skip]
     fn one_block() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "one_arg";
@@ -2532,6 +2533,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn two_paths() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "conditional_true";
@@ -2554,6 +2556,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn four_paths() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "conditional_nozero";
@@ -2578,6 +2581,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn switch() -> Result<()> {
         let modname = "tests/bcfiles/basic.bc";
         let funcname = "has_switch";
@@ -2632,6 +2636,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn while_loop() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "while_loop";
@@ -2657,6 +2662,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn for_loop() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "for_loop";
@@ -2683,6 +2689,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn loop_more_blocks() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "loop_zero_iterations";
@@ -2710,6 +2717,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn loop_more_blocks_in_body() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "loop_with_cond";
@@ -2745,6 +2753,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn two_loops() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "sum_of_array";
@@ -2767,6 +2776,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn nested_loop() -> Result<()> {
         let modname = "tests/bcfiles/loop.bc";
         let funcname = "nested_loop";
@@ -2797,6 +2807,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn simple_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "simple_caller";
@@ -2822,6 +2833,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn simple_call_maxdepth0() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "simple_caller";
@@ -2847,6 +2859,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn cross_module_simple_call() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
@@ -2877,6 +2890,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn conditional_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "conditional_caller";
@@ -2905,6 +2919,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn call_twice() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "twice_caller";
@@ -2932,6 +2947,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn cross_module_call_twice() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
@@ -2964,6 +2980,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn nested_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "nested_caller";
@@ -2991,6 +3008,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn nested_call_maxdepth1() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "nested_caller";
@@ -3017,6 +3035,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn cross_module_nested_near_call() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
@@ -3049,6 +3068,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn cross_module_nested_far_call() -> Result<()> {
         let callee_modname = "tests/bcfiles/call.bc";
         let caller_modname = "tests/bcfiles/crossmod.bc";
@@ -3081,6 +3101,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn call_of_loop() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "caller_of_loop";
@@ -3152,6 +3173,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn call_in_loop() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "caller_with_loop";
@@ -3209,6 +3231,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn recursive_simple() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_simple";
@@ -3354,6 +3377,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn recursive_double() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_double";
@@ -3498,6 +3522,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn recursive_not_tail() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_not_tail";
@@ -3603,6 +3628,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn recursive_and_normal_call() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "recursive_and_normal_caller";
@@ -3676,6 +3702,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn mutually_recursive_functions() -> Result<()> {
         let modname = "tests/bcfiles/call.bc";
         let funcname = "mutually_recursive_a";

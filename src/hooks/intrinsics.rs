@@ -452,7 +452,9 @@ pub fn symex_ctlz<'p, B: Backend>(
             let cond = x.and(&state.bv_from_u32(0x80000000, width))._eq(&zero);
             let n = cond.cond_bv(&n.add(&one), &n);
             // if x = 0 return width, else return n
-            Ok(ReturnValue::Return(x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n)))
+            Ok(ReturnValue::Return(
+                x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n),
+            ))
         },
         16 => {
             // if (x & 0xFF00) = 0: n <- n + 8, x <- x << 8
@@ -471,7 +473,9 @@ pub fn symex_ctlz<'p, B: Backend>(
             let cond = x.and(&state.bv_from_u32(0x8000, width))._eq(&zero);
             let n = cond.cond_bv(&n.add(&one), &n);
             // if x = 0 return width, else return n
-            Ok(ReturnValue::Return(x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n)))
+            Ok(ReturnValue::Return(
+                x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n),
+            ))
         },
         8 => {
             // if (x & 0xF0) = 0: n <- n + 4, x <- x << 4
@@ -486,9 +490,14 @@ pub fn symex_ctlz<'p, B: Backend>(
             let cond = x.and(&state.bv_from_u32(0x80, width))._eq(&zero);
             let n = cond.cond_bv(&n.add(&one), &n);
             // if x = 0 return width, else return n
-            Ok(ReturnValue::Return(x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n)))
+            Ok(ReturnValue::Return(
+                x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n),
+            ))
         },
-        w => Err(Error::UnsupportedInstruction(format!("ctlz intrinsic on an operand of width {} bits", w))),
+        w => Err(Error::UnsupportedInstruction(format!(
+            "ctlz intrinsic on an operand of width {} bits",
+            w
+        ))),
     }
 }
 
@@ -553,7 +562,9 @@ pub fn symex_cttz<'p, B: Backend>(
             let cond = x.and(&state.bv_from_u32(0x00000001, width))._eq(&zero);
             let n = cond.cond_bv(&n.add(&one), &n);
             // if x = 0 return width, else return n
-            Ok(ReturnValue::Return(x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n)))
+            Ok(ReturnValue::Return(
+                x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n),
+            ))
         },
         16 => {
             // if (x & 0x00FF) = 0: n <- n + 8, x <- x >> 8
@@ -572,7 +583,9 @@ pub fn symex_cttz<'p, B: Backend>(
             let cond = x.and(&state.bv_from_u32(0x0001, width))._eq(&zero);
             let n = cond.cond_bv(&n.add(&one), &n);
             // if x = 0 return width, else return n
-            Ok(ReturnValue::Return(x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n)))
+            Ok(ReturnValue::Return(
+                x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n),
+            ))
         },
         8 => {
             // if (x & 0x0F) = 0: n <- n + 4, x <- x >> 4
@@ -587,9 +600,14 @@ pub fn symex_cttz<'p, B: Backend>(
             let cond = x.and(&state.bv_from_u32(0x01, width))._eq(&zero);
             let n = cond.cond_bv(&n.add(&one), &n);
             // if x = 0 return width, else return n
-            Ok(ReturnValue::Return(x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n)))
+            Ok(ReturnValue::Return(
+                x_eq_0.cond_bv(&state.bv_from_u32(width, width), &n),
+            ))
         },
-        w => Err(Error::UnsupportedInstruction(format!("cttz intrinsic on an operand of width {} bits", w))),
+        w => Err(Error::UnsupportedInstruction(format!(
+            "cttz intrinsic on an operand of width {} bits",
+            w
+        ))),
     }
 }
 
@@ -811,29 +829,63 @@ mod tests {
         }
     }
 
-    fn test_ctlz<'p>(proj: &'p Project, state: &mut State<'p, DefaultBackend>, width: u32, input: u32, output: u32) {
+    fn test_ctlz<'p>(
+        proj: &'p Project,
+        state: &mut State<'p, DefaultBackend>,
+        width: u32,
+        input: u32,
+        output: u32,
+    ) {
         let call = DummyCall::new_twoarg_call(
-            Operand::ConstantOperand(Constant::Int { bits: width, value: input.into() }),
-            Operand::ConstantOperand(Constant::Int { bits: 1, value: 1}),
+            Operand::ConstantOperand(Constant::Int {
+                bits: width,
+                value: input.into(),
+            }),
+            Operand::ConstantOperand(Constant::Int { bits: 1, value: 1 }),
         );
         match symex_ctlz(proj, state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 let outval = bv.as_u64().unwrap();
-                assert_eq!(outval, output.into(), "Expected {}-bit ctlz({:#x}) = {}, got {}", width, input, output, outval);
+                assert_eq!(
+                    outval,
+                    output.into(),
+                    "Expected {}-bit ctlz({:#x}) = {}, got {}",
+                    width,
+                    input,
+                    output,
+                    outval
+                );
             },
             ret => panic!("Unexpected return value: {:?}", ret),
         }
     }
 
-    fn test_cttz<'p>(proj: &'p Project, state: &mut State<'p, DefaultBackend>, width: u32, input: u32, output: u32) {
+    fn test_cttz<'p>(
+        proj: &'p Project,
+        state: &mut State<'p, DefaultBackend>,
+        width: u32,
+        input: u32,
+        output: u32,
+    ) {
         let call = DummyCall::new_twoarg_call(
-            Operand::ConstantOperand(Constant::Int { bits: width, value: input.into() }),
-            Operand::ConstantOperand(Constant::Int { bits: 1, value: 1}),
+            Operand::ConstantOperand(Constant::Int {
+                bits: width,
+                value: input.into(),
+            }),
+            Operand::ConstantOperand(Constant::Int { bits: 1, value: 1 }),
         );
         match symex_cttz(proj, state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 let outval = bv.as_u64().unwrap();
-                assert_eq!(outval, output.into(), "Expected {}-bit cttz({:#x}) = {}, got {}", width, input, output, outval);
+                assert_eq!(
+                    outval,
+                    output.into(),
+                    "Expected {}-bit cttz({:#x}) = {}, got {}",
+                    width,
+                    input,
+                    output,
+                    outval
+                );
             },
             ret => panic!("Unexpected return value: {:?}", ret),
         }

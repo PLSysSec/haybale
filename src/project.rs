@@ -438,11 +438,13 @@ fn get_ptr_size(module: &Module) -> u32 {
             .find(':')
             .expect("datalayout 'p' specification has no colon");
         let addr_space_num = spec[1 .. colon_idx].parse::<u32>().unwrap_or(0); // if not specified, the address space defaults to 0
-        if addr_space_num == 0 { // we are only looking for a specification for the default address space
-            return spec[colon_idx + 1 .. colon_idx + 3]
-                .parse::<u32>()
-                .expect("Failed to parse pointer size");
+        if addr_space_num != 0 {
+            // we are only looking for a specification for the default address space
+            continue;
         }
+        return spec[colon_idx + 1 .. colon_idx + 3]
+            .parse::<u32>()
+            .expect("Failed to parse pointer size");
     }
     64 // no pointer size spec explicitly specified, so LLVM defaults to 64
 }
