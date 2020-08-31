@@ -3,7 +3,10 @@
 
 // this ensures that crate users generating docs with --no-deps will still
 // properly get links to the public docs for haybale's types
-#![doc(html_root_url = "https://PLSysSec.github.io/haybale")]
+// it was especially necessary when the docs.rs docs weren't working for any
+// llvm-sys consumers; now that we have docs.rs as the official docs, I'm not
+// sure if this is necessary or helpful anymore
+#![doc(html_root_url = "https://docs.rs/haybale/0.5.1")]
 
 use llvm_ir::{Type, Typed};
 use std::collections::HashSet;

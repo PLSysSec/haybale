@@ -263,7 +263,7 @@ println!("Parameter values for which foo returns 0: a = {}, b = {}", a, b);
 
 ## Documentation
 
-Full documentation for `haybale` can be found [here](https://PLSysSec.github.io/haybale),
+Full documentation for `haybale` can be found [on docs.rs](https://docs.rs/haybale),
 or of course you can generate local documentation with `cargo doc --open`.
 
 ## Compatibility
@@ -556,47 +556,48 @@ Initial release!
 [`llvm-sys`]: https://crates.io/crates/llvm-sys
 [`boolector-sys`]: https://crates.io/crates/boolector-sys/
 [KLEE]: https://klee.github.io/
-[`Project`]: https://PLSysSec.github.io/haybale/haybale/project/struct.Project.html
-[`Project` documentation]: https://PLSysSec.github.io/haybale/haybale/project/struct.Project.html
-[`Project::get_func_by_name()`]: https://PLSysSec.github.io/haybale/haybale/project/struct.Project.html#method.get_func_by_name
-[`get_possible_return_values_of_func()`]: https://PLSysSec.github.io/haybale/haybale/fn.get_possible_return_values_of_func.html
-[`find_zero_of_func()`]: https://PLSysSec.github.io/haybale/haybale/fn.find_zero_of_func.html
-[`ExecutionManager`]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
-[`ExecutionManager` documentation]: https://PLSysSec.github.io/haybale/haybale/struct.ExecutionManager.html
-[`symex_function()`]: https://PLSysSec.github.io/haybale/haybale/fn.symex_function.html
-[`Config`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html
+[`Project`]: https://docs.rs/haybale/0.5.1/haybale/project/struct.Project.html
+https://docs.rs/haybale/0.5.0/haybale/struct.Project.html
+[`Project` documentation]: https://docs.rs/haybale/0.5.1/haybale/project/struct.Project.html
+[`Project::get_func_by_name()`]: https://docs.rs/haybale/0.5.1/haybale/project/struct.Project.html#method.get_func_by_name
+[`get_possible_return_values_of_func()`]: https://docs.rs/haybale/0.5.1/haybale/fn.get_possible_return_values_of_func.html
+[`find_zero_of_func()`]: https://docs.rs/haybale/0.5.1/haybale/fn.find_zero_of_func.html
+[`ExecutionManager`]: https://docs.rs/haybale/0.5.1/haybale/struct.ExecutionManager.html
+[`ExecutionManager` documentation]: https://docs.rs/haybale/0.5.1/haybale/struct.ExecutionManager.html
+[`symex_function()`]: https://docs.rs/haybale/0.5.1/haybale/fn.symex_function.html
+[`Config`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html
 [`BV`]: https://docs.rs/boolector/0.3.0/boolector/struct.BV.html
-[`ReturnValue`]: https://PLSysSec.github.io/haybale/haybale/enum.ReturnValue.html
-[`Error`]: https://PLSysSec.github.io/haybale/haybale/enum.Error.html
-[`State`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html
-[`Location`]: https://PLSysSec.github.io/haybale/haybale/struct.Location.html
-[`Project::get_inner_struct_type_from_named()`]: https://PLSysSec.github.io/haybale/haybale/struct.Project.html#method.get_inner_struct_type_from_named
-[`State::add_mem_watchpoint()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.add_mem_watchpoint
-[`FunctionHooks::add_cpp_demangled()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_cpp_demangled
-[`FunctionHooks::add_rust_demangled()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_rust_demangled
-[`FunctionHooks::add_inline_asm_hook()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_inline_asm_hook
-[`FunctionHooks::add_default_hook()`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/struct.FunctionHooks.html#method.add_default_hook
-[`function_hooks`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/index.html
-[`generic_stub_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.generic_stub_hook.html
-[`abort_hook`]: https://PLSysSec.github.io/haybale/haybale/function_hooks/fn.abort_hook.html
-[`Config.initial_mem_watchpoints`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.initial_mem_watchpoints
-[`Config.demangling`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.demangling
-[`Config.print_source_info`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.print_source_info
-[`Config.print_module_name`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.print_module_name
-[`Config.trust_llvm_assumes`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.trust_llvm_assumes
-[`Config.solver_query_timeout`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.solver_query_timeout
-[`Config.squash_unsats`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.squash_unsats
-[`Config.max_callstack_depth`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.max_callstack_depth
-[`Config.max_memcpy_length`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.max_memcpy_length
-[`Config.callbacks`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.callbacks
-[`Config.null_pointer_checking`]: https://PLSysSec.github.io/haybale/haybale/config/struct.Config.html#structfield.null_pointer_checking
-[`backend::BV`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.BV.html
-[`backend::Memory`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.Memory.html
-[`new_uninitialized()`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.Memory.html#tymethod.new_uninitialized
-[`new_zero_initialized()`]: https://PLSysSec.github.io/haybale/haybale/backend/trait.Memory.html#tymethod.new_zero_initialized
-[`State.full_error_message_with_context()`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.full_error_message_with_context
-[`memcpy_bv`]: https://PLSysSec.github.io/haybale/haybale/hook_utils/fn.memcpy_bv.html
-[`memset_bv`]: https://PLSysSec.github.io/haybale/haybale/hook_utils/fn.memset_bv.html
-[`layout::size_opaque_aware`]: https://PLSysSec.github.io/haybale/haybale/struct.State.html#method.size_opaque_aware
-[`pointer_size_bits()`]: https://PLSysSec.github.io/haybale/haybale/struct.Project.html#method.pointer_size_bits
-[`solver_utils::PossibleSolutions`]: https://PLSysSec.github.io/haybale/haybale/solver_utils/enum.PossibleSolutions.html
+[`ReturnValue`]: https://docs.rs/haybale/0.5.1/haybale/enum.ReturnValue.html
+[`Error`]: https://docs.rs/haybale/0.5.1/haybale/enum.Error.html
+[`State`]: https://docs.rs/haybale/0.5.1/haybale/struct.State.html
+[`Location`]: https://docs.rs/haybale/0.5.1/haybale/struct.Location.html
+[`Project::get_inner_struct_type_from_named()`]: https://docs.rs/haybale/0.5.1/haybale/struct.Project.html#method.get_inner_struct_type_from_named
+[`State::add_mem_watchpoint()`]: https://docs.rs/haybale/0.5.1/haybale/struct.State.html#method.add_mem_watchpoint
+[`FunctionHooks::add_cpp_demangled()`]: https://docs.rs/haybale/0.5.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_cpp_demangled
+[`FunctionHooks::add_rust_demangled()`]: https://docs.rs/haybale/0.5.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_rust_demangled
+[`FunctionHooks::add_inline_asm_hook()`]: https://docs.rs/haybale/0.5.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_inline_asm_hook
+[`FunctionHooks::add_default_hook()`]: https://docs.rs/haybale/0.5.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_default_hook
+[`function_hooks`]: https://docs.rs/haybale/0.5.1/haybale/function_hooks/index.html
+[`generic_stub_hook`]: https://docs.rs/haybale/0.5.1/haybale/function_hooks/fn.generic_stub_hook.html
+[`abort_hook`]: https://docs.rs/haybale/0.5.1/haybale/function_hooks/fn.abort_hook.html
+[`Config.initial_mem_watchpoints`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.initial_mem_watchpoints
+[`Config.demangling`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.demangling
+[`Config.print_source_info`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.print_source_info
+[`Config.print_module_name`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.print_module_name
+[`Config.trust_llvm_assumes`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.trust_llvm_assumes
+[`Config.solver_query_timeout`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.solver_query_timeout
+[`Config.squash_unsats`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.squash_unsats
+[`Config.max_callstack_depth`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.max_callstack_depth
+[`Config.max_memcpy_length`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.max_memcpy_length
+[`Config.callbacks`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.callbacks
+[`Config.null_pointer_checking`]: https://docs.rs/haybale/0.5.1/haybale/config/struct.Config.html#structfield.null_pointer_checking
+[`backend::BV`]: https://docs.rs/haybale/0.5.1/haybale/backend/trait.BV.html
+[`backend::Memory`]: https://docs.rs/haybale/0.5.1/haybale/backend/trait.Memory.html
+[`new_uninitialized()`]: https://docs.rs/haybale/0.5.1/haybale/backend/trait.Memory.html#tymethod.new_uninitialized
+[`new_zero_initialized()`]: https://docs.rs/haybale/0.5.1/haybale/backend/trait.Memory.html#tymethod.new_zero_initialized
+[`State.full_error_message_with_context()`]: https://docs.rs/haybale/0.5.1/haybale/struct.State.html#method.full_error_message_with_context
+[`memcpy_bv`]: https://docs.rs/haybale/0.5.1/haybale/hook_utils/fn.memcpy_bv.html
+[`memset_bv`]: https://docs.rs/haybale/0.5.1/haybale/hook_utils/fn.memset_bv.html
+[`layout::size_opaque_aware`]: https://docs.rs/haybale/0.5.1/haybale/struct.State.html#method.size_opaque_aware
+[`pointer_size_bits()`]: https://docs.rs/haybale/0.5.1/haybale/struct.Project.html#method.pointer_size_bits
+[`solver_utils::PossibleSolutions`]: https://docs.rs/haybale/0.5.1/haybale/solver_utils/enum.PossibleSolutions.html
