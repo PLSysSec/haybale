@@ -515,12 +515,12 @@ mod tests {
 
     #[test]
     fn project_for_32bit_target() {
-        let proj = Project::from_bc_path("tests/bcfiles/32bit/basic_rust.bc")
+        let proj = Project::from_bc_path("tests/bcfiles/32bit/issue_4.bc")
             .unwrap_or_else(|e| panic!("Failed to create project: {}", e));
         assert_eq!(proj.pointer_size_bits(), 32);
         let (_, module) = proj
-            .get_func_by_name("basic_rust::ez")
+            .get_func_by_name("issue_4::ez")
             .expect("Failed to find function");
-        assert_eq!(&module.name, "tests/bcfiles/32bit/basic_rust.bc");
+        assert_eq!(&module.name, "tests/bcfiles/32bit/issue_4.bc");
     }
 }

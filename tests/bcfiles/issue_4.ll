@@ -1,5 +1,5 @@
-; ModuleID = 'basic_rust.3a1fbbbh-cgu.0'
-source_filename = "basic_rust.3a1fbbbh-cgu.0"
+; ModuleID = 'issue_4.3a1fbbbh-cgu.0'
+source_filename = "issue_4.3a1fbbbh-cgu.0"
 target datalayout = "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.7.0"
 
@@ -8,8 +8,8 @@ target triple = "x86_64-apple-macosx10.7.0"
 %"core::fmt::Arguments" = type { [0 x i64], { [0 x { [0 x i8]*, i64 }]*, i64 }, [0 x i64], { i64*, i64 }, [0 x i64], { [0 x { i8*, i8* }]*, i64 }, [0 x i64] }
 %"core::panic::Location" = type { [0 x i64], { [0 x i8]*, i64 }, [0 x i32], i32, [0 x i32], i32, [0 x i32] }
 
-@alloc8 = private unnamed_addr constant <{ [13 x i8] }> <{ [13 x i8] c"basic_rust.rs" }>, align 1
-@alloc9 = private unnamed_addr constant <{ i8*, [16 x i8] }> <{ i8* getelementptr inbounds (<{ [13 x i8] }>, <{ [13 x i8] }>* @alloc8, i32 0, i32 0, i32 0), [16 x i8] c"\0D\00\00\00\00\00\00\00\04\00\00\00\05\00\00\00" }>, align 8
+@alloc8 = private unnamed_addr constant <{ [10 x i8] }> <{ [10 x i8] c"issue_4.rs" }>, align 1
+@alloc9 = private unnamed_addr constant <{ i8*, [16 x i8] }> <{ i8* getelementptr inbounds (<{ [10 x i8] }>, <{ [10 x i8] }>* @alloc8, i32 0, i32 0, i32 0), [16 x i8] c"\0A\00\00\00\00\00\00\00\04\00\00\00\05\00\00\00" }>, align 8
 @str.0 = internal constant [33 x i8] c"attempt to multiply with overflow"
 @alloc2 = private unnamed_addr constant <{ [5 x i8] }> <{ [5 x i8] c"out: " }>, align 1
 @alloc3 = private unnamed_addr constant <{ [1 x i8] }> <{ [1 x i8] c"\0A" }>, align 1
@@ -18,7 +18,7 @@ target triple = "x86_64-apple-macosx10.7.0"
 
 ; core::fmt::ArgumentV1::new
 ; Function Attrs: uwtable
-define { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17h11eeb169227c0f27E(i32* noalias readonly align 4 dereferenceable(4) %x, i1 (i32*, %"core::fmt::Formatter"*)* nonnull %f) unnamed_addr #0 {
+define { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17h1255362ef8e19b1aE(i32* noalias readonly align 4 dereferenceable(4) %x, i1 (i32*, %"core::fmt::Formatter"*)* nonnull %f) unnamed_addr #0 {
 start:
   %0 = alloca %"core::fmt::::Opaque"*, align 8
   %1 = alloca i1 (%"core::fmt::::Opaque"*, %"core::fmt::Formatter"*)*, align 8
@@ -51,7 +51,7 @@ bb2:                                              ; preds = %bb1
 
 ; core::fmt::Arguments::new_v1
 ; Function Attrs: inlinehint uwtable
-define internal void @_ZN4core3fmt9Arguments6new_v117he1558e8bffbc4d0cE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(48) %0, [0 x { [0 x i8]*, i64 }]* noalias nonnull readonly align 8 %pieces.0, i64 %pieces.1, [0 x { i8*, i8* }]* noalias nonnull readonly align 8 %args.0, i64 %args.1) unnamed_addr #1 {
+define internal void @_ZN4core3fmt9Arguments6new_v117hcb411028d393ec8fE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(48) %0, [0 x { [0 x i8]*, i64 }]* noalias nonnull readonly align 8 %pieces.0, i64 %pieces.1, [0 x { i8*, i8* }]* noalias nonnull readonly align 8 %args.0, i64 %args.1) unnamed_addr #1 {
 start:
   %_4 = alloca { i64*, i64 }, align 8
   %1 = bitcast { i64*, i64 }* %_4 to {}**
@@ -78,9 +78,9 @@ start:
   ret void
 }
 
-; basic_rust::ez
+; issue_4::ez
 ; Function Attrs: uwtable
-define i32 @_ZN10basic_rust2ez17hf9be465885e49920E(i32 %input) unnamed_addr #0 {
+define i32 @_ZN7issue_42ez17h3ecae08f8205d50dE(i32 %input) unnamed_addr #0 {
 start:
   %0 = call { i32, i1 } @llvm.umul.with.overflow.i32(i32 %input, i32 2)
   %_3.0 = extractvalue { i32, i1 } %0, 0
@@ -97,16 +97,16 @@ panic:                                            ; preds = %start
   unreachable
 }
 
-; basic_rust::main
+; issue_4::main
 ; Function Attrs: uwtable
-define void @_ZN10basic_rust4main17h9124f02438e9f370E() unnamed_addr #0 {
+define void @_ZN7issue_44main17hce56232ad4472924E() unnamed_addr #0 {
 start:
   %_11 = alloca i32*, align 8
   %_10 = alloca [1 x { i8*, i8* }], align 8
   %_3 = alloca %"core::fmt::Arguments", align 8
   %out = alloca i32, align 4
-; call basic_rust::ez
-  %0 = call i32 @_ZN10basic_rust2ez17hf9be465885e49920E(i32 1)
+; call issue_4::ez
+  %0 = call i32 @_ZN7issue_42ez17h3ecae08f8205d50dE(i32 1)
   store i32 %0, i32* %out, align 4
   br label %bb1
 
@@ -116,7 +116,7 @@ bb1:                                              ; preds = %start
   store i32* %out, i32** %_11, align 8
   %arg0 = load i32*, i32** %_11, align 8, !nonnull !1
 ; call core::fmt::ArgumentV1::new
-  %1 = call { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17h11eeb169227c0f27E(i32* noalias readonly align 4 dereferenceable(4) %arg0, i1 (i32*, %"core::fmt::Formatter"*)* nonnull @"_ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$3fmt17h9718cd0454163961E")
+  %1 = call { i8*, i8* } @_ZN4core3fmt10ArgumentV13new17h1255362ef8e19b1aE(i32* noalias readonly align 4 dereferenceable(4) %arg0, i1 (i32*, %"core::fmt::Formatter"*)* nonnull @"_ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$3fmt17h9718cd0454163961E")
   %_14.0 = extractvalue { i8*, i8* } %1, 0
   %_14.1 = extractvalue { i8*, i8* } %1, 1
   br label %bb2
@@ -129,7 +129,7 @@ bb2:                                              ; preds = %bb1
   store i8* %_14.1, i8** %4, align 8
   %_7.0 = bitcast [1 x { i8*, i8* }]* %_10 to [0 x { i8*, i8* }]*
 ; call core::fmt::Arguments::new_v1
-  call void @_ZN4core3fmt9Arguments6new_v117he1558e8bffbc4d0cE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(48) %_3, [0 x { [0 x i8]*, i64 }]* noalias nonnull readonly align 8 %_4.0, i64 2, [0 x { i8*, i8* }]* noalias nonnull readonly align 8 %_7.0, i64 1)
+  call void @_ZN4core3fmt9Arguments6new_v117hcb411028d393ec8fE(%"core::fmt::Arguments"* noalias nocapture sret dereferenceable(48) %_3, [0 x { [0 x i8]*, i64 }]* noalias nonnull readonly align 8 %_4.0, i64 2, [0 x { i8*, i8* }]* noalias nonnull readonly align 8 %_7.0, i64 1)
   br label %bb3
 
 bb3:                                              ; preds = %bb2

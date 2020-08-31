@@ -14,14 +14,14 @@ fn get_project() -> Project {
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
-fn get_basic_rust_project() -> Project {
-    let modname = "tests/bcfiles/basic_rust.bc";
+fn get_issue_4_project() -> Project {
+    let modname = "tests/bcfiles/issue_4.bc";
     Project::from_bc_path(&Path::new(modname))
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
 
-fn get_basic_rust_32bit_project() -> Project {
-    let modname = "tests/bcfiles/32bit/basic_rust.bc";
+fn get_issue_4_32bit_project() -> Project {
+    let modname = "tests/bcfiles/32bit/issue_4.bc";
     Project::from_bc_path(&Path::new(modname))
         .unwrap_or_else(|e| panic!("Failed to parse module {:?}: {}", modname, e))
 }
@@ -282,10 +282,10 @@ fn mixed_bitwidths() {
 }
 
 #[test]
-fn basic_rust() {
-    let funcname = "basic_rust::ez";
+fn issue_4() {
+    let funcname = "issue_4::ez";
     init_logging();
-    let proj = get_basic_rust_project();
+    let proj = get_issue_4_project();
     let ret = get_possible_return_values_of_func(
         funcname,
         vec![Some(1)],
@@ -301,10 +301,10 @@ fn basic_rust() {
 }
 
 #[test]
-fn basic_rust_32bit() {
-    let funcname = "basic_rust::ez";
+fn issue_4_32bit() {
+    let funcname = "issue_4::ez";
     init_logging();
-    let proj = get_basic_rust_32bit_project();
+    let proj = get_issue_4_32bit_project();
     let ret = get_possible_return_values_of_func(
         funcname,
         vec![Some(1)],

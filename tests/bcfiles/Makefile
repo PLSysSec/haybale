@@ -7,7 +7,7 @@ RUST32BIT=--target i686-unknown-linux-gnu
 
 .PHONY: all
 all: basic.bc basic.ll \
-			basic_rust.bc basic_rust.ll \
+			issue_4.bc issue_4.ll \
 			memory.bc memory.ll \
 			loop.bc loop.ll \
 			struct.bc struct.ll \
@@ -23,7 +23,7 @@ all: basic.bc basic.ll \
 			throwcatch.bc throwcatch.ll \
 			abort.bc abort.ll \
 			panic.bc panic.ll \
-			32bit/basic_rust.bc 32bit/basic_rust.ll \
+			32bit/issue_4.bc 32bit/issue_4.ll \
 
 %.ll : %.c
 	$(CC) $(CFLAGS) -S -emit-llvm $^ -o $@
