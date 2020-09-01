@@ -46,18 +46,14 @@ This branch of `haybale` also depends (indirectly) on the LLVM 8 and
 Boolector libraries, which must both be available on your system.
 See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
 
-Alternately, versions of `haybale` supporting/requiring LLVM 9 and LLVM 10
-are available on the `llvm-9` branch and the `master` branch respectively;
-the current [crates.io](https://crates.io/crates/haybale) releases are from
-the `master` branch.
-As of this writing, the LLVM 9 and LLVM 10 branches are at feature parity
-with each other, while this branch lacks many features present on the other
-two branches.
+Alternately, the current [crates.io](https://crates.io/crates/haybale)
+releases and `master` branch of `haybale` support LLVM 9 and LLVM 10.
+This LLVM 8 branch lacks many features present in the latest releases.
 
-As one final note, the [official documentation](https://PLSysSec.github.io/haybale),
-including many of the links scattered throughout the rest of this README, is
-for the (latest stable release of the) `master` branch.
-There will be some differences between the official docs and the `llvm-8`
+As one final note, the [official documentation](https://docs.rs/haybale),
+including many of the links scattered throughout the rest of this README,
+defaults to the latest crates.io release.
+There will be some differences between these linked docs and the `llvm-8`
 branch of `haybale`.
 You can always generate local documentation for your exact version of
 `haybale` with `cargo doc --open`.
@@ -265,9 +261,8 @@ of `haybale` with `cargo doc --open`.
 
 You're looking at the `llvm-8` branch of `haybale`, which only supports LLVM 8.
 
-LLVM 9 and LLVM 10 are supported on the `llvm-9` branch and `master` branch
-respectively; the current [crates.io](https://crates.io/crates/haybale)
-releases are from the `master` branch.
+Both LLVM 9 and LLVM 10 are supported by the `master` branch and the current
+[crates.io](https://crates.io/crates/haybale) releases.
 
 This `llvm-8` branch is approximately at feature parity with `haybale`
 version 0.2.1, and will likely be stuck at that point indefinitely unless
