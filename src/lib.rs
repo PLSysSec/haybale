@@ -128,7 +128,9 @@ pub fn find_zero_of_func<'p>(
         }
     }
 
-    let returnwidth = em.state().size(&func.return_type);
+    let returnwidth = project
+        .size_in_bits(&func.return_type)
+        .expect("Function return type shouldn't be an opaque struct type");
     let zero = em.state().zero(returnwidth);
     let mut found = false;
     while let Some(bvretval) = em.next() {
@@ -223,13 +225,18 @@ pub fn get_possible_return_values_of_func<'p>(
         .expect("Failed to find function");
     for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
         if let Some(val) = arg {
-            let val = em.state().bv_from_u64(val, em.state().size(&param.ty));
+            let param_size_bits = project
+                .size_in_bits(&param.ty)
+                .expect("Parameter type shouldn't be opaque struct type");
+            let val = em.state().bv_from_u64(val, param_size_bits);
             em.mut_state()
                 .overwrite_latest_version_of_bv(&param.name, val);
         }
     }
 
-    let return_width = em.state().size(&func.return_type);
+    let return_width = project
+        .size_in_bits(&func.return_type)
+        .expect("Function return type shouldn't be opaque struct type");
     let mut candidate_values = HashSet::<ReturnValue<u64>>::new();
     let mut have_throw = false; // is there at least one `ReturnValue::Throw` in the `candidate_values`
     while let Some(bvretval) = em.next() {

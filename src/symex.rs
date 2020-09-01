@@ -50,7 +50,7 @@ pub fn symex_function<'p, B: Backend>(
         .iter()
         .map(|param| {
             let param_size = state
-                .size_opaque_aware(&param.ty, project)
+                .size_in_bits(&param.ty)
                 .expect("Parameter type is a struct opaque in the entire Project");
             state
                 .new_bv_with_name(param.name.clone(), param_size)
@@ -558,7 +558,14 @@ where
             Type::IntegerType { bits } => {
                 let bvop = self.state.operand_to_bv(&zext.operand)?;
                 let source_size = bits;
-                let dest_size = self.state.size(&self.state.type_of(zext));
+                let dest_size = self
+                    .state
+                    .size_in_bits(&self.state.type_of(zext))
+                    .ok_or_else(|| {
+                        Error::MalformedInstruction(
+                            "ZExt return type is an opaque struct type".into(),
+                        )
+                    })?;
                 self.state
                     .record_bv_result(zext, bvop.zext(dest_size - source_size))
             },
@@ -567,7 +574,12 @@ where
                 num_elements,
             } => {
                 let in_vector = self.state.operand_to_bv(&zext.operand)?;
-                let in_el_size = self.state.size(&element_type);
+                let in_el_size = self.state.size_in_bits(&element_type).ok_or_else(|| {
+                    Error::MalformedInstruction(
+                        "ZExt operand type is a vector whose elements are opaque struct type"
+                            .into(),
+                    )
+                })?;
                 let out_el_size = match self.state.type_of(zext).as_ref() {
                     Type::VectorType {
                         element_type: out_el_type,
@@ -576,7 +588,8 @@ where
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("ZExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
-                        self.state.size(&out_el_type)
+                        self.state.size_in_bits(&out_el_type)
+                            .ok_or_else(|| Error::MalformedInstruction("ZExt return type is a vector whose elements are opaque struct type".into()))?
                     },
                     ty => {
                         return Err(Error::MalformedInstruction(format!(
@@ -603,7 +616,14 @@ where
             Type::IntegerType { bits } => {
                 let bvop = self.state.operand_to_bv(&sext.operand)?;
                 let source_size = bits;
-                let dest_size = self.state.size(&self.state.type_of(sext));
+                let dest_size = self
+                    .state
+                    .size_in_bits(&self.state.type_of(sext))
+                    .ok_or_else(|| {
+                        Error::MalformedInstruction(
+                            "SExt return type is an opaque struct type".into(),
+                        )
+                    })?;
                 self.state
                     .record_bv_result(sext, bvop.sext(dest_size - source_size))
             },
@@ -612,7 +632,12 @@ where
                 num_elements,
             } => {
                 let in_vector = self.state.operand_to_bv(&sext.operand)?;
-                let in_el_size = self.state.size(&element_type);
+                let in_el_size = self.state.size_in_bits(&element_type).ok_or_else(|| {
+                    Error::MalformedInstruction(
+                        "SExt operand type is a vector whose elements are opaque struct type"
+                            .into(),
+                    )
+                })?;
                 let out_el_size = match self.state.type_of(sext).as_ref() {
                     Type::VectorType {
                         element_type: out_el_type,
@@ -621,7 +646,8 @@ where
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("SExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
-                        self.state.size(&out_el_type)
+                        self.state.size_in_bits(&out_el_type)
+                            .ok_or_else(|| Error::MalformedInstruction("SExt return type is a vector whose elements are opaque struct type".into()))?
                     },
                     ty => {
                         return Err(Error::MalformedInstruction(format!(
@@ -647,7 +673,14 @@ where
         match self.state.type_of(&trunc.operand).as_ref() {
             Type::IntegerType { .. } => {
                 let bvop = self.state.operand_to_bv(&trunc.operand)?;
-                let dest_size = self.state.size(&self.state.type_of(trunc));
+                let dest_size = self
+                    .state
+                    .size_in_bits(&self.state.type_of(trunc))
+                    .ok_or_else(|| {
+                        Error::MalformedInstruction(
+                            "Trunc return type is an opaque struct type".into(),
+                        )
+                    })?;
                 self.state
                     .record_bv_result(trunc, bvop.slice(dest_size - 1, 0))
             },
@@ -661,7 +694,8 @@ where
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("Trunc operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
                         }
-                        self.state.size(&out_el_type)
+                        self.state.size_in_bits(&out_el_type)
+                            .ok_or_else(|| Error::MalformedInstruction("Trunc return type is a vector whose elements are opaque struct type".into()))?
                     },
                     ty => {
                         return Err(Error::MalformedInstruction(format!(
@@ -692,7 +726,12 @@ where
     fn symex_load(&mut self, load: &'p instruction::Load) -> Result<()> {
         debug!("Symexing load {:?}", load);
         let bvaddr = self.state.operand_to_bv(&load.address)?;
-        let dest_size = self.state.size(&self.state.type_of(load));
+        let dest_size = self
+            .state
+            .size_in_bits(&self.state.type_of(load))
+            .ok_or_else(|| {
+                Error::MalformedInstruction("Load result type is an opaque struct type".into())
+            })?;
         self.state
             .record_bv_result(load, self.state.read(&bvaddr, dest_size)?)
     }
@@ -799,12 +838,14 @@ where
                     let allocation_size_bits = {
                         let element_size_bits = self
                             .state
-                            .size_opaque_aware(&alloca.allocated_type, self.project)
-                            .expect("Alloca with type which is opaque in the entire Project");
+                            .size_in_bits(&alloca.allocated_type)
+                            .ok_or_else(|| {
+                                Error::MalformedInstruction("Alloca with opaque struct type".into())
+                            })?;
                         element_size_bits as u64 * *num_elements
                     };
                     let allocation_size_bits = if allocation_size_bits == 0 {
-                        debug!("Alloca is for something of size 0 bits; we'll give it 8 bits anyway");
+                        debug!("Alloca of 0 bits; we'll give it 8 bits anyway");
                         8
                     } else {
                         allocation_size_bits
@@ -815,7 +856,7 @@ where
                 c => Err(Error::UnsupportedInstruction(format!(
                     "Alloca with num_elements not a constant int: {:?}",
                     c
-                )))
+                ))),
             },
             op => Err(Error::UnsupportedInstruction(format!(
                 "Alloca with num_elements not a constant int: {:?}",
@@ -842,7 +883,8 @@ where
                                     index, num_elements
                                 )))
                             } else {
-                                let el_size = self.state.size(&element_type);
+                                let el_size = self.state.size_in_bits(&element_type)
+                                    .ok_or_else(|| Error::MalformedInstruction("ExtractElement vector whose elements are opaque struct type".into()))?;
                                 self.state.record_bv_result(
                                     ee,
                                     vector.slice((index + 1) * el_size - 1, index * el_size),
@@ -887,7 +929,8 @@ where
                                 )))
                             } else {
                                 let vec_size = vector.get_width();
-                                let el_size = self.state.size(&element_type);
+                                let el_size = self.state.size_in_bits(&element_type)
+                                    .ok_or_else(|| Error::MalformedInstruction("InsertElement element is an opaque named struct type".into()))?;
                                 assert_eq!(vec_size, el_size * *num_elements as u32);
                                 let insertion_bitindex_low = index * el_size; // lowest bit number in the vector which will be overwritten
                                 let insertion_bitindex_high = (index + 1) * el_size - 1; // highest bit number in the vector which will be overwritten
@@ -955,7 +998,11 @@ where
                 if op0.get_width() != op1.get_width() {
                     return Err(Error::OtherError(format!("ShuffleVector operands are the same type, but somehow we got two different sizes: {} bits and {} bits", op0.get_width(), op1.get_width())));
                 }
-                let el_size = self.state.size(&element_type);
+                let el_size = self.state.size_in_bits(&element_type).ok_or_else(|| {
+                    Error::MalformedInstruction(
+                        "ShuffleVector element type is an opaque struct type".into(),
+                    )
+                })?;
                 let num_elements = *num_elements as u32;
                 assert_eq!(op0.get_width(), el_size * num_elements);
                 let final_bv = mask
@@ -1043,7 +1090,12 @@ where
             }
         }
         match indices.next() {
-            None => Ok((0, self.state.size(base_type))),
+            None => Ok((
+                0,
+                self.state.size_in_bits(base_type).expect(
+                    "base_type can't be a NamedStructType here because we handled that case above",
+                ),
+            )),
             Some(index) => match base_type {
                 Type::PointerType { .. }
                 | Type::ArrayType { .. }
@@ -1180,7 +1232,11 @@ where
                     match self.state.type_of(call).as_ref() {
                         Type::VoidType => {},
                         ty => {
-                            let width = self.state.size(&ty);
+                            let width = self.state.size_in_bits(&ty).ok_or_else(|| {
+                                Error::MalformedInstruction(
+                                    "Call return type is an opaque struct type".into(),
+                                )
+                            })?;
                             let bv = self.state.new_bv_with_name(
                                 Name::from(format!("{}_retval", called_funcname)),
                                 width,
@@ -1606,7 +1662,11 @@ where
                         hooked_funcname
                     )))
                 } else {
-                    let retwidth = self.state.size(&ret_type);
+                    let retwidth = self.state.size_in_bits(&ret_type).ok_or_else(|| {
+                        Error::MalformedInstruction(
+                            "Call return type is an opaque struct type".into(),
+                        )
+                    })?;
                     if retval.get_width() != retwidth {
                         Err(Error::HookReturnValueMismatch(format!("Hook for {:?} returned a {}-bit value but call's return type requires a {}-bit value", hooked_funcname, retval.get_width(), retwidth)))
                     } else {
@@ -1816,7 +1876,11 @@ where
                     match self.state.type_of(invoke).as_ref() {
                         Type::VoidType => {},
                         ty => {
-                            let width = self.state.size(&ty);
+                            let width = self.state.size_in_bits(&ty).ok_or_else(|| {
+                                Error::MalformedInstruction(
+                                    "Invoke return type is an opaque struct type".into(),
+                                )
+                            })?;
                             let bv = self.state.new_bv_with_name(
                                 Name::from(format!("{}_retval", called_funcname)),
                                 width,
@@ -2068,7 +2132,14 @@ where
                     return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct of 2 elements, got a struct of {} elements: {:?}", element_types.len(), element_types)));
                 }
                 match element_types[0].as_ref() {
-                    ty@Type::PointerType { .. } => assert_eq!(thrown_ptr.get_width(), self.state.size(ty), "Expected thrown_ptr to be a pointer, got a value of width {:?}", thrown_ptr.get_width()),
+                    ty@Type::PointerType { .. } => {
+                        assert_eq!(
+                            thrown_ptr.get_width(),
+                            self.state.size_in_bits(ty).expect("ty is a pointer type, can't be a named struct type"),
+                            "Expected thrown_ptr to be a pointer, got a value of width {:?}",
+                            thrown_ptr.get_width()
+                        );
+                    },
                     ty => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct with first element a pointer, got first element {:?}", ty))),
                 }
                 match element_types[1].as_ref() {
@@ -2159,7 +2230,7 @@ where
                         if num_elements != op_num_els {
                             return Err(Error::MalformedInstruction(format!("Select condition is a vector of {} elements but operands are vectors with {} elements", num_elements, op_num_els)));
                         }
-                        self.state.size(&op_el_type)
+                        self.state.size_in_bits(&op_el_type).ok_or_else(|| Error::MalformedInstruction("Select on a vector whose elements have opaque struct type".into()))?
                     },
                     _ => return Err(Error::MalformedInstruction(format!("Expected Select with vector condition to have vector operands, but operands are of type {:?}", optype))),
                 };

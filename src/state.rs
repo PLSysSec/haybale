@@ -38,6 +38,7 @@ pub struct State<'p, B: Backend> {
     pub cur_loc: Location<'p>,
 
     // Private members
+    proj: &'p Project,
     varmap: VarMap<B::BV>,
     mem: RefCell<B::Memory>,
     alloc: Alloc,
@@ -387,6 +388,7 @@ where
         let mut state = Self {
             cur_loc: start_loc.clone(),
             pointer_size_bits: project.pointer_size_bits(),
+            proj: project,
             varmap: VarMap::new(solver.clone(), config.loop_bound),
             mem: RefCell::new(Memory::new_uninitialized(
                 solver.clone(),
@@ -505,7 +507,7 @@ where
             // definitions, since each global variable must have exactly one
             // definition. Hence the `filter()` above.
             if let Type::PointerType { pointee_type, .. } = var.ty.as_ref() {
-                let size_bits = state.size_opaque_aware(&pointee_type, project).expect(
+                let size_bits = state.size_in_bits(&pointee_type).expect(
                     "Global variable has a struct type which is opaque in the entire Project",
                 );
                 let size_bits = if size_bits == 0 {
@@ -850,11 +852,14 @@ where
         thing: &impl instruction::HasResult,
         resultval: B::BV,
     ) -> Result<()> {
-        if self.size(&self.type_of(thing)) != resultval.get_width() {
+        let thing_size_in_bits = self.size_in_bits(&self.type_of(thing)).ok_or_else(|| {
+            Error::MalformedInstruction("Instruction result type is an opaque struct type".into())
+        })?;
+        if thing_size_in_bits != resultval.get_width() {
             Err(Error::OtherError(format!(
                 "Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}",
                 thing,
-                self.size(&self.type_of(thing)),
+                thing_size_in_bits,
                 resultval,
                 resultval.get_width()
             )))
@@ -902,7 +907,13 @@ where
         match c {
             Constant::Int { bits, value } => Ok(self.bv_from_u64(*value, *bits)),
             Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty) => {
-                Ok(self.zero(self.size(ty)))
+                let size_bits = self.size_in_bits(ty).ok_or_else(|| {
+                    Error::OtherError(format!(
+                        "const_to_bv on a constant with opaque struct type: {:?}",
+                        c
+                    ))
+                })?;
+                Ok(self.zero(size_bits))
             },
             Constant::Struct {
                 values: elements, ..
@@ -1090,33 +1101,78 @@ where
                 )?;
                 Ok(bvbase.add(&offset))
             },
-            Constant::Trunc(t) => self
-                .const_to_bv(&t.operand)
-                .map(|bv| bv.slice(self.size(&t.to_type) - 1, 0)),
-            Constant::ZExt(z) => self
-                .const_to_bv(&z.operand)
-                .map(|bv| bv.zero_extend_to_bits(self.size(&z.to_type))),
-            Constant::SExt(s) => self
-                .const_to_bv(&s.operand)
-                .map(|bv| bv.sign_extend_to_bits(self.size(&s.to_type))),
+            Constant::Trunc(t) => {
+                let to_size_bits = self.size_in_bits(&t.to_type).ok_or_else(|| {
+                    Error::OtherError(format!(
+                        "const_to_bv on a constant with opaque struct type {:?}",
+                        c
+                    ))
+                })?;
+                self.const_to_bv(&t.operand)
+                    .map(|bv| bv.slice(to_size_bits - 1, 0))
+            },
+            Constant::ZExt(z) => {
+                let to_size_bits = self.size_in_bits(&z.to_type).ok_or_else(|| {
+                    Error::OtherError(format!(
+                        "const_to_bv on a constant with opaque struct type {:?}",
+                        c
+                    ))
+                })?;
+                self.const_to_bv(&z.operand)
+                    .map(|bv| bv.zero_extend_to_bits(to_size_bits))
+            },
+            Constant::SExt(s) => {
+                let to_size_bits = self.size_in_bits(&s.to_type).ok_or_else(|| {
+                    Error::OtherError(format!(
+                        "const_to_bv on a constant with opaque struct type {:?}",
+                        c
+                    ))
+                })?;
+                self.const_to_bv(&s.operand)
+                    .map(|bv| bv.sign_extend_to_bits(to_size_bits))
+            },
             Constant::PtrToInt(pti) => {
                 let bv = self.const_to_bv(&pti.operand)?;
-                assert_eq!(bv.get_width(), self.size(&pti.to_type));
+                assert_eq!(
+                    bv.get_width(),
+                    self.size_in_bits(&pti.to_type)
+                        .ok_or_else(|| Error::MalformedInstruction(
+                            "PtrToInt result type is opaque struct type".into()
+                        ))?
+                );
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::IntToPtr(itp) => {
                 let bv = self.const_to_bv(&itp.operand)?;
-                assert_eq!(bv.get_width(), self.size(&itp.to_type));
+                assert_eq!(
+                    bv.get_width(),
+                    self.size_in_bits(&itp.to_type)
+                        .ok_or_else(|| Error::MalformedInstruction(
+                            "IntToPtr result type is opaque struct type".into()
+                        ))?
+                );
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::BitCast(bc) => {
                 let bv = self.const_to_bv(&bc.operand)?;
-                assert_eq!(bv.get_width(), self.size(&bc.to_type));
+                assert_eq!(
+                    bv.get_width(),
+                    self.size_in_bits(&bc.to_type)
+                        .ok_or_else(|| Error::MalformedInstruction(
+                            "BitCast result type is opaque struct type".into()
+                        ))?
+                );
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::AddrSpaceCast(ac) => {
                 let bv = self.const_to_bv(&ac.operand)?;
-                assert_eq!(bv.get_width(), self.size(&ac.to_type));
+                assert_eq!(
+                    bv.get_width(),
+                    self.size_in_bits(&ac.to_type)
+                        .ok_or_else(|| Error::MalformedInstruction(
+                            "AddrSpaceCast result type is opaque struct type".into()
+                        ))?
+                );
                 Ok(bv) // just a cast, it's the same bits underneath
             },
             Constant::ICmp(icmp) => {
@@ -1158,16 +1214,33 @@ where
     fn const_to_bv_maybe_zerowidth(&self, c: &Constant) -> Result<Option<B::BV>> {
         match c {
             Constant::Null(ty) | Constant::AggregateZero(ty) | Constant::Undef(ty) => {
-                match self.size(ty) {
-                    0 => Ok(None),
-                    bits => Ok(Some(self.zero(bits))),
+                match self.size_in_bits(ty) {
+                    None => Err(Error::OtherError(format!(
+                        "const_to_bv on a constant with opaque struct type: {:?}",
+                        c
+                    ))),
+                    Some(0) => Ok(None),
+                    Some(bits) => Ok(Some(self.zero(bits))),
                 }
             },
             Constant::Struct { values, .. } => {
                 values
                     .iter()
-                    .filter(|v| self.size(&self.type_of(v.as_ref())) > 0)
-                    .map(|v| self.const_to_bv_maybe_zerowidth(v).transpose().unwrap()) // since we `filter()`'d first, we should have all `Some`s here. We transpose-unwrap Result<Option<BV>> to Result<BV>
+                    .map(|val| {
+                        self.size_in_bits(&self.type_of(val.as_ref()))
+                            .map(|bits| (val, bits))
+                            .ok_or_else(|| {
+                                Error::OtherError(format!(
+                                    "const_to_bv: encountered an opaque struct type: {:?}",
+                                    val
+                                ))
+                            })
+                    })
+                    .collect::<Result<Vec<_>>>()?
+                    .into_iter()
+                    .filter(|&(_val, bits)| bits > 0)
+                    .map(|(val, _bits)| val)
+                    .map(|val| self.const_to_bv_maybe_zerowidth(val).transpose().unwrap()) // since we `filter()`'d first, we should have all `Some`s here. We transpose-unwrap Result<Option<BV>> to Result<BV>
                     .reduce(|a, b| Ok(b?.concat(&a?))) // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
                     .transpose()
             },
@@ -1507,78 +1580,48 @@ where
 
     /// Get the size of the `Type`, in bits.
     ///
-    /// If the `Type` is a named struct type, the named struct type should be
-    /// defined in the current module (i.e., the module in `self.cur_loc`).
-    /// If it is opaque in the current module, or not declared in the current
-    /// module, this function will panic.
+    /// Accounts for the `Project`'s pointer size and named struct definitions.
+    ///
+    /// Panics if `ty` is a struct which has no definition in the entire `Project`,
+    /// or if it is a struct/array/vector where one of the elements is a struct with no
+    /// definition in the entire `Project`.
+    #[deprecated = "Prefer size_in_bits()"]
     pub fn size(&self, ty: &Type) -> u32 {
-        match ty {
-            Type::IntegerType { bits } => *bits,
-            Type::PointerType { .. } => self.pointer_size_bits,
-            Type::ArrayType {
-                element_type,
-                num_elements,
-            }
-            | Type::VectorType {
-                element_type,
-                num_elements,
-            } => {
-                let num_elements: u32 = (*num_elements).try_into().unwrap();
-                num_elements * self.size(element_type)
-            },
-            Type::StructType { element_types, .. } => {
-                element_types.iter().map(|ty| self.size(ty)).sum()
-            },
-            Type::NamedStructType { name } => {
-                match self.cur_loc.module.types.named_struct_def(name) {
-                    None => panic!("Struct named {:?} is not defined in the current module", name),
-                    Some(NamedStructDef::Opaque) => panic!("Can't get size of an opaque struct type"),
-                    Some(NamedStructDef::Defined(ty)) => self.size(&ty),
-                }
-            },
-            Type::FPType(fpt) => Self::fp_size(*fpt),
-            ty => panic!("Not sure how to get the size of {:?}", ty),
-        }
+        self.proj
+            .size_in_bits(ty)
+            .expect("state.size() encountered a struct with no definition in the entire Project")
     }
 
     /// Get the size of the `Type`, in bits.
     ///
-    /// Differs from the basic `size` method above in how it handles opaque struct
-    /// types.
-    /// While `size` will simply panic, this will search the given `Project` for a
-    /// definition of the struct and use that.
+    /// Accounts for the `Project`'s pointer size and named struct definitions.
     ///
     /// Returns `None` for structs which have no definition in the entire `Project`,
     /// or for structs/arrays/vectors where one of the elements is a struct with no
     /// definition in the entire `Project`.
-    pub fn size_opaque_aware(&self, ty: &Type, proj: &Project) -> Option<u32> {
-        match ty {
-            Type::NamedStructType { name } => match proj.get_named_struct_def(name).ok()? {
-                (NamedStructDef::Opaque, _) => None,
-                (NamedStructDef::Defined(ty), _) => self.size_opaque_aware(&ty, proj),
-            },
-            Type::ArrayType {
-                element_type,
-                num_elements,
-            }
-            | Type::VectorType {
-                element_type,
-                num_elements,
-            } => {
-                let num_elements: u32 = (*num_elements).try_into().unwrap();
-                self.size_opaque_aware(&element_type, proj)
-                    .map(|s| s * num_elements)
-            },
-            Type::StructType { element_types, .. } => element_types
-                .iter()
-                .map(|ty| self.size_opaque_aware(ty, proj))
-                .sum(),
-            _ => Some(self.size(ty)), // for all other cases, just fall back on the basic size()
-        }
+    #[deprecated = "Renamed to size_in_bits()"]
+    pub fn size_opaque_aware(&self, ty: &Type, _proj: &'p Project) -> Option<u32> {
+        self.proj.size_in_bits(ty)
+    }
+
+    /// Get the size of the `Type`, in bits.
+    ///
+    /// Accounts for the `Project`'s pointer size and named struct definitions.
+    ///
+    /// Returns `None` for structs which have no definition in the entire `Project`,
+    /// or for structs/arrays/vectors where one of the elements is a struct with no
+    /// definition in the entire `Project`.
+    pub fn size_in_bits(&self, ty: &Type) -> Option<u32> {
+        self.proj.size_in_bits(ty)
     }
 
     /// Get the size of the `FPType`, in bits
+    #[deprecated = "Renamed to fp_size_in_bits"]
     pub fn fp_size(fpt: FPType) -> u32 {
+        Self::fp_size_in_bits(fpt)
+    }
+
+    pub fn fp_size_in_bits(fpt: FPType) -> u32 {
         match fpt {
             FPType::Half => 16,
             FPType::Single => 32,
@@ -1605,7 +1648,12 @@ where
             }
             | Type::ArrayType { element_type, .. }
             | Type::VectorType { element_type, .. } => {
-                let el_size_bits = self.size(element_type);
+                let el_size_bits = self.size_in_bits(element_type).ok_or_else(|| {
+                    Error::MalformedInstruction(format!(
+                        "get_offset encountered an opaque struct type: {:?}",
+                        element_type
+                    ))
+                })?;
                 if el_size_bits % 8 != 0 {
                     Err(Error::UnsupportedInstruction(format!(
                         "Encountered a type with size {} bits",
@@ -1620,7 +1668,13 @@ where
             Type::StructType { element_types, .. } => {
                 let mut offset_bits = 0;
                 for ty in element_types.iter().take(index) {
-                    offset_bits += self.size(ty);
+                    let element_size_bits = self.size_in_bits(ty).ok_or_else(|| {
+                        Error::MalformedInstruction(format!(
+                            "get_offset encountered an opaque struct type: {:?}",
+                            ty
+                        ))
+                    })?;
+                    offset_bits += element_size_bits;
                 }
                 if offset_bits % 8 != 0 {
                     Err(Error::UnsupportedInstruction(format!(
@@ -1667,7 +1721,8 @@ where
             | Type::ArrayType { element_type, .. }
             | Type::VectorType { element_type, .. }
             => {
-                let el_size_bits = self.size(element_type);
+                let el_size_bits = self.size_in_bits(element_type)
+                    .ok_or_else(|| Error::OtherError(format!("get_offset encountered an opaque struct type: {:?}", element_type)))?;
                 if el_size_bits % 8 != 0 {
                     Err(Error::UnsupportedInstruction(format!("Encountered a type with size {} bits", el_size_bits)))
                 } else {

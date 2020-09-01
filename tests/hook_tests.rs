@@ -15,9 +15,10 @@ fn hook_for_simple_callee<'p, B: Backend>(
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 2);
-    Ok(ReturnValue::Return(
-        state.bv_from_u32(5, state.size(&state.type_of(call))),
-    ))
+    let ret_size = state.size_in_bits(&state.type_of(call)).ok_or_else(|| {
+        Error::OtherError("simple_callee shouldn't return opaque struct type".into())
+    })?;
+    Ok(ReturnValue::Return(state.bv_from_u32(5, ret_size)))
 }
 
 #[test]
@@ -63,9 +64,10 @@ fn target_hook<'p, B: Backend>(
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 2);
-    Ok(ReturnValue::Return(
-        state.bv_from_u32(5, state.size(&state.type_of(call))),
-    ))
+    let ret_size = state.size_in_bits(&state.type_of(call)).ok_or_else(|| {
+        Error::OtherError("target_hook: call return type shouldn't be opaque struct type".into())
+    })?;
+    Ok(ReturnValue::Return(state.bv_from_u32(5, ret_size)))
 }
 
 #[test]

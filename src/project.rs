@@ -1,10 +1,11 @@
 use crate::demangling::try_cpp_demangle;
 use crate::error::Error;
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
-use llvm_ir::types::NamedStructDef;
+use llvm_ir::types::{FPType, NamedStructDef, Type};
 use llvm_ir::{Function, Module};
 use log::{info, warn};
 use rustc_demangle::demangle;
+use std::convert::TryInto;
 use std::fs::DirEntry;
 use std::io;
 use std::path::Path;
@@ -317,6 +318,52 @@ impl Project {
             }
         }
         retval.ok_or_else(|| Error::OtherError(format!("Trying to get definition of named struct {:?} which is neither defined nor even declared anywhere in the Project", name)))
+    }
+
+    /// Get the size of the `Type`, in bits.
+    ///
+    /// Accounts for the `Project`'s pointer size and named struct definitions.
+    ///
+    /// Returns `None` for structs which have no definition in the entire `Project`,
+    /// or for structs/arrays/vectors where one of the elements is a struct with no
+    /// definition in the entire `Project`.
+    pub fn size_in_bits(&self, ty: &Type) -> Option<u32> {
+        match ty {
+            Type::IntegerType { bits } => Some(*bits),
+            Type::PointerType { .. } => Some(self.pointer_size_bits()),
+            Type::FPType(fpt) => Some(Self::fp_size_in_bits(*fpt)),
+            Type::ArrayType {
+                element_type,
+                num_elements,
+            }
+            | Type::VectorType {
+                element_type,
+                num_elements,
+            } => {
+                let num_elements: u32 = (*num_elements).try_into().unwrap();
+                self.size_in_bits(&element_type).map(|s| s * num_elements)
+            },
+            Type::StructType { element_types, .. } => {
+                element_types.iter().map(|ty| self.size_in_bits(ty)).sum()
+            },
+            Type::NamedStructType { name } => match self.get_named_struct_def(name).ok()? {
+                (NamedStructDef::Opaque, _) => None,
+                (NamedStructDef::Defined(ty), _) => self.size_in_bits(&ty),
+            },
+            ty => panic!("Not sure how to get the size of {:?}", ty),
+        }
+    }
+
+    /// Get the size of the `FPType`, in bits
+    pub fn fp_size_in_bits(fpt: FPType) -> u32 {
+        match fpt {
+            FPType::Half => 16,
+            FPType::Single => 32,
+            FPType::Double => 64,
+            FPType::FP128 => 128,
+            FPType::X86_FP80 => 80,
+            FPType::PPC_FP128 => 128,
+        }
     }
 
     /// Returns the modules and the pointer size

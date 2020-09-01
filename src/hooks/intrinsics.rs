@@ -108,7 +108,7 @@ pub fn symex_memcpy<'p, B: Backend>(
 }
 
 pub fn symex_bswap<'p, B: Backend>(
-    proj: &'p Project,
+    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -132,7 +132,7 @@ pub fn symex_bswap<'p, B: Backend>(
             element_type,
             num_elements,
         } => {
-            let element_size = state.size_opaque_aware(&element_type, proj).ok_or_else(|| Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
+            let element_size = state.size_in_bits(&element_type).ok_or_else(|| Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
             let final_bv = unary_on_vector(&arg, (*num_elements).try_into().unwrap(), |element| {
                 bswap(element, element_size)
             })?;
@@ -199,7 +199,7 @@ fn bswap<V: BV>(bv: &V, bits: u32) -> Result<V> {
 }
 
 pub fn symex_objectsize<'p, B: Backend>(
-    proj: &'p Project,
+    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -207,7 +207,7 @@ pub fn symex_objectsize<'p, B: Backend>(
     // intended answers for this intrinsic. Instead, we just always return
     // 'unknown', as this is valid behavior according to the LLVM spec.
     let arg1 = state.operand_to_bv(&call.get_arguments()[1].0)?;
-    let width = state.size_opaque_aware(&state.type_of(call), proj).ok_or_else(||
+    let width = state.size_in_bits(&state.type_of(call)).ok_or_else(||
         Error::OtherError("symex_objectsize: return value of this call involves a struct type with no definition in the Project".into())
     )?;
     let zero = state.zero(width);
