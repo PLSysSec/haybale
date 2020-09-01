@@ -2503,12 +2503,35 @@
 <span id="2503">2503</span>
 <span id="2504">2504</span>
 <span id="2505">2505</span>
+<span id="2506">2506</span>
+<span id="2507">2507</span>
+<span id="2508">2508</span>
+<span id="2509">2509</span>
+<span id="2510">2510</span>
+<span id="2511">2511</span>
+<span id="2512">2512</span>
+<span id="2513">2513</span>
+<span id="2514">2514</span>
+<span id="2515">2515</span>
+<span id="2516">2516</span>
+<span id="2517">2517</span>
+<span id="2518">2518</span>
+<span id="2519">2519</span>
+<span id="2520">2520</span>
+<span id="2521">2521</span>
+<span id="2522">2522</span>
+<span id="2523">2523</span>
+<span id="2524">2524</span>
+<span id="2525">2525</span>
+<span id="2526">2526</span>
+<span id="2527">2527</span>
+<span id="2528">2528</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">option</span>::{<span class="ident">BtorOption</span>, <span class="ident">ModelGen</span>};
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">BVSolution</span>;
 <span class="kw">use</span> <span class="ident">either</span>::<span class="ident">Either</span>;
 <span class="kw">use</span> <span class="ident">itertools</span>::<span class="ident">Itertools</span>;
-<span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">types</span>::<span class="ident">FPType</span>;
+<span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">types</span>::{<span class="ident">FPType</span>, <span class="ident">NamedStructDef</span>, <span class="ident">Typed</span>};
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">debug</span>, <span class="ident">info</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">reduce</span>::<span class="ident">Reduce</span>;
@@ -2518,7 +2541,6 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">hash</span>::{<span class="ident">Hash</span>, <span class="ident">Hasher</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::<span class="ident">Deref</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::{<span class="ident">Arc</span>, <span class="ident">RwLock</span>};
 
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">Alloc</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="kw-2">*</span>;
@@ -2916,6 +2938,8 @@
                     <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">intrinsics</span>::<span class="ident">symex_memcpy</span>,
                 );
                 <span class="ident">intrinsic_hooks</span>.<span class="ident">add</span>(<span class="string">&quot;intrinsic: llvm.bswap&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">intrinsics</span>::<span class="ident">symex_bswap</span>);
+                <span class="ident">intrinsic_hooks</span>.<span class="ident">add</span>(<span class="string">&quot;intrinsic: llvm.ctlz&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">intrinsics</span>::<span class="ident">symex_ctlz</span>);
+                <span class="ident">intrinsic_hooks</span>.<span class="ident">add</span>(<span class="string">&quot;intrinsic: llvm.cttz&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">intrinsics</span>::<span class="ident">symex_cttz</span>);
                 <span class="ident">intrinsic_hooks</span>.<span class="ident">add</span>(
                     <span class="string">&quot;intrinsic: llvm.objectsize&quot;</span>,
                     <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">intrinsics</span>::<span class="ident">symex_objectsize</span>,
@@ -3009,8 +3033,8 @@
             <span class="comment">// exactly once, and the order doesn&#39;t matter, so we simply process</span>
             <span class="comment">// definitions, since each global variable must have exactly one</span>
             <span class="comment">// definition. Hence the `filter()` above.</span>
-            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">PointerType</span> { <span class="ident">pointee_type</span>, .. } <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">var</span>.<span class="ident">ty</span> {
-                <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">pointee_type</span>, <span class="ident">project</span>).<span class="ident">expect</span>(
+            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">PointerType</span> { <span class="ident">pointee_type</span>, .. } <span class="op">=</span> <span class="ident">var</span>.<span class="ident">ty</span>.<span class="ident">as_ref</span>() {
+                <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">pointee_type</span>, <span class="ident">project</span>).<span class="ident">expect</span>(
                     <span class="string">&quot;Global variable has a struct type which is opaque in the entire Project&quot;</span>,
                 );
                 <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">size_bits</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
@@ -3039,8 +3063,8 @@
         <span class="comment">// so that we can have pointers to those hooks.</span>
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating functions&quot;</span>);
         <span class="kw">for</span> (<span class="ident">func</span>, <span class="ident">module</span>) <span class="kw">in</span> <span class="ident">project</span>.<span class="ident">all_functions</span>() {
-            <span class="kw">let</span> <span class="ident">addr</span>: <span class="ident">u64</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">alloc</span>.<span class="ident">alloc</span>(<span class="number">64</span> <span class="kw">as</span> <span class="ident">u64</span>); <span class="comment">// we just allocate 64 bits for each function. No reason to allocate more.</span>
-            <span class="kw">let</span> <span class="ident">addr_bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">addr</span>, <span class="number">64</span>);
+            <span class="kw">let</span> <span class="ident">addr</span>: <span class="ident">u64</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">alloc</span>.<span class="ident">alloc</span>(<span class="number">64_u64</span>); <span class="comment">// we just allocate 64 bits for each function. No reason to allocate more.</span>
+            <span class="kw">let</span> <span class="ident">addr_bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">addr</span>, <span class="ident">project</span>.<span class="ident">pointer_size_bits</span>());
             <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocated {:?} at {:?}&quot;</span>, <span class="ident">func</span>.<span class="ident">name</span>, <span class="ident">addr_bv</span>);
             <span class="ident">state</span>
                 .<span class="ident">global_allocations</span>
@@ -3048,8 +3072,8 @@
         }
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocating function hooks&quot;</span>);
         <span class="kw">for</span> (<span class="ident">funcname</span>, <span class="ident">hook</span>) <span class="kw">in</span> <span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">function_hooks</span>.<span class="ident">get_all_hooks</span>() {
-            <span class="kw">let</span> <span class="ident">addr</span>: <span class="ident">u64</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">alloc</span>.<span class="ident">alloc</span>(<span class="number">64</span> <span class="kw">as</span> <span class="ident">u64</span>); <span class="comment">// we just allocate 64 bits for each function. No reason to allocate more.</span>
-            <span class="kw">let</span> <span class="ident">addr_bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">addr</span>, <span class="number">64</span>);
+            <span class="kw">let</span> <span class="ident">addr</span>: <span class="ident">u64</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">alloc</span>.<span class="ident">alloc</span>(<span class="number">64_u64</span>); <span class="comment">// we just allocate 64 bits for each function. No reason to allocate more.</span>
+            <span class="kw">let</span> <span class="ident">addr_bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">addr</span>, <span class="ident">project</span>.<span class="ident">pointer_size_bits</span>());
             <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Allocated hook for {:?} at {:?}&quot;</span>, <span class="ident">funcname</span>, <span class="ident">addr_bv</span>);
             <span class="ident">state</span>
                 .<span class="ident">global_allocations</span>
@@ -3355,11 +3379,11 @@
         <span class="ident">thing</span>: <span class="kw-2">&amp;</span><span class="kw">impl</span> <span class="ident">instruction</span>::<span class="ident">HasResult</span>,
         <span class="ident">resultval</span>: <span class="ident">B</span>::<span class="ident">BV</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">thing</span>.<span class="ident">get_type</span>()) <span class="op">!</span><span class="op">=</span> <span class="ident">resultval</span>.<span class="ident">get_width</span>() {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">thing</span>)) <span class="op">!</span><span class="op">=</span> <span class="ident">resultval</span>.<span class="ident">get_width</span>() {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
                 <span class="string">&quot;Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}&quot;</span>,
                 <span class="ident">thing</span>,
-                <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">thing</span>.<span class="ident">get_type</span>()),
+                <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">thing</span>)),
                 <span class="ident">resultval</span>,
                 <span class="ident">resultval</span>.<span class="ident">get_width</span>()
             )))
@@ -3381,6 +3405,11 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">overwrite_latest_version_of_bv</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">Name</span>, <span class="ident">bv</span>: <span class="ident">B</span>::<span class="ident">BV</span>) {
         <span class="self">self</span>.<span class="ident">varmap</span>
             .<span class="ident">overwrite_latest_version_of_bv</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>.<span class="ident">name</span>, <span class="ident">name</span>, <span class="ident">bv</span>)
+    }
+
+    <span class="doccomment">/// Convenience function to get the `Type` of anything that is `Typed`.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">type_of</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">Typed</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">t</span>: <span class="kw-2">&amp;</span><span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">TypeRef</span> {
+        <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">type_of</span>(<span class="ident">t</span>)
     }
 
     <span class="doccomment">/// Convert an `Operand` to the appropriate `BV`.</span>
@@ -3461,8 +3490,15 @@
                                     <span class="ident">name</span>, <span class="kw-2">&amp;</span><span class="ident">initializer</span>
                                 );
                                 <span class="ident">initialized</span>.<span class="ident">set</span>(<span class="bool-val">true</span>);
-                                <span class="kw">let</span> <span class="ident">write_val</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="ident">initializer</span>)<span class="question-mark">?</span>;
-                                <span class="self">self</span>.<span class="ident">write_without_mut</span>(<span class="ident">addr</span>, <span class="ident">write_val</span>)<span class="question-mark">?</span>;
+                                <span class="comment">// Global variables could be zero-element arrays, or structs</span>
+                                <span class="comment">// containing zero-element arrays, so we use</span>
+                                <span class="comment">// `const_to_bv_maybe_zerowidth()`</span>
+                                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">bv</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">const_to_bv_maybe_zerowidth</span>(<span class="ident">initializer</span>)<span class="question-mark">?</span> {
+                                    <span class="comment">// If that returned `None`, the global is a zero-element array,</span>
+                                    <span class="comment">// in which case we don&#39;t want to initialize it (and can&#39;t, or</span>
+                                    <span class="comment">// we&#39;d get a panic about a 0-width BV)</span>
+                                    <span class="self">self</span>.<span class="ident">write_without_mut</span>(<span class="ident">addr</span>, <span class="ident">bv</span>)<span class="question-mark">?</span>;
+                                }
                             }
                             <span class="prelude-val">Ok</span>(<span class="ident">addr</span>.<span class="ident">clone</span>())
                         },
@@ -3518,8 +3554,8 @@
             <span class="ident">Constant</span>::<span class="ident">AShr</span>(<span class="ident">s</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="self">self</span>
                 .<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>.<span class="ident">operand0</span>)<span class="question-mark">?</span>
                 .<span class="ident">sra</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>.<span class="ident">operand1</span>)<span class="question-mark">?</span>)),
-            <span class="ident">Constant</span>::<span class="ident">ExtractElement</span>(<span class="ident">ee</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ee</span>.<span class="ident">index</span> {
-                <span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">value</span>: <span class="ident">index</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ee</span>.<span class="ident">vector</span> {
+            <span class="ident">Constant</span>::<span class="ident">ExtractElement</span>(<span class="ident">ee</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ee</span>.<span class="ident">index</span>.<span class="ident">as_ref</span>() {
+                <span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">value</span>: <span class="ident">index</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ee</span>.<span class="ident">vector</span>.<span class="ident">as_ref</span>() {
                     <span class="ident">Constant</span>::<span class="ident">Vector</span>(<span class="ident">els</span>) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">let</span> <span class="ident">el</span> <span class="op">=</span> <span class="ident">els</span>.<span class="ident">get</span>(<span class="kw-2">*</span><span class="ident">index</span> <span class="kw">as</span> <span class="ident">usize</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
                             <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
@@ -3538,15 +3574,16 @@
                     <span class="ident">index</span>
                 ))),
             },
-            <span class="ident">Constant</span>::<span class="ident">InsertElement</span>(<span class="ident">ie</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ie</span>.<span class="ident">index</span> {
-                <span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">value</span>: <span class="ident">index</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ie</span>.<span class="ident">vector</span> {
+            <span class="ident">Constant</span>::<span class="ident">InsertElement</span>(<span class="ident">ie</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ie</span>.<span class="ident">index</span>.<span class="ident">as_ref</span>() {
+                <span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">value</span>: <span class="ident">index</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ie</span>.<span class="ident">vector</span>.<span class="ident">as_ref</span>() {
                     <span class="ident">Constant</span>::<span class="ident">Vector</span>(<span class="ident">els</span>) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">els</span> <span class="op">=</span> <span class="ident">els</span>.<span class="ident">clone</span>();
-                        <span class="kw">let</span> <span class="ident">el</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Constant</span> <span class="op">=</span> <span class="ident">els</span>.<span class="ident">get_mut</span>(<span class="kw-2">*</span><span class="ident">index</span> <span class="kw">as</span> <span class="ident">usize</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
-                            <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
-                                <span class="string">&quot;Constant::InsertElement index out of range&quot;</span>.<span class="ident">to_owned</span>(),
-                            )
-                        })<span class="question-mark">?</span>;
+                        <span class="kw">let</span> <span class="ident">el</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">ConstantRef</span> <span class="op">=</span>
+                            <span class="ident">els</span>.<span class="ident">get_mut</span>(<span class="kw-2">*</span><span class="ident">index</span> <span class="kw">as</span> <span class="ident">usize</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                                <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
+                                    <span class="string">&quot;Constant::InsertElement index out of range&quot;</span>.<span class="ident">to_owned</span>(),
+                                )
+                            })<span class="question-mark">?</span>;
                         <span class="kw-2">*</span><span class="ident">el</span> <span class="op">=</span> <span class="ident">ie</span>.<span class="ident">element</span>.<span class="ident">clone</span>();
                         <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">Constant</span>::<span class="ident">Vector</span>(<span class="ident">els</span>))
                     },
@@ -3564,17 +3601,20 @@
                 <span class="kw-2">&amp;</span><span class="ident">ev</span>.<span class="ident">aggregate</span>,
                 <span class="ident">ev</span>.<span class="ident">indices</span>.<span class="ident">iter</span>().<span class="ident">copied</span>(),
             )<span class="question-mark">?</span>),
-            <span class="ident">Constant</span>::<span class="ident">InsertValue</span>(<span class="ident">iv</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="self">Self</span>::<span class="ident">simplify_const_iv</span>(
-                <span class="ident">iv</span>.<span class="ident">aggregate</span>.<span class="ident">clone</span>(),
-                <span class="ident">iv</span>.<span class="ident">element</span>.<span class="ident">clone</span>(),
-                <span class="ident">iv</span>.<span class="ident">indices</span>.<span class="ident">iter</span>().<span class="ident">copied</span>(),
-            )<span class="question-mark">?</span>),
+            <span class="ident">Constant</span>::<span class="ident">InsertValue</span>(<span class="ident">iv</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">c</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">simplify_const_iv</span>(
+                    <span class="kw-2">&amp;</span><span class="ident">iv</span>.<span class="ident">aggregate</span>,
+                    (<span class="kw-2">*</span><span class="ident">iv</span>.<span class="ident">element</span>).<span class="ident">clone</span>(),
+                    <span class="ident">iv</span>.<span class="ident">indices</span>.<span class="ident">iter</span>().<span class="ident">copied</span>(),
+                )<span class="question-mark">?</span>;
+                <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">c</span>)
+            },
             <span class="ident">Constant</span>::<span class="ident">GetElementPtr</span>(<span class="ident">gep</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="comment">// heavily inspired by `ExecutionManager::symex_gep()` in symex.rs. TODO could try to share more code</span>
                 <span class="kw">let</span> <span class="ident">bvbase</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">gep</span>.<span class="ident">address</span>)<span class="question-mark">?</span>;
                 <span class="kw">let</span> <span class="ident">offset</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">get_offset_recursive</span>(
                     <span class="ident">gep</span>.<span class="ident">indices</span>.<span class="ident">iter</span>(),
-                    <span class="kw-2">&amp;</span><span class="ident">gep</span>.<span class="ident">address</span>.<span class="ident">get_type</span>(),
+                    <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="kw-2">&amp;</span><span class="ident">gep</span>.<span class="ident">address</span>),
                     <span class="ident">bvbase</span>.<span class="ident">get_width</span>(),
                 )<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(<span class="ident">bvbase</span>.<span class="ident">add</span>(<span class="kw-2">&amp;</span><span class="ident">offset</span>))
@@ -3638,6 +3678,34 @@
         }
     }
 
+    <span class="doccomment">/// Convert a `Constant` to the appropriate `BV`, allowing for the `Constant`</span>
+    <span class="doccomment">/// to possibly be zero-width (LLVM 0-element array is the only way for that</span>
+    <span class="doccomment">/// to happen) or be a struct with zero-width elements (i.e., struct with one</span>
+    <span class="doccomment">/// or more elements being a 0-element array).</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Returns `Ok(None)` if the result would be a zero-width `BV`.</span>
+    <span class="kw">fn</span> <span class="ident">const_to_bv_maybe_zerowidth</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">c</span>: <span class="kw-2">&amp;</span><span class="ident">Constant</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">match</span> <span class="ident">c</span> {
+            <span class="ident">Constant</span>::<span class="ident">Null</span>(<span class="ident">ty</span>) <span class="op">|</span> <span class="ident">Constant</span>::<span class="ident">AggregateZero</span>(<span class="ident">ty</span>) <span class="op">|</span> <span class="ident">Constant</span>::<span class="ident">Undef</span>(<span class="ident">ty</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>) {
+                    <span class="number">0</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+                    <span class="ident">bits</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">zero</span>(<span class="ident">bits</span>))),
+                }
+            },
+            <span class="ident">Constant</span>::<span class="ident">Struct</span> { <span class="ident">values</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="ident">values</span>
+                    .<span class="ident">iter</span>()
+                    .<span class="ident">filter</span>(<span class="op">|</span><span class="ident">v</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">v</span>.<span class="ident">as_ref</span>())) <span class="op">&gt;</span> <span class="number">0</span>)
+                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">v</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">const_to_bv_maybe_zerowidth</span>(<span class="ident">v</span>).<span class="ident">transpose</span>().<span class="ident">unwrap</span>()) <span class="comment">// since we `filter()`&#39;d first, we should have all `Some`s here. We transpose-unwrap Result&lt;Option&lt;BV&gt;&gt; to Result&lt;BV&gt;</span>
+                    .<span class="ident">reduce</span>(<span class="op">|</span><span class="ident">a</span>, <span class="ident">b</span><span class="op">|</span> <span class="prelude-val">Ok</span>(<span class="ident">b</span><span class="question-mark">?</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">a</span><span class="question-mark">?</span>))) <span class="comment">// the lambda has type Fn(Result&lt;B::BV&gt;, Result&lt;B::BV&gt;) -&gt; Result&lt;B::BV&gt;</span>
+                    .<span class="ident">transpose</span>()
+            },
+            <span class="ident">Constant</span>::<span class="ident">Array</span> { <span class="ident">elements</span>, .. } <span class="kw">if</span> <span class="ident">elements</span>.<span class="ident">is_empty</span>() <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+            <span class="comment">// note that Constant::Vector cannot have 0 elements, per LLVM LangRef</span>
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="ident">c</span>).<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="prelude-val">Some</span>(<span class="ident">bv</span>)),
+        }
+    }
+
     <span class="doccomment">/// Given a `Constant::Struct` and a series of `ExtractValue` indices, get the</span>
     <span class="doccomment">/// final `Constant` referred to</span>
     <span class="kw">fn</span> <span class="ident">simplify_const_ev</span>(
@@ -3664,16 +3732,16 @@
     <span class="doccomment">/// Given a `Constant::Struct`, a value to insert, and a series of</span>
     <span class="doccomment">/// `InsertValue` indices, get the final `Constant` referred to</span>
     <span class="kw">fn</span> <span class="ident">simplify_const_iv</span>(
-        <span class="ident">s</span>: <span class="ident">Constant</span>,
+        <span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">Constant</span>,
         <span class="ident">val</span>: <span class="ident">Constant</span>,
         <span class="kw-2">mut</span> <span class="ident">indices</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u32</span><span class="op">&gt;</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Constant</span><span class="op">&gt;</span> {
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ConstantRef</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">indices</span>.<span class="ident">next</span>() {
-            <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">val</span>),
+            <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ConstantRef</span>::<span class="ident">new</span>(<span class="ident">val</span>)),
             <span class="prelude-val">Some</span>(<span class="ident">index</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Constant</span>::<span class="ident">Struct</span> {
                     <span class="ident">name</span>,
-                    <span class="kw-2">mut</span> <span class="ident">values</span>,
+                    <span class="ident">values</span>,
                     <span class="ident">is_packed</span>,
                 } <span class="op">=</span> <span class="ident">s</span>
                 {
@@ -3685,12 +3753,13 @@
                             )
                         })<span class="question-mark">?</span>
                         .<span class="ident">clone</span>();
-                    <span class="ident">values</span>[<span class="ident">index</span> <span class="kw">as</span> <span class="ident">usize</span>] <span class="op">=</span> <span class="self">Self</span>::<span class="ident">simplify_const_iv</span>(<span class="ident">to_replace</span>, <span class="ident">val</span>, <span class="ident">indices</span>)<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(<span class="ident">Constant</span>::<span class="ident">Struct</span> {
-                        <span class="ident">name</span>,
+                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">values</span> <span class="op">=</span> <span class="ident">values</span>.<span class="ident">clone</span>();
+                    <span class="ident">values</span>[<span class="ident">index</span> <span class="kw">as</span> <span class="ident">usize</span>] <span class="op">=</span> <span class="self">Self</span>::<span class="ident">simplify_const_iv</span>(<span class="kw-2">&amp;</span><span class="ident">to_replace</span>, <span class="ident">val</span>, <span class="ident">indices</span>)<span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>(<span class="ident">ConstantRef</span>::<span class="ident">new</span>(<span class="ident">Constant</span>::<span class="ident">Struct</span> {
+                        <span class="ident">name</span>: <span class="ident">name</span>.<span class="ident">clone</span>(),
                         <span class="ident">values</span>,
-                        <span class="ident">is_packed</span>,
-                    })
+                        <span class="ident">is_packed</span>: <span class="kw-2">*</span><span class="ident">is_packed</span>,
+                    }))
                 } <span class="kw">else</span> {
                     <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;simplify_const_iv: not a Constant::Struct: {:?}&quot;</span>, <span class="ident">s</span>)
                 }
@@ -3698,13 +3767,31 @@
         }
     }
 
-    <span class="doccomment">/// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)</span>
+    <span class="doccomment">/// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits).</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// If `base_type` is a `NamedStructType`, the struct should be defined in the current module.</span>
     <span class="kw">fn</span> <span class="ident">get_offset_recursive</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">indices</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Constant</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">indices</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">ConstantRef</span><span class="op">&gt;</span>,
         <span class="ident">base_type</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>,
         <span class="ident">result_bits</span>: <span class="ident">u32</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span> } <span class="op">=</span> <span class="ident">base_type</span> {
+            <span class="kw">match</span> <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">named_struct_def</span>(<span class="ident">name</span>) {
+                <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;get_offset on a struct type not defined in the current module (struct name {:?})&quot;</span>, <span class="ident">name</span>)));
+                },
+                <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;get_offset on an opaque struct type ({:?})&quot;</span>,
+                        <span class="ident">name</span>
+                    )));
+                },
+                <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty</span>)) <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="kw">return</span> <span class="self">self</span>.<span class="ident">get_offset_recursive</span>(<span class="ident">indices</span>, <span class="kw-2">&amp;</span><span class="ident">ty</span>, <span class="ident">result_bits</span>);
+                },
+            }
+        }
         <span class="kw">match</span> <span class="ident">indices</span>.<span class="ident">next</span>() {
             <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">zero</span>(<span class="ident">result_bits</span>)),
             <span class="prelude-val">Some</span>(<span class="ident">index</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">base_type</span> {
@@ -3715,7 +3802,7 @@
                     <span class="self">self</span>.<span class="ident">get_offset_recursive</span>(<span class="ident">indices</span>, <span class="ident">nested_ty</span>, <span class="ident">result_bits</span>)
                         .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">add</span>(<span class="kw-2">&amp;</span><span class="ident">offset</span>))
                 },
-                <span class="ident">Type</span>::<span class="ident">StructType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">index</span> {
+                <span class="ident">Type</span>::<span class="ident">StructType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">index</span>.<span class="ident">as_ref</span>() {
                     <span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">value</span>: <span class="ident">index</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">let</span> (<span class="ident">offset</span>, <span class="ident">nested_ty</span>) <span class="op">=</span>
                             <span class="self">self</span>.<span class="ident">get_offset_constant_index</span>(<span class="ident">base_type</span>, <span class="kw-2">*</span><span class="ident">index</span> <span class="kw">as</span> <span class="ident">usize</span>)<span class="question-mark">?</span>;
@@ -3727,32 +3814,8 @@
                         <span class="ident">index</span>
                     ))),
                 },
-                <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">ty</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
-                    <span class="kw">let</span> <span class="ident">arc</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">ty</span>
-                        .<span class="ident">as_ref</span>()
-                        .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
-                            <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
-                                <span class="string">&quot;get_offset on an opaque struct type&quot;</span>.<span class="ident">to_owned</span>(),
-                            )
-                        })<span class="question-mark">?</span>
-                        .<span class="ident">upgrade</span>()
-                        .<span class="ident">expect</span>(<span class="string">&quot;Failed to upgrade weak reference&quot;</span>);
-                    <span class="kw">let</span> <span class="ident">actual_ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">arc</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>();
-                    <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">StructType</span> { .. } <span class="op">=</span> <span class="ident">actual_ty</span> {
-                        <span class="comment">// this code copied from the StructType case</span>
-                        <span class="kw">match</span> <span class="ident">index</span> {
-                            <span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">value</span>: <span class="ident">index</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
-                                <span class="kw">let</span> (<span class="ident">offset</span>, <span class="ident">nested_ty</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">get_offset_constant_index</span>(<span class="ident">base_type</span>, <span class="kw-2">*</span><span class="ident">index</span> <span class="kw">as</span> <span class="ident">usize</span>)<span class="question-mark">?</span>;
-                                <span class="self">self</span>.<span class="ident">get_offset_recursive</span>(<span class="ident">indices</span>, <span class="kw-2">&amp;</span><span class="ident">nested_ty</span>, <span class="ident">result_bits</span>).<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">add</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">bv_from_u64</span>(<span class="ident">offset</span> <span class="kw">as</span> <span class="ident">u64</span>, <span class="ident">result_bits</span>)))
-                            },
-                            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Expected index into struct type to be a constant int, but got index {:?}&quot;</span>, <span class="ident">index</span>))),
-                        }
-                    } <span class="kw">else</span> {
-                        <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
-                            <span class="string">&quot;Expected NamedStructType inner type to be a StructType, but got {:?}&quot;</span>,
-                            <span class="ident">actual_ty</span>
-                        )))
-                    }
+                <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;NamedStructType case should have been handled above&quot;</span>)
                 },
                 <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;get_offset_recursive with base type {:?}&quot;</span>, <span class="ident">base_type</span>),
             },
@@ -3973,7 +4036,10 @@
 
     <span class="doccomment">/// Get the size of the `Type`, in bits.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// Will panic if given an opaque struct type.</span>
+    <span class="doccomment">/// If the `Type` is a named struct type, the named struct type should be</span>
+    <span class="doccomment">/// defined in the current module (i.e., the module in `self.cur_loc`).</span>
+    <span class="doccomment">/// If it is opaque in the current module, or not declared in the current</span>
+    <span class="doccomment">/// module, this function will panic.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u32</span> {
         <span class="kw">match</span> <span class="ident">ty</span> {
             <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="ident">bits</span>,
@@ -3992,14 +4058,13 @@
             <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="ident">element_types</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">ty</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>)).<span class="ident">sum</span>()
             },
-            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">ty</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">size</span>(
-                <span class="kw-2">&amp;</span><span class="ident">ty</span>.<span class="ident">as_ref</span>()
-                    .<span class="ident">expect</span>(<span class="string">&quot;Can&#39;t get size of an opaque struct type&quot;</span>)
-                    .<span class="ident">upgrade</span>()
-                    .<span class="ident">expect</span>(<span class="string">&quot;Failed to upgrade weak reference&quot;</span>)
-                    .<span class="ident">read</span>()
-                    .<span class="ident">unwrap</span>(),
-            ),
+            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span> } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">named_struct_def</span>(<span class="ident">name</span>) {
+                    <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Struct named {:?} is not defined in the current module&quot;</span>, <span class="ident">name</span>),
+                    <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Can&#39;t get size of an opaque struct type&quot;</span>),
+                    <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>),
+                }
+            },
             <span class="ident">Type</span>::<span class="ident">FPType</span>(<span class="ident">fpt</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">Self</span>::<span class="ident">fp_size</span>(<span class="kw-2">*</span><span class="ident">fpt</span>),
             <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Not sure how to get the size of {:?}&quot;</span>, <span class="ident">ty</span>),
         }
@@ -4017,10 +4082,10 @@
     <span class="doccomment">/// definition in the entire `Project`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>, <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="ident">Project</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">ty</span> {
-            <span class="ident">ty</span> @ <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">size_opaque_aware</span>(
-                <span class="kw-2">&amp;</span><span class="ident">proj</span>.<span class="ident">get_inner_struct_type_from_named</span>(<span class="ident">ty</span>)<span class="question-mark">?</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>(),
-                <span class="ident">proj</span>,
-            ),
+            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">proj</span>.<span class="ident">get_named_struct_def</span>(<span class="ident">name</span>).<span class="ident">ok</span>()<span class="question-mark">?</span> {
+                (<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>, <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">None</span>,
+                (<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty</span>), <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>, <span class="ident">proj</span>),
+            },
             <span class="ident">Type</span>::<span class="ident">ArrayType</span> {
                 <span class="ident">element_type</span>,
                 <span class="ident">num_elements</span>,
@@ -4030,7 +4095,7 @@
                 <span class="ident">num_elements</span>,
             } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">num_elements</span>: <span class="ident">u32</span> <span class="op">=</span> (<span class="kw-2">*</span><span class="ident">num_elements</span>).<span class="ident">try_into</span>().<span class="ident">unwrap</span>();
-                <span class="self">self</span>.<span class="ident">size_opaque_aware</span>(<span class="ident">element_type</span>, <span class="ident">proj</span>)
+                <span class="self">self</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">element_type</span>, <span class="ident">proj</span>)
                     .<span class="ident">map</span>(<span class="op">|</span><span class="ident">s</span><span class="op">|</span> <span class="ident">s</span> <span class="op">*</span> <span class="ident">num_elements</span>)
             },
             <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">element_types</span>
@@ -4055,10 +4120,13 @@
 
     <span class="doccomment">/// Get the offset (in _bytes_) of the element at the given index, as well as the</span>
     <span class="doccomment">/// `Type` of the element at that index.</span>
-    <span class="comment">//</span>
-    <span class="comment">// TODO: how to return `&amp;Type` here (like get_offset_bv_index below) despite the</span>
-    <span class="comment">// weak reference in the `NamedStructType` case</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_offset_constant_index</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">base_type</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>, <span class="ident">index</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">u32</span>, <span class="ident">Type</span>)<span class="op">&gt;</span> {
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// If `base_type` is a `NamedStructType`, the struct should be defined in the current module.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_offset_constant_index</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">base_type</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>,
+        <span class="ident">index</span>: <span class="ident">usize</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">u32</span>, <span class="ident">TypeRef</span>)<span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">base_type</span> {
             <span class="ident">Type</span>::<span class="ident">PointerType</span> {
                 <span class="ident">pointee_type</span>: <span class="ident">element_type</span>,
@@ -4075,7 +4143,7 @@
                 } <span class="kw">else</span> {
                     <span class="kw">let</span> <span class="ident">el_size_bytes</span> <span class="op">=</span> <span class="ident">el_size_bits</span> <span class="op">/</span> <span class="number">8</span>;
                     <span class="kw">let</span> <span class="ident">index</span>: <span class="ident">u32</span> <span class="op">=</span> <span class="ident">index</span>.<span class="ident">try_into</span>().<span class="ident">unwrap</span>();
-                    <span class="prelude-val">Ok</span>((<span class="ident">index</span> <span class="op">*</span> <span class="ident">el_size_bytes</span>, (<span class="kw-2">*</span><span class="kw-2">*</span><span class="ident">element_type</span>).<span class="ident">clone</span>()))
+                    <span class="prelude-val">Ok</span>((<span class="ident">index</span> <span class="op">*</span> <span class="ident">el_size_bytes</span>, <span class="ident">element_type</span>.<span class="ident">clone</span>()))
                 }
             },
             <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
@@ -4092,39 +4160,17 @@
                     <span class="prelude-val">Ok</span>((<span class="ident">offset_bits</span> <span class="op">/</span> <span class="number">8</span>, <span class="ident">element_types</span>[<span class="ident">index</span>].<span class="ident">clone</span>()))
                 }
             },
-            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">ty</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">arc</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">ty</span>
-                    .<span class="ident">as_ref</span>()
-                    .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
-                        <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
-                            <span class="string">&quot;get_offset on an opaque struct type&quot;</span>.<span class="ident">to_owned</span>(),
-                        )
-                    })<span class="question-mark">?</span>
-                    .<span class="ident">upgrade</span>()
-                    .<span class="ident">expect</span>(<span class="string">&quot;Failed to upgrade weak reference&quot;</span>);
-                <span class="kw">let</span> <span class="ident">actual_ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">arc</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>();
-                <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">StructType</span> {
-                    <span class="kw-2">ref</span> <span class="ident">element_types</span>, ..
-                } <span class="op">=</span> <span class="ident">actual_ty</span>
-                {
-                    <span class="comment">// this code copied from the StructType case, unfortunately</span>
-                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">offset_bits</span> <span class="op">=</span> <span class="number">0</span>;
-                    <span class="kw">for</span> <span class="ident">ty</span> <span class="kw">in</span> <span class="ident">element_types</span>.<span class="ident">iter</span>().<span class="ident">take</span>(<span class="ident">index</span>) {
-                        <span class="ident">offset_bits</span> <span class="op">+</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>);
-                    }
-                    <span class="kw">if</span> <span class="ident">offset_bits</span> <span class="op">%</span> <span class="number">8</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
-                        <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
-                            <span class="string">&quot;Struct offset of {} bits&quot;</span>,
-                            <span class="ident">offset_bits</span>
-                        )))
-                    } <span class="kw">else</span> {
-                        <span class="prelude-val">Ok</span>((<span class="ident">offset_bits</span> <span class="op">/</span> <span class="number">8</span>, <span class="ident">element_types</span>[<span class="ident">index</span>].<span class="ident">clone</span>()))
-                    }
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
-                        <span class="string">&quot;Expected NamedStructType inner type to be a StructType, but got {:?}&quot;</span>,
-                        <span class="ident">actual_ty</span>
-                    )))
+            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span> } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">named_struct_def</span>(<span class="ident">name</span>) {
+                    <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;get_offset on a struct type not found in the current module: {:?}&quot;</span>,
+                        <span class="ident">name</span>
+                    ))),
+                    <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;get_offset on an opaque struct type: {:?}&quot;</span>,
+                        <span class="ident">name</span>
+                    ))),
+                    <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">get_offset_constant_index</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>, <span class="ident">index</span>),
                 }
             },
             <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;get_offset_constant_index with base type {:?}&quot;</span>, <span class="ident">base_type</span>),
@@ -4209,7 +4255,7 @@
     <span class="doccomment">/// Allocate a value of size `bits`; return a pointer to the newly allocated object</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">allocate</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">bits</span>: <span class="kw">impl</span> <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">B</span>::<span class="ident">BV</span> {
         <span class="kw">let</span> <span class="ident">raw_ptr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">alloc</span>.<span class="ident">alloc</span>(<span class="ident">bits</span>);
-        <span class="self">self</span>.<span class="ident">bv_from_u64</span>(<span class="ident">raw_ptr</span>, <span class="number">64</span>)
+        <span class="self">self</span>.<span class="ident">bv_from_u64</span>(<span class="ident">raw_ptr</span>, <span class="self">self</span>.<span class="ident">pointer_size_bits</span>)
     }
 
     <span class="doccomment">/// Get the size, in bits, of the allocation at the given address, or `None`</span>
@@ -4778,11 +4824,11 @@
         <span class="comment">// check that we can look up the correct BV values via LocalOperands</span>
         <span class="kw">let</span> <span class="ident">op1</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">LocalOperand</span> {
             <span class="ident">name</span>: <span class="ident">name1</span>,
-            <span class="ident">ty</span>: <span class="ident">Type</span>::<span class="ident">i32</span>(),
+            <span class="ident">ty</span>: <span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">i32</span>(),
         };
         <span class="kw">let</span> <span class="ident">op2</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">LocalOperand</span> {
             <span class="ident">name</span>: <span class="ident">name2</span>,
-            <span class="ident">ty</span>: <span class="ident">Type</span>::<span class="ident">bool</span>(),
+            <span class="ident">ty</span>: <span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">bool</span>(),
         };
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">op1</span>), <span class="prelude-val">Ok</span>(<span class="ident">var1</span>));
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">op2</span>), <span class="prelude-val">Ok</span>(<span class="ident">var2</span>));
@@ -4799,7 +4845,7 @@
 
         <span class="comment">// this should create a corresponding BV value which is also constant 3</span>
         <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="ident">state</span>
-            .<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">constint</span>))
+            .<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">ConstantRef</span>::<span class="ident">new</span>(<span class="ident">constint</span>)))
             .<span class="ident">unwrap</span>();
 
         <span class="comment">// check that the BV value was evaluated to 3</span>
@@ -4824,10 +4870,10 @@
 
         <span class="comment">// this should create BV values true and false</span>
         <span class="kw">let</span> <span class="ident">bvtrue</span> <span class="op">=</span> <span class="ident">state</span>
-            .<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">consttrue</span>))
+            .<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">ConstantRef</span>::<span class="ident">new</span>(<span class="ident">consttrue</span>)))
             .<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">bvfalse</span> <span class="op">=</span> <span class="ident">state</span>
-            .<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">constfalse</span>))
+            .<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">Operand</span>::<span class="ident">ConstantOperand</span>(<span class="ident">ConstantRef</span>::<span class="ident">new</span>(<span class="ident">constfalse</span>)))
             .<span class="ident">unwrap</span>();
 
         <span class="comment">// check that the BV values are evaluated to true and false respectively</span>
@@ -4961,11 +5007,11 @@
         <span class="comment">// get the copies of `x` and `y` in each state, via operand lookups</span>
         <span class="kw">let</span> <span class="ident">op_x</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">LocalOperand</span> {
             <span class="ident">name</span>: <span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;x&quot;</span>),
-            <span class="ident">ty</span>: <span class="ident">Type</span>::<span class="ident">i64</span>(),
+            <span class="ident">ty</span>: <span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">i64</span>(),
         };
         <span class="kw">let</span> <span class="ident">op_y</span> <span class="op">=</span> <span class="ident">Operand</span>::<span class="ident">LocalOperand</span> {
             <span class="ident">name</span>: <span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;y&quot;</span>),
-            <span class="ident">ty</span>: <span class="ident">Type</span>::<span class="ident">i64</span>(),
+            <span class="ident">ty</span>: <span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">i64</span>(),
         };
         <span class="kw">let</span> <span class="ident">x_1</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">op_x</span>).<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">x_2</span> <span class="op">=</span> <span class="ident">state_2</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">op_x</span>).<span class="ident">unwrap</span>();
@@ -5010,4 +5056,4 @@
     }
 }
 </pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "haybale";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "haybale";</script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>

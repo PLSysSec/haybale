@@ -427,8 +427,6 @@
 <span id="427">427</span>
 <span id="428">428</span>
 <span id="429">429</span>
-<span id="430">430</span>
-<span id="431">431</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::{<span class="ident">Backend</span>, <span class="ident">SolverRef</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">FunctionHook</span>;
@@ -468,13 +466,13 @@
     <span class="ident">module_private_addr_to_function</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">u64</span>, <span class="ident">Callable</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum</span> <span class="ident">GlobalAllocation</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">V</span><span class="op">&gt;</span> {
     <span class="ident">GlobalVariable</span> {
         <span class="doccomment">/// The address at which the global variable is allocated</span>
         <span class="ident">addr</span>: <span class="ident">V</span>,
         <span class="doccomment">/// The initializer associated with the global variable</span>
-        <span class="ident">initializer</span>: <span class="ident">Constant</span>,
+        <span class="ident">initializer</span>: <span class="ident">ConstantRef</span>,
         <span class="doccomment">/// Whether the global variable has been initialized yet</span>
         <span class="ident">initialized</span>: <span class="ident">Cell</span><span class="op">&lt;</span><span class="ident">bool</span><span class="op">&gt;</span>,
     },
@@ -703,8 +701,6 @@
             .<span class="ident">insert</span>(<span class="ident">addr</span>, <span class="ident">Callable</span>::<span class="ident">FunctionHook</span>(<span class="ident">hook</span>));
     }
 
-    <span class="doccomment">/// `initialized`: whether the `Global` has been initialized.</span>
-    <span class="doccomment">/// Currently, this is always `false` for global variables, and always `true` for functions.</span>
     <span class="kw">fn</span> <span class="ident">allocate_global</span>(
         <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>,
         <span class="ident">global</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">impl</span> <span class="ident">Global</span>,
@@ -862,4 +858,4 @@
     }
 }
 </pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "haybale";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "haybale";</script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>

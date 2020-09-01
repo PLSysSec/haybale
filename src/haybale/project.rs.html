@@ -486,54 +486,17 @@
 <span id="486">486</span>
 <span id="487">487</span>
 <span id="488">488</span>
-<span id="489">489</span>
-<span id="490">490</span>
-<span id="491">491</span>
-<span id="492">492</span>
-<span id="493">493</span>
-<span id="494">494</span>
-<span id="495">495</span>
-<span id="496">496</span>
-<span id="497">497</span>
-<span id="498">498</span>
-<span id="499">499</span>
-<span id="500">500</span>
-<span id="501">501</span>
-<span id="502">502</span>
-<span id="503">503</span>
-<span id="504">504</span>
-<span id="505">505</span>
-<span id="506">506</span>
-<span id="507">507</span>
-<span id="508">508</span>
-<span id="509">509</span>
-<span id="510">510</span>
-<span id="511">511</span>
-<span id="512">512</span>
-<span id="513">513</span>
-<span id="514">514</span>
-<span id="515">515</span>
-<span id="516">516</span>
-<span id="517">517</span>
-<span id="518">518</span>
-<span id="519">519</span>
-<span id="520">520</span>
-<span id="521">521</span>
-<span id="522">522</span>
-<span id="523">523</span>
-<span id="524">524</span>
-<span id="525">525</span>
-<span id="526">526</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">demangling</span>::<span class="ident">try_cpp_demangle</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="ident">Error</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">module</span>::{<span class="ident">GlobalAlias</span>, <span class="ident">GlobalVariable</span>};
-<span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">Function</span>, <span class="ident">Module</span>, <span class="ident">Type</span>};
+<span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">types</span>::<span class="ident">NamedStructDef</span>;
+<span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">Function</span>, <span class="ident">Module</span>};
 <span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">info</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">rustc_demangle</span>::<span class="ident">demangle</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fs</span>::<span class="ident">DirEntry</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">io</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">path</span>::<span class="ident">Path</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::{<span class="ident">Arc</span>, <span class="ident">RwLock</span>};
 
 <span class="doccomment">/// A `Project` is a collection of LLVM code to be explored,</span>
 <span class="doccomment">/// consisting of one or more LLVM modules.</span>
@@ -702,21 +665,17 @@
     }
 
     <span class="doccomment">/// Iterate over all named struct types in the `Project`.</span>
-    <span class="doccomment">/// Gives triplets `(name, Type, Module)` which indicate the struct&#39;s name,</span>
-    <span class="doccomment">/// type, and which module it comes from.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// If the `Type` in the triplet is `None`, that means the struct type is</span>
-    <span class="doccomment">/// opaque; see</span>
-    <span class="doccomment">/// [LLVM 9 docs on Opaque Structure Types](https://releases.llvm.org/9.0.0/docs/LangRef.html#t-opaque).</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">all_named_struct_types</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="kw-2">&amp;</span><span class="ident">String</span>, <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="ident">Module</span>)<span class="op">&gt;</span> {
+    <span class="doccomment">/// Gives triplets `(name, NamedStructDef, Module)` which indicate the struct&#39;s name,</span>
+    <span class="doccomment">/// definition, and which module the definition comes from.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">all_named_struct_types</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="kw-2">&amp;</span><span class="ident">String</span>, <span class="kw-2">&amp;</span><span class="ident">NamedStructDef</span>, <span class="kw-2">&amp;</span><span class="ident">Module</span>)<span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">modules</span>
             .<span class="ident">iter</span>()
             .<span class="ident">map</span>(<span class="op">|</span><span class="ident">m</span><span class="op">|</span> {
-                <span class="ident">m</span>.<span class="ident">named_struct_types</span>
-                    .<span class="ident">iter</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">name</span>, <span class="ident">opt</span>)<span class="op">|</span> (<span class="ident">name</span>, <span class="ident">opt</span>.<span class="ident">as_ref</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">arc</span><span class="op">|</span> <span class="ident">arc</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>().<span class="ident">clone</span>())))
-                    .<span class="ident">zip</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">repeat</span>(<span class="ident">m</span>))
-                    .<span class="ident">map</span>(<span class="op">|</span>((<span class="ident">name</span>, <span class="ident">opt</span>), <span class="ident">m</span>)<span class="op">|</span> (<span class="ident">name</span>, <span class="ident">opt</span>, <span class="ident">m</span>))
+                <span class="ident">m</span>.<span class="ident">types</span>
+                    .<span class="ident">all_struct_names</span>()
+                    .<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">name</span><span class="op">|</span> (<span class="ident">name</span>, <span class="ident">m</span>.<span class="ident">types</span>.<span class="ident">named_struct_def</span>(<span class="ident">name</span>).<span class="ident">unwrap</span>(), <span class="ident">m</span>))
             })
             .<span class="ident">flatten</span>()
     }
@@ -736,10 +695,10 @@
     <span class="doccomment">/// found in.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// For projects containing C++ or Rust code, you can pass either the mangled</span>
-    <span class="doccomment">/// or demangled function name.</span>
+    <span class="doccomment">/// or demangled function name (fully qualified with namespaces/modules).</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If you have a `State` handy, you may want to use</span>
-    <span class="doccomment">/// `state.get_func_by_name()` instead, which will get the appopriate</span>
+    <span class="doccomment">/// `state.get_func_by_name()` instead, which will get the appropriate</span>
     <span class="doccomment">/// (potentially module-private) definition based on the current LLVM module.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_func_by_name</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="self">self</span>, <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Function</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>)<span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">retval</span> <span class="op">=</span> <span class="prelude-val">None</span>;
@@ -805,49 +764,39 @@
         <span class="ident">retval</span>
     }
 
-    <span class="doccomment">/// Search the project for a named struct type with the given name.</span>
-    <span class="doccomment">/// If a matching named struct type is found, return both it and the module</span>
-    <span class="doccomment">/// it was found in.</span>
+    <span class="doccomment">/// Get the definition of the named struct with the given name.</span>
+    <span class="doccomment">/// Returns both the definition, and the module that definition was found in.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// If `None` is returned, then no named struct type with the given name was</span>
-    <span class="doccomment">/// found in the project.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// If `Some(None, &lt;module&gt;)` is returned, that means the struct type is</span>
-    <span class="doccomment">/// opaque; see</span>
-    <span class="doccomment">/// [LLVM 9 docs on Opaque Structure Types](https://releases.llvm.org/9.0.0/docs/LangRef.html#t-opaque).</span>
+    <span class="doccomment">/// Returns `Err` if neither a definition nor declaration for a named struct</span>
+    <span class="doccomment">/// type with the given name was found anywhere in the `Project`.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If the named struct type is defined in multiple modules in the `Project`,</span>
     <span class="doccomment">/// this returns one of them arbitrarily. However, it will only return</span>
-    <span class="doccomment">/// `Some(None, &lt;module&gt;)` if _all_ definitions are opaque; that is, it will</span>
+    <span class="doccomment">/// `NamedStructDef::Opaque` if _all_ definitions are opaque; that is, it will</span>
     <span class="doccomment">/// attempt to return some non-opaque definition if one exists, before</span>
     <span class="doccomment">/// returning an opaque definition.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_named_struct_type_by_name</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_named_struct_def</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="self">self</span>,
         <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>)<span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">retval</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>)<span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-val">None</span>;
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="kw">crate</span>::<span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">NamedStructDef</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>)<span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">retval</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">NamedStructDef</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Module</span>)<span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-val">None</span>;
         <span class="kw">for</span> <span class="ident">module</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">modules</span> {
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">t</span>) <span class="op">=</span> <span class="ident">module</span>
-                .<span class="ident">named_struct_types</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">find</span>(<span class="op">|</span><span class="kw-2">&amp;</span>(<span class="ident">n</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">n</span> <span class="op">=</span><span class="op">=</span> <span class="ident">name</span>)
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">t</span>)<span class="op">|</span> <span class="ident">t</span>)
-            {
-                <span class="kw">match</span> (<span class="ident">retval</span>, <span class="ident">t</span>) {
-                    (<span class="prelude-val">None</span>, <span class="ident">t</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">retval</span> <span class="op">=</span> <span class="prelude-val">Some</span>((<span class="ident">t</span>, <span class="ident">module</span>)), <span class="comment">// first definition we&#39;ve found: this is the new candidate to return</span>
-                    (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) <span class="op">=</span><span class="op">&gt;</span> {}, <span class="comment">// this is an opaque definition, and we previously found some other definition (opaque or not); do nothing</span>
-                    (<span class="prelude-val">Some</span>((<span class="prelude-val">None</span>, <span class="kw">_</span>)), <span class="ident">t</span> @ <span class="prelude-val">Some</span>(<span class="kw">_</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">retval</span> <span class="op">=</span> <span class="prelude-val">Some</span>((<span class="ident">t</span>, <span class="ident">module</span>)), <span class="comment">// found an actual definition, replace the previous opaque definition</span>
-                    (<span class="prelude-val">Some</span>((<span class="prelude-val">Some</span>(<span class="ident">arc1</span>), <span class="ident">retmod</span>)), <span class="prelude-val">Some</span>(<span class="ident">arc2</span>)) <span class="op">=</span><span class="op">&gt;</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">def</span>) <span class="op">=</span> <span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">named_struct_def</span>(<span class="ident">name</span>) {
+                <span class="kw">match</span> (<span class="ident">retval</span>, <span class="ident">def</span>) {
+                    (<span class="prelude-val">None</span>, <span class="ident">def</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">retval</span> <span class="op">=</span> <span class="prelude-val">Some</span>((<span class="ident">def</span>, <span class="ident">module</span>)), <span class="comment">// first definition we&#39;ve found: this is the new candidate to return</span>
+                    (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>) <span class="op">=</span><span class="op">&gt;</span> {}, <span class="comment">// this is an opaque definition, and we previously found some other definition (opaque or not); do nothing</span>
+                    (<span class="prelude-val">Some</span>((<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>, <span class="kw">_</span>)), <span class="ident">def</span> @ <span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="kw">_</span>)) <span class="op">=</span><span class="op">&gt;</span> {
+                        <span class="ident">retval</span> <span class="op">=</span> <span class="prelude-val">Some</span>((<span class="ident">def</span>, <span class="ident">module</span>)) <span class="comment">// found an actual definition, replace the previous opaque definition</span>
+                    },
+                    (<span class="prelude-val">Some</span>((<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty1</span>), <span class="ident">retmod</span>)), <span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty2</span>)) <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="comment">// duplicate non-opaque definitions: ensure they completely agree</span>
-                        <span class="kw">let</span> <span class="ident">def1</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">arc1</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>();
-                        <span class="kw">let</span> <span class="ident">def2</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">arc2</span>.<span class="ident">read</span>().<span class="ident">unwrap</span>();
-                        <span class="kw">if</span> <span class="ident">def1</span> <span class="op">!</span><span class="op">=</span> <span class="ident">def2</span> {
+                        <span class="kw">if</span> <span class="ident">ty1</span> <span class="op">!</span><span class="op">=</span> <span class="ident">ty2</span> {
                             <span class="comment">// if they don&#39;t agree, we merely warn rather than panicking.</span>
                             <span class="comment">// For instance, if the struct contains an anonymous union as one of its members,</span>
                             <span class="comment">// duplicate definitions of the struct will appear to conflict due to the</span>
                             <span class="comment">// anonymous union being numbered differently in the two modules, even if the</span>
                             <span class="comment">// union has the same contents in both modules.</span>
-                            <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n  We will (arbitrarily) use the first one.&quot;</span>, <span class="ident">name</span>, <span class="ident">retmod</span>.<span class="ident">name</span>, <span class="ident">module</span>.<span class="ident">name</span>, <span class="ident">def1</span>, <span class="ident">def2</span>);
+                            <span class="macro">warn</span><span class="macro">!</span>(<span class="string">&quot;Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n  We will (arbitrarily) use the first one.&quot;</span>, <span class="ident">name</span>, <span class="ident">retmod</span>.<span class="ident">name</span>, <span class="ident">module</span>.<span class="ident">name</span>, <span class="ident">ty1</span>, <span class="ident">ty2</span>);
                         <span class="comment">// then we&#39;ll do nothing, leaving (arbitrarily) the first definition we found</span>
                         } <span class="kw">else</span> {
                             <span class="comment">// do nothing, leaving (arbitrarily) the first definition we found</span>
@@ -856,30 +805,7 @@
                 };
             }
         }
-        <span class="ident">retval</span>
-    }
-
-    <span class="doccomment">/// Given a `NamedStructType`, get the `StructType` corresponding to the</span>
-    <span class="doccomment">/// actual definition of that `NamedStructType`. This may be as simple as</span>
-    <span class="doccomment">/// upgrading the weak reference, but in the case of opaque struct types may</span>
-    <span class="doccomment">/// involve searching the `Project` for a definition of the relevant struct.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// Returns `None` if the struct is fully opaque, meaning it has no</span>
-    <span class="doccomment">/// definition in the `Project`.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_inner_struct_type_from_named</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">RwLock</span><span class="op">&lt;</span><span class="ident">Type</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="kw">match</span> <span class="ident">ty</span> {
-            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span>, <span class="ident">ty</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">ty</span>.<span class="ident">as_ref</span>() {
-                <span class="prelude-val">Some</span>(<span class="ident">ty</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Some</span>(<span class="ident">ty</span>.<span class="ident">upgrade</span>().<span class="ident">expect</span>(<span class="string">&quot;Failed to upgrade weak reference&quot;</span>)),
-                <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
-                    <span class="comment">// This is an opaque struct definition. Try to find a non-opaque definition of the same struct.</span>
-                    <span class="kw">match</span> <span class="self">self</span>.<span class="ident">get_named_struct_type_by_name</span>(<span class="ident">name</span>).<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Have a struct with name {:?}, but no struct of that name found in the Project&quot;</span>, <span class="ident">name</span>)) {
-                        (<span class="prelude-val">Some</span>(<span class="ident">arc</span>), <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Some</span>(<span class="ident">arc</span>.<span class="ident">clone</span>()),
-                        (<span class="prelude-val">None</span>, <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">None</span>,
-                    }
-                }
-            },
-            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Project::get_inner_struct_type_from_named: called with a Type which is not a NamedStructType: {:?}&quot;</span>, <span class="ident">ty</span>),
-        }
+        <span class="ident">retval</span>.<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Trying to get definition of named struct {:?} which is neither defined nor even declared anywhere in the Project&quot;</span>, <span class="ident">name</span>)))
     }
 
     <span class="doccomment">/// Returns the modules and the pointer size</span>
@@ -953,23 +879,25 @@
 <span class="doccomment">/// Extracts the pointer width from an LLVM module, or returns a default of 64 bits</span>
 <span class="doccomment">/// if the width is not specified.</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// See [LLVM 9 docs on Data Layout](https://releases.llvm.org/10.0.0/docs/LangRef.html#data-layout)</span>
+<span class="doccomment">/// See [LLVM 10 docs on Data Layout](https://releases.llvm.org/10.0.0/docs/LangRef.html#data-layout)</span>
 <span class="comment">//</span>
 <span class="comment">// This function originally thanks to Hudson Ayers (github.com/hudson-ayers)</span>
 <span class="kw">fn</span> <span class="ident">get_ptr_size</span>(<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Module</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u32</span> {
     <span class="kw">for</span> <span class="ident">spec</span> <span class="kw">in</span> <span class="ident">module</span>.<span class="ident">data_layout</span>.<span class="ident">split</span>(<span class="string">&#39;-&#39;</span>) {
-        <span class="kw">if</span> <span class="ident">spec</span>.<span class="ident">chars</span>().<span class="ident">nth</span>(<span class="number">0</span>) <span class="op">!</span><span class="op">=</span> <span class="prelude-val">Some</span>(<span class="string">&#39;p&#39;</span>) {
+        <span class="kw">if</span> <span class="op">!</span><span class="ident">spec</span>.<span class="ident">starts_with</span>(<span class="string">&#39;p&#39;</span>) {
             <span class="kw">continue</span>;
         }
         <span class="kw">let</span> <span class="ident">colon_idx</span> <span class="op">=</span> <span class="ident">spec</span>
             .<span class="ident">find</span>(<span class="string">&#39;:&#39;</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;datalayout &#39;p&#39; specification has no colon&quot;</span>);
         <span class="kw">let</span> <span class="ident">addr_space_num</span> <span class="op">=</span> <span class="ident">spec</span>[<span class="number">1</span> .. <span class="ident">colon_idx</span>].<span class="ident">parse</span>::<span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>); <span class="comment">// if not specified, the address space defaults to 0</span>
-        <span class="kw">if</span> <span class="ident">addr_space_num</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> { <span class="comment">// we are only looking for a specification for the default address space</span>
-            <span class="kw">return</span> <span class="ident">spec</span>[<span class="ident">colon_idx</span> <span class="op">+</span> <span class="number">1</span> .. <span class="ident">colon_idx</span> <span class="op">+</span> <span class="number">3</span>]
-                .<span class="ident">parse</span>::<span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>()
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to parse pointer size&quot;</span>);
+        <span class="kw">if</span> <span class="ident">addr_space_num</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
+            <span class="comment">// we are only looking for a specification for the default address space</span>
+            <span class="kw">continue</span>;
         }
+        <span class="kw">return</span> <span class="ident">spec</span>[<span class="ident">colon_idx</span> <span class="op">+</span> <span class="number">1</span> .. <span class="ident">colon_idx</span> <span class="op">+</span> <span class="number">3</span>]
+            .<span class="ident">parse</span>::<span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>()
+            .<span class="ident">expect</span>(<span class="string">&quot;Failed to parse pointer size&quot;</span>);
     }
     <span class="number">64</span> <span class="comment">// no pointer size spec explicitly specified, so LLVM defaults to 64</span>
 }
@@ -980,7 +908,7 @@
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">single_file_project</span>() {
-        <span class="kw">let</span> <span class="ident">proj</span> <span class="op">=</span> <span class="ident">Project</span>::<span class="ident">from_bc_path</span>(<span class="ident">Path</span>::<span class="ident">new</span>(<span class="string">&quot;tests/bcfiles/basic.bc&quot;</span>))
+        <span class="kw">let</span> <span class="ident">proj</span> <span class="op">=</span> <span class="ident">Project</span>::<span class="ident">from_bc_path</span>(<span class="string">&quot;tests/bcfiles/basic.bc&quot;</span>)
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Failed to create project: {}&quot;</span>, <span class="ident">e</span>));
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">proj</span>.<span class="ident">pointer_size_bits</span>(), <span class="number">64</span>);
         <span class="kw">let</span> (<span class="ident">func</span>, <span class="ident">module</span>) <span class="op">=</span> <span class="ident">proj</span>
@@ -992,12 +920,8 @@
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">double_file_project</span>() {
-        <span class="kw">let</span> <span class="ident">proj</span> <span class="op">=</span> <span class="ident">Project</span>::<span class="ident">from_bc_paths</span>(
-            <span class="macro">vec</span><span class="macro">!</span>[<span class="string">&quot;tests/bcfiles/basic.bc&quot;</span>, <span class="string">&quot;tests/bcfiles/loop.bc&quot;</span>]
-                .<span class="ident">into_iter</span>()
-                .<span class="ident">map</span>(<span class="ident">Path</span>::<span class="ident">new</span>),
-        )
-        .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Failed to create project: {}&quot;</span>, <span class="ident">e</span>));
+        <span class="kw">let</span> <span class="ident">proj</span> <span class="op">=</span> <span class="ident">Project</span>::<span class="ident">from_bc_paths</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;tests/bcfiles/basic.bc&quot;</span>, <span class="string">&quot;tests/bcfiles/loop.bc&quot;</span>])
+            .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Failed to create project: {}&quot;</span>, <span class="ident">e</span>));
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">proj</span>.<span class="ident">pointer_size_bits</span>(), <span class="number">64</span>);
         <span class="kw">let</span> (<span class="ident">func</span>, <span class="ident">module</span>) <span class="op">=</span> <span class="ident">proj</span>
             .<span class="ident">get_func_by_name</span>(<span class="string">&quot;no_args_zero&quot;</span>)
@@ -1042,14 +966,14 @@
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">project_for_32bit_target</span>() {
-        <span class="kw">let</span> <span class="ident">proj</span> <span class="op">=</span> <span class="ident">Project</span>::<span class="ident">from_bc_path</span>(<span class="string">&quot;tests/bcfiles/32bit/basic_rust.bc&quot;</span>)
+        <span class="kw">let</span> <span class="ident">proj</span> <span class="op">=</span> <span class="ident">Project</span>::<span class="ident">from_bc_path</span>(<span class="string">&quot;tests/bcfiles/32bit/issue_4.bc&quot;</span>)
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Failed to create project: {}&quot;</span>, <span class="ident">e</span>));
         <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">proj</span>.<span class="ident">pointer_size_bits</span>(), <span class="number">32</span>);
         <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">module</span>) <span class="op">=</span> <span class="ident">proj</span>
-            .<span class="ident">get_func_by_name</span>(<span class="string">&quot;basic_rust::ez&quot;</span>)
+            .<span class="ident">get_func_by_name</span>(<span class="string">&quot;issue_4::ez&quot;</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;Failed to find function&quot;</span>);
-        <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="kw-2">&amp;</span><span class="ident">module</span>.<span class="ident">name</span>, <span class="string">&quot;tests/bcfiles/32bit/basic_rust.bc&quot;</span>);
+        <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="kw-2">&amp;</span><span class="ident">module</span>.<span class="ident">name</span>, <span class="string">&quot;tests/bcfiles/32bit/issue_4.bc&quot;</span>);
     }
 }
 </pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "haybale";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "haybale";</script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>

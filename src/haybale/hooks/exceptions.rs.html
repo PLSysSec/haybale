@@ -133,7 +133,7 @@
     <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">0</span>].<span class="number">0</span>;
 
     <span class="comment">// sanity-check argument types</span>
-    <span class="kw">match</span> <span class="ident">bytes</span>.<span class="ident">get_type</span>() {
+    <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">bytes</span>).<span class="ident">as_ref</span>() {
         <span class="ident">Type</span>::<span class="ident">IntegerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {},
         <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
@@ -142,7 +142,7 @@
             )))
         },
     };
-    <span class="kw">match</span> <span class="ident">call</span>.<span class="ident">get_type</span>() {
+    <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">call</span>).<span class="ident">as_ref</span>() {
         <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {},
         <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
@@ -166,7 +166,7 @@
     <span class="kw">let</span> <span class="ident">type_info</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">get_arguments</span>()[<span class="number">1</span>].<span class="number">0</span>;
 
     <span class="comment">// sanity-check argument types</span>
-    <span class="kw">match</span> <span class="ident">thrown_ptr</span>.<span class="ident">get_type</span>() {
+    <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">thrown_ptr</span>).<span class="ident">as_ref</span>() {
         <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {},
         <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
@@ -175,7 +175,7 @@
             )))
         },
     }
-    <span class="kw">match</span> <span class="ident">type_info</span>.<span class="ident">get_type</span>() {
+    <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">type_info</span>).<span class="ident">as_ref</span>() {
         <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {},
         <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
@@ -228,4 +228,4 @@
     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">retval</span>))
 }
 </pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../../";window.currentCrate = "haybale";</script><script src="../../../aliases.js"></script><script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script><script defer src="../../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../../";window.currentCrate = "haybale";</script><script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script><script defer src="../../../search-index.js"></script></body></html>
