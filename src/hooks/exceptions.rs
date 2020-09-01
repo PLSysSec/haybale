@@ -18,7 +18,7 @@ pub fn cxa_allocate_exception<B: Backend>(
     let bytes = &call.get_arguments()[0].0;
 
     // sanity-check argument types
-    match bytes.get_type() {
+    match state.type_of(bytes).as_ref() {
         Type::IntegerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -27,7 +27,7 @@ pub fn cxa_allocate_exception<B: Backend>(
             )))
         },
     };
-    match call.get_type() {
+    match state.type_of(call).as_ref() {
         Type::PointerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -51,7 +51,7 @@ pub fn cxa_throw<B: Backend>(
     let type_info = &call.get_arguments()[1].0;
 
     // sanity-check argument types
-    match thrown_ptr.get_type() {
+    match state.type_of(thrown_ptr).as_ref() {
         Type::PointerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -60,7 +60,7 @@ pub fn cxa_throw<B: Backend>(
             )))
         },
     }
-    match type_info.get_type() {
+    match state.type_of(type_info).as_ref() {
         Type::PointerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(

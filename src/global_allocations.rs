@@ -36,13 +36,13 @@ pub(crate) struct GlobalAllocations<'p, B: Backend> {
     module_private_addr_to_function: HashMap<String, HashMap<u64, Callable<'p, B>>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) enum GlobalAllocation<'p, V> {
     GlobalVariable {
         /// The address at which the global variable is allocated
         addr: V,
         /// The initializer associated with the global variable
-        initializer: Constant,
+        initializer: ConstantRef,
         /// Whether the global variable has been initialized yet
         initialized: Cell<bool>,
     },

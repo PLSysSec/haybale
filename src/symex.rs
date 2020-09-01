@@ -1,11 +1,11 @@
 use either::Either;
 use llvm_ir::instruction::{BinaryOp, InlineAssembly};
+use llvm_ir::types::NamedStructDef;
 use llvm_ir::*;
 use log::{debug, info};
 use reduce::Reduce;
 use std::convert::TryInto;
 use std::fmt;
-use std::sync::{Arc, RwLock};
 
 use crate::backend::*;
 use crate::config::*;
@@ -489,10 +489,10 @@ where
     fn symex_binop(&mut self, bop: &instruction::groups::BinaryOp) -> Result<()> {
         debug!("Symexing binop {:?}", bop);
         // We expect these binops to only operate on integers or vectors of integers
-        let op0 = &bop.get_operand0();
-        let op1 = &bop.get_operand1();
-        let op0_type = op0.get_type();
-        let op1_type = op1.get_type();
+        let op0 = bop.get_operand0();
+        let op1 = bop.get_operand1();
+        let op0_type = self.state.type_of(op0);
+        let op1_type = self.state.type_of(op1);
         if op0_type != op1_type {
             return Err(Error::MalformedInstruction(format!("Expected binary op to have two operands of same type, but have types {:?} and {:?}", op0_type, op1_type)));
         }
@@ -500,14 +500,14 @@ where
         let bvop0 = self.state.operand_to_bv(op0)?;
         let bvop1 = self.state.operand_to_bv(op1)?;
         let bvoperation = Self::binop_to_bvbinop(bop)?;
-        match op_type {
+        match op_type.as_ref() {
             Type::IntegerType { .. } => {
                 self.state.record_bv_result(bop, bvoperation(&bvop0, &bvop1))
             },
             Type::VectorType { element_type, num_elements } => {
-                match *element_type {
+                match element_type.as_ref() {
                     Type::IntegerType { .. } => {
-                        self.state.record_bv_result(bop, binary_on_vector(&bvop0, &bvop1, num_elements as u32, bvoperation)?)
+                        self.state.record_bv_result(bop, binary_on_vector(&bvop0, &bvop1, *num_elements as u32, bvoperation)?)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected binary operation's vector operands to have integer elements, but elements are type {:?}", ty))),
                 }
@@ -521,27 +521,27 @@ where
         let bvfirstop = self.state.operand_to_bv(&icmp.operand0)?;
         let bvsecondop = self.state.operand_to_bv(&icmp.operand1)?;
         let bvpred = Self::intpred_to_bvpred(icmp.predicate);
-        let op0_type = icmp.operand0.get_type();
-        let op1_type = icmp.operand1.get_type();
+        let op0_type = self.state.type_of(&icmp.operand0);
+        let op1_type = self.state.type_of(&icmp.operand1);
         if op0_type != op1_type {
             return Err(Error::MalformedInstruction(format!(
                 "Expected icmp to compare two operands of same type, but have types {:?} and {:?}",
                 op0_type, op1_type
             )));
         }
-        match icmp.get_type() {
-            Type::IntegerType { bits } if bits == 1 => match op0_type {
+        match self.state.type_of(icmp).as_ref() {
+            Type::IntegerType { bits } if *bits == 1 => match op0_type.as_ref() {
                 Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
                     self.state.record_bv_result(icmp, bvpred(&bvfirstop, &bvsecondop))
                 },
                 ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
             },
-            Type::VectorType { element_type, num_elements } => match *element_type {
-                Type::IntegerType { bits } if bits == 1 => match op0_type {
+            Type::VectorType { element_type, num_elements } => match element_type.as_ref() {
+                Type::IntegerType { bits } if *bits == 1 => match op0_type.as_ref() {
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
                         let zero = self.state.zero(1);
                         let one = self.state.one(1);
-                        let final_bv = binary_on_vector(&bvfirstop, &bvsecondop, num_elements as u32, |a,b| bvpred(a,b).cond_bv(&one, &zero))?;
+                        let final_bv = binary_on_vector(&bvfirstop, &bvsecondop, *num_elements as u32, |a,b| bvpred(a,b).cond_bv(&one, &zero))?;
                         self.state.record_bv_result(icmp, final_bv)
                     },
                     ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
@@ -554,11 +554,11 @@ where
 
     fn symex_zext(&mut self, zext: &'p instruction::ZExt) -> Result<()> {
         debug!("Symexing zext {:?}", zext);
-        match zext.operand.get_type() {
+        match self.state.type_of(&zext.operand).as_ref() {
             Type::IntegerType { bits } => {
                 let bvop = self.state.operand_to_bv(&zext.operand)?;
                 let source_size = bits;
-                let dest_size = self.state.size(&zext.get_type());
+                let dest_size = self.state.size(&self.state.type_of(zext));
                 self.state
                     .record_bv_result(zext, bvop.zext(dest_size - source_size))
             },
@@ -568,7 +568,7 @@ where
             } => {
                 let in_vector = self.state.operand_to_bv(&zext.operand)?;
                 let in_el_size = self.state.size(&element_type);
-                let out_el_size = match zext.get_type() {
+                let out_el_size = match self.state.type_of(zext).as_ref() {
                     Type::VectorType {
                         element_type: out_el_type,
                         num_elements: out_num_els,
@@ -585,7 +585,7 @@ where
                         )))
                     },
                 };
-                let final_bv = unary_on_vector(&in_vector, num_elements as u32, |el| {
+                let final_bv = unary_on_vector(&in_vector, *num_elements as u32, |el| {
                     Ok(el.zext(out_el_size - in_el_size))
                 })?;
                 self.state.record_bv_result(zext, final_bv)
@@ -599,11 +599,11 @@ where
 
     fn symex_sext(&mut self, sext: &'p instruction::SExt) -> Result<()> {
         debug!("Symexing sext {:?}", sext);
-        match sext.operand.get_type() {
+        match self.state.type_of(&sext.operand).as_ref() {
             Type::IntegerType { bits } => {
                 let bvop = self.state.operand_to_bv(&sext.operand)?;
                 let source_size = bits;
-                let dest_size = self.state.size(&sext.get_type());
+                let dest_size = self.state.size(&self.state.type_of(sext));
                 self.state
                     .record_bv_result(sext, bvop.sext(dest_size - source_size))
             },
@@ -613,7 +613,7 @@ where
             } => {
                 let in_vector = self.state.operand_to_bv(&sext.operand)?;
                 let in_el_size = self.state.size(&element_type);
-                let out_el_size = match sext.get_type() {
+                let out_el_size = match self.state.type_of(sext).as_ref() {
                     Type::VectorType {
                         element_type: out_el_type,
                         num_elements: out_num_els,
@@ -630,7 +630,7 @@ where
                         )))
                     },
                 };
-                let final_bv = unary_on_vector(&in_vector, num_elements as u32, |el| {
+                let final_bv = unary_on_vector(&in_vector, *num_elements as u32, |el| {
                     Ok(el.sext(out_el_size - in_el_size))
                 })?;
                 self.state.record_bv_result(sext, final_bv)
@@ -644,16 +644,16 @@ where
 
     fn symex_trunc(&mut self, trunc: &'p instruction::Trunc) -> Result<()> {
         debug!("Symexing trunc {:?}", trunc);
-        match trunc.operand.get_type() {
+        match self.state.type_of(&trunc.operand).as_ref() {
             Type::IntegerType { .. } => {
                 let bvop = self.state.operand_to_bv(&trunc.operand)?;
-                let dest_size = self.state.size(&trunc.get_type());
+                let dest_size = self.state.size(&self.state.type_of(trunc));
                 self.state
                     .record_bv_result(trunc, bvop.slice(dest_size - 1, 0))
             },
             Type::VectorType { num_elements, .. } => {
                 let in_vector = self.state.operand_to_bv(&trunc.operand)?;
-                let dest_el_size = match trunc.get_type() {
+                let dest_el_size = match self.state.type_of(trunc).as_ref() {
                     Type::VectorType {
                         element_type: out_el_type,
                         num_elements: out_num_els,
@@ -670,7 +670,7 @@ where
                         )))
                     },
                 };
-                let final_bv = unary_on_vector(&in_vector, num_elements as u32, |el| {
+                let final_bv = unary_on_vector(&in_vector, *num_elements as u32, |el| {
                     Ok(el.slice(dest_el_size - 1, 0))
                 })?;
                 self.state.record_bv_result(trunc, final_bv)
@@ -692,7 +692,7 @@ where
     fn symex_load(&mut self, load: &'p instruction::Load) -> Result<()> {
         debug!("Symexing load {:?}", load);
         let bvaddr = self.state.operand_to_bv(&load.address)?;
-        let dest_size = self.state.size(&load.get_type());
+        let dest_size = self.state.size(&self.state.type_of(load));
         self.state
             .record_bv_result(load, self.state.read(&bvaddr, dest_size)?)
     }
@@ -706,13 +706,13 @@ where
 
     fn symex_gep(&mut self, gep: &'p instruction::GetElementPtr) -> Result<()> {
         debug!("Symexing gep {:?}", gep);
-        match gep.get_type() {
+        match self.state.type_of(gep).as_ref() {
             Type::PointerType { .. } => {
                 let bvbase = self.state.operand_to_bv(&gep.address)?;
                 let offset = Self::get_offset_recursive(
                     &self.state,
                     gep.indices.iter(),
-                    &gep.address.get_type(),
+                    &self.state.type_of(&gep.address),
                     bvbase.get_width(),
                 )?;
                 self.state.record_bv_result(gep, bvbase.add(&offset))
@@ -728,62 +728,65 @@ where
     }
 
     /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
+    ///
+    /// If `base_type` is a `NamedStructType`, the struct should be defined in the `state`'s current module.
     fn get_offset_recursive(
         state: &State<'p, B>,
         mut indices: impl Iterator<Item = &'p Operand>,
         base_type: &Type,
         result_bits: u32,
     ) -> Result<B::BV> {
+        if let Type::NamedStructType { name } = base_type {
+            match state.cur_loc.module.types.named_struct_def(name) {
+                None => {
+                    return Err(Error::MalformedInstruction(format!(
+                        "get_offset on a struct type not found in the current module (name {:?})",
+                        name
+                    )));
+                },
+                Some(NamedStructDef::Opaque) => {
+                    return Err(Error::MalformedInstruction(format!(
+                        "get_offset on an opaque struct type (name {:?})",
+                        name
+                    )));
+                },
+                Some(NamedStructDef::Defined(ty)) => {
+                    return Self::get_offset_recursive(state, indices, &ty, result_bits);
+                },
+            }
+        }
         match indices.next() {
             None => Ok(state.zero(result_bits)),
-            Some(index) => {
-                match base_type {
-                    Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
-                        let index = state.operand_to_bv(index)?.zero_extend_to_bits(result_bits);
-                        let (offset, nested_ty) =
-                            state.get_offset_bv_index(base_type, &index, state.solver.clone())?;
-                        Self::get_offset_recursive(state, indices, nested_ty, result_bits)
-                            .map(|bv| bv.add(&offset))
-                    },
-                    Type::StructType { .. } => match index {
-                        Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
+            Some(index) => match base_type {
+                Type::PointerType { .. } | Type::ArrayType { .. } | Type::VectorType { .. } => {
+                    let index = state.operand_to_bv(index)?.zero_extend_to_bits(result_bits);
+                    let (offset, nested_ty) =
+                        state.get_offset_bv_index(base_type, &index, state.solver.clone())?;
+                    Self::get_offset_recursive(state, indices, nested_ty, result_bits)
+                        .map(|bv| bv.add(&offset))
+                },
+                Type::StructType { .. } => match index {
+                    Operand::ConstantOperand(cref) => match cref.as_ref() {
+                        Constant::Int { value: index, .. } => {
                             let (offset, nested_ty) =
                                 state.get_offset_constant_index(base_type, *index as usize)?;
                             Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
                                 .map(|bv| bv.add(&state.bv_from_u32(offset, result_bits)))
                         },
-                        _ => Err(Error::MalformedInstruction(format!(
-                            "Expected index into struct type to be constant, but got index {:?}",
-                            index
-                        ))),
+                        c => Err(Error::MalformedInstruction(format!(
+                            "Expected index into struct type to be constant int, but got index {:?}",
+                            c
+                        )))
                     },
-                    Type::NamedStructType { ty, .. } => {
-                        let arc: Arc<RwLock<Type>> = ty
-                            .as_ref()
-                            .ok_or_else(|| {
-                                Error::MalformedInstruction(
-                                    "get_offset on an opaque struct type".to_owned(),
-                                )
-                            })?
-                            .upgrade()
-                            .expect("Failed to upgrade weak reference");
-                        let actual_ty: &Type = &arc.read().unwrap();
-                        if let Type::StructType { .. } = actual_ty {
-                            // this code copied from the StructType case
-                            match index {
-                            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                                let (offset, nested_ty) = state.get_offset_constant_index(actual_ty, *index as usize)?;
-                                Self::get_offset_recursive(state, indices, &nested_ty, result_bits)
-                                    .map(|bv| bv.add(&state.bv_from_u32(offset, result_bits)))
-                            },
-                            _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be constant, but got index {:?}", index))),
-                        }
-                        } else {
-                            Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
-                        }
-                    },
-                    _ => panic!("get_offset_recursive with base type {:?}", base_type),
-                }
+                    _ => Err(Error::MalformedInstruction(format!(
+                        "Expected index into struct type to be constant int, but got index {:?}",
+                        index
+                    ))),
+                },
+                Type::NamedStructType { .. } => {
+                    panic!("NamedStructType case should have been handled above")
+                },
+                _ => panic!("get_offset_recursive with base type {:?}", base_type),
             },
         }
     }
@@ -791,25 +794,28 @@ where
     fn symex_alloca(&mut self, alloca: &'p instruction::Alloca) -> Result<()> {
         debug!("Symexing alloca {:?}", alloca);
         match &alloca.num_elements {
-            Operand::ConstantOperand(Constant::Int {
-                value: num_elements,
-                ..
-            }) => {
-                let allocation_size_bits = {
-                    let element_size_bits = self
-                        .state
-                        .size_opaque_aware(&alloca.allocated_type, self.project)
-                        .expect("Alloca with type which is opaque in the entire Project");
-                    element_size_bits as u64 * num_elements
-                };
-                let allocation_size_bits = if allocation_size_bits == 0 {
-                    debug!("Alloca is for something of size 0 bits; we'll give it 8 bits anyway");
-                    8
-                } else {
-                    allocation_size_bits
-                };
-                let allocated = self.state.allocate(allocation_size_bits);
-                self.state.record_bv_result(alloca, allocated)
+            Operand::ConstantOperand(cref) => match cref.as_ref() {
+                Constant::Int { value: num_elements, .. } => {
+                    let allocation_size_bits = {
+                        let element_size_bits = self
+                            .state
+                            .size_opaque_aware(&alloca.allocated_type, self.project)
+                            .expect("Alloca with type which is opaque in the entire Project");
+                        element_size_bits as u64 * *num_elements
+                    };
+                    let allocation_size_bits = if allocation_size_bits == 0 {
+                        debug!("Alloca is for something of size 0 bits; we'll give it 8 bits anyway");
+                        8
+                    } else {
+                        allocation_size_bits
+                    };
+                    let allocated = self.state.allocate(allocation_size_bits);
+                    self.state.record_bv_result(alloca, allocated)
+                },
+                c => Err(Error::UnsupportedInstruction(format!(
+                    "Alloca with num_elements not a constant int: {:?}",
+                    c
+                )))
             },
             op => Err(Error::UnsupportedInstruction(format!(
                 "Alloca with num_elements not a constant int: {:?}",
@@ -822,31 +828,37 @@ where
         debug!("Symexing extractelement {:?}", ee);
         let vector = self.state.operand_to_bv(&ee.vector)?;
         match &ee.index {
-            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                let index = *index as u32;
-                match ee.vector.get_type() {
-                    Type::VectorType {
-                        element_type,
-                        num_elements,
-                    } => {
-                        if index >= num_elements as u32 {
-                            Err(Error::MalformedInstruction(format!(
-                                "ExtractElement index out of range: index {} with {} elements",
-                                index, num_elements
-                            )))
-                        } else {
-                            let el_size = self.state.size(&element_type);
-                            self.state.record_bv_result(
-                                ee,
-                                vector.slice((index + 1) * el_size - 1, index * el_size),
-                            )
-                        }
-                    },
-                    ty => Err(Error::MalformedInstruction(format!(
-                        "Expected ExtractElement vector to be a vector type, got {:?}",
-                        ty
-                    ))),
-                }
+            Operand::ConstantOperand(cref) => match cref.as_ref() {
+                Constant::Int { value: index, .. } => {
+                    let index = *index as u32;
+                    match self.state.type_of(&ee.vector).as_ref() {
+                        Type::VectorType {
+                            element_type,
+                            num_elements,
+                        } => {
+                            if index >= *num_elements as u32 {
+                                Err(Error::MalformedInstruction(format!(
+                                    "ExtractElement index out of range: index {} with {} elements",
+                                    index, num_elements
+                                )))
+                            } else {
+                                let el_size = self.state.size(&element_type);
+                                self.state.record_bv_result(
+                                    ee,
+                                    vector.slice((index + 1) * el_size - 1, index * el_size),
+                                )
+                            }
+                        },
+                        ty => Err(Error::MalformedInstruction(format!(
+                            "Expected ExtractElement vector to be a vector type, got {:?}",
+                            ty
+                        ))),
+                    }
+                },
+                c => Err(Error::UnsupportedInstruction(format!(
+                    "ExtractElement with index not a constant int: {:?}",
+                    c
+                ))),
             },
             op => Err(Error::UnsupportedInstruction(format!(
                 "ExtractElement with index not a constant int: {:?}",
@@ -860,41 +872,47 @@ where
         let vector = self.state.operand_to_bv(&ie.vector)?;
         let element = self.state.operand_to_bv(&ie.element)?;
         match &ie.index {
-            Operand::ConstantOperand(Constant::Int { value: index, .. }) => {
-                let index = *index as u32;
-                match ie.vector.get_type() {
-                    Type::VectorType {
-                        element_type,
-                        num_elements,
-                    } => {
-                        if index >= num_elements as u32 {
-                            Err(Error::MalformedInstruction(format!(
-                                "InsertElement index out of range: index {} with {} elements",
-                                index, num_elements
-                            )))
-                        } else {
-                            let vec_size = vector.get_width();
-                            let el_size = self.state.size(&element_type);
-                            assert_eq!(vec_size, el_size * num_elements as u32);
-                            let insertion_bitindex_low = index * el_size; // lowest bit number in the vector which will be overwritten
-                            let insertion_bitindex_high = (index + 1) * el_size - 1; // highest bit number in the vector which will be overwritten
+            Operand::ConstantOperand(cref) => match cref.as_ref() {
+                Constant::Int { value: index, .. } => {
+                    let index = *index as u32;
+                    match self.state.type_of(&ie.vector).as_ref() {
+                        Type::VectorType {
+                            element_type,
+                            num_elements,
+                        } => {
+                            if index >= *num_elements as u32 {
+                                Err(Error::MalformedInstruction(format!(
+                                    "InsertElement index out of range: index {} with {} elements",
+                                    index, num_elements
+                                )))
+                            } else {
+                                let vec_size = vector.get_width();
+                                let el_size = self.state.size(&element_type);
+                                assert_eq!(vec_size, el_size * *num_elements as u32);
+                                let insertion_bitindex_low = index * el_size; // lowest bit number in the vector which will be overwritten
+                                let insertion_bitindex_high = (index + 1) * el_size - 1; // highest bit number in the vector which will be overwritten
 
-                            let with_insertion = Self::overwrite_bv_segment(
-                                &mut self.state,
-                                &vector,
-                                element,
-                                insertion_bitindex_low,
-                                insertion_bitindex_high,
-                            );
+                                let with_insertion = Self::overwrite_bv_segment(
+                                    &mut self.state,
+                                    &vector,
+                                    element,
+                                    insertion_bitindex_low,
+                                    insertion_bitindex_high,
+                                );
 
-                            self.state.record_bv_result(ie, with_insertion)
-                        }
-                    },
-                    ty => Err(Error::MalformedInstruction(format!(
-                        "Expected InsertElement vector to be a vector type, got {:?}",
-                        ty
-                    ))),
-                }
+                                self.state.record_bv_result(ie, with_insertion)
+                            }
+                        },
+                        ty => Err(Error::MalformedInstruction(format!(
+                            "Expected InsertElement vector to be a vector type, got {:?}",
+                            ty
+                        ))),
+                    }
+                },
+                c => Err(Error::UnsupportedInstruction(format!(
+                    "InsertElement with index not a constant int: {:?}",
+                    c
+                ))),
             },
             op => Err(Error::UnsupportedInstruction(format!(
                 "InsertElement with index not a constant int: {:?}",
@@ -906,27 +924,27 @@ where
     fn symex_shufflevector(&mut self, sv: &'p instruction::ShuffleVector) -> Result<()> {
         debug!("Symexing shufflevector {:?}", sv);
         let op_type = {
-            let op0_type = sv.operand0.get_type();
-            let op1_type = sv.operand1.get_type();
+            let op0_type = self.state.type_of(&sv.operand0);
+            let op1_type = self.state.type_of(&sv.operand1);
             if op0_type != op1_type {
                 return Err(Error::MalformedInstruction(format!("Expected ShuffleVector operands to be exactly the same type, but they are {:?} and {:?}", op0_type, op1_type)));
             }
             op0_type
         };
-        match op_type {
+        match op_type.as_ref() {
             Type::VectorType {
                 element_type,
                 num_elements,
             } => {
-                let mask: Vec<u32> = match &sv.mask {
+                let mask: Vec<u32> = match sv.mask.as_ref() {
                     Constant::Vector(mask) => mask.iter()
-                        .map(|c| match c {
+                        .map(|c| match c.as_ref() {
                             Constant::Int { value: idx, .. } => Ok(*idx as u32),
                             Constant::Undef(_) => Ok(0),
                             _ => Err(Error::UnsupportedInstruction(format!("ShuffleVector with a mask entry which is not a Constant::Int or Constant::Undef but instead {:?}", c))),
                         })
                         .collect::<Result<Vec<u32>>>()?,
-                    Constant::AggregateZero(ty) | Constant::Undef(ty) => match ty {
+                    Constant::AggregateZero(ty) | Constant::Undef(ty) => match ty.as_ref() {
                         Type::VectorType { num_elements, .. } => itertools::repeat_n(0, *num_elements).collect(),
                         _ => return Err(Error::MalformedInstruction(format!("Expected ShuffleVector mask (which is an AggregateZero or Undef) to have vector type, but its type is {:?}", ty))),
                     },
@@ -938,7 +956,7 @@ where
                     return Err(Error::OtherError(format!("ShuffleVector operands are the same type, but somehow we got two different sizes: {} bits and {} bits", op0.get_width(), op1.get_width())));
                 }
                 let el_size = self.state.size(&element_type);
-                let num_elements = num_elements as u32;
+                let num_elements = *num_elements as u32;
                 assert_eq!(op0.get_width(), el_size * num_elements);
                 let final_bv = mask
                     .into_iter()
@@ -968,7 +986,7 @@ where
         let aggregate = self.state.operand_to_bv(&ev.aggregate)?;
         let (offset_bytes, size_bits) = self.get_offset_recursive_const_indices(
             ev.indices.iter().map(|i| *i as usize),
-            &ev.aggregate.get_type(),
+            &self.state.type_of(&ev.aggregate),
         )?;
         let low_offset_bits = offset_bytes * 8; // inclusive
         let high_offset_bits = low_offset_bits + size_bits; // exclusive
@@ -983,7 +1001,7 @@ where
         let element = self.state.operand_to_bv(&iv.element)?;
         let (offset_bytes, size_bits) = self.get_offset_recursive_const_indices(
             iv.indices.iter().map(|i| *i as usize),
-            &iv.aggregate.get_type(),
+            &self.state.type_of(&iv.aggregate),
         )?;
         let low_offset_bits = offset_bytes * 8; // inclusive
         let high_offset_bits = low_offset_bits + size_bits - 1; // inclusive
@@ -1008,44 +1026,41 @@ where
         mut indices: impl Iterator<Item = usize>,
         base_type: &Type,
     ) -> Result<(u32, u32)> {
+        if let Type::NamedStructType { name } = base_type {
+            match self.project.get_named_struct_def(name) {
+                Err(e) => {
+                    return Err(Error::OtherError(format!("error during get_offset: {}", e)));
+                },
+                Ok((NamedStructDef::Opaque, _)) => {
+                    return Err(Error::MalformedInstruction(format!(
+                        "get_offset on an opaque struct type ({:?})",
+                        name
+                    )));
+                },
+                Ok((NamedStructDef::Defined(ty), _)) => {
+                    return self.get_offset_recursive_const_indices(indices, &ty);
+                },
+            }
+        }
         match indices.next() {
             None => Ok((0, self.state.size(base_type))),
-            Some(index) => {
-                match base_type {
-                    Type::PointerType { .. }
-                    | Type::ArrayType { .. }
-                    | Type::VectorType { .. }
-                    | Type::StructType { .. } => {
-                        let (offset, nested_ty) =
-                            self.state.get_offset_constant_index(base_type, index)?;
-                        self.get_offset_recursive_const_indices(indices, &nested_ty)
-                            .map(|(val, size)| (val + offset, size))
-                    },
-                    Type::NamedStructType { ty, .. } => {
-                        let arc: Arc<RwLock<Type>> = ty
-                            .as_ref()
-                            .ok_or_else(|| {
-                                Error::MalformedInstruction(
-                                    "get_offset on an opaque struct type".to_owned(),
-                                )
-                            })?
-                            .upgrade()
-                            .expect("Failed to upgrade weak reference");
-                        let actual_ty: &Type = &arc.read().unwrap();
-                        if let Type::StructType { .. } = actual_ty {
-                            let (offset, nested_ty) =
-                                self.state.get_offset_constant_index(actual_ty, index)?;
-                            self.get_offset_recursive_const_indices(indices, &nested_ty)
-                                .map(|(val, size)| (val + offset, size))
-                        } else {
-                            Err(Error::MalformedInstruction(format!("Expected NamedStructType inner type to be a StructType, but got {:?}", actual_ty)))
-                        }
-                    },
-                    _ => panic!(
-                        "get_offset_recursive_const_indices with base type {:?}",
-                        base_type
-                    ),
-                }
+            Some(index) => match base_type {
+                Type::PointerType { .. }
+                | Type::ArrayType { .. }
+                | Type::VectorType { .. }
+                | Type::StructType { .. } => {
+                    let (offset, nested_ty) =
+                        self.state.get_offset_constant_index(base_type, index)?;
+                    self.get_offset_recursive_const_indices(indices, &nested_ty)
+                        .map(|(val, size)| (val + offset, size))
+                },
+                Type::NamedStructType { .. } => {
+                    panic!("NamedStructType case should have been handled above")
+                },
+                _ => panic!(
+                    "get_offset_recursive_const_indices with base type {:?}",
+                    base_type
+                ),
             },
         }
     }
@@ -1162,7 +1177,7 @@ where
                 };
                 if at_max_callstack_depth {
                     info!("Ignoring a call to function {:?} due to max_callstack_len setting (current callstack depth is {}, max is {})", called_funcname, self.state.current_callstack_depth(), self.state.config.max_callstack_depth.unwrap());
-                    match call.get_type() {
+                    match self.state.type_of(call).as_ref() {
                         Type::VoidType => {},
                         ty => {
                             let width = self.state.size(&ty);
@@ -1298,9 +1313,12 @@ where
     ) -> Result<ResolvedFunction<'p, B>> {
         use crate::global_allocations::Callable;
         let funcname_or_hook: Either<&str, FunctionHook<B>> = match function {
-            // the first two cases are really just optimizations for the third case; things should still work without the first two lines
-            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name: Name::Name(name), .. })) => Either::Left(name),
-            Either::Right(Operand::ConstantOperand(Constant::GlobalReference { name, .. })) => panic!("Function with a numbered name: {:?}", name),
+            // the first case is really just an optimization for the second case; things should still work if the first case was omitted
+            Either::Right(Operand::ConstantOperand(cref)) if is_global_reference(cref) => match cref.as_ref() {
+                Constant::GlobalReference { name: Name::Name(name), .. } => Either::Left(name),
+                Constant::GlobalReference { name, .. } => panic!("Function with a numbered name: {:?}", name),
+                _ => panic!("Expected only a GlobalReference here because of earlier check"),
+            },
             Either::Right(operand) => {
                 match self.state.interpret_as_function_ptr(self.state.operand_to_bv(&operand)?, 1)? {
                     PossibleSolutions::AtLeast(_) => return Err(Error::OtherError("calling a function pointer which has multiple possible targets".to_owned())),  // there must be at least 2 targets since we passed n==1 to `interpret_as_function_ptr`
@@ -1571,18 +1589,18 @@ where
         log::log!(log_level, "Processing hook for {}", hooked_funcname);
         match hook.call_hook(&self.project, &mut self.state, call)? {
             ReturnValue::ReturnVoid => {
-                if call.get_type() != Type::VoidType {
+                if self.state.type_of(call).as_ref() == &Type::VoidType {
+                    Ok(ReturnValue::ReturnVoid)
+                } else {
                     Err(Error::HookReturnValueMismatch(format!(
                         "Hook for {:?} returned void but call needs a return value",
                         hooked_funcname
                     )))
-                } else {
-                    Ok(ReturnValue::ReturnVoid)
                 }
             },
             ReturnValue::Return(retval) => {
-                let ret_type = call.get_type();
-                if ret_type == Type::VoidType {
+                let ret_type = self.state.type_of(call);
+                if ret_type.as_ref() == &Type::VoidType {
                     Err(Error::HookReturnValueMismatch(format!(
                         "Hook for {:?} returned a value but call is void-typed",
                         hooked_funcname
@@ -1795,7 +1813,7 @@ where
                 };
                 if at_max_callstack_depth {
                     info!("Ignoring a call to function {:?} due to max_callstack_len setting (current callstack depth is {}, max is {})", called_funcname, self.state.current_callstack_depth(), self.state.config.max_callstack_depth.unwrap());
-                    match invoke.get_type() {
+                    match self.state.type_of(invoke).as_ref() {
                         Type::VoidType => {},
                         ty => {
                             let width = self.state.size(&ty);
@@ -2043,17 +2061,17 @@ where
         type_index: &B::BV,
     ) -> Result<()> {
         debug!("Symexing landingpad {:?}", lp);
-        let result_ty = lp.get_type();
-        match result_ty {
+        let result_ty = self.state.type_of(lp);
+        match result_ty.as_ref() {
             Type::StructType { element_types, .. } => {
                 if element_types.len() != 2 {
                     return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct of 2 elements, got a struct of {} elements: {:?}", element_types.len(), element_types)));
                 }
-                match &element_types[0] {
+                match element_types[0].as_ref() {
                     ty@Type::PointerType { .. } => assert_eq!(thrown_ptr.get_width(), self.state.size(ty), "Expected thrown_ptr to be a pointer, got a value of width {:?}", thrown_ptr.get_width()),
                     ty => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct with first element a pointer, got first element {:?}", ty))),
                 }
-                match &element_types[1] {
+                match element_types[1].as_ref() {
                     Type::IntegerType { bits: 32 } => {},
                     ty => return Err(Error::MalformedInstruction(format!("Expected landingpad result type to be a struct with second element an i32, got second element {:?}", ty))),
                 }
@@ -2090,14 +2108,14 @@ where
     fn symex_select(&mut self, select: &'p instruction::Select) -> Result<()> {
         debug!("Symexing select {:?}", select);
         let optype = {
-            let truetype = select.true_value.get_type();
-            let falsetype = select.false_value.get_type();
+            let truetype = self.state.type_of(&select.true_value);
+            let falsetype = self.state.type_of(&select.false_value);
             if truetype != falsetype {
                 return Err(Error::MalformedInstruction(format!("Expected Select operands to have identical type, but they have types {:?} and {:?}", truetype, falsetype)));
             }
             truetype
         };
-        match select.condition.get_type() {
+        match self.state.type_of(&select.condition).as_ref() {
             Type::IntegerType { bits: 1 } => {
                 let bvcond = self.state.operand_to_bv(&select.condition)?;
                 let bvtrueval = self.state.operand_to_bv(&select.true_value)?;
@@ -2132,11 +2150,11 @@ where
                 element_type,
                 num_elements,
             } => {
-                match *element_type {
+                match element_type.as_ref() {
                     Type::IntegerType { bits: 1 } => {},
                     ty => return Err(Error::MalformedInstruction(format!("Expected Select vector condition to be vector of i1, but got vector of {:?}", ty))),
                 };
-                let el_size = match optype {
+                let el_size = match optype.as_ref() {
                     Type::VectorType { element_type: op_el_type, num_elements: op_num_els } => {
                         if num_elements != op_num_els {
                             return Err(Error::MalformedInstruction(format!("Select condition is a vector of {} elements but operands are vectors with {} elements", num_elements, op_num_els)));
@@ -2148,7 +2166,7 @@ where
                 let condvec = self.state.operand_to_bv(&select.condition)?;
                 let truevec = self.state.operand_to_bv(&select.true_value)?;
                 let falsevec = self.state.operand_to_bv(&select.false_value)?;
-                let final_bv = (0 .. num_elements as u32)
+                let final_bv = (0 .. *num_elements as u32)
                     .map(|idx| {
                         let bit = condvec.slice(idx, idx);
                         bit.cond_bv(
@@ -2172,15 +2190,15 @@ where
     fn symex_cmpxchg(&mut self, cmpxchg: &'p instruction::CmpXchg) -> Result<()> {
         debug!("Symexing cmpxchg {:?}", cmpxchg);
         let main_ty = {
-            let expected_ty = cmpxchg.expected.get_type();
-            let replacement_ty = cmpxchg.replacement.get_type();
+            let expected_ty = self.state.type_of(&cmpxchg.expected);
+            let replacement_ty = self.state.type_of(&cmpxchg.replacement);
             if expected_ty != replacement_ty {
                 return Err(Error::MalformedInstruction(format!("Expected cmpxchg 'expected' and 'replacement' to be the same type, but their types are {:?} and {:?}", expected_ty, replacement_ty)));
             }
             expected_ty
         };
-        let result_ty = cmpxchg.get_type();
-        match result_ty {
+        let result_ty = self.state.type_of(cmpxchg);
+        match result_ty.as_ref() {
             Type::StructType { element_types, .. } => {
                 if element_types.len() != 2 {
                     return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct of 2 elements, got a struct of {} elements: {:?}", element_types.len(), element_types)));
@@ -2188,7 +2206,7 @@ where
                 if element_types[0] != main_ty {
                     return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct with first element equal to the expected/replacement type. Instead, first element of return type is {:?} while expected/replacement type is {:?}", element_types[0], main_ty)));
                 }
-                if element_types[1] != (Type::IntegerType { bits: 1 }) {
+                if element_types[1].as_ref() != &(Type::IntegerType { bits: 1 }) {
                     return Err(Error::MalformedInstruction(format!("Expected cmpxchg result type to be a struct with second element an i1; got second element {:?}", element_types[1])));
                 }
             },
@@ -2211,6 +2229,14 @@ where
 
         self.state
             .record_bv_result(cmpxchg, match_flag.concat(&read_value))
+    }
+}
+
+// Is the given `Constant` a `GlobalReference`
+fn is_global_reference(c: &Constant) -> bool {
+    match c {
+        Constant::GlobalReference { .. } => true,
+        _ => false,
     }
 }
 

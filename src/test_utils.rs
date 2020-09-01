@@ -1,7 +1,7 @@
 use crate::backend::DefaultBackend;
 use crate::{BBInstrIndex, Config, Location, Project, State};
+use llvm_ir::types::Types;
 use llvm_ir::*;
-use std::collections::HashMap;
 
 /// utility to initialize a `State` out of a `Project` and a function name
 pub fn blank_state<'p>(project: &'p Project, funcname: &str) -> State<'p, DefaultBackend> {
@@ -33,8 +33,8 @@ pub fn blank_project(modname: impl Into<String>, func: Function) -> Project {
         functions: vec![func],
         global_vars: vec![],
         global_aliases: vec![],
-        named_struct_types: HashMap::new(),
         inline_assembly: String::new(),
+        types: Types::blank_for_testing(),
     })
 }
 

@@ -166,11 +166,11 @@ impl<V: BV> VarMap<V> {
     /// This function does not modify (or even use) the current state of the
     /// `VarMap`.
     fn build_versioned_name(funcname: &str, name: &Name, version_num: usize) -> String {
-        let (name_prefix, stem): (&str, String) = match name {
-            Name::Name(s) => ("name_", s.clone()),
-            Name::Number(n) => ("%", n.to_string()),
+        let stem: String = match name {
+            Name::Name(s) => format!("name_{}", &s),
+            Name::Number(n) => format!("%{}", n),
         };
-        "@".to_owned() + funcname + "_" + name_prefix + &stem + "_" + &version_num.to_string()
+        format!("@{}_{}_{}", funcname, &stem, version_num)
     }
 
     /// Get a `RestoreInfo` which can later be used with `restore_fn_vars()` to

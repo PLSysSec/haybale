@@ -16,7 +16,7 @@ fn hook_for_simple_callee<'p, B: Backend>(
 ) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 2);
     Ok(ReturnValue::Return(
-        state.bv_from_u32(5, state.size(&call.get_type())),
+        state.bv_from_u32(5, state.size(&state.type_of(call))),
     ))
 }
 
@@ -64,7 +64,7 @@ fn target_hook<'p, B: Backend>(
 ) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 2);
     Ok(ReturnValue::Return(
-        state.bv_from_u32(5, state.size(&call.get_type())),
+        state.bv_from_u32(5, state.size(&state.type_of(call))),
     ))
 }
 

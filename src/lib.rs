@@ -8,7 +8,7 @@
 // sure if this is necessary or helpful anymore
 #![doc(html_root_url = "https://docs.rs/haybale/0.5.1")]
 
-use llvm_ir::{Type, Typed};
+use llvm_ir::Type;
 use std::collections::HashSet;
 
 mod project;
@@ -123,7 +123,7 @@ pub fn find_zero_of_func<'p>(
         .get_func_by_name(funcname)
         .unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
     for (param, bv) in func.parameters.iter().zip(em.param_bvs()) {
-        if let Type::PointerType { .. } = param.get_type() {
+        if let Type::PointerType { .. } = em.state().type_of(param).as_ref() {
             bv._ne(&em.state().zero(bv.get_width())).assert();
         }
     }
@@ -163,7 +163,7 @@ pub fn find_zero_of_func<'p>(
                         .expect("since state.sat() passed, expected a solution for each var")
                         .as_u64()
                         .expect("parameter more than 64 bits wide");
-                    Ok(match &p.ty {
+                    Ok(match p.ty.as_ref() {
                         Type::IntegerType { bits: 8 } => SolutionValue::I8(param_as_u64 as i8),
                         Type::IntegerType { bits: 16 } => SolutionValue::I16(param_as_u64 as i16),
                         Type::IntegerType { bits: 32 } => SolutionValue::I32(param_as_u64 as i32),

@@ -16,7 +16,7 @@ pub fn malloc_hook<'p, B: Backend + 'p>(
 ) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 1);
     let bytes = &call.get_arguments()[0].0;
-    match bytes.get_type() {
+    match state.type_of(bytes).as_ref() {
         Type::IntegerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -25,7 +25,7 @@ pub fn malloc_hook<'p, B: Backend + 'p>(
             )))
         },
     };
-    match call.get_type() {
+    match state.type_of(call).as_ref() {
         Type::PointerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -47,7 +47,7 @@ pub fn calloc_hook<'p, B: Backend + 'p>(
     assert_eq!(call.get_arguments().len(), 2);
     let num = &call.get_arguments()[0].0;
     let size = &call.get_arguments()[1].0;
-    match num.get_type() {
+    match state.type_of(num).as_ref() {
         Type::IntegerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -56,7 +56,7 @@ pub fn calloc_hook<'p, B: Backend + 'p>(
             )))
         },
     };
-    match size.get_type() {
+    match state.type_of(size).as_ref() {
         Type::IntegerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -65,7 +65,7 @@ pub fn calloc_hook<'p, B: Backend + 'p>(
             )))
         },
     };
-    match call.get_type() {
+    match state.type_of(call).as_ref() {
         Type::PointerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -97,7 +97,7 @@ pub fn realloc_hook<'p, B: Backend + 'p>(
     assert_eq!(call.get_arguments().len(), 2);
     let addr = &call.get_arguments()[0].0;
     let new_size = &call.get_arguments()[1].0;
-    match addr.get_type() {
+    match state.type_of(addr).as_ref() {
         Type::PointerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -106,7 +106,7 @@ pub fn realloc_hook<'p, B: Backend + 'p>(
             )))
         },
     };
-    match new_size.get_type() {
+    match state.type_of(new_size).as_ref() {
         Type::IntegerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -115,7 +115,7 @@ pub fn realloc_hook<'p, B: Backend + 'p>(
             )))
         },
     };
-    match call.get_type() {
+    match state.type_of(call).as_ref() {
         Type::PointerType { .. } => {},
         ty => {
             return Err(Error::OtherError(format!(

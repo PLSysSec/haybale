@@ -2,7 +2,7 @@ use boolector::option::{BtorOption, ModelGen};
 use boolector::BVSolution;
 use either::Either;
 use itertools::Itertools;
-use llvm_ir::types::FPType;
+use llvm_ir::types::{FPType, NamedStructDef, Typed};
 use llvm_ir::*;
 use log::{debug, info, warn};
 use reduce::Reduce;
@@ -12,7 +12,6 @@ use std::convert::TryInto;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use std::sync::{Arc, RwLock};
 
 use crate::alloc::Alloc;
 use crate::backend::*;
@@ -505,8 +504,8 @@ where
             // exactly once, and the order doesn't matter, so we simply process
             // definitions, since each global variable must have exactly one
             // definition. Hence the `filter()` above.
-            if let Type::PointerType { pointee_type, .. } = &var.ty {
-                let size_bits = state.size_opaque_aware(&*pointee_type, project).expect(
+            if let Type::PointerType { pointee_type, .. } = var.ty.as_ref() {
+                let size_bits = state.size_opaque_aware(&pointee_type, project).expect(
                     "Global variable has a struct type which is opaque in the entire Project",
                 );
                 let size_bits = if size_bits == 0 {
@@ -851,11 +850,11 @@ where
         thing: &impl instruction::HasResult,
         resultval: B::BV,
     ) -> Result<()> {
-        if self.size(&thing.get_type()) != resultval.get_width() {
+        if self.size(&self.type_of(thing)) != resultval.get_width() {
             Err(Error::OtherError(format!(
                 "Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}",
                 thing,
-                self.size(&thing.get_type()),
+                self.size(&self.type_of(thing)),
                 resultval,
                 resultval.get_width()
             )))
@@ -877,6 +876,11 @@ where
     pub fn overwrite_latest_version_of_bv(&mut self, name: &Name, bv: B::BV) {
         self.varmap
             .overwrite_latest_version_of_bv(&self.cur_loc.func.name, name, bv)
+    }
+
+    /// Convenience function to get the `Type` of anything that is `Typed`.
+    pub fn type_of<T: Typed + ?Sized>(&self, t: &T) -> TypeRef {
+        self.cur_loc.module.type_of(t)
     }
 
     /// Convert an `Operand` to the appropriate `BV`.
@@ -1021,8 +1025,8 @@ where
             Constant::AShr(s) => Ok(self
                 .const_to_bv(&s.operand0)?
                 .sra(&self.const_to_bv(&s.operand1)?)),
-            Constant::ExtractElement(ee) => match &ee.index {
-                Constant::Int { value: index, .. } => match &ee.vector {
+            Constant::ExtractElement(ee) => match &ee.index.as_ref() {
+                Constant::Int { value: index, .. } => match &ee.vector.as_ref() {
                     Constant::Vector(els) => {
                         let el = els.get(*index as usize).ok_or_else(|| {
                             Error::MalformedInstruction(
@@ -1041,15 +1045,16 @@ where
                     index
                 ))),
             },
-            Constant::InsertElement(ie) => match &ie.index {
-                Constant::Int { value: index, .. } => match &ie.vector {
+            Constant::InsertElement(ie) => match &ie.index.as_ref() {
+                Constant::Int { value: index, .. } => match &ie.vector.as_ref() {
                     Constant::Vector(els) => {
                         let mut els = els.clone();
-                        let el: &mut Constant = els.get_mut(*index as usize).ok_or_else(|| {
-                            Error::MalformedInstruction(
-                                "Constant::InsertElement index out of range".to_owned(),
-                            )
-                        })?;
+                        let el: &mut ConstantRef =
+                            els.get_mut(*index as usize).ok_or_else(|| {
+                                Error::MalformedInstruction(
+                                    "Constant::InsertElement index out of range".to_owned(),
+                                )
+                            })?;
                         *el = ie.element.clone();
                         self.const_to_bv(&Constant::Vector(els))
                     },
@@ -1067,17 +1072,20 @@ where
                 &ev.aggregate,
                 ev.indices.iter().copied(),
             )?),
-            Constant::InsertValue(iv) => self.const_to_bv(&Self::simplify_const_iv(
-                iv.aggregate.clone(),
-                iv.element.clone(),
-                iv.indices.iter().copied(),
-            )?),
+            Constant::InsertValue(iv) => {
+                let c = Self::simplify_const_iv(
+                    &iv.aggregate,
+                    (*iv.element).clone(),
+                    iv.indices.iter().copied(),
+                )?;
+                self.const_to_bv(&c)
+            },
             Constant::GetElementPtr(gep) => {
                 // heavily inspired by `ExecutionManager::symex_gep()` in symex.rs. TODO could try to share more code
                 let bvbase = self.const_to_bv(&gep.address)?;
                 let offset = self.get_offset_recursive(
                     gep.indices.iter(),
-                    &gep.address.get_type(),
+                    &self.type_of(&gep.address),
                     bvbase.get_width(),
                 )?;
                 Ok(bvbase.add(&offset))
@@ -1158,7 +1166,7 @@ where
             Constant::Struct { values, .. } => {
                 values
                     .iter()
-                    .filter(|v| self.size(&v.get_type()) > 0)
+                    .filter(|v| self.size(&self.type_of(v.as_ref())) > 0)
                     .map(|v| self.const_to_bv_maybe_zerowidth(v).transpose().unwrap()) // since we `filter()`'d first, we should have all `Some`s here. We transpose-unwrap Result<Option<BV>> to Result<BV>
                     .reduce(|a, b| Ok(b?.concat(&a?))) // the lambda has type Fn(Result<B::BV>, Result<B::BV>) -> Result<B::BV>
                     .transpose()
@@ -1195,16 +1203,16 @@ where
     /// Given a `Constant::Struct`, a value to insert, and a series of
     /// `InsertValue` indices, get the final `Constant` referred to
     fn simplify_const_iv(
-        s: Constant,
+        s: &Constant,
         val: Constant,
         mut indices: impl Iterator<Item = u32>,
-    ) -> Result<Constant> {
+    ) -> Result<ConstantRef> {
         match indices.next() {
-            None => Ok(val),
+            None => Ok(ConstantRef::new(val)),
             Some(index) => {
                 if let Constant::Struct {
                     name,
-                    mut values,
+                    values,
                     is_packed,
                 } = s
                 {
@@ -1216,12 +1224,13 @@ where
                             )
                         })?
                         .clone();
-                    values[index as usize] = Self::simplify_const_iv(to_replace, val, indices)?;
-                    Ok(Constant::Struct {
-                        name,
+                    let mut values = values.clone();
+                    values[index as usize] = Self::simplify_const_iv(&to_replace, val, indices)?;
+                    Ok(ConstantRef::new(Constant::Struct {
+                        name: name.clone(),
                         values,
-                        is_packed,
-                    })
+                        is_packed: *is_packed,
+                    }))
                 } else {
                     panic!("simplify_const_iv: not a Constant::Struct: {:?}", s)
                 }
@@ -1229,13 +1238,31 @@ where
         }
     }
 
-    /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits)
+    /// Get the offset of the element (in bytes, as a `BV` of `result_bits` bits).
+    ///
+    /// If `base_type` is a `NamedStructType`, the struct should be defined in the current module.
     fn get_offset_recursive<'a>(
         &self,
-        mut indices: impl Iterator<Item = &'a Constant>,
+        mut indices: impl Iterator<Item = &'a ConstantRef>,
         base_type: &Type,
         result_bits: u32,
     ) -> Result<B::BV> {
+        if let Type::NamedStructType { name } = base_type {
+            match self.cur_loc.module.types.named_struct_def(name) {
+                None => {
+                    return Err(Error::MalformedInstruction(format!("get_offset on a struct type not defined in the current module (struct name {:?})", name)));
+                },
+                Some(NamedStructDef::Opaque) => {
+                    return Err(Error::MalformedInstruction(format!(
+                        "get_offset on an opaque struct type ({:?})",
+                        name
+                    )));
+                },
+                Some(NamedStructDef::Defined(ty)) => {
+                    return self.get_offset_recursive(indices, &ty, result_bits);
+                },
+            }
+        }
         match indices.next() {
             None => Ok(self.zero(result_bits)),
             Some(index) => match base_type {
@@ -1246,7 +1273,7 @@ where
                     self.get_offset_recursive(indices, nested_ty, result_bits)
                         .map(|bv| bv.add(&offset))
                 },
-                Type::StructType { .. } => match index {
+                Type::StructType { .. } => match index.as_ref() {
                     Constant::Int { value: index, .. } => {
                         let (offset, nested_ty) =
                             self.get_offset_constant_index(base_type, *index as usize)?;
@@ -1258,32 +1285,8 @@ where
                         index
                     ))),
                 },
-                Type::NamedStructType { ty, .. } => {
-                    let arc: Arc<RwLock<Type>> = ty
-                        .as_ref()
-                        .ok_or_else(|| {
-                            Error::MalformedInstruction(
-                                "get_offset on an opaque struct type".to_owned(),
-                            )
-                        })?
-                        .upgrade()
-                        .expect("Failed to upgrade weak reference");
-                    let actual_ty: &Type = &arc.read().unwrap();
-                    if let Type::StructType { .. } = actual_ty {
-                        // this code copied from the StructType case
-                        match index {
-                            Constant::Int { value: index, .. } => {
-                                let (offset, nested_ty) = self.get_offset_constant_index(base_type, *index as usize)?;
-                                self.get_offset_recursive(indices, &nested_ty, result_bits).map(|bv| bv.add(&self.bv_from_u64(offset as u64, result_bits)))
-                            },
-                            _ => Err(Error::MalformedInstruction(format!("Expected index into struct type to be a constant int, but got index {:?}", index))),
-                        }
-                    } else {
-                        Err(Error::MalformedInstruction(format!(
-                            "Expected NamedStructType inner type to be a StructType, but got {:?}",
-                            actual_ty
-                        )))
-                    }
+                Type::NamedStructType { .. } => {
+                    panic!("NamedStructType case should have been handled above")
                 },
                 _ => panic!("get_offset_recursive with base type {:?}", base_type),
             },
@@ -1504,7 +1507,10 @@ where
 
     /// Get the size of the `Type`, in bits.
     ///
-    /// Will panic if given an opaque struct type.
+    /// If the `Type` is a named struct type, the named struct type should be
+    /// defined in the current module (i.e., the module in `self.cur_loc`).
+    /// If it is opaque in the current module, or not declared in the current
+    /// module, this function will panic.
     pub fn size(&self, ty: &Type) -> u32 {
         match ty {
             Type::IntegerType { bits } => *bits,
@@ -1523,14 +1529,13 @@ where
             Type::StructType { element_types, .. } => {
                 element_types.iter().map(|ty| self.size(ty)).sum()
             },
-            Type::NamedStructType { ty, .. } => self.size(
-                &ty.as_ref()
-                    .expect("Can't get size of an opaque struct type")
-                    .upgrade()
-                    .expect("Failed to upgrade weak reference")
-                    .read()
-                    .unwrap(),
-            ),
+            Type::NamedStructType { name } => {
+                match self.cur_loc.module.types.named_struct_def(name) {
+                    None => panic!("Struct named {:?} is not defined in the current module", name),
+                    Some(NamedStructDef::Opaque) => panic!("Can't get size of an opaque struct type"),
+                    Some(NamedStructDef::Defined(ty)) => self.size(&ty),
+                }
+            },
             Type::FPType(fpt) => Self::fp_size(*fpt),
             ty => panic!("Not sure how to get the size of {:?}", ty),
         }
@@ -1548,10 +1553,10 @@ where
     /// definition in the entire `Project`.
     pub fn size_opaque_aware(&self, ty: &Type, proj: &Project) -> Option<u32> {
         match ty {
-            ty @ Type::NamedStructType { .. } => self.size_opaque_aware(
-                &proj.get_inner_struct_type_from_named(ty)?.read().unwrap(),
-                proj,
-            ),
+            Type::NamedStructType { name } => match proj.get_named_struct_def(name).ok()? {
+                (NamedStructDef::Opaque, _) => None,
+                (NamedStructDef::Defined(ty), _) => self.size_opaque_aware(&ty, proj),
+            },
             Type::ArrayType {
                 element_type,
                 num_elements,
@@ -1561,7 +1566,7 @@ where
                 num_elements,
             } => {
                 let num_elements: u32 = (*num_elements).try_into().unwrap();
-                self.size_opaque_aware(element_type, proj)
+                self.size_opaque_aware(&element_type, proj)
                     .map(|s| s * num_elements)
             },
             Type::StructType { element_types, .. } => element_types
@@ -1586,10 +1591,13 @@ where
 
     /// Get the offset (in _bytes_) of the element at the given index, as well as the
     /// `Type` of the element at that index.
-    //
-    // TODO: how to return `&Type` here (like get_offset_bv_index below) despite the
-    // weak reference in the `NamedStructType` case
-    pub fn get_offset_constant_index(&self, base_type: &Type, index: usize) -> Result<(u32, Type)> {
+    ///
+    /// If `base_type` is a `NamedStructType`, the struct should be defined in the current module.
+    pub fn get_offset_constant_index(
+        &self,
+        base_type: &Type,
+        index: usize,
+    ) -> Result<(u32, TypeRef)> {
         match base_type {
             Type::PointerType {
                 pointee_type: element_type,
@@ -1606,7 +1614,7 @@ where
                 } else {
                     let el_size_bytes = el_size_bits / 8;
                     let index: u32 = index.try_into().unwrap();
-                    Ok((index * el_size_bytes, (**element_type).clone()))
+                    Ok((index * el_size_bytes, element_type.clone()))
                 }
             },
             Type::StructType { element_types, .. } => {
@@ -1623,39 +1631,17 @@ where
                     Ok((offset_bits / 8, element_types[index].clone()))
                 }
             },
-            Type::NamedStructType { ty, .. } => {
-                let arc: Arc<RwLock<Type>> = ty
-                    .as_ref()
-                    .ok_or_else(|| {
-                        Error::MalformedInstruction(
-                            "get_offset on an opaque struct type".to_owned(),
-                        )
-                    })?
-                    .upgrade()
-                    .expect("Failed to upgrade weak reference");
-                let actual_ty: &Type = &arc.read().unwrap();
-                if let Type::StructType {
-                    ref element_types, ..
-                } = actual_ty
-                {
-                    // this code copied from the StructType case, unfortunately
-                    let mut offset_bits = 0;
-                    for ty in element_types.iter().take(index) {
-                        offset_bits += self.size(ty);
-                    }
-                    if offset_bits % 8 != 0 {
-                        Err(Error::UnsupportedInstruction(format!(
-                            "Struct offset of {} bits",
-                            offset_bits
-                        )))
-                    } else {
-                        Ok((offset_bits / 8, element_types[index].clone()))
-                    }
-                } else {
-                    Err(Error::MalformedInstruction(format!(
-                        "Expected NamedStructType inner type to be a StructType, but got {:?}",
-                        actual_ty
-                    )))
+            Type::NamedStructType { name } => {
+                match self.cur_loc.module.types.named_struct_def(name) {
+                    None => Err(Error::MalformedInstruction(format!(
+                        "get_offset on a struct type not found in the current module: {:?}",
+                        name
+                    ))),
+                    Some(NamedStructDef::Opaque) => Err(Error::MalformedInstruction(format!(
+                        "get_offset on an opaque struct type: {:?}",
+                        name
+                    ))),
+                    Some(NamedStructDef::Defined(ty)) => self.get_offset_constant_index(&ty, index),
                 }
             },
             _ => panic!("get_offset_constant_index with base type {:?}", base_type),
@@ -2309,11 +2295,11 @@ mod tests {
         // check that we can look up the correct BV values via LocalOperands
         let op1 = Operand::LocalOperand {
             name: name1,
-            ty: Type::i32(),
+            ty: state.cur_loc.module.types.i32(),
         };
         let op2 = Operand::LocalOperand {
             name: name2,
-            ty: Type::bool(),
+            ty: state.cur_loc.module.types.bool(),
         };
         assert_eq!(state.operand_to_bv(&op1), Ok(var1));
         assert_eq!(state.operand_to_bv(&op2), Ok(var2));
@@ -2330,7 +2316,7 @@ mod tests {
 
         // this should create a corresponding BV value which is also constant 3
         let bv = state
-            .operand_to_bv(&Operand::ConstantOperand(constint))
+            .operand_to_bv(&Operand::ConstantOperand(ConstantRef::new(constint)))
             .unwrap();
 
         // check that the BV value was evaluated to 3
@@ -2355,10 +2341,10 @@ mod tests {
 
         // this should create BV values true and false
         let bvtrue = state
-            .operand_to_bv(&Operand::ConstantOperand(consttrue))
+            .operand_to_bv(&Operand::ConstantOperand(ConstantRef::new(consttrue)))
             .unwrap();
         let bvfalse = state
-            .operand_to_bv(&Operand::ConstantOperand(constfalse))
+            .operand_to_bv(&Operand::ConstantOperand(ConstantRef::new(constfalse)))
             .unwrap();
 
         // check that the BV values are evaluated to true and false respectively
@@ -2492,11 +2478,11 @@ mod tests {
         // get the copies of `x` and `y` in each state, via operand lookups
         let op_x = Operand::LocalOperand {
             name: Name::from("x"),
-            ty: Type::i64(),
+            ty: state.cur_loc.module.types.i64(),
         };
         let op_y = Operand::LocalOperand {
             name: Name::from("y"),
-            ty: Type::i64(),
+            ty: state.cur_loc.module.types.i64(),
         };
         let x_1 = state.operand_to_bv(&op_x).unwrap();
         let x_2 = state_2.operand_to_bv(&op_x).unwrap();

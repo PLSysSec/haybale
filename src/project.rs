@@ -1,12 +1,13 @@
 use crate::demangling::try_cpp_demangle;
+use crate::error::Error;
 use llvm_ir::module::{GlobalAlias, GlobalVariable};
-use llvm_ir::{Function, Module, Type};
+use llvm_ir::types::NamedStructDef;
+use llvm_ir::{Function, Module};
 use log::{info, warn};
 use rustc_demangle::demangle;
 use std::fs::DirEntry;
 use std::io;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
 
 /// A `Project` is a collection of LLVM code to be explored,
 /// consisting of one or more LLVM modules.
@@ -175,21 +176,17 @@ impl Project {
     }
 
     /// Iterate over all named struct types in the `Project`.
-    /// Gives triplets `(name, Type, Module)` which indicate the struct's name,
-    /// type, and which module it comes from.
-    ///
-    /// If the `Type` in the triplet is `None`, that means the struct type is
-    /// opaque; see
-    /// [LLVM 9 docs on Opaque Structure Types](https://releases.llvm.org/9.0.0/docs/LangRef.html#t-opaque).
-    pub fn all_named_struct_types(&self) -> impl Iterator<Item = (&String, Option<Type>, &Module)> {
+    /// Gives triplets `(name, NamedStructDef, Module)` which indicate the struct's name,
+    /// definition, and which module the definition comes from.
+    pub fn all_named_struct_types(
+        &self,
+    ) -> impl Iterator<Item = (&String, &NamedStructDef, &Module)> {
         self.modules
             .iter()
             .map(|m| {
-                m.named_struct_types
-                    .iter()
-                    .map(|(name, opt)| (name, opt.as_ref().map(|arc| arc.read().unwrap().clone())))
-                    .zip(std::iter::repeat(m))
-                    .map(|((name, opt), m)| (name, opt, m))
+                m.types
+                    .all_struct_names()
+                    .map(move |name| (name, m.types.named_struct_def(name).unwrap(), m))
             })
             .flatten()
     }
@@ -209,7 +206,7 @@ impl Project {
     /// found in.
     ///
     /// For projects containing C++ or Rust code, you can pass either the mangled
-    /// or demangled function name.
+    /// or demangled function name (fully qualified with namespaces/modules).
     ///
     /// If you have a `State` handy, you may want to use
     /// `state.get_func_by_name()` instead, which will get the appropriate
@@ -278,49 +275,39 @@ impl Project {
         retval
     }
 
-    /// Search the project for a named struct type with the given name.
-    /// If a matching named struct type is found, return both it and the module
-    /// it was found in.
+    /// Get the definition of the named struct with the given name.
+    /// Returns both the definition, and the module that definition was found in.
     ///
-    /// If `None` is returned, then no named struct type with the given name was
-    /// found in the project.
-    ///
-    /// If `Some(None, <module>)` is returned, that means the struct type is
-    /// opaque; see
-    /// [LLVM 9 docs on Opaque Structure Types](https://releases.llvm.org/9.0.0/docs/LangRef.html#t-opaque).
+    /// Returns `Err` if neither a definition nor declaration for a named struct
+    /// type with the given name was found anywhere in the `Project`.
     ///
     /// If the named struct type is defined in multiple modules in the `Project`,
     /// this returns one of them arbitrarily. However, it will only return
-    /// `Some(None, <module>)` if _all_ definitions are opaque; that is, it will
+    /// `NamedStructDef::Opaque` if _all_ definitions are opaque; that is, it will
     /// attempt to return some non-opaque definition if one exists, before
     /// returning an opaque definition.
-    pub fn get_named_struct_type_by_name<'p>(
+    pub fn get_named_struct_def<'p>(
         &'p self,
         name: &str,
-    ) -> Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> {
-        let mut retval: Option<(&'p Option<Arc<RwLock<Type>>>, &'p Module)> = None;
+    ) -> crate::Result<(&'p NamedStructDef, &'p Module)> {
+        let mut retval: Option<(&'p NamedStructDef, &'p Module)> = None;
         for module in &self.modules {
-            if let Some(t) = module
-                .named_struct_types
-                .iter()
-                .find(|&(n, _)| n == name)
-                .map(|(_, t)| t)
-            {
-                match (retval, t) {
-                    (None, t) => retval = Some((t, module)), // first definition we've found: this is the new candidate to return
-                    (Some(_), None) => {}, // this is an opaque definition, and we previously found some other definition (opaque or not); do nothing
-                    (Some((None, _)), t @ Some(_)) => retval = Some((t, module)), // found an actual definition, replace the previous opaque definition
-                    (Some((Some(arc1), retmod)), Some(arc2)) => {
+            if let Some(def) = module.types.named_struct_def(name) {
+                match (retval, def) {
+                    (None, def) => retval = Some((def, module)), // first definition we've found: this is the new candidate to return
+                    (Some(_), NamedStructDef::Opaque) => {}, // this is an opaque definition, and we previously found some other definition (opaque or not); do nothing
+                    (Some((NamedStructDef::Opaque, _)), def @ NamedStructDef::Defined(_)) => {
+                        retval = Some((def, module)) // found an actual definition, replace the previous opaque definition
+                    },
+                    (Some((NamedStructDef::Defined(ty1), retmod)), NamedStructDef::Defined(ty2)) => {
                         // duplicate non-opaque definitions: ensure they completely agree
-                        let def1: &Type = &arc1.read().unwrap();
-                        let def2: &Type = &arc2.read().unwrap();
-                        if def1 != def2 {
+                        if ty1 != ty2 {
                             // if they don't agree, we merely warn rather than panicking.
                             // For instance, if the struct contains an anonymous union as one of its members,
                             // duplicate definitions of the struct will appear to conflict due to the
                             // anonymous union being numbered differently in the two modules, even if the
                             // union has the same contents in both modules.
-                            warn!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n  We will (arbitrarily) use the first one.", name, retmod.name, module.name, def1, def2);
+                            warn!("Multiple named struct types found with name {:?}: the first was from module {:?}, the other was from module {:?}.\n  First definition: {:?}\n  Second definition: {:?}\n  We will (arbitrarily) use the first one.", name, retmod.name, module.name, ty1, ty2);
                         // then we'll do nothing, leaving (arbitrarily) the first definition we found
                         } else {
                             // do nothing, leaving (arbitrarily) the first definition we found
@@ -329,30 +316,7 @@ impl Project {
                 };
             }
         }
-        retval
-    }
-
-    /// Given a `NamedStructType`, get the `StructType` corresponding to the
-    /// actual definition of that `NamedStructType`. This may be as simple as
-    /// upgrading the weak reference, but in the case of opaque struct types may
-    /// involve searching the `Project` for a definition of the relevant struct.
-    ///
-    /// Returns `None` if the struct is fully opaque, meaning it has no
-    /// definition in the `Project`.
-    pub fn get_inner_struct_type_from_named(&self, ty: &Type) -> Option<Arc<RwLock<Type>>> {
-        match ty {
-            Type::NamedStructType { name, ty } => match &ty.as_ref() {
-                Some(ty) => Some(ty.upgrade().expect("Failed to upgrade weak reference")),
-                None => {
-                    // This is an opaque struct definition. Try to find a non-opaque definition of the same struct.
-                    match self.get_named_struct_type_by_name(name).unwrap_or_else(|| panic!("Have a struct with name {:?}, but no struct of that name found in the Project", name)) {
-                        (Some(arc), _) => Some(arc.clone()),
-                        (None, _) => None,
-                    }
-                }
-            },
-            _ => panic!("Project::get_inner_struct_type_from_named: called with a Type which is not a NamedStructType: {:?}", ty),
-        }
+        retval.ok_or_else(|| Error::OtherError(format!("Trying to get definition of named struct {:?} which is neither defined nor even declared anywhere in the Project", name)))
     }
 
     /// Returns the modules and the pointer size

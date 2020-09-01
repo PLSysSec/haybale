@@ -8,7 +8,7 @@ use crate::project::Project;
 use crate::return_value::ReturnValue;
 use crate::state::State;
 use crate::symex::unary_on_vector;
-use llvm_ir::{Type, Typed};
+use llvm_ir::Type;
 use std::convert::TryInto;
 
 pub fn symex_memset<'p, B: Backend>(
@@ -20,12 +20,28 @@ pub fn symex_memset<'p, B: Backend>(
     let addr = &call.get_arguments()[0].0;
     let val = &call.get_arguments()[1].0;
     let num_bytes = &call.get_arguments()[2].0;
-    assert_eq!(addr.get_type(), Type::pointer_to(Type::i8()));
+    match state.type_of(addr).as_ref() {
+        Type::PointerType { pointee_type, .. } => match pointee_type.as_ref() {
+            Type::IntegerType { bits: 8 } => (),
+            _ => {
+                return Err(Error::OtherError(format!(
+                    "memset: Expected address to be a pointer to i8, got pointer to {:?}",
+                    pointee_type
+                )))
+            },
+        },
+        ty => {
+            return Err(Error::OtherError(format!(
+                "memset: Expected address to have pointer type, got {:?}",
+                ty
+            )))
+        },
+    }
 
     let addr = hook_utils::memset(state, addr, val, num_bytes)?;
 
     // if the call should return a pointer, it returns `addr`. If it's void-typed, that's fine too.
-    match call.get_type() {
+    match state.type_of(call).as_ref() {
         Type::VoidType => Ok(ReturnValue::ReturnVoid),
         Type::PointerType { .. } => Ok(ReturnValue::Return(addr)),
         ty => Err(Error::OtherError(format!(
@@ -43,13 +59,45 @@ pub fn symex_memcpy<'p, B: Backend>(
     let dest = &call.get_arguments()[0].0;
     let src = &call.get_arguments()[1].0;
     let num_bytes = &call.get_arguments()[2].0;
-    assert_eq!(dest.get_type(), Type::pointer_to(Type::i8()));
-    assert_eq!(src.get_type(), Type::pointer_to(Type::i8()));
+    match state.type_of(dest).as_ref() {
+        Type::PointerType { pointee_type, .. } => match pointee_type.as_ref() {
+            Type::IntegerType { bits: 8 } => (),
+            _ => {
+                return Err(Error::OtherError(format!(
+                    "memcpy: Expected dest to be a pointer to i8, got pointer to {:?}",
+                    pointee_type
+                )))
+            },
+        },
+        ty => {
+            return Err(Error::OtherError(format!(
+                "memcpy: Expected dest to have pointer type, got {:?}",
+                ty
+            )))
+        },
+    }
+    match state.type_of(src).as_ref() {
+        Type::PointerType { pointee_type, .. } => match pointee_type.as_ref() {
+            Type::IntegerType { bits: 8 } => (),
+            _ => {
+                return Err(Error::OtherError(format!(
+                    "memcpy: Expected dest to be a pointer to i8, got pointer to {:?}",
+                    pointee_type
+                )))
+            },
+        },
+        ty => {
+            return Err(Error::OtherError(format!(
+                "memcpy: Expected dest to have pointer type, got {:?}",
+                ty
+            )))
+        },
+    }
 
     let dest = hook_utils::memcpy(state, dest, src, num_bytes)?;
 
     // if the call should return a pointer, it returns `dest`. If it's void-typed, that's fine too.
-    match call.get_type() {
+    match state.type_of(call).as_ref() {
         Type::VoidType => Ok(ReturnValue::ReturnVoid),
         Type::PointerType { .. } => Ok(ReturnValue::Return(dest)),
         ty => Err(Error::OtherError(format!(
@@ -66,8 +114,8 @@ pub fn symex_bswap<'p, B: Backend>(
 ) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 1);
     let arg = &call.get_arguments()[0].0;
-    let argty = arg.get_type();
-    let retty = call.get_type();
+    let argty = state.type_of(arg);
+    let retty = state.type_of(call);
     if argty != retty {
         return Err(Error::OtherError(
             "Expected bswap argument to be the same type as its return type".to_owned(),
@@ -75,17 +123,17 @@ pub fn symex_bswap<'p, B: Backend>(
     }
 
     let arg = state.operand_to_bv(arg)?;
-    match argty {
+    match argty.as_ref() {
         Type::IntegerType { bits } => {
-            assert_eq!(arg.get_width(), bits);
-            Ok(ReturnValue::Return(bswap(&arg, bits)?))
+            assert_eq!(arg.get_width(), *bits);
+            Ok(ReturnValue::Return(bswap(&arg, *bits)?))
         },
         Type::VectorType {
             element_type,
             num_elements,
         } => {
             let element_size = state.size_opaque_aware(&element_type, proj).ok_or_else(|| Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
-            let final_bv = unary_on_vector(&arg, num_elements.try_into().unwrap(), |element| {
+            let final_bv = unary_on_vector(&arg, (*num_elements).try_into().unwrap(), |element| {
                 bswap(element, element_size)
             })?;
             Ok(ReturnValue::Return(final_bv))
@@ -159,7 +207,7 @@ pub fn symex_objectsize<'p, B: Backend>(
     // intended answers for this intrinsic. Instead, we just always return
     // 'unknown', as this is valid behavior according to the LLVM spec.
     let arg1 = state.operand_to_bv(&call.get_arguments()[1].0)?;
-    let width = state.size_opaque_aware(&call.get_type(), proj).ok_or_else(||
+    let width = state.size_opaque_aware(&state.type_of(call), proj).ok_or_else(||
         Error::OtherError("symex_objectsize: return value of this call involves a struct type with no definition in the Project".into())
     )?;
     let zero = state.zero(width);
@@ -174,7 +222,7 @@ pub fn symex_assume<'p, B: Backend>(
 ) -> Result<ReturnValue<B::BV>> {
     assert_eq!(call.get_arguments().len(), 1);
     let arg = &call.get_arguments()[0].0;
-    match arg.get_type() {
+    match state.type_of(arg).as_ref() {
         Type::IntegerType { bits: 1 } => {},
         ty => {
             return Err(Error::OtherError(format!(
@@ -201,8 +249,8 @@ pub fn symex_uadd_with_overflow<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_uadd_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_uadd_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -222,8 +270,8 @@ pub fn symex_sadd_with_overflow<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_sadd_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_sadd_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -243,8 +291,8 @@ pub fn symex_usub_with_overflow<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_usub_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_usub_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -264,8 +312,8 @@ pub fn symex_ssub_with_overflow<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_ssub_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_ssub_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -285,8 +333,8 @@ pub fn symex_umul_with_overflow<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_umul_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_umul_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -306,8 +354,8 @@ pub fn symex_smul_with_overflow<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_smul_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_smul_with_overflow: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -327,8 +375,8 @@ pub fn symex_uadd_sat<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_uadd_sat: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_uadd_sat: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -345,8 +393,8 @@ pub fn symex_sadd_sat<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_sadd_sat: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_sadd_sat: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -363,8 +411,8 @@ pub fn symex_usub_sat<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_usub_sat: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_usub_sat: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -381,8 +429,8 @@ pub fn symex_ssub_sat<'p, B: Backend>(
     assert_eq!(call.get_arguments().len(), 2);
     let arg0 = &call.get_arguments()[0].0;
     let arg1 = &call.get_arguments()[1].0;
-    if arg0.get_type() != arg1.get_type() {
-        return Err(Error::OtherError(format!("symex_ssub_sat: expected arguments to be of the same type, but got types {:?} and {:?}", arg0.get_type(), arg1.get_type())));
+    if state.type_of(arg0) != state.type_of(arg1) {
+        return Err(Error::OtherError(format!("symex_ssub_sat: expected arguments to be of the same type, but got types {:?} and {:?}", state.type_of(arg0), state.type_of(arg1))));
     }
 
     let arg0 = state.operand_to_bv(arg0)?;
@@ -618,7 +666,12 @@ mod tests {
     use crate::function_hooks::Argument;
     use crate::test_utils::*;
     use either::Either;
+    use llvm_ir::types::{Typed, Types};
     use llvm_ir::*;
+
+    fn constant_operand(c: Constant) -> Operand {
+        Operand::ConstantOperand(ConstantRef::new(c))
+    }
 
     /// just something to implement `IsCall`
     struct DummyCall {
@@ -634,7 +687,7 @@ mod tests {
     }
 
     impl Typed for DummyCall {
-        fn get_type(&self) -> Type {
+        fn get_type(&self, _types: &Types) -> TypeRef {
             unimplemented!()
         }
     }
@@ -665,9 +718,15 @@ mod tests {
         );
         let mut state = blank_state(&project, "test_func");
 
-        let four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 4 });
-        let sixty_four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 64 });
-        let one_hundred = Operand::ConstantOperand(Constant::Int {
+        let four = constant_operand(Constant::Int {
+            bits: 8,
+            value: 4,
+        });
+        let sixty_four = constant_operand(Constant::Int {
+            bits: 8,
+            value: 64
+        });
+        let one_hundred = constant_operand(Constant::Int {
             bits: 8,
             value: 100,
         });
@@ -707,9 +766,9 @@ mod tests {
         );
         let mut state = blank_state(&project, "test_func");
 
-        let four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 4 });
-        let eight = Operand::ConstantOperand(Constant::Int { bits: 8, value: 8 });
-        let sixty_four = Operand::ConstantOperand(Constant::Int { bits: 8, value: 64 });
+        let four = constant_operand(Constant::Int { bits: 8, value: 4 });
+        let eight = constant_operand(Constant::Int { bits: 8, value: 8 });
+        let sixty_four = constant_operand(Constant::Int { bits: 8, value: 64 });
 
         {
             let call = DummyCall::new_twoarg_call(four.clone(), eight.clone());
@@ -747,9 +806,9 @@ mod tests {
         let mut state = blank_state(&project, "test_func");
 
         // these are the examples from the LLVM 9 docs
-        let two = Operand::ConstantOperand(Constant::Int { bits: 4, value: 2 });
-        let one = Operand::ConstantOperand(Constant::Int { bits: 4, value: 1 });
-        let six = Operand::ConstantOperand(Constant::Int { bits: 4, value: 6 });
+        let two = constant_operand(Constant::Int { bits: 4, value: 2 });
+        let one = constant_operand(Constant::Int { bits: 4, value: 1 });
+        let six = constant_operand(Constant::Int { bits: 4, value: 6 });
 
         let call = DummyCall::new_twoarg_call(two.clone(), one.clone());
         match symex_usub_sat(&project, &mut state, &call).unwrap() {
@@ -777,15 +836,15 @@ mod tests {
         let mut state = blank_state(&project, "test_func");
 
         // these are the examples from the LLVM 9 docs
-        let one = Operand::ConstantOperand(Constant::Int { bits: 4, value: 1 });
-        let two = Operand::ConstantOperand(Constant::Int { bits: 4, value: 2 });
-        let five = Operand::ConstantOperand(Constant::Int { bits: 4, value: 5 });
-        let six = Operand::ConstantOperand(Constant::Int { bits: 4, value: 6 });
-        let minusfour = Operand::ConstantOperand(Constant::Int {
+        let one = constant_operand(Constant::Int { bits: 4, value: 1 });
+        let two = constant_operand(Constant::Int { bits: 4, value: 2 });
+        let five = constant_operand(Constant::Int { bits: 4, value: 5 });
+        let six = constant_operand(Constant::Int { bits: 4, value: 6 });
+        let minusfour = constant_operand(Constant::Int {
             bits: 4,
             value: (-4_i64) as u64,
         });
-        let minusfive = Operand::ConstantOperand(Constant::Int {
+        let minusfive = constant_operand(Constant::Int {
             bits: 4,
             value: (-5_i64) as u64,
         });
@@ -837,11 +896,11 @@ mod tests {
         output: u32,
     ) {
         let call = DummyCall::new_twoarg_call(
-            Operand::ConstantOperand(Constant::Int {
+            constant_operand(Constant::Int {
                 bits: width,
                 value: input.into(),
             }),
-            Operand::ConstantOperand(Constant::Int { bits: 1, value: 1 }),
+            constant_operand(Constant::Int { bits: 1, value: 1 }),
         );
         match symex_ctlz(proj, state, &call).unwrap() {
             ReturnValue::Return(bv) => {
@@ -868,11 +927,11 @@ mod tests {
         output: u32,
     ) {
         let call = DummyCall::new_twoarg_call(
-            Operand::ConstantOperand(Constant::Int {
+            constant_operand(Constant::Int {
                 bits: width,
                 value: input.into(),
             }),
-            Operand::ConstantOperand(Constant::Int { bits: 1, value: 1 }),
+            constant_operand(Constant::Int { bits: 1, value: 1 }),
         );
         match symex_cttz(proj, state, &call).unwrap() {
             ReturnValue::Return(bv) => {

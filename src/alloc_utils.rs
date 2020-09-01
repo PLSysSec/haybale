@@ -101,7 +101,10 @@ pub fn realloc<B: Backend>(
 /// (But don't try too hard - as of this writing, doesn't even try to evaluate constant expressions.)
 fn try_as_u64(op: &Operand) -> Option<u64> {
     match op {
-        Operand::ConstantOperand(Constant::Int { value, .. }) => Some(*value),
+        Operand::ConstantOperand(cref) => match cref.as_ref() {
+            Constant::Int { value, .. } => Some(*value),
+            _ => None,
+        },
         _ => None,
     }
 }

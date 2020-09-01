@@ -9,7 +9,8 @@ use crate::return_value::*;
 use crate::state::State;
 use either::Either;
 use llvm_ir::function::{CallingConvention, FunctionAttribute, ParameterAttribute};
-use llvm_ir::{instruction::InlineAssembly, Name, Operand, Type, Typed};
+use llvm_ir::types::Typed;
+use llvm_ir::{instruction::InlineAssembly, Name, Operand, Type};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -457,10 +458,10 @@ pub fn generic_stub_hook<B: Backend>(
     state: &mut State<B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
-    match call.get_type() {
+    match state.type_of(call).as_ref() {
         Type::VoidType => Ok(ReturnValue::ReturnVoid),
         ty => {
-            let width = state.size(&ty);
+            let width = state.size(ty);
             let bv = state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width)?;
             Ok(ReturnValue::Return(bv))
         },
