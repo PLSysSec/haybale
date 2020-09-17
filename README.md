@@ -39,7 +39,7 @@ to the LLVM version you want:
 
 ```toml
 [dependencies]
-haybale = { version = "0.6.0", features = ["llvm-10"] }
+haybale = { version = "0.6.1", features = ["llvm-10"] }
 ```
 
 Currently, the supported LLVM versions are `llvm-9` and `llvm-10`.
@@ -291,6 +291,15 @@ LLVM 7 and earlier are not supported.
 solver (via the Rust [`boolector`] crate).
 
 ## Changelog
+
+### Version 0.6.1 (Sep 17, 2020)
+
+- Both [`State`] and [`Project`] now have a method `size_in_bits()` which
+gets the size of any `Type` in bits, accounting for the `Project`'s pointer
+size and struct definitions. This is intended to replace `state.size()` and
+`state.size_opaque_aware()`, both of which are now deprecated and will be
+removed in `haybale` 0.7.0. Likewise, `state.fp_size()` was deprecated and
+renamed to `state.fp_size_in_bits()`.
 
 ### Version 0.6.0 (Sep 1, 2020)
 
@@ -565,47 +574,47 @@ Initial release!
 [`llvm-sys`]: https://crates.io/crates/llvm-sys
 [`boolector-sys`]: https://crates.io/crates/boolector-sys/
 [KLEE]: https://klee.github.io/
-[`Project`]: https://docs.rs/haybale/0.6.0/haybale/project/struct.Project.html
-[`Project` documentation]: https://docs.rs/haybale/0.6.0/haybale/project/struct.Project.html
-[`Project::get_func_by_name()`]: https://docs.rs/haybale/0.6.0/haybale/project/struct.Project.html#method.get_func_by_name
-[`get_possible_return_values_of_func()`]: https://docs.rs/haybale/0.6.0/haybale/fn.get_possible_return_values_of_func.html
-[`find_zero_of_func()`]: https://docs.rs/haybale/0.6.0/haybale/fn.find_zero_of_func.html
-[`ExecutionManager`]: https://docs.rs/haybale/0.6.0/haybale/struct.ExecutionManager.html
-[`ExecutionManager` documentation]: https://docs.rs/haybale/0.6.0/haybale/struct.ExecutionManager.html
-[`symex_function()`]: https://docs.rs/haybale/0.6.0/haybale/fn.symex_function.html
-[`Config`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html
+[`Project`]: https://docs.rs/haybale/0.6.1/haybale/project/struct.Project.html
+[`Project` documentation]: https://docs.rs/haybale/0.6.1/haybale/project/struct.Project.html
+[`Project::get_func_by_name()`]: https://docs.rs/haybale/0.6.1/haybale/project/struct.Project.html#method.get_func_by_name
+[`get_possible_return_values_of_func()`]: https://docs.rs/haybale/0.6.1/haybale/fn.get_possible_return_values_of_func.html
+[`find_zero_of_func()`]: https://docs.rs/haybale/0.6.1/haybale/fn.find_zero_of_func.html
+[`ExecutionManager`]: https://docs.rs/haybale/0.6.1/haybale/struct.ExecutionManager.html
+[`ExecutionManager` documentation]: https://docs.rs/haybale/0.6.1/haybale/struct.ExecutionManager.html
+[`symex_function()`]: https://docs.rs/haybale/0.6.1/haybale/fn.symex_function.html
+[`Config`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html
 [`BV`]: https://docs.rs/boolector/0.3.0/boolector/struct.BV.html
-[`ReturnValue`]: https://docs.rs/haybale/0.6.0/haybale/enum.ReturnValue.html
-[`Error`]: https://docs.rs/haybale/0.6.0/haybale/enum.Error.html
-[`State`]: https://docs.rs/haybale/0.6.0/haybale/struct.State.html
-[`Location`]: https://docs.rs/haybale/0.6.0/haybale/struct.Location.html
-[`Project::get_inner_struct_type_from_named()`]: https://docs.rs/haybale/0.6.0/haybale/struct.Project.html#method.get_inner_struct_type_from_named
-[`State::add_mem_watchpoint()`]: https://docs.rs/haybale/0.6.0/haybale/struct.State.html#method.add_mem_watchpoint
-[`FunctionHooks::add_cpp_demangled()`]: https://docs.rs/haybale/0.6.0/haybale/function_hooks/struct.FunctionHooks.html#method.add_cpp_demangled
-[`FunctionHooks::add_rust_demangled()`]: https://docs.rs/haybale/0.6.0/haybale/function_hooks/struct.FunctionHooks.html#method.add_rust_demangled
-[`FunctionHooks::add_inline_asm_hook()`]: https://docs.rs/haybale/0.6.0/haybale/function_hooks/struct.FunctionHooks.html#method.add_inline_asm_hook
-[`FunctionHooks::add_default_hook()`]: https://docs.rs/haybale/0.6.0/haybale/function_hooks/struct.FunctionHooks.html#method.add_default_hook
-[`function_hooks`]: https://docs.rs/haybale/0.6.0/haybale/function_hooks/index.html
-[`generic_stub_hook`]: https://docs.rs/haybale/0.6.0/haybale/function_hooks/fn.generic_stub_hook.html
-[`abort_hook`]: https://docs.rs/haybale/0.6.0/haybale/function_hooks/fn.abort_hook.html
-[`Config.initial_mem_watchpoints`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.initial_mem_watchpoints
-[`Config.demangling`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.demangling
-[`Config.print_source_info`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.print_source_info
-[`Config.print_module_name`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.print_module_name
-[`Config.trust_llvm_assumes`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.trust_llvm_assumes
-[`Config.solver_query_timeout`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.solver_query_timeout
-[`Config.squash_unsats`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.squash_unsats
-[`Config.max_callstack_depth`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.max_callstack_depth
-[`Config.max_memcpy_length`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.max_memcpy_length
-[`Config.callbacks`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.callbacks
-[`Config.null_pointer_checking`]: https://docs.rs/haybale/0.6.0/haybale/config/struct.Config.html#structfield.null_pointer_checking
-[`backend::BV`]: https://docs.rs/haybale/0.6.0/haybale/backend/trait.BV.html
-[`backend::Memory`]: https://docs.rs/haybale/0.6.0/haybale/backend/trait.Memory.html
-[`new_uninitialized()`]: https://docs.rs/haybale/0.6.0/haybale/backend/trait.Memory.html#tymethod.new_uninitialized
-[`new_zero_initialized()`]: https://docs.rs/haybale/0.6.0/haybale/backend/trait.Memory.html#tymethod.new_zero_initialized
-[`State.full_error_message_with_context()`]: https://docs.rs/haybale/0.6.0/haybale/struct.State.html#method.full_error_message_with_context
-[`memcpy_bv`]: https://docs.rs/haybale/0.6.0/haybale/hook_utils/fn.memcpy_bv.html
-[`memset_bv`]: https://docs.rs/haybale/0.6.0/haybale/hook_utils/fn.memset_bv.html
-[`layout::size_opaque_aware`]: https://docs.rs/haybale/0.6.0/haybale/struct.State.html#method.size_opaque_aware
-[`pointer_size_bits()`]: https://docs.rs/haybale/0.6.0/haybale/struct.Project.html#method.pointer_size_bits
-[`solver_utils::PossibleSolutions`]: https://docs.rs/haybale/0.6.0/haybale/solver_utils/enum.PossibleSolutions.html
+[`ReturnValue`]: https://docs.rs/haybale/0.6.1/haybale/enum.ReturnValue.html
+[`Error`]: https://docs.rs/haybale/0.6.1/haybale/enum.Error.html
+[`State`]: https://docs.rs/haybale/0.6.1/haybale/struct.State.html
+[`Location`]: https://docs.rs/haybale/0.6.1/haybale/struct.Location.html
+[`Project::get_inner_struct_type_from_named()`]: https://docs.rs/haybale/0.6.1/haybale/struct.Project.html#method.get_inner_struct_type_from_named
+[`State::add_mem_watchpoint()`]: https://docs.rs/haybale/0.6.1/haybale/struct.State.html#method.add_mem_watchpoint
+[`FunctionHooks::add_cpp_demangled()`]: https://docs.rs/haybale/0.6.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_cpp_demangled
+[`FunctionHooks::add_rust_demangled()`]: https://docs.rs/haybale/0.6.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_rust_demangled
+[`FunctionHooks::add_inline_asm_hook()`]: https://docs.rs/haybale/0.6.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_inline_asm_hook
+[`FunctionHooks::add_default_hook()`]: https://docs.rs/haybale/0.6.1/haybale/function_hooks/struct.FunctionHooks.html#method.add_default_hook
+[`function_hooks`]: https://docs.rs/haybale/0.6.1/haybale/function_hooks/index.html
+[`generic_stub_hook`]: https://docs.rs/haybale/0.6.1/haybale/function_hooks/fn.generic_stub_hook.html
+[`abort_hook`]: https://docs.rs/haybale/0.6.1/haybale/function_hooks/fn.abort_hook.html
+[`Config.initial_mem_watchpoints`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.initial_mem_watchpoints
+[`Config.demangling`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.demangling
+[`Config.print_source_info`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.print_source_info
+[`Config.print_module_name`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.print_module_name
+[`Config.trust_llvm_assumes`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.trust_llvm_assumes
+[`Config.solver_query_timeout`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.solver_query_timeout
+[`Config.squash_unsats`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.squash_unsats
+[`Config.max_callstack_depth`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.max_callstack_depth
+[`Config.max_memcpy_length`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.max_memcpy_length
+[`Config.callbacks`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.callbacks
+[`Config.null_pointer_checking`]: https://docs.rs/haybale/0.6.1/haybale/config/struct.Config.html#structfield.null_pointer_checking
+[`backend::BV`]: https://docs.rs/haybale/0.6.1/haybale/backend/trait.BV.html
+[`backend::Memory`]: https://docs.rs/haybale/0.6.1/haybale/backend/trait.Memory.html
+[`new_uninitialized()`]: https://docs.rs/haybale/0.6.1/haybale/backend/trait.Memory.html#tymethod.new_uninitialized
+[`new_zero_initialized()`]: https://docs.rs/haybale/0.6.1/haybale/backend/trait.Memory.html#tymethod.new_zero_initialized
+[`State.full_error_message_with_context()`]: https://docs.rs/haybale/0.6.1/haybale/struct.State.html#method.full_error_message_with_context
+[`memcpy_bv`]: https://docs.rs/haybale/0.6.1/haybale/hook_utils/fn.memcpy_bv.html
+[`memset_bv`]: https://docs.rs/haybale/0.6.1/haybale/hook_utils/fn.memset_bv.html
+[`layout::size_opaque_aware`]: https://docs.rs/haybale/0.6.1/haybale/struct.State.html#method.size_opaque_aware
+[`pointer_size_bits()`]: https://docs.rs/haybale/0.6.1/haybale/struct.Project.html#method.pointer_size_bits
+[`solver_utils::PossibleSolutions`]: https://docs.rs/haybale/0.6.1/haybale/solver_utils/enum.PossibleSolutions.html
