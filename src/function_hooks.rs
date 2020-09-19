@@ -373,6 +373,8 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
         fhooks.add("llvm.eh.typeid.for", &hooks::exceptions::llvm_eh_typeid_for);
         fhooks.add("exit", &abort_hook);
         fhooks.add_rust_demangled("std::panicking::begin_panic", &abort_hook);
+        fhooks.add_rust_demangled("std::panicking::begin_panic_fmt", &abort_hook);
+        fhooks.add_rust_demangled("std::panicking::begin_panic_handler", &abort_hook);
         fhooks.add_rust_demangled("core::panicking::panic", &abort_hook);
         fhooks.add_rust_demangled("core::panicking::panic_bounds_check", &abort_hook);
         fhooks.add_rust_demangled("core::result::unwrap_failed", &abort_hook);
