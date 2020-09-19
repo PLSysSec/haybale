@@ -913,6 +913,7 @@ where
                         c
                     ))
                 })?;
+                assert_ne!(size_bits, 0, "const_to_bv: can't convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead");
                 Ok(self.zero(size_bits))
             },
             Constant::Struct {
@@ -1108,6 +1109,7 @@ where
                         c
                     ))
                 })?;
+                assert_ne!(to_size_bits, 0, "const_to_bv: can't convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead");
                 self.const_to_bv(&t.operand)
                     .map(|bv| bv.slice(to_size_bits - 1, 0))
             },
@@ -1118,6 +1120,7 @@ where
                         c
                     ))
                 })?;
+                assert_ne!(to_size_bits, 0, "const_to_bv: can't convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead");
                 self.const_to_bv(&z.operand)
                     .map(|bv| bv.zero_extend_to_bits(to_size_bits))
             },
@@ -1128,6 +1131,7 @@ where
                         c
                     ))
                 })?;
+                assert_ne!(to_size_bits, 0, "const_to_bv: can't convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead");
                 self.const_to_bv(&s.operand)
                     .map(|bv| bv.sign_extend_to_bits(to_size_bits))
             },
@@ -1582,6 +1586,8 @@ where
     ///
     /// Accounts for the `Project`'s pointer size and named struct definitions.
     ///
+    /// Note that some types have size 0 bits, and this may return `0`.
+    ///
     /// Panics if `ty` is a struct which has no definition in the entire `Project`,
     /// or if it is a struct/array/vector where one of the elements is a struct with no
     /// definition in the entire `Project`.
@@ -1596,6 +1602,8 @@ where
     ///
     /// Accounts for the `Project`'s pointer size and named struct definitions.
     ///
+    /// Note that some types have size 0 bits, and this may return `Some(0)`.
+    ///
     /// Returns `None` for structs which have no definition in the entire `Project`,
     /// or for structs/arrays/vectors where one of the elements is a struct with no
     /// definition in the entire `Project`.
@@ -1607,6 +1615,8 @@ where
     /// Get the size of the `Type`, in bits.
     ///
     /// Accounts for the `Project`'s pointer size and named struct definitions.
+    ///
+    /// Note that some types have size 0 bits, and this may return `Some(0)`.
     ///
     /// Returns `None` for structs which have no definition in the entire `Project`,
     /// or for structs/arrays/vectors where one of the elements is a struct with no

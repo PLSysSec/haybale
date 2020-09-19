@@ -52,6 +52,7 @@ pub fn symex_function<'p, B: Backend>(
             let param_size = state
                 .size_in_bits(&param.ty)
                 .expect("Parameter type is a struct opaque in the entire Project");
+            assert_ne!(param_size, 0, "Parameter {} shouldn't have size 0 bits", &param.name);
             state
                 .new_bv_with_name(param.name.clone(), param_size)
                 .unwrap()
@@ -732,6 +733,9 @@ where
             .ok_or_else(|| {
                 Error::MalformedInstruction("Load result type is an opaque struct type".into())
             })?;
+        if dest_size == 0 {
+            return Err(Error::MalformedInstruction("Shouldn't be loading a value of size 0 bits".into()));
+        }
         self.state
             .record_bv_result(load, self.state.read(&bvaddr, dest_size)?)
     }
@@ -1237,6 +1241,7 @@ where
                                     "Call return type is an opaque struct type".into(),
                                 )
                             })?;
+                            assert_ne!(width, 0, "Function return type has size 0 bits but isn't void type"); // void type was handled above
                             let bv = self.state.new_bv_with_name(
                                 Name::from(format!("{}_retval", called_funcname)),
                                 width,
@@ -1881,6 +1886,7 @@ where
                                     "Invoke return type is an opaque struct type".into(),
                                 )
                             })?;
+                            assert_ne!(width, 0, "Invoke return type has size 0 bits but isn't void type"); // void type was handled above
                             let bv = self.state.new_bv_with_name(
                                 Name::from(format!("{}_retval", called_funcname)),
                                 width,

@@ -464,6 +464,7 @@ pub fn generic_stub_hook<B: Backend>(
             let width = state.size_in_bits(ty).ok_or_else(|| {
                 Error::OtherError("Call return type is an opaque named struct".into())
             })?;
+            assert_ne!(width, 0, "Call return type has size 0 bits but isn't void type"); // void type was handled above
             let bv = state.new_bv_with_name(Name::from("generic_stub_hook_retval"), width)?;
             Ok(ReturnValue::Return(bv))
         },

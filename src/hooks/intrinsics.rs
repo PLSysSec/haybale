@@ -210,6 +210,9 @@ pub fn symex_objectsize<'p, B: Backend>(
     let width = state.size_in_bits(&state.type_of(call)).ok_or_else(||
         Error::OtherError("symex_objectsize: return value of this call involves a struct type with no definition in the Project".into())
     )?;
+    if width == 0 {
+        return Err(Error::OtherError("symex_objectsize: didn't expect return type to have size 0 bits".into()));
+    }
     let zero = state.zero(width);
     let minusone = state.ones(width);
     Ok(ReturnValue::Return(arg1.cond_bv(&zero, &minusone)))

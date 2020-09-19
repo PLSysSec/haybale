@@ -9,6 +9,7 @@ RUST32BIT=--target i686-unknown-linux-gnu
 all: basic.bc basic.ll \
 			issue_4.bc issue_4.ll \
 			issue_9.bc issue_9.ll \
+			issue_10.bc issue_10.ll \
 			memory.bc memory.ll \
 			loop.bc loop.ll \
 			struct.bc struct.ll \

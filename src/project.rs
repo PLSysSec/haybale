@@ -324,6 +324,8 @@ impl Project {
     ///
     /// Accounts for the `Project`'s pointer size and named struct definitions.
     ///
+    /// Note that some types have size 0 bits, and this may return `Some(0)`.
+    ///
     /// Returns `None` for structs which have no definition in the entire `Project`,
     /// or for structs/arrays/vectors where one of the elements is a struct with no
     /// definition in the entire `Project`.
@@ -350,6 +352,7 @@ impl Project {
                 (NamedStructDef::Opaque, _) => None,
                 (NamedStructDef::Defined(ty), _) => self.size_in_bits(&ty),
             },
+            Type::VoidType => Some(0),
             ty => panic!("Not sure how to get the size of {:?}", ty),
         }
     }

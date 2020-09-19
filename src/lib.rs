@@ -128,9 +128,18 @@ pub fn find_zero_of_func<'p>(
         }
     }
 
-    let returnwidth = project
-        .size_in_bits(&func.return_type)
-        .expect("Function return type shouldn't be an opaque struct type");
+    let returnwidth = match func.return_type.as_ref() {
+        Type::VoidType => {
+            return Err("find_zero_of_func: function has void type".into());
+        },
+        ty => {
+            let width = project
+                .size_in_bits(&ty)
+                .expect("Function return type shouldn't be an opaque struct type");
+            assert_ne!(width, 0, "Function return type has width 0 bits but isn't void type"); // void type was handled above
+            width
+        },
+    };
     let zero = em.state().zero(returnwidth);
     let mut found = false;
     while let Some(bvretval) = em.next() {
@@ -228,6 +237,7 @@ pub fn get_possible_return_values_of_func<'p>(
             let param_size_bits = project
                 .size_in_bits(&param.ty)
                 .expect("Parameter type shouldn't be opaque struct type");
+            assert_ne!(param_size_bits, 0, "Parameter {} shouldn't have size 0 bits", &param.name);
             let val = em.state().bv_from_u64(val, param_size_bits);
             em.mut_state()
                 .overwrite_latest_version_of_bv(&param.name, val);
@@ -255,6 +265,7 @@ pub fn get_possible_return_values_of_func<'p>(
                 }
             },
             Ok(ReturnValue::Return(bvretval)) => {
+                assert_eq!(bvretval.get_width(), return_width);
                 let state = em.mut_state();
                 // rule out all the returned values we already have - we're interested in new values
                 for candidate in candidate_values.iter() {
@@ -301,7 +312,7 @@ pub fn get_possible_return_values_of_func<'p>(
                         for candidate in candidate_values.iter() {
                             if let ReturnValue::Throw(candidate) = candidate {
                                 thrown_value
-                                    ._ne(&state.bv_from_u64(*candidate, return_width))
+                                    ._ne(&state.bv_from_u64(*candidate, thrown_size))
                                     .assert();
                             }
                         }
