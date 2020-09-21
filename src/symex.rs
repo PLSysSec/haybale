@@ -1648,7 +1648,7 @@ where
             log::Level::Info
         };
         log::log!(log_level, "Processing hook for {}", hooked_funcname);
-        match hook.call_hook(&self.project, &mut self.state, call)? {
+        match hook.call_hook(&mut self.state, call)? {
             ReturnValue::ReturnVoid => {
                 if self.state.type_of(call).as_ref() == &Type::VoidType {
                     Ok(ReturnValue::ReturnVoid)

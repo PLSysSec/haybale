@@ -10,7 +10,6 @@ fn init_logging() {
 
 // Hook call.c's "simple_callee" to just return 5 instead of executing its actual body
 fn hook_for_simple_callee<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -47,7 +46,6 @@ fn hook_a_function() {
 
 // Hook functionptr.c's "get_function_ptr" to return a pointer to our hook "target_hook" instead of "foo" or "bar" like it normally does
 fn hook_for_get_function_ptr<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -60,7 +58,6 @@ fn hook_for_get_function_ptr<'p, B: Backend>(
 }
 
 fn target_hook<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {

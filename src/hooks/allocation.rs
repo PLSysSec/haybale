@@ -4,13 +4,11 @@ use crate::alloc_utils;
 use crate::backend::Backend;
 use crate::error::*;
 use crate::function_hooks::IsCall;
-use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
 use llvm_ir::*;
 
 pub fn malloc_hook<'p, B: Backend + 'p>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -40,7 +38,6 @@ pub fn malloc_hook<'p, B: Backend + 'p>(
 }
 
 pub fn calloc_hook<'p, B: Backend + 'p>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -80,7 +77,6 @@ pub fn calloc_hook<'p, B: Backend + 'p>(
 }
 
 pub fn free_hook<'p, B: Backend + 'p>(
-    _proj: &'p Project,
     _state: &mut State<'p, B>,
     _call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -90,7 +86,6 @@ pub fn free_hook<'p, B: Backend + 'p>(
 }
 
 pub fn realloc_hook<'p, B: Backend + 'p>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {

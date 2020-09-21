@@ -4,7 +4,6 @@ use crate::backend::Backend;
 use crate::demangling;
 use crate::error::*;
 use crate::hooks;
-use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
 use either::Either;
@@ -158,7 +157,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// the `hooked_function`.
     pub fn add<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
     where
-        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
+        H: Fn(&mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
         self.hooks
             .insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
@@ -169,7 +168,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// to hook, so you can use a function name like "namespace::function".
     pub fn add_cpp_demangled<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
     where
-        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
+        H: Fn(&mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
         self.cpp_demangled_hooks
             .insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
@@ -180,7 +179,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// to hook, so you can use a function name like "module::function".
     pub fn add_rust_demangled<H>(&mut self, hooked_function: impl Into<String>, hook: &'p H)
     where
-        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
+        H: Fn(&mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
         self.rust_demangled_hooks
             .insert(hooked_function.into(), FunctionHook::new(self.cur_id, hook));
@@ -205,7 +204,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// For now, this is the best we can do.
     pub fn add_inline_asm_hook<H>(&mut self, hook: &'p H) -> bool
     where
-        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
+        H: Fn(&mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
         match &mut self.inline_asm_hook {
             h @ Some(_) => {
@@ -230,7 +229,7 @@ impl<'p, B: Backend + 'p> FunctionHooks<'p, B> {
     /// default hook was present.
     pub fn add_default_hook<H>(&mut self, hook: &'p H) -> bool
     where
-        H: Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
+        H: Fn(&mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     {
         match &mut self.default_hook {
             h @ Some(_) => {
@@ -394,9 +393,7 @@ impl<'p, B: Backend + 'p> Default for FunctionHooks<'p, B> {
 pub(crate) struct FunctionHook<'p, B: Backend> {
     /// The actual hook to be executed
     #[allow(clippy::type_complexity)]
-    hook: Rc<
-        dyn Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>> + 'p,
-    >,
+    hook: Rc<dyn Fn(&mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>> + 'p>,
 
     /// A unique id, used for nothing except equality comparisons between `FunctionHook`s.
     /// This `id` should be globally unique across all created `FunctionHook`s.
@@ -431,7 +428,7 @@ impl<'p, B: Backend> FunctionHook<'p, B> {
     /// This `id` should be globally unique across all created `FunctionHook`s.
     pub fn new(
         id: usize,
-        f: &'p dyn Fn(&'p Project, &mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
+        f: &'p dyn Fn(&mut State<'p, B>, &'p dyn IsCall) -> Result<ReturnValue<B::BV>>,
     ) -> Self {
         Self {
             hook: Rc::new(f),
@@ -441,11 +438,10 @@ impl<'p, B: Backend> FunctionHook<'p, B> {
 
     pub fn call_hook(
         &self,
-        proj: &'p Project,
         state: &mut State<'p, B>,
         call: &'p dyn IsCall,
     ) -> Result<ReturnValue<B::BV>> {
-        (self.hook)(proj, state, call)
+        (self.hook)(state, call)
     }
 }
 
@@ -456,7 +452,6 @@ impl<'p, B: Backend> FunctionHook<'p, B> {
 /// May be used for functions taking any number and type of arguments, and with
 /// any return type.
 pub fn generic_stub_hook<B: Backend>(
-    _proj: &Project,
     state: &mut State<B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -477,7 +472,6 @@ pub fn generic_stub_hook<B: Backend>(
 /// It is suitable for hooking functions such as C's `exit()` which abort the
 /// program and never return.
 pub fn abort_hook<B: Backend>(
-    _proj: &Project,
     _state: &mut State<B>,
     _call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {

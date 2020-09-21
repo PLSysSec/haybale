@@ -34,11 +34,12 @@ pub struct State<'p, B: Backend> {
     pub solver: B::SolverRef,
     /// The configuration being used
     pub config: Config<'p, B>,
+    /// Referece to the `Project` being used
+    pub proj: &'p Project,
     /// Indicates the instruction which is currently being executed
     pub cur_loc: Location<'p>,
 
     // Private members
-    proj: &'p Project,
     varmap: VarMap<B::BV>,
     mem: RefCell<B::Memory>,
     alloc: Alloc,

@@ -4,13 +4,11 @@ use crate::alloc_utils;
 use crate::backend::{Backend, BV};
 use crate::error::*;
 use crate::function_hooks::IsCall;
-use crate::project::Project;
 use crate::return_value::*;
 use crate::state::State;
 use llvm_ir::*;
 
 pub fn cxa_allocate_exception<B: Backend>(
-    _proj: &Project,
     state: &mut State<B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -42,7 +40,6 @@ pub fn cxa_allocate_exception<B: Backend>(
 }
 
 pub fn cxa_throw<B: Backend>(
-    _proj: &Project,
     state: &mut State<B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -75,7 +72,6 @@ pub fn cxa_throw<B: Backend>(
 }
 
 pub fn cxa_begin_catch<B: Backend>(
-    _proj: &Project,
     state: &mut State<B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -90,7 +86,6 @@ pub fn cxa_begin_catch<B: Backend>(
 }
 
 pub fn cxa_end_catch<B: Backend>(
-    _proj: &Project,
     _state: &mut State<B>,
     _call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -100,7 +95,6 @@ pub fn cxa_end_catch<B: Backend>(
 }
 
 pub fn llvm_eh_typeid_for<B: Backend>(
-    _proj: &Project,
     state: &mut State<B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {

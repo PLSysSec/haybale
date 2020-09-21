@@ -4,7 +4,6 @@ use crate::backend::{Backend, BV};
 use crate::error::*;
 use crate::function_hooks::IsCall;
 use crate::hook_utils;
-use crate::project::Project;
 use crate::return_value::ReturnValue;
 use crate::state::State;
 use crate::symex::unary_on_vector;
@@ -12,7 +11,6 @@ use llvm_ir::Type;
 use std::convert::TryInto;
 
 pub fn symex_memset<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -52,7 +50,6 @@ pub fn symex_memset<'p, B: Backend>(
 }
 
 pub fn symex_memcpy<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -108,7 +105,6 @@ pub fn symex_memcpy<'p, B: Backend>(
 }
 
 pub fn symex_bswap<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -199,7 +195,6 @@ fn bswap<V: BV>(bv: &V, bits: u32) -> Result<V> {
 }
 
 pub fn symex_objectsize<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -219,7 +214,6 @@ pub fn symex_objectsize<'p, B: Backend>(
 }
 
 pub fn symex_assume<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &'p dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -245,7 +239,6 @@ pub fn symex_assume<'p, B: Backend>(
 }
 
 pub fn symex_uadd_with_overflow<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -266,7 +259,6 @@ pub fn symex_uadd_with_overflow<'p, B: Backend>(
 }
 
 pub fn symex_sadd_with_overflow<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -287,7 +279,6 @@ pub fn symex_sadd_with_overflow<'p, B: Backend>(
 }
 
 pub fn symex_usub_with_overflow<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -308,7 +299,6 @@ pub fn symex_usub_with_overflow<'p, B: Backend>(
 }
 
 pub fn symex_ssub_with_overflow<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -329,7 +319,6 @@ pub fn symex_ssub_with_overflow<'p, B: Backend>(
 }
 
 pub fn symex_umul_with_overflow<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -350,7 +339,6 @@ pub fn symex_umul_with_overflow<'p, B: Backend>(
 }
 
 pub fn symex_smul_with_overflow<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -371,7 +359,6 @@ pub fn symex_smul_with_overflow<'p, B: Backend>(
 }
 
 pub fn symex_uadd_sat<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -389,7 +376,6 @@ pub fn symex_uadd_sat<'p, B: Backend>(
 }
 
 pub fn symex_sadd_sat<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -407,7 +393,6 @@ pub fn symex_sadd_sat<'p, B: Backend>(
 }
 
 pub fn symex_usub_sat<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -425,7 +410,6 @@ pub fn symex_usub_sat<'p, B: Backend>(
 }
 
 pub fn symex_ssub_sat<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -443,7 +427,6 @@ pub fn symex_ssub_sat<'p, B: Backend>(
 }
 
 pub fn symex_ctlz<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -553,7 +536,6 @@ pub fn symex_ctlz<'p, B: Backend>(
 }
 
 pub fn symex_cttz<'p, B: Backend>(
-    _proj: &'p Project,
     state: &mut State<'p, B>,
     call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
@@ -736,7 +718,7 @@ mod tests {
 
         {
             let call = DummyCall::new_twoarg_call(four.clone(), one_hundred.clone());
-            match symex_sadd_with_overflow(&project, &mut state, &call).unwrap() {
+            match symex_sadd_with_overflow(&mut state, &call).unwrap() {
                 ReturnValue::Return(bv) => {
                     let result = bv.slice(7, 0).as_u64().unwrap();
                     let overflow = bv.slice(8, 8).as_u64().unwrap();
@@ -749,7 +731,7 @@ mod tests {
 
         {
             let call = DummyCall::new_twoarg_call(sixty_four.clone(), one_hundred.clone());
-            match symex_sadd_with_overflow(&project, &mut state, &call).unwrap() {
+            match symex_sadd_with_overflow(&mut state, &call).unwrap() {
                 ReturnValue::Return(bv) => {
                     let result = bv.slice(7, 0).as_u64().unwrap();
                     let overflow = bv.slice(8, 8).as_u64().unwrap();
@@ -775,7 +757,7 @@ mod tests {
 
         {
             let call = DummyCall::new_twoarg_call(four.clone(), eight.clone());
-            match symex_umul_with_overflow(&project, &mut state, &call).unwrap() {
+            match symex_umul_with_overflow(&mut state, &call).unwrap() {
                 ReturnValue::Return(bv) => {
                     let result = bv.slice(7, 0).as_u64().unwrap();
                     let overflow = bv.slice(8, 8).as_u64().unwrap();
@@ -788,7 +770,7 @@ mod tests {
 
         {
             let call = DummyCall::new_twoarg_call(eight.clone(), sixty_four.clone());
-            match symex_umul_with_overflow(&project, &mut state, &call).unwrap() {
+            match symex_umul_with_overflow(&mut state, &call).unwrap() {
                 ReturnValue::Return(bv) => {
                     let result = bv.slice(7, 0).as_u64().unwrap();
                     let overflow = bv.slice(8, 8).as_u64().unwrap();
@@ -814,7 +796,7 @@ mod tests {
         let six = constant_operand(Constant::Int { bits: 4, value: 6 });
 
         let call = DummyCall::new_twoarg_call(two.clone(), one.clone());
-        match symex_usub_sat(&project, &mut state, &call).unwrap() {
+        match symex_usub_sat(&mut state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 assert_eq!(bv.as_u64().unwrap(), 1);
             },
@@ -822,7 +804,7 @@ mod tests {
         }
 
         let call = DummyCall::new_twoarg_call(two.clone(), six.clone());
-        match symex_usub_sat(&project, &mut state, &call).unwrap() {
+        match symex_usub_sat(&mut state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 assert_eq!(bv.as_u64().unwrap(), 0);
             },
@@ -853,7 +835,7 @@ mod tests {
         });
 
         let call = DummyCall::new_twoarg_call(one.clone(), two.clone());
-        match symex_sadd_sat(&project, &mut state, &call).unwrap() {
+        match symex_sadd_sat(&mut state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 assert_eq!(bv.as_u64().unwrap(), 3);
             },
@@ -861,7 +843,7 @@ mod tests {
         }
 
         let call = DummyCall::new_twoarg_call(five.clone(), six.clone());
-        match symex_sadd_sat(&project, &mut state, &call).unwrap() {
+        match symex_sadd_sat(&mut state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 assert_eq!(bv.as_u64().unwrap(), 7);
             },
@@ -869,7 +851,7 @@ mod tests {
         }
 
         let call = DummyCall::new_twoarg_call(minusfour.clone(), two.clone());
-        match symex_sadd_sat(&project, &mut state, &call).unwrap() {
+        match symex_sadd_sat(&mut state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 assert_eq!(
                     bv.as_u64().unwrap(),
@@ -880,7 +862,7 @@ mod tests {
         }
 
         let call = DummyCall::new_twoarg_call(minusfour.clone(), minusfive.clone());
-        match symex_sadd_sat(&project, &mut state, &call).unwrap() {
+        match symex_sadd_sat(&mut state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 assert_eq!(
                     bv.as_u64().unwrap(),
@@ -891,13 +873,7 @@ mod tests {
         }
     }
 
-    fn test_ctlz<'p>(
-        proj: &'p Project,
-        state: &mut State<'p, DefaultBackend>,
-        width: u32,
-        input: u32,
-        output: u32,
-    ) {
+    fn test_ctlz<'p>(state: &mut State<'p, DefaultBackend>, width: u32, input: u32, output: u32) {
         let call = DummyCall::new_twoarg_call(
             constant_operand(Constant::Int {
                 bits: width,
@@ -905,7 +881,7 @@ mod tests {
             }),
             constant_operand(Constant::Int { bits: 1, value: 1 }),
         );
-        match symex_ctlz(proj, state, &call).unwrap() {
+        match symex_ctlz(state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 let outval = bv.as_u64().unwrap();
                 assert_eq!(
@@ -922,13 +898,7 @@ mod tests {
         }
     }
 
-    fn test_cttz<'p>(
-        proj: &'p Project,
-        state: &mut State<'p, DefaultBackend>,
-        width: u32,
-        input: u32,
-        output: u32,
-    ) {
+    fn test_cttz<'p>(state: &mut State<'p, DefaultBackend>, width: u32, input: u32, output: u32) {
         let call = DummyCall::new_twoarg_call(
             constant_operand(Constant::Int {
                 bits: width,
@@ -936,7 +906,7 @@ mod tests {
             }),
             constant_operand(Constant::Int { bits: 1, value: 1 }),
         );
-        match symex_cttz(proj, state, &call).unwrap() {
+        match symex_cttz(state, &call).unwrap() {
             ReturnValue::Return(bv) => {
                 let outval = bv.as_u64().unwrap();
                 assert_eq!(
@@ -962,67 +932,67 @@ mod tests {
         let mut state = blank_state(&proj, "test_func");
 
         // 32-bit ctlz(0) = 32
-        test_ctlz(&proj, &mut state, 32, 0, 32);
+        test_ctlz(&mut state, 32, 0, 32);
         // 16-bit ctlz(0) = 16
-        test_ctlz(&proj, &mut state, 16, 0, 16);
+        test_ctlz(&mut state, 16, 0, 16);
         // 8-bit ctlz(0) = 8
-        test_ctlz(&proj, &mut state, 8, 0, 8);
+        test_ctlz(&mut state, 8, 0, 8);
 
         // 32-bit ctlz(1) = 31
-        test_ctlz(&proj, &mut state, 32, 1, 31);
+        test_ctlz(&mut state, 32, 1, 31);
         // 16-bit ctlz(1) = 15
-        test_ctlz(&proj, &mut state, 16, 1, 15);
+        test_ctlz(&mut state, 16, 1, 15);
         // 8-bit ctlz(1) = 7
-        test_ctlz(&proj, &mut state, 8, 1, 7);
+        test_ctlz(&mut state, 8, 1, 7);
 
         // 32-bit ctlz(0x0000_000F) = 28
-        test_ctlz(&proj, &mut state, 32, 0x0000_000F, 28);
+        test_ctlz(&mut state, 32, 0x0000_000F, 28);
         // 16-bit ctlz(0x000F) = 12
-        test_ctlz(&proj, &mut state, 16, 0x000F, 12);
+        test_ctlz(&mut state, 16, 0x000F, 12);
         // 8-bit ctlz(0x0F) = 4
-        test_ctlz(&proj, &mut state, 8, 0x0F, 4);
+        test_ctlz(&mut state, 8, 0x0F, 4);
 
         // 32-bit ctlz(0x0000_0008) = 28
-        test_ctlz(&proj, &mut state, 32, 0x0000_0008, 28);
+        test_ctlz(&mut state, 32, 0x0000_0008, 28);
         // 16-bit ctlz(0x0008) = 12
-        test_ctlz(&proj, &mut state, 16, 0x0008, 12);
+        test_ctlz(&mut state, 16, 0x0008, 12);
         // 8-bit ctlz(0x08) = 4
-        test_ctlz(&proj, &mut state, 8, 0x08, 4);
+        test_ctlz(&mut state, 8, 0x08, 4);
 
         // 32-bit ctlz(0x0001_0000) = 15
-        test_ctlz(&proj, &mut state, 32, 0x0001_0000, 15);
+        test_ctlz(&mut state, 32, 0x0001_0000, 15);
         // 16-bit ctlz(0x0100) = 7
-        test_ctlz(&proj, &mut state, 16, 0x0100, 7);
+        test_ctlz(&mut state, 16, 0x0100, 7);
         // 8-bit ctlz(0x10) = 3
-        test_ctlz(&proj, &mut state, 8, 0x10, 3);
+        test_ctlz(&mut state, 8, 0x10, 3);
 
         // 32-bit ctlz(0x0010_1234) = 11
-        test_ctlz(&proj, &mut state, 32, 0x0010_1234, 11);
+        test_ctlz(&mut state, 32, 0x0010_1234, 11);
         // 16-bit ctlz(0x037B) = 6
-        test_ctlz(&proj, &mut state, 16, 0x037B, 6);
+        test_ctlz(&mut state, 16, 0x037B, 6);
         // 8-bit ctlz(0x37) = 2
-        test_ctlz(&proj, &mut state, 8, 0x37, 2);
+        test_ctlz(&mut state, 8, 0x37, 2);
 
         // 32-bit ctlz(0x5555_AAAA) = 1
-        test_ctlz(&proj, &mut state, 32, 0x5555_AAAA, 1);
+        test_ctlz(&mut state, 32, 0x5555_AAAA, 1);
         // 16-bit ctlz(0x55AA) = 1
-        test_ctlz(&proj, &mut state, 16, 0x55AA, 1);
+        test_ctlz(&mut state, 16, 0x55AA, 1);
         // 8-bit ctlz(0x5A) = 1
-        test_ctlz(&proj, &mut state, 8, 0x5A, 1);
+        test_ctlz(&mut state, 8, 0x5A, 1);
 
         // 32-bit ctlz(0xFFFF_FFFF) = 0
-        test_ctlz(&proj, &mut state, 32, 0xFFFF_FFFF, 0);
+        test_ctlz(&mut state, 32, 0xFFFF_FFFF, 0);
         // 16-bit ctlz(0xFFFF) = 0
-        test_ctlz(&proj, &mut state, 16, 0xFFFF, 0);
+        test_ctlz(&mut state, 16, 0xFFFF, 0);
         // 8-bit ctlz(0xFF) = 0
-        test_ctlz(&proj, &mut state, 8, 0xFF, 0);
+        test_ctlz(&mut state, 8, 0xFF, 0);
 
         // 32-bit ctlz(0x8000_000F) = 0
-        test_ctlz(&proj, &mut state, 32, 0x8000_000F, 0);
+        test_ctlz(&mut state, 32, 0x8000_000F, 0);
         // 16-bit ctlz(0x800F) = 0
-        test_ctlz(&proj, &mut state, 16, 0x800F, 0);
+        test_ctlz(&mut state, 16, 0x800F, 0);
         // 8-bit ctlz(0x8F) = 0
-        test_ctlz(&proj, &mut state, 8, 0x8F, 0);
+        test_ctlz(&mut state, 8, 0x8F, 0);
     }
 
     #[test]
@@ -1034,73 +1004,73 @@ mod tests {
         let mut state = blank_state(&proj, "test_func");
 
         // 32-bit cttz(0) = 32
-        test_cttz(&proj, &mut state, 32, 0, 32);
+        test_cttz(&mut state, 32, 0, 32);
         // 16-bit cttz(0) = 16
-        test_cttz(&proj, &mut state, 16, 0, 16);
+        test_cttz(&mut state, 16, 0, 16);
         // 8-bit cttz(0) = 8
-        test_cttz(&proj, &mut state, 8, 0, 8);
+        test_cttz(&mut state, 8, 0, 8);
 
         // 32-bit cttz(1) = 0
-        test_cttz(&proj, &mut state, 32, 1, 0);
+        test_cttz(&mut state, 32, 1, 0);
         // 16-bit cttz(1) = 0
-        test_cttz(&proj, &mut state, 16, 1, 0);
+        test_cttz(&mut state, 16, 1, 0);
         // 8-bit cttz(1) = 0
-        test_cttz(&proj, &mut state, 8, 1, 0);
+        test_cttz(&mut state, 8, 1, 0);
 
         // 32-bit cttz(0x8000_0000) = 31
-        test_cttz(&proj, &mut state, 32, 0x8000_0000, 31);
+        test_cttz(&mut state, 32, 0x8000_0000, 31);
         // 16-bit cttz(0x8000) = 15
-        test_cttz(&proj, &mut state, 16, 0x8000, 15);
+        test_cttz(&mut state, 16, 0x8000, 15);
         // 8-bit cttz(0x80) = 7
-        test_cttz(&proj, &mut state, 8, 0x80, 7);
+        test_cttz(&mut state, 8, 0x80, 7);
 
         // 32-bit cttz(0xF000_0000) = 28
-        test_cttz(&proj, &mut state, 32, 0xF000_0000, 28);
+        test_cttz(&mut state, 32, 0xF000_0000, 28);
         // 16-bit cttz(0xF000) = 12
-        test_cttz(&proj, &mut state, 16, 0xF000, 12);
+        test_cttz(&mut state, 16, 0xF000, 12);
         // 8-bit cttz(0xF0) = 4
-        test_cttz(&proj, &mut state, 8, 0xF0, 4);
+        test_cttz(&mut state, 8, 0xF0, 4);
 
         // 32-bit cttz(0x1000_0000) = 28
-        test_cttz(&proj, &mut state, 32, 0x1000_0000, 28);
+        test_cttz(&mut state, 32, 0x1000_0000, 28);
         // 16-bit cttz(0x1000) = 12
-        test_cttz(&proj, &mut state, 16, 0x1000, 12);
+        test_cttz(&mut state, 16, 0x1000, 12);
         // 8-bit cttz(0x10) = 4
-        test_cttz(&proj, &mut state, 8, 0x10, 4);
+        test_cttz(&mut state, 8, 0x10, 4);
 
         // 32-bit cttz(0x0000_F000) = 12
-        test_cttz(&proj, &mut state, 32, 0x0000_F000, 12);
+        test_cttz(&mut state, 32, 0x0000_F000, 12);
         // 16-bit cttz(0x00F0) = 4
-        test_cttz(&proj, &mut state, 16, 0x00F0, 4);
+        test_cttz(&mut state, 16, 0x00F0, 4);
         // 8-bit cttz(0x0C) = 2
-        test_cttz(&proj, &mut state, 8, 0x0C, 2);
+        test_cttz(&mut state, 8, 0x0C, 2);
 
         // 32-bit cttz(0x4321_FA00) = 9
-        test_cttz(&proj, &mut state, 32, 0x4321_FA00, 9);
+        test_cttz(&mut state, 32, 0x4321_FA00, 9);
         // 16-bit cttz(0x43A0) = 5
-        test_cttz(&proj, &mut state, 16, 0x43A0, 5);
+        test_cttz(&mut state, 16, 0x43A0, 5);
         // 8-bit cttz(0x48) = 3
-        test_cttz(&proj, &mut state, 8, 0x48, 3);
+        test_cttz(&mut state, 8, 0x48, 3);
 
         // 32-bit cttz(0x5555_AAAA) = 1
-        test_cttz(&proj, &mut state, 32, 0x5555_AAAA, 1);
+        test_cttz(&mut state, 32, 0x5555_AAAA, 1);
         // 16-bit cttz(0x55AA) = 1
-        test_cttz(&proj, &mut state, 16, 0x55AA, 1);
+        test_cttz(&mut state, 16, 0x55AA, 1);
         // 8-bit cttz(0x5A) = 1
-        test_cttz(&proj, &mut state, 8, 0x5A, 1);
+        test_cttz(&mut state, 8, 0x5A, 1);
 
         // 32-bit cttz(0xFFFF_FFFF) = 0
-        test_cttz(&proj, &mut state, 32, 0xFFFF_FFFF, 0);
+        test_cttz(&mut state, 32, 0xFFFF_FFFF, 0);
         // 16-bit cttz(0xFFFF) = 0
-        test_cttz(&proj, &mut state, 16, 0xFFFF, 0);
+        test_cttz(&mut state, 16, 0xFFFF, 0);
         // 8-bit cttz(0xFF) = 0
-        test_cttz(&proj, &mut state, 8, 0xFF, 0);
+        test_cttz(&mut state, 8, 0xFF, 0);
 
         // 32-bit cttz(0xF000_0001) = 0
-        test_cttz(&proj, &mut state, 32, 0xF000_0001, 0);
+        test_cttz(&mut state, 32, 0xF000_0001, 0);
         // 16-bit cttz(0xF001) = 0
-        test_cttz(&proj, &mut state, 16, 0xF001, 0);
+        test_cttz(&mut state, 16, 0xF001, 0);
         // 8-bit cttz(0xF1) = 0
-        test_cttz(&proj, &mut state, 8, 0xF1, 0);
+        test_cttz(&mut state, 8, 0xF1, 0);
     }
 }
