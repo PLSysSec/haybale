@@ -25,9 +25,9 @@ fn read_global() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::empty(),
             &proj,
             Config::default(),
+            Some(vec![]),
             None,
             5
         ),
@@ -43,9 +43,9 @@ fn modify_global() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::once(Some(3)),
             &proj,
             Config::default(),
+            Some(vec!(ParameterVal::ExactValue(3))),
             None,
             5
         ),
@@ -61,9 +61,9 @@ fn modify_global_with_call() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::once(Some(3)),
             &proj,
             Config::default(),
+            Some(vec!(ParameterVal::ExactValue(3))),
             None,
             5
         ),
@@ -79,9 +79,9 @@ fn dont_confuse_globals() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::once(Some(3)),
             &proj,
             Config::default(),
+            Some(vec!(ParameterVal::ExactValue(3))),
             None,
             5
         ),
@@ -99,9 +99,9 @@ fn cross_module_read_global() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::empty(),
             &proj,
             Config::default(),
+            Some(vec![]),
             None,
             5
         ),
@@ -117,9 +117,9 @@ fn cross_module_read_global_via_call() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::empty(),
             &proj,
             Config::default(),
+            Some(vec![]),
             None,
             5
         ),
@@ -135,9 +135,9 @@ fn cross_module_modify_global() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::once(Some(3)),
             &proj,
             Config::default(),
+            Some(vec![ParameterVal::ExactValue(3)]),
             None,
             5
         ),
@@ -153,9 +153,9 @@ fn cross_module_modify_global_via_call() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::once(Some(3)),
             &proj,
             Config::default(),
+            Some(vec![ParameterVal::ExactValue(3)]),
             None,
             5
         ),
@@ -176,9 +176,9 @@ fn globals_initialization() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::empty(),
             &proj,
             Config::default(),
+            Some(vec![]),
             None,
             5
         ),

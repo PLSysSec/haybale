@@ -1,4 +1,5 @@
 use either::Either;
+use itertools::Itertools;
 use llvm_ir::instruction::{BinaryOp, InlineAssembly};
 use llvm_ir::types::NamedStructDef;
 use llvm_ir::*;
@@ -11,24 +12,32 @@ use crate::backend::*;
 use crate::config::*;
 use crate::error::*;
 use crate::function_hooks::*;
+use crate::parameter_val::ParameterVal;
 use crate::project::Project;
 use crate::return_value::*;
 use crate::solver_utils::PossibleSolutions;
 pub use crate::state::{BBInstrIndex, Location, LocationDescription, PathEntry, State};
 
 /// Begin symbolic execution of the function named `funcname`, obtaining an
-/// `ExecutionManager`. The function's parameters will start completely
-/// unconstrained.
+/// `ExecutionManager`.
 ///
 /// `project`: The `Project` (set of LLVM modules) in which symbolic execution
 /// should take place. In the absence of function hooks (see
 /// [`Config`](struct.Config.html)), we will try to enter calls to any functions
 /// defined in the `Project`.
+///
+/// `params`: a `ParameterVal` for each parameter to the function, indicating
+/// what the initial value of that parameter should be, or if the parameter
+/// should be unconstrained (so that the analysis considers all possible values
+/// for the parameter).
+/// `None` here is equivalent to supplying a `Vec` with all
+/// `ParameterVal::Unconstrained` entries.
 pub fn symex_function<'p, B: Backend>(
     funcname: &str,
     project: &'p Project,
     config: Config<'p, B>,
-) -> ExecutionManager<'p, B> {
+    params: Option<Vec<ParameterVal>>,
+) -> Result<ExecutionManager<'p, B>> {
     debug!("Symexing function {}", funcname);
     let (func, module) = project
         .get_func_by_name(funcname)
@@ -45,20 +54,52 @@ pub fn symex_function<'p, B: Backend>(
     };
     let squash_unsats = config.squash_unsats;
     let mut state = State::new(project, start_loc, config);
+    let params = params.unwrap_or_else(|| std::iter::repeat(ParameterVal::Unconstrained).take(func.parameters.len()).collect());
     let bvparams: Vec<_> = func
         .parameters
         .iter()
-        .map(|param| {
+        .zip_eq(params.into_iter())
+        .map(|(param, paramval)| {
             let param_size = state
                 .size_in_bits(&param.ty)
                 .expect("Parameter type is a struct opaque in the entire Project");
             assert_ne!(param_size, 0, "Parameter {} shouldn't have size 0 bits", &param.name);
-            state
+            let bvparam = state
                 .new_bv_with_name(param.name.clone(), param_size)
-                .unwrap()
+                .unwrap();
+            match paramval {
+                ParameterVal::Unconstrained => {}, // nothing to do
+                ParameterVal::ExactValue(val) => {
+                    bvparam._eq(&state.bv_from_u64(val, param_size)).assert()?;
+                },
+                ParameterVal::Range(low, high) => {
+                    debug_assert!(low <= high);
+                    bvparam.ugte(&state.bv_from_u64(low, param_size)).assert()?;
+                    bvparam.ulte(&state.bv_from_u64(high, param_size)).assert()?;
+                },
+                ParameterVal::NonNullPointer => {
+                    match param.ty.as_ref() {
+                        Type::PointerType { .. } => {
+                            bvparam._ne(&state.zero(param_size)).assert()?;
+                        },
+                        ty => panic!("ParameterVal::NonNullPointer used for non-pointer parameter {} (which has type {:?})", &param.name, ty),
+                    }
+                }
+                ParameterVal::PointerToAllocated(allocbytes) => {
+                    match param.ty.as_ref() {
+                        Type::PointerType { .. } => {
+                            let allocbits = allocbytes * 8;
+                            let allocated = state.allocate(allocbits);
+                            bvparam._eq(&allocated).assert()?;
+                        },
+                        ty => panic!("ParameterVal::PointerToAllocated used for non-pointer parameter {} (which has type {:?})", &param.name, ty),
+                    }
+                }
+            }
+            Ok(bvparam)
         })
-        .collect();
-    ExecutionManager::new(state, project, bvparams, squash_unsats)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ExecutionManager::new(state, project, bvparams, squash_unsats))
 }
 
 /// An `ExecutionManager` allows you to symbolically explore executions of a
@@ -80,6 +121,7 @@ pub fn symex_function<'p, B: Backend>(
 pub struct ExecutionManager<'p, B: Backend> {
     state: State<'p, B>,
     project: &'p Project,
+    func: &'p Function,
     bvparams: Vec<B::BV>,
     /// Whether the `ExecutionManager` is "fresh". A "fresh" `ExecutionManager`
     /// has not yet produced its first path, i.e., `next()` has not been called
@@ -96,13 +138,22 @@ impl<'p, B: Backend> ExecutionManager<'p, B> {
         bvparams: Vec<B::BV>,
         squash_unsats: bool,
     ) -> Self {
+        let func = state.cur_loc.func;
         Self {
             state,
             project,
+            func,
             bvparams,
             fresh: true,
             squash_unsats,
         }
+    }
+
+    /// Reference to the `Function` which the `ExecutionManager` is managing
+    /// symbolic execution of. (This is the top-level function, i.e., the
+    /// function we started the analysis in.)
+    pub fn func(&self) -> &'p Function {
+        self.func
     }
 
     /// Provides access to the `State` resulting from the end of the most recently
@@ -2568,9 +2619,14 @@ mod tests {
 
     impl<'p, B: Backend> PathIterator<'p, B> {
         /// For argument descriptions, see notes on `symex_function`
-        pub fn new(funcname: &str, project: &'p Project, config: Config<'p, B>) -> Self {
+        pub fn new(
+            funcname: &str,
+            project: &'p Project,
+            config: Config<'p, B>,
+            params: Option<Vec<ParameterVal>>
+        ) -> Self {
             Self {
-                em: symex_function(funcname, project, config),
+                em: symex_function(funcname, project, config, params).unwrap(),
             }
         }
     }
@@ -2625,7 +2681,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2647,7 +2703,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2670,7 +2726,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2695,7 +2751,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2750,7 +2806,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2776,7 +2832,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2803,7 +2859,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2831,7 +2887,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2867,7 +2923,7 @@ mod tests {
             loop_bound: 30,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2890,7 +2946,7 @@ mod tests {
             loop_bound: 30,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2921,7 +2977,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2948,7 +3004,7 @@ mod tests {
             max_callstack_depth: Some(0),
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -2974,7 +3030,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3000,7 +3056,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3029,7 +3085,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3058,7 +3114,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3086,7 +3142,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3115,7 +3171,7 @@ mod tests {
             max_callstack_depth: Some(1),
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3142,7 +3198,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3171,7 +3227,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3199,7 +3255,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3271,7 +3327,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3329,7 +3385,7 @@ mod tests {
             loop_bound: 5,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3475,7 +3531,7 @@ mod tests {
             loop_bound: 4,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3620,7 +3676,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3726,7 +3782,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();
@@ -3800,7 +3856,7 @@ mod tests {
             loop_bound: 3,
             ..Config::default()
         };
-        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config)
+        let mut paths: Vec<Path> = PathIterator::<DefaultBackend>::new(funcname, &proj, config, None)
             .collect::<Result<Vec<Path>>>()
             .unwrap_or_else(|r| panic!("{}", r));
         paths.sort();

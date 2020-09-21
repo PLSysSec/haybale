@@ -18,9 +18,9 @@ fn doesnt_throw() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );
@@ -47,9 +47,9 @@ fn throw_uncaught() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );
@@ -65,9 +65,9 @@ fn throw_multiple_values() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         5,
     );
@@ -92,9 +92,9 @@ fn throw_uncaught_wrongtype() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );
@@ -121,9 +121,9 @@ fn throw_uncaught_caller() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );
@@ -139,9 +139,9 @@ fn throw_and_catch_wildcard() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );
@@ -157,9 +157,9 @@ fn throw_and_catch_val() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );
@@ -186,9 +186,9 @@ fn throw_and_catch_in_caller() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );
@@ -217,9 +217,9 @@ fn throw_and_rethrow_in_caller() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_project(),
         Config::default(),
+        None,
         Some(32),
         3,
     );

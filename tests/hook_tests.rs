@@ -34,9 +34,9 @@ fn hook_a_function() {
     assert_eq!(
         get_possible_return_values_of_func(
             "simple_caller",
-            std::iter::once(None),
             &proj,
             config,
+            None,
             None,
             3
         ),
@@ -87,9 +87,9 @@ fn hook_a_function_ptr() {
     assert_eq!(
         get_possible_return_values_of_func(
             "fptr_driver",
-            std::iter::empty(),
             &proj,
             config,
+            None,
             None,
             3
         ),

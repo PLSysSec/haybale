@@ -24,9 +24,9 @@ fn may_exit() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_abort_project(),
         Config::default(),
+        Some(vec![ParameterVal::Unconstrained]),
         None,
         3,
     );
@@ -42,9 +42,9 @@ fn may_panic() {
     init_logging();
     let rvals = get_possible_return_values_of_func(
         funcname,
-        std::iter::once(None),
         &get_panic_project(),
         Config::default(),
+        Some(vec![ParameterVal::Unconstrained]),
         None,
         3,
     );

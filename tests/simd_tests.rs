@@ -15,9 +15,15 @@ fn simd_add() {
 
     // This function effectively computes 4x + 4y + 6.
     // So with x=3 and y=5, we should have 12 + 20 + 6 = 38.
-    let args = std::iter::once(3).chain(std::iter::once(5)).map(Some);
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        get_possible_return_values_of_func(
+            funcname,
+            &proj,
+            Config::default(),
+            Some(vec![ParameterVal::ExactValue(3), ParameterVal::ExactValue(5)]),
+            None,
+            5,
+        ),
         PossibleSolutions::exactly_one(ReturnValue::Return(38)),
     );
 }
@@ -30,7 +36,6 @@ fn simd_ops() {
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
 
     // We compute the function's output for x=4, y=7
-    let args = std::iter::once(4).chain(std::iter::once(7)).map(Some);
     let a_1: u32 = 4;
     let a_2: u32 = 4;
     let a_3: u32 = 4;
@@ -61,7 +66,14 @@ fn simd_ops() {
     let g_4: u32 = f_4 << 5;
     let retval: u32 = g_1 + g_2 + g_3 + g_4;
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        get_possible_return_values_of_func(
+            funcname,
+            &proj,
+            Config::default(),
+            Some(vec![ParameterVal::ExactValue(4), ParameterVal::ExactValue(7)]),
+            None,
+            5,
+        ),
         PossibleSolutions::exactly_one(ReturnValue::Return(retval as u64)),
     );
 }
@@ -74,7 +86,6 @@ fn simd_select() {
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
 
     // We compute the function's output for x=4, y=3
-    let args = std::iter::once(4).chain(std::iter::once(3)).map(Some);
     let a_1: u32 = 4;
     let a_2: u32 = 4;
     let a_3: u32 = 4;
@@ -89,7 +100,14 @@ fn simd_select() {
     let c_4: u32 = if a_4 < b_4 { a_4 } else { b_4 };
     let retval = c_1 + c_2 + c_3 + c_4;
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        get_possible_return_values_of_func(
+            funcname,
+            &proj,
+            Config::default(),
+            Some(vec![ParameterVal::ExactValue(4), ParameterVal::ExactValue(3)]),
+            None,
+            5,
+        ),
         PossibleSolutions::exactly_one(ReturnValue::Return(retval as u64)),
     );
 }
@@ -107,11 +125,11 @@ fn simd_add_autovectorized() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::empty(),
             &proj,
             Config::default(),
+            Some(vec![]),
             None,
-            5
+            5,
         ),
         PossibleSolutions::exactly_one(ReturnValue::Return(z_sum as u64)),
     );
@@ -125,7 +143,6 @@ fn simd_typeconversions() {
         .unwrap_or_else(|e| panic!("Failed to parse simd_cl.bc module: {}", e));
 
     // We compute the function's output for x=3, y=5
-    let args = std::iter::once(3).chain(std::iter::once(5)).map(Some);
     let a_1: u32 = 3;
     let a_2: u32 = 3;
     let a_3: u32 = 3;
@@ -152,7 +169,14 @@ fn simd_typeconversions() {
     let f_4: u32 = e_4 as u32;
     let retval = f_1 + f_2 + f_3 + f_4;
     assert_eq!(
-        get_possible_return_values_of_func(funcname, args, &proj, Config::default(), None, 5),
+        get_possible_return_values_of_func(
+            funcname,
+            &proj,
+            Config::default(),
+            Some(vec![ParameterVal::ExactValue(3), ParameterVal::ExactValue(5)]),
+            None,
+            5,
+        ),
         PossibleSolutions::exactly_one(ReturnValue::Return(retval as u64)),
     )
 }

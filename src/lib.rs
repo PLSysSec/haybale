@@ -23,6 +23,9 @@ pub use config::Config;
 mod error;
 pub use error::*;
 
+mod parameter_val;
+pub use parameter_val::ParameterVal;
+
 mod return_value;
 pub use return_value::ReturnValue;
 
@@ -97,14 +100,22 @@ impl SolutionValue {
 }
 
 /// Given a function, find values of its inputs such that it returns zero.
-/// Assumes that the function takes (some number of) integer and/or pointer
-/// arguments, and returns an integer.
-/// Pointer arguments will be assumed to be never NULL.
+///
+/// `funcname`: Name of the function to analyze.
+/// For `Project`s containing C++ or Rust code, you can pass either the mangled
+/// or demangled function name (fully qualified with namespaces/modules).
 ///
 /// `project`: The `Project` (set of LLVM modules) in which symbolic execution
 /// should take place. In the absence of function hooks (see
 /// [`Config`](struct.Config.html)), we will try to enter calls to any functions
 /// defined in the `Project`.
+///
+/// `params`: a `ParameterVal` for each parameter to the function, indicating
+/// what the initial value of that parameter should be, or if the parameter
+/// should be unconstrained (so that the analysis considers all possible values
+/// for the parameter).
+/// `None` here is equivalent to supplying a `Vec` with all
+/// `ParameterVal::Unconstrained` entries.
 ///
 /// Returns `Ok(None)` if there are no values of the inputs such that the
 /// function returns zero.
@@ -115,20 +126,11 @@ pub fn find_zero_of_func<'p>(
     funcname: &str,
     project: &'p Project,
     config: Config<'p, DefaultBackend>,
+    params: Option<Vec<ParameterVal>>,
 ) -> std::result::Result<Option<Vec<SolutionValue>>, String> {
-    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config);
+    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config, params).unwrap();
 
-    // constrain pointer arguments to be not-null
-    let (func, _) = project
-        .get_func_by_name(funcname)
-        .unwrap_or_else(|| panic!("Failed to find function named {:?}", funcname));
-    for (param, bv) in func.parameters.iter().zip(em.param_bvs()) {
-        if let Type::PointerType { .. } = em.state().type_of(param).as_ref() {
-            bv._ne(&em.state().zero(bv.get_width())).assert();
-        }
-    }
-
-    let returnwidth = match func.return_type.as_ref() {
+    let returnwidth = match em.func().return_type.as_ref() {
         Type::VoidType => {
             return Err("find_zero_of_func: function has void type".into());
         },
@@ -161,6 +163,7 @@ pub fn find_zero_of_func<'p>(
     }
 
     let param_bvs: Vec<_> = em.param_bvs().clone();
+    let func = em.func();
     let state = em.mut_state();
     if found {
         // in this case state.sat() must have passed
@@ -194,14 +197,21 @@ pub fn find_zero_of_func<'p>(
 /// argument values.
 /// Considers all possible paths through the function given these arguments.
 ///
-/// `args`: For each function parameter, either a concrete value for that
-/// parameter, or `None` to have the analysis consider all possible values of the
-/// parameter.
+/// `funcname`: Name of the function to analyze.
+/// For `Project`s containing C++ or Rust code, you can pass either the mangled
+/// or demangled function name (fully qualified with namespaces/modules).
 ///
 /// `project`: The `Project` (set of LLVM modules) in which symbolic execution
 /// should take place. In the absence of function hooks (see
 /// [`Config`](struct.Config.html)), we will try to enter calls to any functions
 /// defined in the `Project`.
+///
+/// `params`: a `ParameterVal` for each parameter to the function, indicating
+/// what the initial value of that parameter should be, or if the parameter
+/// should be unconstrained (so that the analysis considers all possible values
+/// for the parameter).
+/// `None` here is equivalent to supplying a `Vec` with all
+/// `ParameterVal::Unconstrained` entries.
 ///
 /// `thrown_size`:
 ///   If this is `None`, then no attempt will be made to distinguish
@@ -221,31 +231,16 @@ pub fn find_zero_of_func<'p>(
 /// the crate.
 pub fn get_possible_return_values_of_func<'p>(
     funcname: &str,
-    args: impl IntoIterator<Item = Option<u64>>,
     project: &'p Project,
     config: Config<'p, DefaultBackend>,
+    params: Option<Vec<ParameterVal>>,
     thrown_size: Option<u32>,
     n: usize,
 ) -> PossibleSolutions<ReturnValue<u64>> {
-    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config);
-
-    let (func, _) = project
-        .get_func_by_name(funcname)
-        .expect("Failed to find function");
-    for (param, arg) in func.parameters.iter().zip(args.into_iter()) {
-        if let Some(val) = arg {
-            let param_size_bits = project
-                .size_in_bits(&param.ty)
-                .expect("Parameter type shouldn't be opaque struct type");
-            assert_ne!(param_size_bits, 0, "Parameter {} shouldn't have size 0 bits", &param.name);
-            let val = em.state().bv_from_u64(val, param_size_bits);
-            em.mut_state()
-                .overwrite_latest_version_of_bv(&param.name, val);
-        }
-    }
+    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config, params).unwrap();
 
     let return_width = project
-        .size_in_bits(&func.return_type)
+        .size_in_bits(&em.func().return_type)
         .expect("Function return type shouldn't be opaque struct type");
     let mut candidate_values = HashSet::<ReturnValue<u64>>::new();
     let mut have_throw = false; // is there at least one `ReturnValue::Throw` in the `candidate_values`

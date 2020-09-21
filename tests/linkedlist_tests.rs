@@ -16,7 +16,7 @@ fn simple_linked_list() {
     let funcname = "simple_linked_list";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -28,7 +28,7 @@ fn indirectly_recursive_type() {
     let funcname = "indirectly_recursive_type";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);

@@ -111,7 +111,7 @@ int foo(int a, int b) {
 We can use `find_zero_of_func()` to find inputs such that `foo` will return `0`:
 
 ```rust
-match find_zero_of_func("foo", &project, Config::default()) {
+match find_zero_of_func("foo", &project, Config::default(), None) {
     Ok(None) => println!("foo can never return 0"),
     Ok(Some(inputs)) => println!("Inputs for which foo returns 0: {:?}", inputs),
     Err(e) => panic!("{}", e),  // use the pretty Display impl for errors
@@ -137,7 +137,7 @@ will also analyze any functions called by `foo`, as necessary and depending
 on the [`Config`] settings.
 
 ```rust
-let mut em = symex_function("foo", &project, Config::<DefaultBackend>::default());
+let mut em = symex_function("foo", &project, Config::<DefaultBackend>::default(), None);
 ```
 
 Here it was necessary to not only specify the default `haybale`

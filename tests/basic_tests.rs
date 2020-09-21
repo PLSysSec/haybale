@@ -43,7 +43,8 @@ fn no_args_nozero() {
     init_logging();
     let proj = get_project();
     let args =
-        find_zero_of_func(funcname, &proj, Config::default()).unwrap_or_else(|r| panic!("{}", r));
+        find_zero_of_func(funcname, &proj, Config::default(), None)
+            .unwrap_or_else(|r| panic!("{}", r));
     assert_eq!(args, None);
 }
 
@@ -52,7 +53,7 @@ fn no_args_zero() {
     let funcname = "no_args_zero";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 0);
@@ -63,7 +64,7 @@ fn one_arg() {
     let funcname = "one_arg";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -76,7 +77,7 @@ fn two_args() {
     let funcname = "two_args";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -89,7 +90,7 @@ fn three_args() {
     let funcname = "three_args";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 3);
@@ -102,7 +103,7 @@ fn four_args() {
     let funcname = "four_args";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 4);
@@ -115,7 +116,7 @@ fn five_args() {
     let funcname = "five_args";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 5);
@@ -128,7 +129,7 @@ fn binops() {
     let funcname = "binops";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -146,7 +147,7 @@ fn conditional_true() {
     let funcname = "conditional_true";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -166,7 +167,7 @@ fn conditional_false() {
     let funcname = "conditional_false";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -187,7 +188,8 @@ fn conditional_nozero() {
     init_logging();
     let proj = get_project();
     let args =
-        find_zero_of_func(funcname, &proj, Config::default()).unwrap_or_else(|r| panic!("{}", r));
+        find_zero_of_func(funcname, &proj, Config::default(), None)
+            .unwrap_or_else(|r| panic!("{}", r));
     assert_eq!(args, None);
 }
 
@@ -196,7 +198,7 @@ fn conditional_with_and() {
     let funcname = "conditional_with_and";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -212,7 +214,7 @@ fn switch() {
     let funcname = "has_switch";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -228,7 +230,7 @@ fn int8t() {
     let funcname = "int8t";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -241,7 +243,7 @@ fn int16t() {
     let funcname = "int16t";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -254,7 +256,7 @@ fn int32t() {
     let funcname = "int32t";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -267,7 +269,7 @@ fn int64t() {
     let funcname = "int64t";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
@@ -280,7 +282,7 @@ fn mixed_bitwidths() {
     let funcname = "mixed_bitwidths";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 4);
@@ -299,9 +301,9 @@ fn issue_4() {
     let proj = get_issue_4_project();
     let ret = get_possible_return_values_of_func(
         funcname,
-        vec![Some(1)],
         &proj,
         Config::default(),
+        Some(vec![ParameterVal::ExactValue(1)]),
         None,
         10,
     );
@@ -318,9 +320,9 @@ fn issue_4_32bit() {
     let proj = get_issue_4_32bit_project();
     let ret = get_possible_return_values_of_func(
         funcname,
-        vec![Some(1)],
         &proj,
         Config::default(),
+        Some(vec![ParameterVal::ExactValue(1)]),
         None,
         10,
     );
@@ -337,9 +339,9 @@ fn issue_9() {
     let proj = get_issue_9_project();
     let ret = get_possible_return_values_of_func(
         funcname,
-        vec![Some(1)],
         &proj,
         Config::default(),
+        Some(vec![ParameterVal::PointerToAllocated(16), ParameterVal::ExactValue(1)]),
         None,
         10,
     );
@@ -356,9 +358,9 @@ fn issue_10() {
     let proj = get_issue_10_project();
     let ret = get_possible_return_values_of_func(
         funcname,
-        vec![None],
         &proj,
         Config::default(),
+        Some(vec![ParameterVal::Unconstrained]),
         None,
         10,
     );

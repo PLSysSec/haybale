@@ -20,9 +20,9 @@ fn call_through_function_ptr() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::empty(),
             &proj,
             Config::default(),
+            None,
             None,
             5
         ),
@@ -37,9 +37,9 @@ fn call_through_function_ptr_struct() {
     assert_eq!(
         get_possible_return_values_of_func(
             funcname,
-            std::iter::empty(),
             &proj,
             Config::default(),
+            None,
             None,
             5
         ),

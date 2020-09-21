@@ -16,7 +16,7 @@ fn while_loop() {
     let funcname = "while_loop";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -28,7 +28,7 @@ fn for_loop() {
     let funcname = "for_loop";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -40,7 +40,7 @@ fn loop_zero_iterations() {
     let funcname = "loop_zero_iterations";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -52,7 +52,7 @@ fn loop_with_cond() {
     let funcname = "loop_with_cond";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -64,7 +64,7 @@ fn loop_inside_cond() {
     let funcname = "loop_inside_cond";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -76,7 +76,7 @@ fn loop_over_array() {
     let funcname = "loop_over_array";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -88,7 +88,7 @@ fn sum_of_array() {
     let funcname = "sum_of_array";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -100,7 +100,7 @@ fn search_array() {
     let funcname = "search_array";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default())
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
@@ -114,7 +114,7 @@ fn nested_loop() {
     let proj = get_project();
     let mut config = Config::default();
     config.loop_bound = 50;
-    let args = find_zero_of_func(funcname, &proj, config)
+    let args = find_zero_of_func(funcname, &proj, config, None)
         .unwrap_or_else(|r| panic!("{}", r))
         .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 1);
