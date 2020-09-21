@@ -47,6 +47,7 @@ mod varmap;
 pub mod watchpoints;
 
 use backend::*;
+use itertools::Itertools;
 use solver_utils::PossibleSolutions;
 
 #[cfg(test)]
@@ -170,7 +171,7 @@ pub fn find_zero_of_func<'p>(
         Ok(Some(
             func.parameters
                 .iter()
-                .zip(param_bvs.iter())
+                .zip_eq(param_bvs.iter())
                 .map(|(p, bv)| {
                     let param_as_u64 = state
                         .get_a_solution_for_bv(bv)?
