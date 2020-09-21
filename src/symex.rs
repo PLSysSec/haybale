@@ -1,4 +1,5 @@
 use either::Either;
+use itertools::Itertools;
 use llvm_ir::instruction::{BinaryOp, InlineAssembly};
 use llvm_ir::types::NamedStructDef;
 use llvm_ir::*;
@@ -1281,7 +1282,7 @@ where
                         instr: BBInstrIndex::Instr(0),
                         source_loc: None, // this will be updated once we get there and begin symex of the instruction
                     };
-                    for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
+                    for (bvarg, param) in bvargs.into_iter().zip_eq(callee.parameters.iter()) {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;
                         // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
@@ -1928,7 +1929,7 @@ where
                         instr: BBInstrIndex::Instr(0),
                         source_loc: None, // this will be updated once we get there and begin symex of the instruction
                     };
-                    for (bvarg, param) in bvargs.into_iter().zip(callee.parameters.iter()) {
+                    for (bvarg, param) in bvargs.into_iter().zip_eq(callee.parameters.iter()) {
                         self.state.assign_bv_to_name(param.name.clone(), bvarg)?;
                         // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
@@ -2361,7 +2362,7 @@ where
         (0 .. num_elements).map(|i| in_vector_0.slice((i + 1) * in_el_size - 1, i * in_el_size));
     let in_scalars_1 =
         (0 .. num_elements).map(|i| in_vector_1.slice((i + 1) * in_el_size - 1, i * in_el_size));
-    let out_scalars = in_scalars_0.zip(in_scalars_1).map(|(s0, s1)| op(&s0, &s1));
+    let out_scalars = in_scalars_0.zip_eq(in_scalars_1).map(|(s0, s1)| op(&s0, &s1));
     out_scalars.reduce(|a, b| b.concat(&a)).ok_or_else(|| {
         Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned())
     }) // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
