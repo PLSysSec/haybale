@@ -1,5 +1,6 @@
 use crate::backend::DefaultBackend;
 use crate::{BBInstrIndex, Config, Location, Project, State};
+use llvm_ir::module::DataLayout;
 use llvm_ir::types::Types;
 use llvm_ir::*;
 
@@ -28,7 +29,7 @@ pub fn blank_project(modname: impl Into<String>, func: Function) -> Project {
     Project::from_module(Module {
         name: modname.into(),
         source_file_name: String::new(),
-        data_layout: String::new(),
+        data_layout: DataLayout::default(),
         target_triple: None,
         functions: vec![func],
         global_vars: vec![],

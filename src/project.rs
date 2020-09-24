@@ -450,30 +450,9 @@ fn entry_is_dir(entry: &io::Result<DirEntry>) -> Option<bool> {
     // entry.as_ref().ok().and_then(|entry| entry.file_type().map(|ft| ft.is_dir()).ok())
 }
 
-/// Extracts the pointer width from an LLVM module, or returns a default of 64 bits
-/// if the width is not specified.
-///
-/// See [LLVM 10 docs on Data Layout](https://releases.llvm.org/10.0.0/docs/LangRef.html#data-layout)
-//
-// This function originally thanks to Hudson Ayers (github.com/hudson-ayers)
+/// Extracts the pointer size from an LLVM module
 fn get_ptr_size(module: &Module) -> u32 {
-    for spec in module.data_layout.split('-') {
-        if !spec.starts_with('p') {
-            continue;
-        }
-        let colon_idx = spec
-            .find(':')
-            .expect("datalayout 'p' specification has no colon");
-        let addr_space_num = spec[1 .. colon_idx].parse::<u32>().unwrap_or(0); // if not specified, the address space defaults to 0
-        if addr_space_num != 0 {
-            // we are only looking for a specification for the default address space
-            continue;
-        }
-        return spec[colon_idx + 1 .. colon_idx + 3]
-            .parse::<u32>()
-            .expect("Failed to parse pointer size");
-    }
-    64 // no pointer size spec explicitly specified, so LLVM defaults to 64
+    module.data_layout.alignments.ptr_alignment(0).size
 }
 
 #[cfg(test)]

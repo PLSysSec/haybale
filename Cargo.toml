@@ -11,7 +11,7 @@ keywords = ["symbolic", "llvm", "IR", "SMT"]
 license = "MIT"
 
 [dependencies]
-llvm-ir = "0.7.3"
+llvm-ir = { git = "https://github.com/cdisselkoen/llvm-ir" }
 boolector = "0.4.1"
 either = "1.6"
 itertools = "0.10"
