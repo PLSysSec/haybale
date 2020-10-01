@@ -739,7 +739,9 @@ where
                 Error::MalformedInstruction("Load result type is an opaque struct type".into())
             })?;
         if dest_size == 0 {
-            return Err(Error::MalformedInstruction("Shouldn't be loading a value of size 0 bits".into()));
+            return Err(Error::MalformedInstruction(
+                "Shouldn't be loading a value of size 0 bits".into(),
+            ));
         }
         self.state
             .record_bv_result(load, self.state.read(&bvaddr, dest_size)?)
@@ -2401,7 +2403,9 @@ where
         (0 .. num_elements).map(|i| in_vector_0.slice((i + 1) * in_el_size - 1, i * in_el_size));
     let in_scalars_1 =
         (0 .. num_elements).map(|i| in_vector_1.slice((i + 1) * in_el_size - 1, i * in_el_size));
-    let out_scalars = in_scalars_0.zip_eq(in_scalars_1).map(|(s0, s1)| op(&s0, &s1));
+    let out_scalars = in_scalars_0
+        .zip_eq(in_scalars_1)
+        .map(|(s0, s1)| op(&s0, &s1));
     out_scalars.reduce(|a, b| b.concat(&a)).ok_or_else(|| {
         Error::MalformedInstruction("Binary operation on vectors with 0 elements".to_owned())
     }) // LLVM disallows vectors of size 0: https://releases.llvm.org/9.0.0/docs/LangRef.html#vector-type
