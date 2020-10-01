@@ -591,6 +591,17 @@ where
         solver_utils::sat_with_extra_constraints(&self.solver, constraints)
     }
 
+    /// Get the `BV` corresponding to the given IR `Name` (from the given
+    /// `Function` name).
+    ///
+    /// There should already have been a `BV` created for this `Name` on this
+    /// path; this won't attempt to create a `BV` if there isn't already one for
+    /// this `Name`.
+    #[allow(clippy::ptr_arg)] // as of this writing, clippy warns that the &String argument should be &str; but it actually needs to be &String here
+    pub fn get_bv_by_irname<'s>(&'s self, funcname: &String, name: &Name) -> &'s B::BV {
+        self.varmap.lookup_var(funcname, name)
+    }
+
     /// Returns `true` if under the current constraints, `a` and `b` must have the
     /// same value. Returns `false` if `a` and `b` may have different values. (If the
     /// current constraints are themselves unsatisfiable, that will result in
