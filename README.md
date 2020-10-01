@@ -272,9 +272,11 @@ or of course you can generate local documentation with `cargo doc --open`.
 Currently, the official crates.io releases of `haybale` (`0.6.x` series)
 depend on Boolector 3.2.1 and either LLVM 9 or 10, depending on whether you
 select the `llvm-9` or `llvm-10` feature.
-As of this writing, choosing `llvm-9` vs `llvm-10` has no effect on
-`haybale`'s features or interface; the only difference is the ability to
-analyze bitcode generated with LLVM 10.
+As of this writing, choosing `llvm-9` vs `llvm-10` has essentially no effect
+on `haybale`'s features or interface; the only difference is the ability to
+analyze bitcode generated with LLVM 10. (And the LLVM 10 version can process
+`AtomicRMW` instructions; see
+[#12](https://github.com/PLSysSec/haybale/issues/12).)
 
 LLVM 8 is supported on the `llvm-8` branch of this repo. This version is
 approximately at feature parity with `haybale` 0.2.1, and will likely be

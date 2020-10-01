@@ -4,6 +4,7 @@ CFLAGS=-O3
 RUSTC=rustc
 RUSTFLAGS=--crate-type=lib
 RUST32BIT=--target i686-unknown-linux-gnu
+LLVMAS=$$LLVM9PATH/bin/llvm-as
 
 .PHONY: all
 all: basic.bc basic.ll \
@@ -26,6 +27,7 @@ all: basic.bc basic.ll \
 			throwcatch.bc throwcatch.ll \
 			abort.bc abort.ll \
 			panic.bc panic.ll \
+			atomicrmw.bc atomicrmw.ll \
 			32bit/issue_4.bc 32bit/issue_4.ll \
 
 %.ll : %.c
@@ -76,8 +78,12 @@ linkedlist.ll : linkedlist.c
 linkedlist.bc : linkedlist.c
 	$(CC) -O0 -c -emit-llvm $^ -o $@
 
+# atomicrmw.ll is a .ll file written by hand, so we need to compile the .bc from the .ll
+atomicrmw.bc : atomicrmw.ll
+	$(LLVMAS) $< -o $@
+
 .PHONY: clean
 clean:
-	find . -name "*.ll" | xargs rm
+	find . -name "*.ll" | grep -v "atomicrmw.ll" | xargs rm
 	find . -name "*.bc" | xargs rm
 	find . -name "*~" | xargs rm
