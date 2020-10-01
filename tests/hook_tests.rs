@@ -32,14 +32,7 @@ fn hook_a_function() {
         .add("simple_callee", &hook_for_simple_callee);
     // with that hook, simple_caller should always return 5 regardless of the value of its argument
     assert_eq!(
-        get_possible_return_values_of_func(
-            "simple_caller",
-            &proj,
-            config,
-            None,
-            None,
-            3
-        ),
+        get_possible_return_values_of_func("simple_caller", &proj, config, None, None, 3),
         PossibleSolutions::exactly_one(ReturnValue::Return(5)),
     );
 }
@@ -85,14 +78,7 @@ fn hook_a_function_ptr() {
     // with these hooks, now `get_function_ptr` should return a pointer to `target_hook` instead of `foo` like it normally does,
     // and therefore fptr_driver() should return 15 instead of 22
     assert_eq!(
-        get_possible_return_values_of_func(
-            "fptr_driver",
-            &proj,
-            config,
-            None,
-            None,
-            3
-        ),
+        get_possible_return_values_of_func("fptr_driver", &proj, config, None, None, 3),
         PossibleSolutions::exactly_one(ReturnValue::Return(15)),
     );
 }

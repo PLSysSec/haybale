@@ -18,14 +18,7 @@ fn call_through_function_ptr() {
     init_logging();
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(
-            funcname,
-            &proj,
-            Config::default(),
-            None,
-            None,
-            5
-        ),
+        get_possible_return_values_of_func(funcname, &proj, Config::default(), None, None, 5),
         PossibleSolutions::exactly_one(ReturnValue::Return(22)),
     );
 }
@@ -35,14 +28,7 @@ fn call_through_function_ptr_struct() {
     let funcname = "struct_driver";
     let proj = get_project();
     assert_eq!(
-        get_possible_return_values_of_func(
-            funcname,
-            &proj,
-            Config::default(),
-            None,
-            None,
-            5
-        ),
+        get_possible_return_values_of_func(funcname, &proj, Config::default(), None, None, 5),
         PossibleSolutions::exactly_one(ReturnValue::Return(15)),
     );
 }

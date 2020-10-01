@@ -20,7 +20,10 @@ fn simd_add() {
             funcname,
             &proj,
             Config::default(),
-            Some(vec![ParameterVal::ExactValue(3), ParameterVal::ExactValue(5)]),
+            Some(vec![
+                ParameterVal::ExactValue(3),
+                ParameterVal::ExactValue(5)
+            ]),
             None,
             5,
         ),
@@ -70,7 +73,10 @@ fn simd_ops() {
             funcname,
             &proj,
             Config::default(),
-            Some(vec![ParameterVal::ExactValue(4), ParameterVal::ExactValue(7)]),
+            Some(vec![
+                ParameterVal::ExactValue(4),
+                ParameterVal::ExactValue(7)
+            ]),
             None,
             5,
         ),
@@ -104,7 +110,10 @@ fn simd_select() {
             funcname,
             &proj,
             Config::default(),
-            Some(vec![ParameterVal::ExactValue(4), ParameterVal::ExactValue(3)]),
+            Some(vec![
+                ParameterVal::ExactValue(4),
+                ParameterVal::ExactValue(3)
+            ]),
             None,
             5,
         ),
@@ -173,7 +182,10 @@ fn simd_typeconversions() {
             funcname,
             &proj,
             Config::default(),
-            Some(vec![ParameterVal::ExactValue(3), ParameterVal::ExactValue(5)]),
+            Some(vec![
+                ParameterVal::ExactValue(3),
+                ParameterVal::ExactValue(5)
+            ]),
             None,
             5,
         ),

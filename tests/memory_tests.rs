@@ -18,9 +18,17 @@ fn load_and_store() {
     let funcname = "load_and_store";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default(), Some(vec![ParameterVal::NonNullPointer, ParameterVal::Unconstrained]))
-        .unwrap_or_else(|r| panic!("{}", r))
-        .expect("Failed to find zero of the function");
+    let args = find_zero_of_func(
+        funcname,
+        &proj,
+        Config::default(),
+        Some(vec![
+            ParameterVal::NonNullPointer,
+            ParameterVal::Unconstrained,
+        ]),
+    )
+    .unwrap_or_else(|r| panic!("{}", r))
+    .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -42,9 +50,17 @@ fn overwrite() {
     let funcname = "overwrite";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default(), Some(vec![ParameterVal::NonNullPointer, ParameterVal::Unconstrained]))
-        .unwrap_or_else(|r| panic!("{}", r))
-        .expect("Failed to find zero of the function");
+    let args = find_zero_of_func(
+        funcname,
+        &proj,
+        Config::default(),
+        Some(vec![
+            ParameterVal::NonNullPointer,
+            ParameterVal::Unconstrained,
+        ]),
+    )
+    .unwrap_or_else(|r| panic!("{}", r))
+    .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -54,9 +70,17 @@ fn load_and_store_mult() {
     let funcname = "load_and_store_mult";
     init_logging();
     let proj = get_project();
-    let args = find_zero_of_func(funcname, &proj, Config::default(), Some(vec![ParameterVal::NonNullPointer, ParameterVal::Unconstrained]))
-        .unwrap_or_else(|r| panic!("{}", r))
-        .expect("Failed to find zero of the function");
+    let args = find_zero_of_func(
+        funcname,
+        &proj,
+        Config::default(),
+        Some(vec![
+            ParameterVal::NonNullPointer,
+            ParameterVal::Unconstrained,
+        ]),
+    )
+    .unwrap_or_else(|r| panic!("{}", r))
+    .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -77,9 +101,17 @@ fn array() {
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
     // alternately, it should also work to allocate the parameter and still use null-pointer checking
-    let args = find_zero_of_func(funcname, &proj, Config::default(), Some(vec![ParameterVal::PointerToAllocated(54 * 4), ParameterVal::Unconstrained]))
-        .unwrap_or_else(|r| panic!("{}", r))
-        .expect("Failed to find zero of the function");
+    let args = find_zero_of_func(
+        funcname,
+        &proj,
+        Config::default(),
+        Some(vec![
+            ParameterVal::PointerToAllocated(54 * 4),
+            ParameterVal::Unconstrained,
+        ]),
+    )
+    .unwrap_or_else(|r| panic!("{}", r))
+    .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }
@@ -100,9 +132,17 @@ fn pointer_arith() {
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
     // alternately, it should also work to allocate the parameter and still use null-pointer checking
-    let args = find_zero_of_func(funcname, &proj, Config::default(), Some(vec![ParameterVal::PointerToAllocated(54 * 4), ParameterVal::Unconstrained]))
-        .unwrap_or_else(|r| panic!("{}", r))
-        .expect("Failed to find zero of the function");
+    let args = find_zero_of_func(
+        funcname,
+        &proj,
+        Config::default(),
+        Some(vec![
+            ParameterVal::PointerToAllocated(54 * 4),
+            ParameterVal::Unconstrained,
+        ]),
+    )
+    .unwrap_or_else(|r| panic!("{}", r))
+    .expect("Failed to find zero of the function");
     assert_eq!(args.len(), 2);
     assert_eq!(args[1], SolutionValue::I32(3));
 }

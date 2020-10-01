@@ -42,9 +42,8 @@ fn no_args_nozero() {
     let funcname = "no_args_nozero";
     init_logging();
     let proj = get_project();
-    let args =
-        find_zero_of_func(funcname, &proj, Config::default(), None)
-            .unwrap_or_else(|r| panic!("{}", r));
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
+        .unwrap_or_else(|r| panic!("{}", r));
     assert_eq!(args, None);
 }
 
@@ -187,9 +186,8 @@ fn conditional_nozero() {
     let funcname = "conditional_nozero";
     init_logging();
     let proj = get_project();
-    let args =
-        find_zero_of_func(funcname, &proj, Config::default(), None)
-            .unwrap_or_else(|r| panic!("{}", r));
+    let args = find_zero_of_func(funcname, &proj, Config::default(), None)
+        .unwrap_or_else(|r| panic!("{}", r));
     assert_eq!(args, None);
 }
 
@@ -341,7 +339,10 @@ fn issue_9() {
         funcname,
         &proj,
         Config::default(),
-        Some(vec![ParameterVal::PointerToAllocated(16), ParameterVal::ExactValue(1)]),
+        Some(vec![
+            ParameterVal::PointerToAllocated(16),
+            ParameterVal::ExactValue(1),
+        ]),
         None,
         10,
     );

@@ -129,7 +129,8 @@ pub fn find_zero_of_func<'p>(
     config: Config<'p, DefaultBackend>,
     params: Option<Vec<ParameterVal>>,
 ) -> std::result::Result<Option<Vec<SolutionValue>>, String> {
-    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config, params).unwrap();
+    let mut em: ExecutionManager<DefaultBackend> =
+        symex_function(funcname, project, config, params).unwrap();
 
     let returnwidth = match em.func().return_type.as_ref() {
         Type::VoidType => {
@@ -238,7 +239,8 @@ pub fn get_possible_return_values_of_func<'p>(
     thrown_size: Option<u32>,
     n: usize,
 ) -> PossibleSolutions<ReturnValue<u64>> {
-    let mut em: ExecutionManager<DefaultBackend> = symex_function(funcname, project, config, params).unwrap();
+    let mut em: ExecutionManager<DefaultBackend> =
+        symex_function(funcname, project, config, params).unwrap();
 
     let return_width = project
         .size_in_bits(&em.func().return_type)
