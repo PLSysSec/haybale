@@ -226,6 +226,10 @@ where
                     Instruction::Phi(phi) => self.symex_phi(phi),
                     Instruction::Select(select) => self.symex_select(select),
                     Instruction::CmpXchg(cmpxchg) => self.symex_cmpxchg(cmpxchg),
+                    #[cfg(feature = "llvm-9")]
+                    Instruction::AtomicRMW(_) => return Err(Error::UnsupportedInstruction("LLVM `AtomicRMW` instruction is not supported for the LLVM 9 version of Haybale; see Haybale issue #12".into())),
+                    #[cfg(feature = "llvm-10")]
+                    Instruction::AtomicRMW(armw) => self.symex_atomicrmw(armw),
                     Instruction::Call(call) => match self.symex_call(call) {
                         Err(e) => Err(e),
                         Ok(None) => Ok(()),
@@ -2307,6 +2311,41 @@ where
 
         self.state
             .record_bv_result(cmpxchg, match_flag.concat(&read_value))
+    }
+
+    #[cfg(feature = "llvm-10")]
+    fn symex_atomicrmw(&mut self, armw: &'p instruction::AtomicRMW) -> Result<()> {
+        debug!("Symexing atomicrmw {:?}", armw);
+        use llvm_ir::instruction::RMWBinOp;
+        let op_size = self
+            .state
+            .size_in_bits(&self.state.type_of(armw))
+            .ok_or_else(|| {
+                Error::MalformedInstruction("AtomicRMW result is an opaque struct type".into())
+            })?;
+        let addr = self.state.operand_to_bv(&armw.address)?;
+        let val = self.state.operand_to_bv(&armw.value)?;
+        let read_val = self.state.read(&addr, op_size)?;
+        let modified_val = match armw.operation {
+            RMWBinOp::Xchg => val,
+            RMWBinOp::Add => read_val.add(&val),
+            RMWBinOp::Sub => read_val.sub(&val),
+            RMWBinOp::And => read_val.and(&val),
+            RMWBinOp::Nand => read_val.and(&val).not(),
+            RMWBinOp::Or => read_val.or(&val),
+            RMWBinOp::Xor => read_val.xor(&val),
+            RMWBinOp::Max => read_val.sgt(&val).cond_bv(&read_val, &val),
+            RMWBinOp::Min => read_val.slt(&val).cond_bv(&read_val, &val),
+            RMWBinOp::UMax => read_val.ugt(&val).cond_bv(&read_val, &val),
+            RMWBinOp::UMin => read_val.ult(&val).cond_bv(&read_val, &val),
+            RMWBinOp::FAdd | RMWBinOp::FSub => {
+                return Err(Error::UnsupportedInstruction(
+                    "Floating-point operation in an AtomicRMW".into(),
+                ))
+            },
+        };
+        self.state.write(&addr, modified_val)?;
+        self.state.record_bv_result(armw, read_val)
     }
 }
 
