@@ -478,6 +478,11 @@
 <span id="478">478</span>
 <span id="479">479</span>
 <span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Functions and structures for defining and activating function hooks</span>
 
@@ -854,6 +859,8 @@
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;llvm.eh.typeid.for&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">hooks</span>::<span class="ident">exceptions</span>::<span class="ident">llvm_eh_typeid_for</span>);
         <span class="ident">fhooks</span>.<span class="ident">add</span>(<span class="string">&quot;exit&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">abort_hook</span>);
         <span class="ident">fhooks</span>.<span class="ident">add_rust_demangled</span>(<span class="string">&quot;std::panicking::begin_panic&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">abort_hook</span>);
+        <span class="ident">fhooks</span>.<span class="ident">add_rust_demangled</span>(<span class="string">&quot;std::panicking::begin_panic_fmt&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">abort_hook</span>);
+        <span class="ident">fhooks</span>.<span class="ident">add_rust_demangled</span>(<span class="string">&quot;std::panicking::begin_panic_handler&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">abort_hook</span>);
         <span class="ident">fhooks</span>.<span class="ident">add_rust_demangled</span>(<span class="string">&quot;core::panicking::panic&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">abort_hook</span>);
         <span class="ident">fhooks</span>.<span class="ident">add_rust_demangled</span>(<span class="string">&quot;core::panicking::panic_bounds_check&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">abort_hook</span>);
         <span class="ident">fhooks</span>.<span class="ident">add_rust_demangled</span>(<span class="string">&quot;core::result::unwrap_failed&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">abort_hook</span>);
@@ -942,7 +949,10 @@
     <span class="kw">match</span> <span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">call</span>).<span class="ident">as_ref</span>() {
         <span class="ident">Type</span>::<span class="ident">VoidType</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>),
         <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">width</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size</span>(<span class="ident">ty</span>);
+            <span class="kw">let</span> <span class="ident">width</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size_in_bits</span>(<span class="ident">ty</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="string">&quot;Call return type is an opaque named struct&quot;</span>.<span class="ident">into</span>())
+            })<span class="question-mark">?</span>;
+            <span class="macro">assert_ne</span><span class="macro">!</span>(<span class="ident">width</span>, <span class="number">0</span>, <span class="string">&quot;Call return type has size 0 bits but isn&#39;t void type&quot;</span>); <span class="comment">// void type was handled above</span>
             <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">new_bv_with_name</span>(<span class="ident">Name</span>::<span class="ident">from</span>(<span class="string">&quot;generic_stub_hook_retval&quot;</span>), <span class="ident">width</span>)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>))
         },

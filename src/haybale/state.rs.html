@@ -2526,6 +2526,84 @@
 <span id="2526">2526</span>
 <span id="2527">2527</span>
 <span id="2528">2528</span>
+<span id="2529">2529</span>
+<span id="2530">2530</span>
+<span id="2531">2531</span>
+<span id="2532">2532</span>
+<span id="2533">2533</span>
+<span id="2534">2534</span>
+<span id="2535">2535</span>
+<span id="2536">2536</span>
+<span id="2537">2537</span>
+<span id="2538">2538</span>
+<span id="2539">2539</span>
+<span id="2540">2540</span>
+<span id="2541">2541</span>
+<span id="2542">2542</span>
+<span id="2543">2543</span>
+<span id="2544">2544</span>
+<span id="2545">2545</span>
+<span id="2546">2546</span>
+<span id="2547">2547</span>
+<span id="2548">2548</span>
+<span id="2549">2549</span>
+<span id="2550">2550</span>
+<span id="2551">2551</span>
+<span id="2552">2552</span>
+<span id="2553">2553</span>
+<span id="2554">2554</span>
+<span id="2555">2555</span>
+<span id="2556">2556</span>
+<span id="2557">2557</span>
+<span id="2558">2558</span>
+<span id="2559">2559</span>
+<span id="2560">2560</span>
+<span id="2561">2561</span>
+<span id="2562">2562</span>
+<span id="2563">2563</span>
+<span id="2564">2564</span>
+<span id="2565">2565</span>
+<span id="2566">2566</span>
+<span id="2567">2567</span>
+<span id="2568">2568</span>
+<span id="2569">2569</span>
+<span id="2570">2570</span>
+<span id="2571">2571</span>
+<span id="2572">2572</span>
+<span id="2573">2573</span>
+<span id="2574">2574</span>
+<span id="2575">2575</span>
+<span id="2576">2576</span>
+<span id="2577">2577</span>
+<span id="2578">2578</span>
+<span id="2579">2579</span>
+<span id="2580">2580</span>
+<span id="2581">2581</span>
+<span id="2582">2582</span>
+<span id="2583">2583</span>
+<span id="2584">2584</span>
+<span id="2585">2585</span>
+<span id="2586">2586</span>
+<span id="2587">2587</span>
+<span id="2588">2588</span>
+<span id="2589">2589</span>
+<span id="2590">2590</span>
+<span id="2591">2591</span>
+<span id="2592">2592</span>
+<span id="2593">2593</span>
+<span id="2594">2594</span>
+<span id="2595">2595</span>
+<span id="2596">2596</span>
+<span id="2597">2597</span>
+<span id="2598">2598</span>
+<span id="2599">2599</span>
+<span id="2600">2600</span>
+<span id="2601">2601</span>
+<span id="2602">2602</span>
+<span id="2603">2603</span>
+<span id="2604">2604</span>
+<span id="2605">2605</span>
+<span id="2606">2606</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">option</span>::{<span class="ident">BtorOption</span>, <span class="ident">ModelGen</span>};
 <span class="kw">use</span> <span class="ident">boolector</span>::<span class="ident">BVSolution</span>;
@@ -2567,6 +2645,7 @@
     <span class="kw">pub</span> <span class="ident">cur_loc</span>: <span class="ident">Location</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>,
 
     <span class="comment">// Private members</span>
+    <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">varmap</span>: <span class="ident">VarMap</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span>,
     <span class="ident">mem</span>: <span class="ident">RefCell</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">Memory</span><span class="op">&gt;</span>,
     <span class="ident">alloc</span>: <span class="ident">Alloc</span>,
@@ -2916,6 +2995,7 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="self">Self</span> {
             <span class="ident">cur_loc</span>: <span class="ident">start_loc</span>.<span class="ident">clone</span>(),
             <span class="ident">pointer_size_bits</span>: <span class="ident">project</span>.<span class="ident">pointer_size_bits</span>(),
+            <span class="ident">proj</span>: <span class="ident">project</span>,
             <span class="ident">varmap</span>: <span class="ident">VarMap</span>::<span class="ident">new</span>(<span class="ident">solver</span>.<span class="ident">clone</span>(), <span class="ident">config</span>.<span class="ident">loop_bound</span>),
             <span class="ident">mem</span>: <span class="ident">RefCell</span>::<span class="ident">new</span>(<span class="ident">Memory</span>::<span class="ident">new_uninitialized</span>(
                 <span class="ident">solver</span>.<span class="ident">clone</span>(),
@@ -3034,7 +3114,7 @@
             <span class="comment">// definitions, since each global variable must have exactly one</span>
             <span class="comment">// definition. Hence the `filter()` above.</span>
             <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Type</span>::<span class="ident">PointerType</span> { <span class="ident">pointee_type</span>, .. } <span class="op">=</span> <span class="ident">var</span>.<span class="ident">ty</span>.<span class="ident">as_ref</span>() {
-                <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">pointee_type</span>, <span class="ident">project</span>).<span class="ident">expect</span>(
+                <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">pointee_type</span>).<span class="ident">expect</span>(
                     <span class="string">&quot;Global variable has a struct type which is opaque in the entire Project&quot;</span>,
                 );
                 <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">size_bits</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
@@ -3115,6 +3195,17 @@
         <span class="ident">constraints</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">bool</span><span class="op">&gt;</span> {
         <span class="ident">solver_utils</span>::<span class="ident">sat_with_extra_constraints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">solver</span>, <span class="ident">constraints</span>)
+    }
+
+    <span class="doccomment">/// Get the `BV` corresponding to the given IR `Name` (from the given</span>
+    <span class="doccomment">/// `Function` name).</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// There should already have been a `BV` created for this `Name` on this</span>
+    <span class="doccomment">/// path; this won&#39;t attempt to create a `BV` if there isn&#39;t already one for</span>
+    <span class="doccomment">/// this `Name`.</span>
+    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy</span>::<span class="ident">ptr_arg</span>)]</span> <span class="comment">// as of this writing, clippy warns that the &amp;String argument should be &amp;str; but it actually needs to be &amp;String here</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_bv_by_irname</span><span class="op">&lt;</span><span class="lifetime">&#39;s</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s</span> <span class="self">self</span>, <span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">String</span>, <span class="ident">name</span>: <span class="kw-2">&amp;</span><span class="ident">Name</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;s</span> <span class="ident">B</span>::<span class="ident">BV</span> {
+        <span class="self">self</span>.<span class="ident">varmap</span>.<span class="ident">lookup_var</span>(<span class="ident">funcname</span>, <span class="ident">name</span>)
     }
 
     <span class="doccomment">/// Returns `true` if under the current constraints, `a` and `b` must have the</span>
@@ -3379,11 +3470,14 @@
         <span class="ident">thing</span>: <span class="kw-2">&amp;</span><span class="kw">impl</span> <span class="ident">instruction</span>::<span class="ident">HasResult</span>,
         <span class="ident">resultval</span>: <span class="ident">B</span>::<span class="ident">BV</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">thing</span>)) <span class="op">!</span><span class="op">=</span> <span class="ident">resultval</span>.<span class="ident">get_width</span>() {
+        <span class="kw">let</span> <span class="ident">thing_size_in_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">thing</span>)).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+            <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="string">&quot;Instruction result type is an opaque struct type&quot;</span>.<span class="ident">into</span>())
+        })<span class="question-mark">?</span>;
+        <span class="kw">if</span> <span class="ident">thing_size_in_bits</span> <span class="op">!</span><span class="op">=</span> <span class="ident">resultval</span>.<span class="ident">get_width</span>() {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
                 <span class="string">&quot;Computed result for an instruction has the wrong size: instruction {:?} with result size {}, but got result {:?} with size {}&quot;</span>,
                 <span class="ident">thing</span>,
-                <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">thing</span>)),
+                <span class="ident">thing_size_in_bits</span>,
                 <span class="ident">resultval</span>,
                 <span class="ident">resultval</span>.<span class="ident">get_width</span>()
             )))
@@ -3431,7 +3525,14 @@
         <span class="kw">match</span> <span class="ident">c</span> {
             <span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>, <span class="ident">value</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">bv_from_u64</span>(<span class="kw-2">*</span><span class="ident">value</span>, <span class="kw-2">*</span><span class="ident">bits</span>)),
             <span class="ident">Constant</span>::<span class="ident">Null</span>(<span class="ident">ty</span>) <span class="op">|</span> <span class="ident">Constant</span>::<span class="ident">AggregateZero</span>(<span class="ident">ty</span>) <span class="op">|</span> <span class="ident">Constant</span>::<span class="ident">Undef</span>(<span class="ident">ty</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">zero</span>(<span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>)))
+                <span class="kw">let</span> <span class="ident">size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="ident">ty</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                    <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;const_to_bv on a constant with opaque struct type: {:?}&quot;</span>,
+                        <span class="ident">c</span>
+                    ))
+                })<span class="question-mark">?</span>;
+                <span class="macro">assert_ne</span><span class="macro">!</span>(<span class="ident">size_bits</span>, <span class="number">0</span>, <span class="string">&quot;const_to_bv: can&#39;t convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead&quot;</span>);
+                <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">zero</span>(<span class="ident">size_bits</span>))
             },
             <span class="ident">Constant</span>::<span class="ident">Struct</span> {
                 <span class="ident">values</span>: <span class="ident">elements</span>, ..
@@ -3619,33 +3720,81 @@
                 )<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(<span class="ident">bvbase</span>.<span class="ident">add</span>(<span class="kw-2">&amp;</span><span class="ident">offset</span>))
             },
-            <span class="ident">Constant</span>::<span class="ident">Trunc</span>(<span class="ident">t</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>
-                .<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">t</span>.<span class="ident">operand</span>)
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">t</span>.<span class="ident">to_type</span>) <span class="op">-</span> <span class="number">1</span>, <span class="number">0</span>)),
-            <span class="ident">Constant</span>::<span class="ident">ZExt</span>(<span class="ident">z</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>
-                .<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">z</span>.<span class="ident">operand</span>)
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">zero_extend_to_bits</span>(<span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">z</span>.<span class="ident">to_type</span>))),
-            <span class="ident">Constant</span>::<span class="ident">SExt</span>(<span class="ident">s</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>
-                .<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>.<span class="ident">operand</span>)
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">sign_extend_to_bits</span>(<span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>.<span class="ident">to_type</span>))),
+            <span class="ident">Constant</span>::<span class="ident">Trunc</span>(<span class="ident">t</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">to_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">t</span>.<span class="ident">to_type</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                    <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;const_to_bv on a constant with opaque struct type {:?}&quot;</span>,
+                        <span class="ident">c</span>
+                    ))
+                })<span class="question-mark">?</span>;
+                <span class="macro">assert_ne</span><span class="macro">!</span>(<span class="ident">to_size_bits</span>, <span class="number">0</span>, <span class="string">&quot;const_to_bv: can&#39;t convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead&quot;</span>);
+                <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">t</span>.<span class="ident">operand</span>)
+                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="ident">to_size_bits</span> <span class="op">-</span> <span class="number">1</span>, <span class="number">0</span>))
+            },
+            <span class="ident">Constant</span>::<span class="ident">ZExt</span>(<span class="ident">z</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">to_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">z</span>.<span class="ident">to_type</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                    <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;const_to_bv on a constant with opaque struct type {:?}&quot;</span>,
+                        <span class="ident">c</span>
+                    ))
+                })<span class="question-mark">?</span>;
+                <span class="macro">assert_ne</span><span class="macro">!</span>(<span class="ident">to_size_bits</span>, <span class="number">0</span>, <span class="string">&quot;const_to_bv: can&#39;t convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead&quot;</span>);
+                <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">z</span>.<span class="ident">operand</span>)
+                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">zero_extend_to_bits</span>(<span class="ident">to_size_bits</span>))
+            },
+            <span class="ident">Constant</span>::<span class="ident">SExt</span>(<span class="ident">s</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">to_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>.<span class="ident">to_type</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                    <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;const_to_bv on a constant with opaque struct type {:?}&quot;</span>,
+                        <span class="ident">c</span>
+                    ))
+                })<span class="question-mark">?</span>;
+                <span class="macro">assert_ne</span><span class="macro">!</span>(<span class="ident">to_size_bits</span>, <span class="number">0</span>, <span class="string">&quot;const_to_bv: can&#39;t convert constant of size 0 to a BV; use const_to_bv_maybe_zerowidth() instead&quot;</span>);
+                <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>.<span class="ident">operand</span>)
+                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bv</span><span class="op">|</span> <span class="ident">bv</span>.<span class="ident">sign_extend_to_bits</span>(<span class="ident">to_size_bits</span>))
+            },
             <span class="ident">Constant</span>::<span class="ident">PtrToInt</span>(<span class="ident">pti</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">pti</span>.<span class="ident">operand</span>)<span class="question-mark">?</span>;
-                <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">get_width</span>(), <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">pti</span>.<span class="ident">to_type</span>));
+                <span class="macro">assert_eq</span><span class="macro">!</span>(
+                    <span class="ident">bv</span>.<span class="ident">get_width</span>(),
+                    <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">pti</span>.<span class="ident">to_type</span>)
+                        .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
+                            <span class="string">&quot;PtrToInt result type is opaque struct type&quot;</span>.<span class="ident">into</span>()
+                        ))<span class="question-mark">?</span>
+                );
                 <span class="prelude-val">Ok</span>(<span class="ident">bv</span>) <span class="comment">// just a cast, it&#39;s the same bits underneath</span>
             },
             <span class="ident">Constant</span>::<span class="ident">IntToPtr</span>(<span class="ident">itp</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">itp</span>.<span class="ident">operand</span>)<span class="question-mark">?</span>;
-                <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">get_width</span>(), <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">itp</span>.<span class="ident">to_type</span>));
+                <span class="macro">assert_eq</span><span class="macro">!</span>(
+                    <span class="ident">bv</span>.<span class="ident">get_width</span>(),
+                    <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">itp</span>.<span class="ident">to_type</span>)
+                        .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
+                            <span class="string">&quot;IntToPtr result type is opaque struct type&quot;</span>.<span class="ident">into</span>()
+                        ))<span class="question-mark">?</span>
+                );
                 <span class="prelude-val">Ok</span>(<span class="ident">bv</span>) <span class="comment">// just a cast, it&#39;s the same bits underneath</span>
             },
             <span class="ident">Constant</span>::<span class="ident">BitCast</span>(<span class="ident">bc</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">bc</span>.<span class="ident">operand</span>)<span class="question-mark">?</span>;
-                <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">get_width</span>(), <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">bc</span>.<span class="ident">to_type</span>));
+                <span class="macro">assert_eq</span><span class="macro">!</span>(
+                    <span class="ident">bv</span>.<span class="ident">get_width</span>(),
+                    <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">bc</span>.<span class="ident">to_type</span>)
+                        .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
+                            <span class="string">&quot;BitCast result type is opaque struct type&quot;</span>.<span class="ident">into</span>()
+                        ))<span class="question-mark">?</span>
+                );
                 <span class="prelude-val">Ok</span>(<span class="ident">bv</span>) <span class="comment">// just a cast, it&#39;s the same bits underneath</span>
             },
             <span class="ident">Constant</span>::<span class="ident">AddrSpaceCast</span>(<span class="ident">ac</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">bv</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">const_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">ac</span>.<span class="ident">operand</span>)<span class="question-mark">?</span>;
-                <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">get_width</span>(), <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">ac</span>.<span class="ident">to_type</span>));
+                <span class="macro">assert_eq</span><span class="macro">!</span>(
+                    <span class="ident">bv</span>.<span class="ident">get_width</span>(),
+                    <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">ac</span>.<span class="ident">to_type</span>)
+                        .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(
+                            <span class="string">&quot;AddrSpaceCast result type is opaque struct type&quot;</span>.<span class="ident">into</span>()
+                        ))<span class="question-mark">?</span>
+                );
                 <span class="prelude-val">Ok</span>(<span class="ident">bv</span>) <span class="comment">// just a cast, it&#39;s the same bits underneath</span>
             },
             <span class="ident">Constant</span>::<span class="ident">ICmp</span>(<span class="ident">icmp</span>) <span class="op">=</span><span class="op">&gt;</span> {
@@ -3687,16 +3836,33 @@
     <span class="kw">fn</span> <span class="ident">const_to_bv_maybe_zerowidth</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">c</span>: <span class="kw-2">&amp;</span><span class="ident">Constant</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">c</span> {
             <span class="ident">Constant</span>::<span class="ident">Null</span>(<span class="ident">ty</span>) <span class="op">|</span> <span class="ident">Constant</span>::<span class="ident">AggregateZero</span>(<span class="ident">ty</span>) <span class="op">|</span> <span class="ident">Constant</span>::<span class="ident">Undef</span>(<span class="ident">ty</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>) {
-                    <span class="number">0</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-                    <span class="ident">bits</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">zero</span>(<span class="ident">bits</span>))),
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="ident">ty</span>) {
+                    <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;const_to_bv on a constant with opaque struct type: {:?}&quot;</span>,
+                        <span class="ident">c</span>
+                    ))),
+                    <span class="prelude-val">Some</span>(<span class="number">0</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+                    <span class="prelude-val">Some</span>(<span class="ident">bits</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">zero</span>(<span class="ident">bits</span>))),
                 }
             },
             <span class="ident">Constant</span>::<span class="ident">Struct</span> { <span class="ident">values</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="ident">values</span>
                     .<span class="ident">iter</span>()
-                    .<span class="ident">filter</span>(<span class="op">|</span><span class="ident">v</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">v</span>.<span class="ident">as_ref</span>())) <span class="op">&gt;</span> <span class="number">0</span>)
-                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">v</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">const_to_bv_maybe_zerowidth</span>(<span class="ident">v</span>).<span class="ident">transpose</span>().<span class="ident">unwrap</span>()) <span class="comment">// since we `filter()`&#39;d first, we should have all `Some`s here. We transpose-unwrap Result&lt;Option&lt;BV&gt;&gt; to Result&lt;BV&gt;</span>
+                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">val</span><span class="op">|</span> {
+                        <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">type_of</span>(<span class="ident">val</span>.<span class="ident">as_ref</span>()))
+                            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">bits</span><span class="op">|</span> (<span class="ident">val</span>, <span class="ident">bits</span>))
+                            .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                                <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(
+                                    <span class="string">&quot;const_to_bv: encountered an opaque struct type: {:?}&quot;</span>,
+                                    <span class="ident">val</span>
+                                ))
+                            })
+                    })
+                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>
+                    .<span class="ident">into_iter</span>()
+                    .<span class="ident">filter</span>(<span class="op">|</span><span class="kw-2">&amp;</span>(<span class="ident">_val</span>, <span class="ident">bits</span>)<span class="op">|</span> <span class="ident">bits</span> <span class="op">&gt;</span> <span class="number">0</span>)
+                    .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">val</span>, <span class="ident">_bits</span>)<span class="op">|</span> <span class="ident">val</span>)
+                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">val</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">const_to_bv_maybe_zerowidth</span>(<span class="ident">val</span>).<span class="ident">transpose</span>().<span class="ident">unwrap</span>()) <span class="comment">// since we `filter()`&#39;d first, we should have all `Some`s here. We transpose-unwrap Result&lt;Option&lt;BV&gt;&gt; to Result&lt;BV&gt;</span>
                     .<span class="ident">reduce</span>(<span class="op">|</span><span class="ident">a</span>, <span class="ident">b</span><span class="op">|</span> <span class="prelude-val">Ok</span>(<span class="ident">b</span><span class="question-mark">?</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">a</span><span class="question-mark">?</span>))) <span class="comment">// the lambda has type Fn(Result&lt;B::BV&gt;, Result&lt;B::BV&gt;) -&gt; Result&lt;B::BV&gt;</span>
                     .<span class="ident">transpose</span>()
             },
@@ -4036,80 +4202,58 @@
 
     <span class="doccomment">/// Get the size of the `Type`, in bits.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// If the `Type` is a named struct type, the named struct type should be</span>
-    <span class="doccomment">/// defined in the current module (i.e., the module in `self.cur_loc`).</span>
-    <span class="doccomment">/// If it is opaque in the current module, or not declared in the current</span>
-    <span class="doccomment">/// module, this function will panic.</span>
+    <span class="doccomment">/// Accounts for the `Project`&#39;s pointer size and named struct definitions.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Note that some types have size 0 bits, and this may return `0`.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Panics if `ty` is a struct which has no definition in the entire `Project`,</span>
+    <span class="doccomment">/// or if it is a struct/array/vector where one of the elements is a struct with no</span>
+    <span class="doccomment">/// definition in the entire `Project`.</span>
+    <span class="attribute">#[<span class="ident">deprecated</span> <span class="op">=</span> <span class="string">&quot;Prefer size_in_bits()&quot;</span>]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u32</span> {
-        <span class="kw">match</span> <span class="ident">ty</span> {
-            <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="ident">bits</span>,
-            <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">pointer_size_bits</span>,
-            <span class="ident">Type</span>::<span class="ident">ArrayType</span> {
-                <span class="ident">element_type</span>,
-                <span class="ident">num_elements</span>,
-            }
-            <span class="op">|</span> <span class="ident">Type</span>::<span class="ident">VectorType</span> {
-                <span class="ident">element_type</span>,
-                <span class="ident">num_elements</span>,
-            } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">num_elements</span>: <span class="ident">u32</span> <span class="op">=</span> (<span class="kw-2">*</span><span class="ident">num_elements</span>).<span class="ident">try_into</span>().<span class="ident">unwrap</span>();
-                <span class="ident">num_elements</span> <span class="op">*</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">element_type</span>)
-            },
-            <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="ident">element_types</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">ty</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>)).<span class="ident">sum</span>()
-            },
-            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span> } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">cur_loc</span>.<span class="ident">module</span>.<span class="ident">types</span>.<span class="ident">named_struct_def</span>(<span class="ident">name</span>) {
-                    <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Struct named {:?} is not defined in the current module&quot;</span>, <span class="ident">name</span>),
-                    <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Can&#39;t get size of an opaque struct type&quot;</span>),
-                    <span class="prelude-val">Some</span>(<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>),
-                }
-            },
-            <span class="ident">Type</span>::<span class="ident">FPType</span>(<span class="ident">fpt</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">Self</span>::<span class="ident">fp_size</span>(<span class="kw-2">*</span><span class="ident">fpt</span>),
-            <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Not sure how to get the size of {:?}&quot;</span>, <span class="ident">ty</span>),
-        }
+        <span class="self">self</span>.<span class="ident">proj</span>
+            .<span class="ident">size_in_bits</span>(<span class="ident">ty</span>)
+            .<span class="ident">expect</span>(<span class="string">&quot;state.size() encountered a struct with no definition in the entire Project&quot;</span>)
     }
 
     <span class="doccomment">/// Get the size of the `Type`, in bits.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// Differs from the basic `size` method above in how it handles opaque struct</span>
-    <span class="doccomment">/// types.</span>
-    <span class="doccomment">/// While `size` will simply panic, this will search the given `Project` for a</span>
-    <span class="doccomment">/// definition of the struct and use that.</span>
+    <span class="doccomment">/// Accounts for the `Project`&#39;s pointer size and named struct definitions.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Note that some types have size 0 bits, and this may return `Some(0)`.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// Returns `None` for structs which have no definition in the entire `Project`,</span>
     <span class="doccomment">/// or for structs/arrays/vectors where one of the elements is a struct with no</span>
     <span class="doccomment">/// definition in the entire `Project`.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>, <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="ident">Project</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> {
-        <span class="kw">match</span> <span class="ident">ty</span> {
-            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">proj</span>.<span class="ident">get_named_struct_def</span>(<span class="ident">name</span>).<span class="ident">ok</span>()<span class="question-mark">?</span> {
-                (<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>, <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">None</span>,
-                (<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty</span>), <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>, <span class="ident">proj</span>),
-            },
-            <span class="ident">Type</span>::<span class="ident">ArrayType</span> {
-                <span class="ident">element_type</span>,
-                <span class="ident">num_elements</span>,
-            }
-            <span class="op">|</span> <span class="ident">Type</span>::<span class="ident">VectorType</span> {
-                <span class="ident">element_type</span>,
-                <span class="ident">num_elements</span>,
-            } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">num_elements</span>: <span class="ident">u32</span> <span class="op">=</span> (<span class="kw-2">*</span><span class="ident">num_elements</span>).<span class="ident">try_into</span>().<span class="ident">unwrap</span>();
-                <span class="self">self</span>.<span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="ident">element_type</span>, <span class="ident">proj</span>)
-                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">s</span><span class="op">|</span> <span class="ident">s</span> <span class="op">*</span> <span class="ident">num_elements</span>)
-            },
-            <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">element_types</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">ty</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">size_opaque_aware</span>(<span class="ident">ty</span>, <span class="ident">proj</span>))
-                .<span class="ident">sum</span>(),
-            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>)), <span class="comment">// for all other cases, just fall back on the basic size()</span>
-        }
+    <span class="attribute">#[<span class="ident">deprecated</span> <span class="op">=</span> <span class="string">&quot;Renamed to size_in_bits()&quot;</span>]</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size_opaque_aware</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>, <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">proj</span>.<span class="ident">size_in_bits</span>(<span class="ident">ty</span>)
+    }
+
+    <span class="doccomment">/// Get the size of the `Type`, in bits.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Accounts for the `Project`&#39;s pointer size and named struct definitions.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Note that some types have size 0 bits, and this may return `Some(0)`.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Returns `None` for structs which have no definition in the entire `Project`,</span>
+    <span class="doccomment">/// or for structs/arrays/vectors where one of the elements is a struct with no</span>
+    <span class="doccomment">/// definition in the entire `Project`.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">proj</span>.<span class="ident">size_in_bits</span>(<span class="ident">ty</span>)
     }
 
     <span class="doccomment">/// Get the size of the `FPType`, in bits</span>
+    <span class="attribute">#[<span class="ident">deprecated</span> <span class="op">=</span> <span class="string">&quot;Renamed to fp_size_in_bits&quot;</span>]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">fp_size</span>(<span class="ident">fpt</span>: <span class="ident">FPType</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u32</span> {
+        <span class="self">Self</span>::<span class="ident">fp_size_in_bits</span>(<span class="ident">fpt</span>)
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">fp_size_in_bits</span>(<span class="ident">fpt</span>: <span class="ident">FPType</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u32</span> {
         <span class="kw">match</span> <span class="ident">fpt</span> {
             <span class="ident">FPType</span>::<span class="ident">Half</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">16</span>,
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="ident">FPType</span>::<span class="ident">BFloat</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">16</span>,
             <span class="ident">FPType</span>::<span class="ident">Single</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">32</span>,
             <span class="ident">FPType</span>::<span class="ident">Double</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">64</span>,
             <span class="ident">FPType</span>::<span class="ident">FP128</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">128</span>,
@@ -4134,7 +4278,12 @@
             }
             <span class="op">|</span> <span class="ident">Type</span>::<span class="ident">ArrayType</span> { <span class="ident">element_type</span>, .. }
             <span class="op">|</span> <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">element_type</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">el_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">element_type</span>);
+                <span class="kw">let</span> <span class="ident">el_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="ident">element_type</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                    <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
+                        <span class="string">&quot;get_offset encountered an opaque struct type: {:?}&quot;</span>,
+                        <span class="ident">element_type</span>
+                    ))
+                })<span class="question-mark">?</span>;
                 <span class="kw">if</span> <span class="ident">el_size_bits</span> <span class="op">%</span> <span class="number">8</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
                     <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
                         <span class="string">&quot;Encountered a type with size {} bits&quot;</span>,
@@ -4149,7 +4298,13 @@
             <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">offset_bits</span> <span class="op">=</span> <span class="number">0</span>;
                 <span class="kw">for</span> <span class="ident">ty</span> <span class="kw">in</span> <span class="ident">element_types</span>.<span class="ident">iter</span>().<span class="ident">take</span>(<span class="ident">index</span>) {
-                    <span class="ident">offset_bits</span> <span class="op">+</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">ty</span>);
+                    <span class="kw">let</span> <span class="ident">element_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="ident">ty</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                        <span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
+                            <span class="string">&quot;get_offset encountered an opaque struct type: {:?}&quot;</span>,
+                            <span class="ident">ty</span>
+                        ))
+                    })<span class="question-mark">?</span>;
+                    <span class="ident">offset_bits</span> <span class="op">+</span><span class="op">=</span> <span class="ident">element_size_bits</span>;
                 }
                 <span class="kw">if</span> <span class="ident">offset_bits</span> <span class="op">%</span> <span class="number">8</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
                     <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(
@@ -4196,7 +4351,8 @@
             <span class="op">|</span> <span class="ident">Type</span>::<span class="ident">ArrayType</span> { <span class="ident">element_type</span>, .. }
             <span class="op">|</span> <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">element_type</span>, .. }
             <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">el_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size</span>(<span class="ident">element_type</span>);
+                <span class="kw">let</span> <span class="ident">el_size_bits</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="ident">element_type</span>)
+                    .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;get_offset encountered an opaque struct type: {:?}&quot;</span>, <span class="ident">element_type</span>)))<span class="question-mark">?</span>;
                 <span class="kw">if</span> <span class="ident">el_size_bits</span> <span class="op">%</span> <span class="number">8</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
                     <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Encountered a type with size {} bits&quot;</span>, <span class="ident">el_size_bits</span>)))
                 } <span class="kw">else</span> {

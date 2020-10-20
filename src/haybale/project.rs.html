@@ -486,14 +486,70 @@
 <span id="486">486</span>
 <span id="487">487</span>
 <span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">demangling</span>::<span class="ident">try_cpp_demangle</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="ident">Error</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">module</span>::{<span class="ident">GlobalAlias</span>, <span class="ident">GlobalVariable</span>};
-<span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">types</span>::<span class="ident">NamedStructDef</span>;
+<span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">types</span>::{<span class="ident">FPType</span>, <span class="ident">NamedStructDef</span>, <span class="ident">Type</span>};
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::{<span class="ident">Function</span>, <span class="ident">Module</span>};
 <span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">info</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">rustc_demangle</span>::<span class="ident">demangle</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::<span class="ident">TryInto</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fs</span>::<span class="ident">DirEntry</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">io</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">path</span>::<span class="ident">Path</span>;
@@ -806,6 +862,60 @@
             }
         }
         <span class="ident">retval</span>.<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Error</span>::<span class="ident">OtherError</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Trying to get definition of named struct {:?} which is neither defined nor even declared anywhere in the Project&quot;</span>, <span class="ident">name</span>)))
+    }
+
+    <span class="doccomment">/// Get the size of the `Type`, in bits.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Accounts for the `Project`&#39;s pointer size and named struct definitions.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Note that some types have size 0 bits, and this may return `Some(0)`.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Returns `None` for structs which have no definition in the entire `Project`,</span>
+    <span class="doccomment">/// or for structs/arrays/vectors where one of the elements is a struct with no</span>
+    <span class="doccomment">/// definition in the entire `Project`.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">Type</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> {
+        <span class="kw">match</span> <span class="ident">ty</span> {
+            <span class="ident">Type</span>::<span class="ident">IntegerType</span> { <span class="ident">bits</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Some</span>(<span class="kw-2">*</span><span class="ident">bits</span>),
+            <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">pointer_size_bits</span>()),
+            <span class="ident">Type</span>::<span class="ident">FPType</span>(<span class="ident">fpt</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Some</span>(<span class="self">Self</span>::<span class="ident">fp_size_in_bits</span>(<span class="kw-2">*</span><span class="ident">fpt</span>)),
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;size_in_bits: scalable vectors are not supported&quot;</span>),
+            <span class="ident">Type</span>::<span class="ident">ArrayType</span> {
+                <span class="ident">element_type</span>,
+                <span class="ident">num_elements</span>,
+            }
+            <span class="op">|</span> <span class="ident">Type</span>::<span class="ident">VectorType</span> {
+                <span class="ident">element_type</span>,
+                <span class="ident">num_elements</span>,
+                ..
+            } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">num_elements</span>: <span class="ident">u32</span> <span class="op">=</span> (<span class="kw-2">*</span><span class="ident">num_elements</span>).<span class="ident">try_into</span>().<span class="ident">unwrap</span>();
+                <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">element_type</span>).<span class="ident">map</span>(<span class="op">|</span><span class="ident">s</span><span class="op">|</span> <span class="ident">s</span> <span class="op">*</span> <span class="ident">num_elements</span>)
+            },
+            <span class="ident">Type</span>::<span class="ident">StructType</span> { <span class="ident">element_types</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="ident">element_types</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">ty</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="ident">ty</span>)).<span class="ident">sum</span>()
+            },
+            <span class="ident">Type</span>::<span class="ident">NamedStructType</span> { <span class="ident">name</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">get_named_struct_def</span>(<span class="ident">name</span>).<span class="ident">ok</span>()<span class="question-mark">?</span> {
+                (<span class="ident">NamedStructDef</span>::<span class="ident">Opaque</span>, <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">None</span>,
+                (<span class="ident">NamedStructDef</span>::<span class="ident">Defined</span>(<span class="ident">ty</span>), <span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">ty</span>),
+            },
+            <span class="ident">Type</span>::<span class="ident">VoidType</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Some</span>(<span class="number">0</span>),
+            <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Not sure how to get the size of {:?}&quot;</span>, <span class="ident">ty</span>),
+        }
+    }
+
+    <span class="doccomment">/// Get the size of the `FPType`, in bits</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">fp_size_in_bits</span>(<span class="ident">fpt</span>: <span class="ident">FPType</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u32</span> {
+        <span class="kw">match</span> <span class="ident">fpt</span> {
+            <span class="ident">FPType</span>::<span class="ident">Half</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">16</span>,
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="ident">FPType</span>::<span class="ident">BFloat</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">16</span>,
+            <span class="ident">FPType</span>::<span class="ident">Single</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">32</span>,
+            <span class="ident">FPType</span>::<span class="ident">Double</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">64</span>,
+            <span class="ident">FPType</span>::<span class="ident">FP128</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">128</span>,
+            <span class="ident">FPType</span>::<span class="ident">X86_FP80</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">80</span>,
+            <span class="ident">FPType</span>::<span class="ident">PPC_FP128</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">128</span>,
+        }
     }
 
     <span class="doccomment">/// Returns the modules and the pointer size</span>
