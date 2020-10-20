@@ -11,7 +11,7 @@ keywords = ["symbolic", "llvm", "IR", "SMT"]
 license = "MIT"
 
 [dependencies]
-llvm-ir = "0.7.1"
+llvm-ir = "0.7.3"
 boolector = "0.4.1"
 either = "1.5.3"
 itertools = "0.9.0"
@@ -28,13 +28,15 @@ env_logger = "0.7.1"
 # You _must_ enable exactly one of the following features.
 llvm-9 = ["llvm-ir/llvm-9"]
 llvm-10 = ["llvm-ir/llvm-10"]
+llvm-11 = ["llvm-ir/llvm-11"]
 
 # These features select the corresponding LLVM version, and require an exact
 # match between the system LLVM version and the LLVM version chosen here. For
 # more information, see the "strict-versioning" feature on `llvm-sys`.
 llvm-9-strict = ["llvm-9", "llvm-ir/llvm-9-strict"]
 llvm-10-strict = ["llvm-10", "llvm-ir/llvm-10-strict"]
+llvm-11-strict = ["llvm-11", "llvm-ir/llvm-11-strict"]
 
 [package.metadata.docs.rs]
-# Generate docs.rs documentation with the llvm-10 feature
-features = ["llvm-10"]
+# Generate docs.rs documentation with the llvm-11 feature
+features = ["llvm-11"]

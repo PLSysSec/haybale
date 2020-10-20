@@ -42,7 +42,8 @@ to the LLVM version you want:
 haybale = { version = "0.6.1", features = ["llvm-10"] }
 ```
 
-Currently, the supported LLVM versions are `llvm-9` and `llvm-10`.
+As of 0.6.1, the supported LLVM versions are `llvm-9` and `llvm-10`.
+(The Git version you're looking at also supports `llvm-11`.)
 
 `haybale` depends (indirectly) on the LLVM and Boolector libraries, which
 must both be available on your system.
