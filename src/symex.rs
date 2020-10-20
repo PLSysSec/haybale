@@ -282,14 +282,14 @@ where
                     Instruction::PtrToInt(pti) => self.symex_cast_op(pti),
                     Instruction::IntToPtr(itp) => self.symex_cast_op(itp),
                     Instruction::BitCast(bitcast) => self.symex_cast_op(bitcast),
-                    #[cfg(feature = "llvm-10")]
+                    #[cfg(LLVM_VERSION_10_OR_GREATER)]
                     Instruction::Freeze(freeze) => self.symex_cast_op(freeze), // since our BVs are never undef or poison, freeze is the identity operation for us
                     Instruction::Phi(phi) => self.symex_phi(phi),
                     Instruction::Select(select) => self.symex_select(select),
                     Instruction::CmpXchg(cmpxchg) => self.symex_cmpxchg(cmpxchg),
-                    #[cfg(feature = "llvm-9")]
+                    #[cfg(LLVM_VERSION_9_OR_LOWER)]
                     Instruction::AtomicRMW(_) => return Err(Error::UnsupportedInstruction("LLVM `AtomicRMW` instruction is not supported for the LLVM 9 version of Haybale; see Haybale issue #12".into())),
-                    #[cfg(feature = "llvm-10")]
+                    #[cfg(LLVM_VERSION_10_OR_GREATER)]
                     Instruction::AtomicRMW(armw) => self.symex_atomicrmw(armw),
                     Instruction::Call(call) => match self.symex_call(call) {
                         Err(e) => Err(e),
@@ -571,7 +571,11 @@ where
             Type::IntegerType { .. } => {
                 self.state.record_bv_result(bop, bvoperation(&bvop0, &bvop1))
             },
-            Type::VectorType { element_type, num_elements } => {
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => {
+                return Err(Error::UnsupportedInstruction("operation on scalable vectors".into()));
+            }
+            Type::VectorType { element_type, num_elements, .. } => {
                 match element_type.as_ref() {
                     Type::IntegerType { .. } => {
                         self.state.record_bv_result(bop, binary_on_vector(&bvop0, &bvop1, *num_elements as u32, bvoperation)?)
@@ -603,7 +607,11 @@ where
                 },
                 ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
             },
-            Type::VectorType { element_type, num_elements } => match element_type.as_ref() {
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => {
+                return Err(Error::UnsupportedInstruction("icmp on scalable vectors".into()));
+            }
+            Type::VectorType { element_type, num_elements, .. } => match element_type.as_ref() {
                 Type::IntegerType { bits } if *bits == 1 => match op0_type.as_ref() {
                     Type::IntegerType { .. } | Type::VectorType { .. } | Type::PointerType { .. } => {
                         let zero = self.state.zero(1);
@@ -636,9 +644,14 @@ where
                 self.state
                     .record_bv_result(zext, bvop.zext(dest_size - source_size))
             },
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => {
+                return Err(Error::UnsupportedInstruction("zext on a scalable vector".into()));
+            }
             Type::VectorType {
                 element_type,
                 num_elements,
+                ..
             } => {
                 let in_vector = self.state.operand_to_bv(&zext.operand)?;
                 let in_el_size = self.state.size_in_bits(&element_type).ok_or_else(|| {
@@ -648,9 +661,14 @@ where
                     )
                 })?;
                 let out_el_size = match self.state.type_of(zext).as_ref() {
+                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    Type::VectorType { scalable: true, .. } => {
+                        return Err(Error::MalformedInstruction("ZExt result type is a scalable vector, but its operand is not".into()));
+                    }
                     Type::VectorType {
                         element_type: out_el_type,
                         num_elements: out_num_els,
+                        ..
                     } => {
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("ZExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
@@ -694,9 +712,14 @@ where
                 self.state
                     .record_bv_result(sext, bvop.sext(dest_size - source_size))
             },
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => {
+                return Err(Error::UnsupportedInstruction("sext on a scalable vector".into()));
+            }
             Type::VectorType {
                 element_type,
                 num_elements,
+                ..
             } => {
                 let in_vector = self.state.operand_to_bv(&sext.operand)?;
                 let in_el_size = self.state.size_in_bits(&element_type).ok_or_else(|| {
@@ -706,9 +729,14 @@ where
                     )
                 })?;
                 let out_el_size = match self.state.type_of(sext).as_ref() {
+                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    Type::VectorType { scalable: true, .. } => {
+                        return Err(Error::MalformedInstruction("SExt result type is a scalable vector, but its operand is not".into()));
+                    }
                     Type::VectorType {
                         element_type: out_el_type,
                         num_elements: out_num_els,
+                        ..
                     } => {
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("SExt operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
@@ -751,12 +779,21 @@ where
                 self.state
                     .record_bv_result(trunc, bvop.slice(dest_size - 1, 0))
             },
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => {
+                return Err(Error::UnsupportedInstruction("trunc on a scalable vector".into()));
+            }
             Type::VectorType { num_elements, .. } => {
                 let in_vector = self.state.operand_to_bv(&trunc.operand)?;
                 let dest_el_size = match self.state.type_of(trunc).as_ref() {
+                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    Type::VectorType { scalable: true, .. } => {
+                        return Err(Error::MalformedInstruction("Trunc result type is a scalable vector, but its operand is not".into()));
+                    },
                     Type::VectorType {
                         element_type: out_el_type,
                         num_elements: out_num_els,
+                        ..
                     } => {
                         if out_num_els != num_elements {
                             return Err(Error::MalformedInstruction(format!("Trunc operand is a vector of {} elements but output is a vector of {} elements", num_elements, out_num_els)));
@@ -948,10 +985,11 @@ where
                         Type::VectorType {
                             element_type,
                             num_elements,
+                            ..
                         } => {
                             if index >= *num_elements as u32 {
                                 Err(Error::MalformedInstruction(format!(
-                                    "ExtractElement index out of range: index {} with {} elements",
+                                    "ExtractElement index out of range: index {} with {} elements", // or, (in LLVM 11+) trying to extract from a scalable vector, at an index which is not _guaranteed_ to exist
                                     index, num_elements
                                 )))
                             } else {
@@ -993,10 +1031,11 @@ where
                         Type::VectorType {
                             element_type,
                             num_elements,
+                            ..
                         } => {
                             if index >= *num_elements as u32 {
                                 Err(Error::MalformedInstruction(format!(
-                                    "InsertElement index out of range: index {} with {} elements",
+                                    "InsertElement index out of range: index {} with {} elements", // or, (in LLVM 11+) trying to insert into a scalable vector, at an index which is not _guaranteed_ to exist
                                     index, num_elements
                                 )))
                             } else {
@@ -1047,9 +1086,14 @@ where
             op0_type
         };
         match op_type.as_ref() {
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => {
+                return Err(Error::UnsupportedInstruction("shufflevector on scalable vectors".into()));
+            }
             Type::VectorType {
                 element_type,
                 num_elements,
+                ..
             } => {
                 let mask: Vec<u32> = match sv.mask.as_ref() {
                     Constant::Vector(mask) => mask.iter()
@@ -2291,16 +2335,25 @@ where
                         .record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
                 }
             },
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => {
+                return Err(Error::UnsupportedInstruction("select on scalable vectors".into()));
+            },
             Type::VectorType {
                 element_type,
                 num_elements,
+                ..
             } => {
                 match element_type.as_ref() {
                     Type::IntegerType { bits: 1 } => {},
                     ty => return Err(Error::MalformedInstruction(format!("Expected Select vector condition to be vector of i1, but got vector of {:?}", ty))),
                 };
                 let el_size = match optype.as_ref() {
-                    Type::VectorType { element_type: op_el_type, num_elements: op_num_els } => {
+                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    Type::VectorType { scalable: true, .. } => {
+                        return Err(Error::MalformedInstruction("Select operands are scalable vectors but condition is not".into()));
+                    },
+                    Type::VectorType { element_type: op_el_type, num_elements: op_num_els, .. } => {
                         if num_elements != op_num_els {
                             return Err(Error::MalformedInstruction(format!("Select condition is a vector of {} elements but operands are vectors with {} elements", num_elements, op_num_els)));
                         }
@@ -2376,7 +2429,7 @@ where
             .record_bv_result(cmpxchg, match_flag.concat(&read_value))
     }
 
-    #[cfg(feature = "llvm-10")]
+    #[cfg(LLVM_VERSION_10_OR_GREATER)]
     fn symex_atomicrmw(&mut self, armw: &'p instruction::AtomicRMW) -> Result<()> {
         debug!("Symexing atomicrmw {:?}", armw);
         use llvm_ir::instruction::RMWBinOp;

@@ -124,9 +124,14 @@ pub fn symex_bswap<'p, B: Backend>(
             assert_eq!(arg.get_width(), *bits);
             Ok(ReturnValue::Return(bswap(&arg, *bits)?))
         },
+        #[cfg(LLVM_VERSION_11_OR_GREATER)]
+        Type::VectorType { scalable: true, .. } => {
+            return Err(Error::UnsupportedInstruction("bswap on a scalable vector".into()));
+        },
         Type::VectorType {
             element_type,
             num_elements,
+            ..
         } => {
             let element_size = state.size_in_bits(&element_type).ok_or_else(|| Error::OtherError("llvm.bswap: argument is vector type, and vector element type contains a struct type with no definition in the Project".into()))?;
             let final_bv = unary_on_vector(&arg, (*num_elements).try_into().unwrap(), |element| {

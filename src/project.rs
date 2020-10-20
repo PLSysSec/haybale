@@ -334,6 +334,8 @@ impl Project {
             Type::IntegerType { bits } => Some(*bits),
             Type::PointerType { .. } => Some(self.pointer_size_bits()),
             Type::FPType(fpt) => Some(Self::fp_size_in_bits(*fpt)),
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            Type::VectorType { scalable: true, .. } => panic!("size_in_bits: scalable vectors are not supported"),
             Type::ArrayType {
                 element_type,
                 num_elements,
@@ -341,6 +343,7 @@ impl Project {
             | Type::VectorType {
                 element_type,
                 num_elements,
+                ..
             } => {
                 let num_elements: u32 = (*num_elements).try_into().unwrap();
                 self.size_in_bits(&element_type).map(|s| s * num_elements)
@@ -361,6 +364,8 @@ impl Project {
     pub fn fp_size_in_bits(fpt: FPType) -> u32 {
         match fpt {
             FPType::Half => 16,
+            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            FPType::BFloat => 16,
             FPType::Single => 32,
             FPType::Double => 64,
             FPType::FP128 => 128,
