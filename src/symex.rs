@@ -223,6 +223,8 @@ where
                     Instruction::PtrToInt(pti) => self.symex_cast_op(pti),
                     Instruction::IntToPtr(itp) => self.symex_cast_op(itp),
                     Instruction::BitCast(bitcast) => self.symex_cast_op(bitcast),
+                    #[cfg(feature = "llvm-10")]
+                    Instruction::Freeze(freeze) => self.symex_cast_op(freeze), // since our BVs are never undef or poison, freeze is the identity operation for us
                     Instruction::Phi(phi) => self.symex_phi(phi),
                     Instruction::Select(select) => self.symex_select(select),
                     Instruction::CmpXchg(cmpxchg) => self.symex_cmpxchg(cmpxchg),
