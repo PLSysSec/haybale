@@ -2078,11 +2078,11 @@ where
                     }
                     // add terminator, but only if we did not leave bb early bc of function call.
                     if !broke_early {
-                        path_str.push_str(&format!("{:?}\n", location.bb.term));
+                        path_str.push_str(&format!("{}\n", location.bb.term));
                     }
                 }
                 BBInstrIndex::Terminator => {
-                    path_str.push_str(&format!("{:?}\n", location.bb.term));
+                    path_str.push_str(&format!("{}\n", location.bb.term));
                 }
             }
         }

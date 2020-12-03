@@ -240,3 +240,30 @@ fn mutually_recursive_functions() {
     assert_eq!(args.len(), 1);
     //assert_eq!(args[0], SolutionValue::I32(3))
 }
+
+#[test]
+fn test_pretty_path_llvm_instructions() {
+    let funcname = "nested_caller";
+    init_logging();
+    let proj = get_project();
+    let mut em: ExecutionManager<haybale::backend::DefaultBackend> =
+        symex_function(funcname, &proj, Config::default(), None).unwrap();
+    loop {
+        match em.next() {
+            Some(res) => match res {
+                Ok(_) => {
+                    println!("next() worked");
+                }
+                Err(_) => {}
+            },
+            None => break,
+        }
+        let state = em.state();
+        let path = state.get_path();
+        let len = haybale::get_path_length(path);
+        assert_eq!(
+            len,
+            state.pretty_path_llvm_instructions().matches("\n").count() - 1
+        );
+    }
+}
