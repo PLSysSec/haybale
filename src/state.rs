@@ -2052,7 +2052,7 @@ where
                 BBInstrIndex::Terminator => {
                     let num_instrs = path_entry.0.bb.instrs.len();
                     if num_instrs > 0 {
-                        // tail call!
+                        // call is last instruction in block
                         reenter_set.insert((path_entry.0.bb.name.clone(), num_instrs - 1));
                     }
                 }
@@ -2062,9 +2062,10 @@ where
         for path_entry in self.get_path().iter() {
             let location = &path_entry.0;
             match location.instr {
-                BBInstrIndex::Instr(idx) => {
+                BBInstrIndex::Instr(start) => {
                     let mut broke_early = false;
-                    for instr in location.bb.instrs.iter().skip(idx) {
+                    for (i, instr) in location.bb.instrs.iter().skip(start).enumerate() {
+                        let idx = start + i;
                         path_str.push_str(&format!("{}\n", instr));
                         match instr {
                             llvm_ir::instruction::Instruction::Call(_) => {
@@ -2088,6 +2089,7 @@ where
         }
         path_str
     }
+
 
     /// returns a `String` containing a formatted view of the full path which led
     /// to this point, in terms of source locations
@@ -2146,6 +2148,14 @@ where
             }
         }
         path_str
+    }
+
+    /// Returns the number of LLVM instructions in the current path.
+    /// The returned value is only accurate if the path under
+    /// analysis does not include a panic, exception, exit,
+    /// or any hooked calls (such as inline assembly).
+    pub fn get_path_length(&self) -> usize {
+        get_path_length(self.get_path())
     }
 
     /// Attempt to demangle the given `funcname` as appropriate based on the
@@ -2293,7 +2303,7 @@ pub fn get_path_length<'p>(path: &Vec<PathEntry<'p>>) -> usize {
             BBInstrIndex::Instr(_) => 0,                            // already counted
             BBInstrIndex::Terminator => {
                 // Path with only a terminator: 1 instruction, not counted yet.
-                // Tail calls: we already counted the terminator, this is a duplicate bb
+                // With instrs: we already counted the terminator, this is a duplicate bb
                 if location.bb.instrs.len() == 0 {
                     1
                 } else {
@@ -2304,7 +2314,6 @@ pub fn get_path_length<'p>(path: &Vec<PathEntry<'p>>) -> usize {
         acc + entry_len
     })
 }
-
 
 #[cfg(test)]
 mod tests {
