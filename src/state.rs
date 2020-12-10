@@ -2031,6 +2031,65 @@ where
         }
         path_str
     }
+    
+    /// returns a `String` containing a formatted view of the full path which led
+    /// to this point, in terms of LLVM IR instructions. If the Path includes any
+    /// hooked functions, the instructions which might be contained within those
+    /// functions are not included.
+    pub fn pretty_path_llvm_instructions(&self) -> String {
+        // to correctly print an instruction trace in the presence of function calls,
+        // we need to know which calls divert control flow to another basic block. This
+        // can be determined by finding all basic blocks in the path which do not
+        // begin at instruction 0.
+        let mut reenter_set = HashSet::new(); //Store (bb_name, instr_idx) of all calls that leave bb
+        for path_entry in self.get_path().iter() {
+            match path_entry.0.instr {
+                BBInstrIndex::Instr(idx) => {
+                    if idx != 0 {
+                        reenter_set.insert((path_entry.0.bb.name.clone(), idx - 1));
+                    }
+                }
+                BBInstrIndex::Terminator => {
+                    let num_instrs = path_entry.0.bb.instrs.len();
+                    if num_instrs > 0 {
+                        // call is last instruction in block
+                        reenter_set.insert((path_entry.0.bb.name.clone(), num_instrs - 1));
+                    }
+                }
+            }
+        }
+        let mut path_str = String::new();
+        for path_entry in self.get_path().iter() {
+            let location = &path_entry.0;
+            match location.instr {
+                BBInstrIndex::Instr(start) => {
+                    let mut broke_early = false;
+                    for (i, instr) in location.bb.instrs.iter().skip(start).enumerate() {
+                        let idx = start + i;
+                        path_str.push_str(&format!("{}\n", instr));
+                        match instr {
+                            llvm_ir::instruction::Instruction::Call(_) => {
+                                if reenter_set.contains(&(location.bb.name.clone(), idx)) {
+                                    broke_early = true;
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    // add terminator, but only if we did not leave bb early bc of function call.
+                    if !broke_early {
+                        path_str.push_str(&format!("{}\n", location.bb.term));
+                    }
+                }
+                BBInstrIndex::Terminator => {
+                    path_str.push_str(&format!("{}\n", location.bb.term));
+                }
+            }
+        }
+        path_str
+    }
+
 
     /// returns a `String` containing a formatted view of the full path which led
     /// to this point, in terms of source locations
@@ -2089,6 +2148,14 @@ where
             }
         }
         path_str
+    }
+
+    /// Returns the number of LLVM instructions in the current path.
+    /// The returned value is only accurate if the path under
+    /// analysis does not include a panic, exception, exit,
+    /// or any hooked calls (such as inline assembly).
+    pub fn get_path_length(&self) -> usize {
+        get_path_length(self.get_path())
     }
 
     /// Attempt to demangle the given `funcname` as appropriate based on the
@@ -2217,6 +2284,35 @@ impl PathDumpType {
             },
         }
     }
+}
+
+/// Returns the number of LLVM instructions in a passed path.
+/// The returned value is only accurate if the path under
+/// analysis does not include a panic, exception, exit,
+/// or any hooked calls (such as inline assembly).
+// A path is represented as a vector of `PathEntry`s, and
+// each `PathEntry` describes a sequential set of instructions in a basic block,
+// not necessarily starting at the beginning of that basic block.
+// When a `PathEntry` does not start at the beginning of a basic block, that means
+// we have returned to the basic block after a function call within that block.
+pub fn get_path_length<'p>(path: &Vec<PathEntry<'p>>) -> usize {
+    path.iter().fold(0, |acc, entry| {
+        let location = &entry.0;
+        let entry_len = match location.instr {
+            BBInstrIndex::Instr(0) => location.bb.instrs.len() + 1, // +1 for terminator
+            BBInstrIndex::Instr(_) => 0,                            // already counted
+            BBInstrIndex::Terminator => {
+                // Path with only a terminator: 1 instruction, not counted yet.
+                // With instrs: we already counted the terminator, this is a duplicate bb
+                if location.bb.instrs.len() == 0 {
+                    1
+                } else {
+                    0
+                }
+            }
+        };
+        acc + entry_len
+    })
 }
 
 #[cfg(test)]

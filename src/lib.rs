@@ -43,6 +43,7 @@ mod hooks;
 pub mod simple_memory;
 pub mod solver_utils;
 mod state;
+pub use state::get_path_length;
 mod varmap;
 pub mod watchpoints;
 
