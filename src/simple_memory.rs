@@ -150,7 +150,7 @@ impl Memory {
         );
 
         if self.null_detection
-            && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone(), addr_width))?
+            && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone(), addr_width)).unwrap_warn()?
         {
             return Err(Error::NullPointerDereference);
         }
@@ -189,7 +189,7 @@ impl Memory {
         );
 
         if self.null_detection
-            && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone(), addr_width))?
+            && bvs_can_be_equal(&self.btor, addr, &BV::zero(self.btor.clone(), addr_width)).unwrap_warn()?
         {
             return Err(Error::NullPointerDereference);
         }

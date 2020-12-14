@@ -237,7 +237,7 @@ pub fn symex_assume<'p, B: Backend>(
     }
 
     if state.config.trust_llvm_assumes {
-        state.operand_to_bv(arg)?.assert()?;
+        state.assert(&state.operand_to_bv(arg)?)?;
     } else {
         // just ignore the assume
     }

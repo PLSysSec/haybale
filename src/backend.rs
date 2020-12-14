@@ -1,7 +1,7 @@
 //! Traits which abstract over the backend (BV types, memory implementation,
 //! etc) being used.
 
-use crate::error::Result;
+use crate::error::{BackendResult, Result};
 use boolector::{BVSolution, Btor};
 use std::fmt;
 use std::ops::Deref;
@@ -114,7 +114,7 @@ pub trait BV: Clone + PartialEq + Eq + fmt::Debug {
     fn set_symbol(&mut self, symbol: Option<&str>);
     fn is_const(&self) -> bool;
     fn has_same_width(&self, other: &Self) -> bool;
-    fn assert(&self) -> Result<()>;
+    fn assert(&self) -> BackendResult<()>;
     fn is_failed_assumption(&self) -> bool;
     fn _eq(&self, other: &Self) -> Self;
     fn _ne(&self, other: &Self) -> Self;
@@ -349,10 +349,10 @@ pub trait Memory: Clone + PartialEq + Eq {
 
     /// Read any number (>0) of bits of memory, at any alignment.
     /// Returned `BV` will have size `bits`.
-    fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value>;
+    fn read(&self, index: &Self::Index, bits: u32) -> BackendResult<Self::Value>;
 
     /// Write any number (>0) of bits of memory, at any alignment.
-    fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()>;
+    fn write(&mut self, index: &Self::Index, value: Self::Value) -> BackendResult<()>;
 
     /// Get a reference to the solver instance this `Memory` belongs to
     fn get_solver(&self) -> Self::SolverRef;
@@ -442,9 +442,9 @@ impl BV for boolector::BV<Rc<Btor>> {
     fn has_same_width(&self, other: &Self) -> bool {
         self.has_same_width(other)
     }
-    fn assert(&self) -> Result<()> {
+    fn assert(&self) -> BackendResult<()> {
         self.assert();
-        Ok(())
+        Ok(()).into()
     }
     fn is_failed_assumption(&self) -> bool {
         self.is_failed_assumption()
@@ -625,11 +625,11 @@ impl Memory for crate::cell_memory::Memory {
     ) -> Self {
         crate::cell_memory::Memory::new_zero_initialized(btor, null_detection, name, addr_bits)
     }
-    fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
-        self.read(index, bits)
+    fn read(&self, index: &Self::Index, bits: u32) -> BackendResult<Self::Value> {
+        self.read(index, bits).into()
     }
-    fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
-        self.write(index, value)
+    fn write(&mut self, index: &Self::Index, value: Self::Value) -> BackendResult<()> {
+        self.write(index, value).into()
     }
     fn get_solver(&self) -> Rc<Btor> {
         self.get_solver()
@@ -660,11 +660,11 @@ impl Memory for crate::simple_memory::Memory {
     ) -> Self {
         crate::simple_memory::Memory::new_zero_initialized(btor, null_detection, name, addr_bits)
     }
-    fn read(&self, index: &Self::Index, bits: u32) -> Result<Self::Value> {
-        self.read(index, bits)
+    fn read(&self, index: &Self::Index, bits: u32) -> BackendResult<Self::Value> {
+        self.read(index, bits).into()
     }
-    fn write(&mut self, index: &Self::Index, value: Self::Value) -> Result<()> {
-        self.write(index, value)
+    fn write(&mut self, index: &Self::Index, value: Self::Value) -> BackendResult<()> {
+        self.write(index, value).into()
     }
     fn get_solver(&self) -> Rc<Btor> {
         self.get_solver()

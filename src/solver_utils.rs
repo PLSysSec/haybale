@@ -32,18 +32,27 @@ pub fn sat(btor: &Btor) -> Result<bool> {
 pub fn sat_with_extra_constraints<I, B>(
     btor: &Btor,
     constraints: impl IntoIterator<Item = I>,
-) -> Result<bool>
+) -> BackendResult<bool>
 where
     I: Deref<Target = B>,
     B: BV,
 {
     btor.push(1);
+    let mut warnings = Vec::new();
     for constraint in constraints {
-        constraint.assert()?;
+        let BackendResult { res, warnings: new_warnings } = constraint.assert();
+        warnings.extend(new_warnings.into_iter());
+        if let Err(err) = res {
+            // propagate error, like with `?`
+            return BackendResult {
+                res: Err(err),
+                warnings,
+            };
+        }
     }
     let retval = sat(btor);
     btor.pop(1);
-    retval
+    BackendResult::with_warns(retval, warnings)
 }
 
 /// Returns `true` if under the current constraints, `a` and `b` must have the
@@ -59,12 +68,8 @@ where
 /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
 /// not require full model generation. You should prefer this function or
 /// `bvs_can_be_equal()` if they are sufficient for your needs.
-pub fn bvs_must_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<bool> {
-    if sat_with_extra_constraints(btor, &[a._ne(&b)])? {
-        Ok(false)
-    } else {
-        Ok(true)
-    }
+pub fn bvs_must_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> BackendResult<bool> {
+    sat_with_extra_constraints(btor, &[a._ne(&b)]).map(|b| !b)
 }
 
 /// Returns `true` if under the current constraints, `a` and `b` can have the
@@ -80,12 +85,8 @@ pub fn bvs_must_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<bool> {
 /// `get_a_solution()` or `get_possible_solutions()`-type functions, as they do
 /// not require full model generation. You should prefer this function or
 /// `bvs_must_be_equal()` if they are sufficient for your needs.
-pub fn bvs_can_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<bool> {
-    if sat_with_extra_constraints(btor, &[a._eq(&b)])? {
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+pub fn bvs_can_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> BackendResult<bool> {
+    sat_with_extra_constraints(btor, &[a._eq(&b)])
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -203,15 +204,14 @@ pub fn get_possible_solutions_for_bv<V: BV>(
             Some(bstr) => PossibleSolutions::exactly_one(BVSolution::from_01x_str(bstr)),
             None => {
                 let mut solutions = HashSet::new();
-                check_for_common_solutions(solver.clone(), bv, n, &mut solutions)?;
+                check_for_common_solutions(solver.clone(), bv, n, &mut solutions).unwrap_warn()?;
                 if solutions.len() > n {
                     PossibleSolutions::AtLeast(solutions)
                 } else {
                     solver.push(1);
                     for solution in solutions.iter() {
                         // Temporarily constrain that the solution can't be `solution` - we want to see if other solutions exist
-                        bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str()))
-                            .assert()?;
+                        bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str())).assert().unwrap_warn()?;
                     }
                     warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}", bv);
                     solver.set_opt(BtorOption::ModelGen(ModelGen::All));
@@ -219,8 +219,7 @@ pub fn get_possible_solutions_for_bv<V: BV>(
                         let val = bv.get_a_solution()?.disambiguate();
                         solutions.insert(val.clone());
                         // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str()))
-                            .assert()?;
+                        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert().unwrap_warn()?;
                     }
                     solver.pop(1);
                     if solutions.len() > n {
@@ -236,6 +235,35 @@ pub fn get_possible_solutions_for_bv<V: BV>(
     Ok(ps)
 }
 
+/*
+/// If the expr is a `Result::Err`, throw it as a `BackendResult::Err` with no warnings.
+/// Otherwise, this evaluates to the `Ok` value.
+/// This is like `?`, but for expressions of type `Result` in functions returning `BackendResult`.
+macro_rules! throw_basic_errs {
+    ($expr:expr) => {
+        match $expr {
+            Ok(t) => t,
+            Err(err) => return Err(err).into(),
+        }
+    }
+}
+*/
+
+/// If the expr is a `BackendResult::Err`, throw it.
+/// Otherwise, this evaluates to the `Ok` value (panicking if there were any warnings).
+/// This is like `?`, but for expressions of type `BackendResult` in functions returning `BackendResult`.
+macro_rules! throw_errs {
+    ($expr:expr) => {
+        match $expr.res {
+            Ok(_) => $expr.unwrap_warn().unwrap(),
+            Err(err) => return BackendResult {
+                res: Err(err),
+                warnings: $expr.warnings,
+            },
+        }
+    }
+}
+
 /// Check whether some common values are solutions, and if so, add them.
 ///
 /// Adds solutions until `solutions` has `n+1` entries, or until it can't find any more.
@@ -247,12 +275,12 @@ fn check_for_common_solutions<V: BV>(
     bv: &V,
     n: usize,
     solutions: &mut HashSet<BVSolution>,
-) -> Result<()> {
+) -> BackendResult<()> {
     let width = bv.get_width();
-    if solutions.len() <= n && bvs_can_be_equal(&solver, bv, &BV::zero(solver.clone(), width))? {
+    if solutions.len() <= n && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::zero(solver.clone(), width))) {
         solutions.insert(BVSolution::from_01x_str("0".repeat(width as usize)));
     }
-    if solutions.len() <= n && bvs_can_be_equal(&solver, bv, &BV::one(solver.clone(), width))? {
+    if solutions.len() <= n && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::one(solver.clone(), width))) {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
             1,
@@ -261,13 +289,13 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 1
-        && bvs_can_be_equal(&solver, bv, &BV::ones(solver.clone(), width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::ones(solver.clone(), width)))
     {
         solutions.insert(BVSolution::from_01x_str("1".repeat(width as usize)));
     }
     if solutions.len() <= n
         && width > 1
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -277,7 +305,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 2
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -287,7 +315,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 3
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 8, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 8, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -297,7 +325,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 4
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 16, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 16, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -307,7 +335,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 5
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 32, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 32, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -317,7 +345,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 6
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 64, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 64, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -327,7 +355,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 7
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 128, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 128, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -337,7 +365,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 8
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 256, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 256, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -347,7 +375,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 9
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 512, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 512, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -357,7 +385,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 10
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 1024, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 1024, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -367,7 +395,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 11
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2048, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 2048, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -377,7 +405,7 @@ fn check_for_common_solutions<V: BV>(
     }
     if solutions.len() <= n
         && width > 12
-        && bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4096, width))?
+        && throw_errs!(bvs_can_be_equal(&solver, bv, &BV::from_u32(solver.clone(), 4096, width)))
     {
         solutions.insert(BVSolution::from_01x_str(format!(
             "{:0width$b}",
@@ -385,7 +413,7 @@ fn check_for_common_solutions<V: BV>(
             width = width as usize
         )));
     }
-    Ok(())
+    Ok(()).into()
 }
 
 /// Get the maximum possible solution for the `BV`: that is, the highest value
@@ -411,7 +439,7 @@ pub fn max_possible_solution_for_bv_as_u64<V: BV>(
         return Ok(Some(u));
     }
     // Shortcut: check all-ones first, and if it's a valid solution, just return that
-    if bvs_can_be_equal(&solver, bv, &V::ones(solver.clone(), width))? {
+    if bvs_can_be_equal(&solver, bv, &V::ones(solver.clone(), width)).unwrap_warn()? {
         if width == 64 {
             return Ok(Some(std::u64::MAX));
         } else {
@@ -431,7 +459,7 @@ pub fn max_possible_solution_for_bv_as_u64<V: BV>(
         let mid = if mid / 2 > min { mid / 2 } else { mid }; // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
-        bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert()?;
+        bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert().unwrap_warn()?;
         if sat(&solver)? {
             min = mid;
         } else {
@@ -470,7 +498,7 @@ pub fn min_possible_solution_for_bv_as_u64<V: BV>(
         return Ok(Some(u));
     }
     // Shortcut: check `0` first, and if it's a valid solution, just return that
-    if bvs_can_be_equal(&solver, bv, &V::zero(solver.clone(), width))? {
+    if bvs_can_be_equal(&solver, bv, &V::zero(solver.clone(), width)).unwrap_warn()? {
         return Ok(Some(0));
     }
     // min is exclusive (we know `0` doesn't work), max is inclusive
@@ -486,7 +514,7 @@ pub fn min_possible_solution_for_bv_as_u64<V: BV>(
         let mid = if mid / 2 > min { mid / 2 } else { mid }; // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
-        bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert()?;
+        bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert().unwrap_warn()?;
         if sat(&solver)? {
             max = mid;
         } else {
@@ -558,7 +586,8 @@ pub fn max_possible_solution_for_bv_as_binary_str<V: BV>(
             // return values consistent with that
             high_bits
                 ._eq(&V::from_u64(solver.clone(), max_for_high_bits, 64))
-                .assert()?;
+                .assert()
+                .unwrap_warn()?;
         }
     }
     solver.pop(1);
@@ -629,7 +658,8 @@ pub fn min_possible_solution_for_bv_as_binary_str<V: BV>(
             // return values consistent with that
             high_bits
                 ._eq(&V::from_u64(solver.clone(), min_for_high_bits, 64))
-                .assert()?;
+                .assert()
+                .unwrap_warn()?;
         }
     }
     solver.pop(1);
@@ -690,7 +720,7 @@ mod tests {
         // adding x < 3 constraint should make us unsat
         let bad_constraint = x.ult(&BV::from_u64(btor.clone(), 3, 64));
         assert_eq!(
-            sat_with_extra_constraints(&btor, std::iter::once(&bad_constraint)),
+            sat_with_extra_constraints(&btor, std::iter::once(&bad_constraint)).unwrap_warn(),
             Ok(false)
         );
 
@@ -714,19 +744,19 @@ mod tests {
         x.ugt(&three).assert();
 
         // we should have that x _can be_ 7 but not _must be_ 7
-        assert_eq!(bvs_can_be_equal(&btor, &x, &seven), Ok(true));
-        assert_eq!(bvs_must_be_equal(&btor, &x, &seven), Ok(false));
+        assert_eq!(bvs_can_be_equal(&btor, &x, &seven).unwrap_warn(), Ok(true));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &seven).unwrap_warn(), Ok(false));
 
         // we should have that x neither _can be_ nor _must be_ 2
-        assert_eq!(bvs_can_be_equal(&btor, &x, &two), Ok(false));
-        assert_eq!(bvs_must_be_equal(&btor, &x, &two), Ok(false));
+        assert_eq!(bvs_can_be_equal(&btor, &x, &two).unwrap_warn(), Ok(false));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &two).unwrap_warn(), Ok(false));
 
         // add an x < 5 constraint
         x.ult(&five).assert();
 
         // we should now have that x both _can be_ and _must be_ 4
-        assert_eq!(bvs_can_be_equal(&btor, &x, &four), Ok(true));
-        assert_eq!(bvs_must_be_equal(&btor, &x, &four), Ok(true));
+        assert_eq!(bvs_can_be_equal(&btor, &x, &four).unwrap_warn(), Ok(true));
+        assert_eq!(bvs_must_be_equal(&btor, &x, &four).unwrap_warn(), Ok(true));
     }
 
     #[test]
@@ -874,7 +904,7 @@ mod tests {
         );
 
         // make sure we've popped solver state correctly: all-ones should still be a possible solution for y
-        assert!(bvs_can_be_equal(&btor, &y, &BV::ones(btor.clone(), 96)).unwrap());
+        assert!(bvs_can_be_equal(&btor, &y, &BV::ones(btor.clone(), 96)).unwrap_warn().unwrap());
     }
 
     #[test]

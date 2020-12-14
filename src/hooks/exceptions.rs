@@ -103,6 +103,6 @@ pub fn llvm_eh_typeid_for<B: Backend>(
     // for now we ignore the argument and return an unconstrained value
     // (unconstrained except for the constraint that the value is positive, as specified in LLVM docs)
     let retval = state.new_bv_with_name(Name::from("llvm_eh_typeid_for_retval"), 32)?;
-    retval.sgte(&state.zero(32)).assert()?;
+    state.assert(&retval.sgte(&state.zero(32)))?;
     Ok(ReturnValue::Return(retval))
 }

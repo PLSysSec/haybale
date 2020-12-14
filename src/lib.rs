@@ -154,7 +154,7 @@ pub fn find_zero_of_func<'p>(
             Ok(ReturnValue::Abort) => continue,
             Ok(ReturnValue::Return(bvretval)) => {
                 let state = em.mut_state();
-                bvretval._eq(&zero).assert();
+                state.assert(&bvretval._eq(&zero)).unwrap();
                 if state.sat()? {
                     found = true;
                     break;
@@ -269,9 +269,8 @@ pub fn get_possible_return_values_of_func<'p>(
                 // rule out all the returned values we already have - we're interested in new values
                 for candidate in candidate_values.iter() {
                     if let ReturnValue::Return(candidate) = candidate {
-                        bvretval
-                            ._ne(&state.bv_from_u64(*candidate, return_width))
-                            .assert();
+                        let candidatebv = state.bv_from_u64(*candidate, return_width);
+                        state.assert(&bvretval._ne(&candidatebv)).unwrap();
                     }
                 }
                 match state.get_possible_solutions_for_bv(&bvretval, n).unwrap() {
@@ -310,9 +309,8 @@ pub fn get_possible_return_values_of_func<'p>(
                         // rule out all the thrown values we already have - we're interested in new values
                         for candidate in candidate_values.iter() {
                             if let ReturnValue::Throw(candidate) = candidate {
-                                thrown_value
-                                    ._ne(&state.bv_from_u64(*candidate, thrown_size))
-                                    .assert();
+                                let candidatebv = state.bv_from_u64(*candidate, thrown_size);
+                                state.assert(&thrown_value._ne(&candidatebv)).unwrap();
                             }
                         }
                         match state
