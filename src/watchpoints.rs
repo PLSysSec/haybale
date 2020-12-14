@@ -1,7 +1,7 @@
 //! Structures for defining and processing memory watchpoints
 
 use crate::backend::BV;
-use crate::error::Result;
+use crate::error::{BackendResult, Result};
 use crate::solver_utils;
 use std::collections::HashMap;
 use std::fmt;
@@ -144,7 +144,7 @@ impl Watchpoints {
             .iter()
             .map(|(name, (watchpoint, enabled))| {
                 if *enabled {
-                    if self.is_watchpoint_triggered(watchpoint, op_lower, &op_upper)? {
+                    if self.is_watchpoint_triggered(watchpoint, op_lower, &op_upper).unwrap_warn()? {
                         Ok(Some((name, watchpoint)))
                     } else {
                         Ok(None)
@@ -163,7 +163,7 @@ impl Watchpoints {
         watchpoint: &Watchpoint,
         interval_lower: &V,
         interval_upper: &V,
-    ) -> Result<bool> {
+    ) -> BackendResult<bool> {
         let btor = interval_lower.get_solver();
         let width = interval_lower.get_width();
         assert_eq!(width, interval_upper.get_width());

@@ -225,7 +225,7 @@ fn get_memcpy_length<B: Backend>(
                     &num_bytes.ugt(&max_memcpy_length_bv),
                 ))? {
                     warn!("Encountered a memcpy/memset/memmove with multiple possible lengths, some of which are larger than max_memcpy_length {} bytes. Constraining the length to be at most {} bytes.", max_memcpy_length, max_memcpy_length);
-                    num_bytes.ulte(&max_memcpy_length_bv).assert()?;
+                    state.assert(&num_bytes.ulte(&max_memcpy_length_bv))?;
                 }
             }
             let num_bytes_concrete = match concretize {
@@ -266,9 +266,7 @@ fn get_memcpy_length<B: Backend>(
             };
             info!("Encountered a memcpy/memset/memmove with multiple possible lengths; according to the concretization policy {:?}, chose a length of {} bytes and will constrain the length argument to be {} going forward", concretize, num_bytes_concrete, num_bytes_concrete);
             // actually constrain that `num_bytes` has to now be equal to our chosen concrete value
-            num_bytes
-                ._eq(&state.bv_from_u64(num_bytes_concrete, num_bytes.get_width()))
-                .assert()?;
+            state.assert(&num_bytes._eq(&state.bv_from_u64(num_bytes_concrete, num_bytes.get_width())))?;
             Ok(MemcpyLength::Concrete(num_bytes_concrete))
         },
     }

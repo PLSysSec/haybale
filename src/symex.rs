@@ -79,17 +79,17 @@ pub fn symex_function<'p, B: Backend>(
             match paramval {
                 ParameterVal::Unconstrained => {}, // nothing to do
                 ParameterVal::ExactValue(val) => {
-                    bvparam._eq(&state.bv_from_u64(val, param_size)).assert()?;
+                    state.assert(&bvparam._eq(&state.bv_from_u64(val, param_size)))?;
                 },
                 ParameterVal::Range(low, high) => {
                     debug_assert!(low <= high);
-                    bvparam.ugte(&state.bv_from_u64(low, param_size)).assert()?;
-                    bvparam.ulte(&state.bv_from_u64(high, param_size)).assert()?;
+                    state.assert(&bvparam.ugte(&state.bv_from_u64(low, param_size)))?;
+                    state.assert(&bvparam.ulte(&state.bv_from_u64(high, param_size)))?;
                 },
                 ParameterVal::NonNullPointer => {
                     match param.ty.as_ref() {
                         Type::PointerType { .. } => {
-                            bvparam._ne(&state.zero(param_size)).assert()?;
+                            state.assert(&bvparam._ne(&state.zero(param_size)))?;
                         },
                         ty => panic!("ParameterVal::NonNullPointer used for non-pointer parameter {} (which has type {:?})", &param.name, ty),
                     }
@@ -99,7 +99,7 @@ pub fn symex_function<'p, B: Backend>(
                         Type::PointerType { .. } => {
                             let allocbits = allocbytes * 8;
                             let allocated = state.allocate(allocbits);
-                            bvparam._eq(&allocated).assert()?;
+                            state.assert(&bvparam._eq(&allocated))?;
                         },
                         ty => panic!("ParameterVal::PointerToAllocated used for non-pointer parameter {} (which has type {:?})", &param.name, ty),
                     }
@@ -1848,21 +1848,21 @@ where
             // for now we choose to explore true first, and backtrack to false if necessary
             self.state
                 .save_backtracking_point(&condbr.false_dest, bvcond.not());
-            bvcond.assert()?;
+            self.state.assert(&bvcond)?;
             self.state
                 .cur_loc
                 .move_to_start_of_bb_by_name(&condbr.true_dest);
             self.symex_from_cur_loc_through_end_of_function()
         } else if true_feasible {
             debug!("only the true branch is feasible");
-            bvcond.assert()?; // unnecessary, but may help Boolector more than it hurts?
+            self.state.assert(&bvcond)?; // unnecessary, but may help Boolector more than it hurts?
             self.state
                 .cur_loc
                 .move_to_start_of_bb_by_name(&condbr.true_dest);
             self.symex_from_cur_loc_through_end_of_function()
         } else if false_feasible {
             debug!("only the false branch is feasible");
-            bvcond.not().assert()?; // unnecessary, but may help Boolector more than it hurts?
+            self.state.assert(&bvcond.not())?; // unnecessary, but may help Boolector more than it hurts?
             self.state
                 .cur_loc
                 .move_to_start_of_bb_by_name(&condbr.false_dest);
@@ -1927,7 +1927,7 @@ where
             }
             // follow the first destination
             let (val, name) = &feasible_dests[0];
-            val._eq(&switchval).assert()?; // unnecessary, but may help Boolector more than it hurts?
+            self.state.assert(&val._eq(&switchval))?; // unnecessary, but may help Boolector more than it hurts?
             self.state.cur_loc.move_to_start_of_bb_by_name(name);
             self.symex_from_cur_loc_through_end_of_function()
         }
@@ -2331,10 +2331,10 @@ where
                         self.state
                             .record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
                     } else if true_feasible {
-                        bvcond.assert()?; // unnecessary, but may help Boolector more than it hurts?
+                        self.state.assert(&bvcond)?; // unnecessary, but may help Boolector more than it hurts?
                         self.state.record_bv_result(select, bvtrueval)
                     } else if false_feasible {
-                        bvcond.not().assert()?; // unnecessary, but may help Boolector more than it hurts?
+                        self.state.assert(&bvcond.not())?; // unnecessary, but may help Boolector more than it hurts?
                         self.state.record_bv_result(select, bvfalseval)
                     } else {
                         // this path is unsat

@@ -235,7 +235,7 @@ First, we'll add a constraint to the `State` requiring that the return value
 must be `0`:
 
 ```rust
-retval._eq(&zero).assert();
+state.assert(&retval._eq(&zero));
 ```
 
 and then we'll ask for solutions for each of the parameters, given this constraint:
