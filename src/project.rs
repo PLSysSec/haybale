@@ -65,6 +65,8 @@ impl Project {
     ///
     /// All files in the directory which have the extension `extn` will
     /// be parsed and added to the `Project`.
+    ///
+    /// Panics if there are no files in the directory with that extension.
     pub fn from_bc_dir(path: impl AsRef<Path>, extn: &str) -> Result<Self, io::Error> {
         info!("Parsing bitcode from directory {}", path.as_ref().display());
         let (modules, pointer_size_bits) = Self::modules_from_bc_dir(path, extn, |_| false)?;
@@ -80,6 +82,9 @@ impl Project {
     /// All files in the directory which have the extension `extn`, except those
     /// for which the provided `exclude` closure returns `true`, will be parsed
     /// and added to the `Project`.
+    ///
+    /// Panics if there are no files in the directory with that extension, or if
+    /// they were all excluded.
     pub fn from_bc_dir_with_blacklist(
         path: impl AsRef<Path>,
         extn: &str,
@@ -374,15 +379,15 @@ impl Project {
         }
     }
 
-    /// Returns the modules and the pointer size
+    /// Returns the modules and the pointer size.
     fn modules_from_bc_dir(
         path: impl AsRef<Path>,
         extn: &str,
         exclude: impl Fn(&Path) -> bool,
     ) -> Result<(Vec<Module>, u32), io::Error> {
+        let path = path.as_ref();
         // warning, we use both `Iterator::map` and `Result::map` in here, and it's easy to get them confused
         let (modules, ptr_sizes): (Vec<Module>, Vec<u32>) = path
-            .as_ref()
             .read_dir()?
             .filter(|entry| match entry_is_dir(entry) {
                 Some(true) => false, // filter out if it is a directory
@@ -411,6 +416,9 @@ impl Project {
             .collect::<Result<Vec<(Module, u32)>, _>>()?
             .into_iter()
             .unzip();
+        if modules.is_empty() {
+            panic!("No files found in {:?} with extension {:?}; or all were excluded", path, extn);
+        }
         let mut ptr_sizes = ptr_sizes.into_iter();
         let pointer_size_bits = ptr_sizes.next().expect("at least one path is required");
         assert!(
