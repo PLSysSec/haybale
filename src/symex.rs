@@ -228,14 +228,14 @@ where
                     Instruction::PtrToInt(pti) => self.symex_cast_op(pti),
                     Instruction::IntToPtr(itp) => self.symex_cast_op(itp),
                     Instruction::BitCast(bitcast) => self.symex_cast_op(bitcast),
-                    #[cfg(LLVM_VERSION_10_OR_GREATER)]
+                    #[cfg(feature = "llvm-10-or-greater")]
                     Instruction::Freeze(freeze) => self.symex_cast_op(freeze), // since our BVs are never undef or poison, freeze is the identity operation for us
                     Instruction::Phi(phi) => self.symex_phi(phi),
                     Instruction::Select(select) => self.symex_select(select),
                     Instruction::CmpXchg(cmpxchg) => self.symex_cmpxchg(cmpxchg),
-                    #[cfg(LLVM_VERSION_9_OR_LOWER)]
+                    #[cfg(feature = "llvm-9-or-lower")]
                     Instruction::AtomicRMW(_) => return Err(Error::UnsupportedInstruction("LLVM `AtomicRMW` instruction is not supported for the LLVM 9 version of Haybale; see Haybale issue #12".into())),
-                    #[cfg(LLVM_VERSION_10_OR_GREATER)]
+                    #[cfg(feature = "llvm-10-or-greater")]
                     Instruction::AtomicRMW(armw) => self.symex_atomicrmw(armw),
                     Instruction::Call(call) => match self.symex_call(call) {
                         Err(e) => Err(e),
@@ -517,7 +517,7 @@ where
             Type::IntegerType { .. } => {
                 self.state.record_bv_result(bop, bvoperation(&bvop0, &bvop1))
             },
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => {
                 return Err(Error::UnsupportedInstruction("operation on scalable vectors".into()));
             }
@@ -553,7 +553,7 @@ where
                 },
                 ty => Err(Error::MalformedInstruction(format!("Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}", ty))),
             },
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => {
                 return Err(Error::UnsupportedInstruction("icmp on scalable vectors".into()));
             }
@@ -590,7 +590,7 @@ where
                 self.state
                     .record_bv_result(zext, bvop.zext(dest_size - source_size))
             },
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => {
                 return Err(Error::UnsupportedInstruction("zext on a scalable vector".into()));
             }
@@ -607,7 +607,7 @@ where
                     )
                 })?;
                 let out_el_size = match self.state.type_of(zext).as_ref() {
-                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    #[cfg(feature = "llvm-11-or-greater")]
                     Type::VectorType { scalable: true, .. } => {
                         return Err(Error::MalformedInstruction("ZExt result type is a scalable vector, but its operand is not".into()));
                     }
@@ -658,7 +658,7 @@ where
                 self.state
                     .record_bv_result(sext, bvop.sext(dest_size - source_size))
             },
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => {
                 return Err(Error::UnsupportedInstruction("sext on a scalable vector".into()));
             }
@@ -675,7 +675,7 @@ where
                     )
                 })?;
                 let out_el_size = match self.state.type_of(sext).as_ref() {
-                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    #[cfg(feature = "llvm-11-or-greater")]
                     Type::VectorType { scalable: true, .. } => {
                         return Err(Error::MalformedInstruction("SExt result type is a scalable vector, but its operand is not".into()));
                     }
@@ -725,14 +725,14 @@ where
                 self.state
                     .record_bv_result(trunc, bvop.slice(dest_size - 1, 0))
             },
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => {
                 return Err(Error::UnsupportedInstruction("trunc on a scalable vector".into()));
             }
             Type::VectorType { num_elements, .. } => {
                 let in_vector = self.state.operand_to_bv(&trunc.operand)?;
                 let dest_el_size = match self.state.type_of(trunc).as_ref() {
-                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    #[cfg(feature = "llvm-11-or-greater")]
                     Type::VectorType { scalable: true, .. } => {
                         return Err(Error::MalformedInstruction("Trunc result type is a scalable vector, but its operand is not".into()));
                     },
@@ -1032,7 +1032,7 @@ where
             op0_type
         };
         match op_type.as_ref() {
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => {
                 return Err(Error::UnsupportedInstruction("shufflevector on scalable vectors".into()));
             }
@@ -2281,7 +2281,7 @@ where
                         .record_bv_result(select, bvcond.cond_bv(&bvtrueval, &bvfalseval))
                 }
             },
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => {
                 return Err(Error::UnsupportedInstruction("select on scalable vectors".into()));
             },
@@ -2295,7 +2295,7 @@ where
                     ty => return Err(Error::MalformedInstruction(format!("Expected Select vector condition to be vector of i1, but got vector of {:?}", ty))),
                 };
                 let el_size = match optype.as_ref() {
-                    #[cfg(LLVM_VERSION_11_OR_GREATER)]
+                    #[cfg(feature = "llvm-11-or-greater")]
                     Type::VectorType { scalable: true, .. } => {
                         return Err(Error::MalformedInstruction("Select operands are scalable vectors but condition is not".into()));
                     },
@@ -2375,7 +2375,7 @@ where
             .record_bv_result(cmpxchg, match_flag.concat(&read_value))
     }
 
-    #[cfg(LLVM_VERSION_10_OR_GREATER)]
+    #[cfg(feature = "llvm-10-or-greater")]
     fn symex_atomicrmw(&mut self, armw: &'p instruction::AtomicRMW) -> Result<()> {
         debug!("Symexing atomicrmw {:?}", armw);
         use llvm_ir::instruction::RMWBinOp;

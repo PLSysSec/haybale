@@ -128,7 +128,7 @@ pub fn symex_bswap<'p, B: Backend>(
             assert_eq!(arg.get_width(), *bits);
             Ok(ReturnValue::Return(bswap(&arg, *bits)?))
         },
-        #[cfg(LLVM_VERSION_11_OR_GREATER)]
+        #[cfg(feature = "llvm-11-or-greater")]
         Type::VectorType { scalable: true, .. } => {
             return Err(Error::UnsupportedInstruction("bswap on a scalable vector".into()));
         },
