@@ -286,7 +286,8 @@ backported features.
 
 LLVM 7 and earlier are not supported.
 
-`haybale` works on stable Rust, and requires Rust 1.40 or later.
+`haybale` works on stable Rust, and requires Rust 1.43 or later.
+(LLVM 11 users need Rust 1.44+ instead, due to requirements of `llvm-ir`.)
 
 ## Under the hood
 
@@ -311,6 +312,8 @@ solver (via the Rust [`boolector`] crate).
 - Built-in support for a few more Rust standard-library functions related to
 panic handling
 - [`State`] has a new public method [`get_bv_by_irname()`]
+- LLVM 11 users need Rust 1.44+, due to requirements of `llvm-ir`. LLVM 9 or
+10 users still need only Rust 1.43+.
 
 ### Version 0.6.1 (Sep 17, 2020)
 
@@ -329,6 +332,8 @@ feature.
 - Updated `llvm-ir` dependency to 0.7.1 (from 0.6.0), which includes runtime
 and memory-usage performance improvements, particularly for large bitcode
 files. This also involves a few breaking changes to parts of `haybale`'s API.
+- `haybale` now requires Rust 1.43+ (previously 1.40+) due to requirements
+of `llvm-ir` 0.7.1.
 
 ### Version 0.5.1 (Aug 31, 2020)
 
