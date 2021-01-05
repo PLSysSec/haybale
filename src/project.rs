@@ -339,7 +339,7 @@ impl Project {
             Type::IntegerType { bits } => Some(*bits),
             Type::PointerType { .. } => Some(self.pointer_size_bits()),
             Type::FPType(fpt) => Some(Self::fp_size_in_bits(*fpt)),
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             Type::VectorType { scalable: true, .. } => panic!("size_in_bits: scalable vectors are not supported"),
             Type::ArrayType {
                 element_type,
@@ -369,7 +369,7 @@ impl Project {
     pub fn fp_size_in_bits(fpt: FPType) -> u32 {
         match fpt {
             FPType::Half => 16,
-            #[cfg(LLVM_VERSION_11_OR_GREATER)]
+            #[cfg(feature = "llvm-11-or-greater")]
             FPType::BFloat => 16,
             FPType::Single => 32,
             FPType::Double => 64,
