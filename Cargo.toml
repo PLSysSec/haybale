@@ -13,15 +13,15 @@ license = "MIT"
 [dependencies]
 llvm-ir = "0.7.3"
 boolector = "0.4.1"
-either = "1.5.3"
-itertools = "0.9.0"
+either = "1.6"
+itertools = "0.10"
 reduce = "0.1"
 cpp_demangle = "0.2"
 rustc-demangle = "0.1"
 log = "0.4.8"
 
 [dev-dependencies]
-env_logger = "0.7.1"
+env_logger = "0.8"
 
 [features]
 # Select the LLVM version to be compatible with.
@@ -32,8 +32,8 @@ llvm-11 = ["llvm-ir/llvm-11", "llvm-11-or-lower", "llvm-11-or-greater"]
 
 ###
 # For convenience, these automatically-enabled features allow us to avoid
-# checking complex combinations of features all the time. they are not meant to
-# be manually enabled, use the above llvm-x features instead
+# checking complex combinations of features all the time. They are not meant to
+# be manually enabled; use the above llvm-x features instead
 llvm-9-or-greater = []
 llvm-10-or-greater = ["llvm-9-or-greater"]
 llvm-11-or-greater = ["llvm-10-or-greater"]
