@@ -178,17 +178,28 @@ impl<'p> PathEntry<'p> {
     }
 
     /// Get all the source locations touched on this path segment.
+    ///
     /// Consecutive LLVM instructions with the same source location will be
     /// collapsed, so no two consecutive items of the returned iterator will be
     /// equal.
+    ///
     /// The returned iterator may also be empty, for instance if no debuginfo is
     /// present.
-    pub(crate) fn get_all_source_locs(&self) -> impl Iterator<Item = &'p DebugLoc> {
+    fn get_all_source_locs(&self) -> impl Iterator<Item = &'p DebugLoc> {
+        let num_instrs_to_skip = match self.0.instr {
+            BBInstrIndex::Instr(instr) => instr,
+            BBInstrIndex::Terminator => self.0.bb.instrs.len(),
+        };
+        // This still incorrectly assumes that the path segment goes all the way
+        // to the end of the basic block
         self.0
             .bb
             .instrs
             .iter()
-            .filter_map(|instr| instr.get_debug_loc().as_ref())
+            .map(|instr| instr.get_debug_loc().as_ref())
+            .chain(std::iter::once(self.0.bb.term.get_debug_loc().as_ref()))
+            .skip(num_instrs_to_skip)
+            .filter_map(|debugloc| debugloc) // take only the Some's
             .dedup()
     }
 }
