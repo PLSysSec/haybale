@@ -1398,8 +1398,13 @@ where
                         // have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function
                     }
                     info!(
-                        "Entering function {:?} in module {:?}",
-                        called_funcname, &callee_mod.name
+                        "Entering function {:?}{}",
+                        called_funcname,
+                        if self.state.config.print_module_name {
+                            format!("in module {:?}", &callee_mod.name)
+                        } else {
+                            String::new()
+                        },
                     );
                     let returned_bv = self
                         .symex_from_cur_loc_through_end_of_function()?
