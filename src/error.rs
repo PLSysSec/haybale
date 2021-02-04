@@ -244,4 +244,9 @@ impl<T> BackendResult<T> {
             panic!("unwrap_warn: there was a warning: {}", self.warnings[0])
         }
     }
+
+    /// Unwrap a `BackendResult` into a `Result`, discarding any warnings.
+    pub fn discard_warnings(self) -> Result<T> {
+        self.res
+    }
 }
