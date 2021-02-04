@@ -250,12 +250,16 @@ macro_rules! throw_basic_errs {
 */
 
 /// If the expr is a `BackendResult::Err`, throw it.
-/// Otherwise, this evaluates to the `Ok` value (panicking if there were any warnings).
+/// Otherwise, this evaluates to the `Ok` value (dropping any warnings).
 /// This is like `?`, but for expressions of type `BackendResult` in functions returning `BackendResult`.
+//
+// Normally we don't drop warnings, but we do for this macro, which is only used
+// in `check_for_common_solutions()`, for operations that "aren't real" i.e.
+// aren't part of the actual program.
 macro_rules! throw_errs {
     ($expr:expr) => {
         match $expr.res {
-            Ok(_) => $expr.unwrap_warn().unwrap(),
+            Ok(_) => $expr.discard_warnings().unwrap(),
             Err(err) => return BackendResult {
                 res: Err(err),
                 warnings: $expr.warnings,
