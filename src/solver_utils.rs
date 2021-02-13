@@ -211,7 +211,8 @@ pub fn get_possible_solutions_for_bv<V: BV>(
                     solver.push(1);
                     for solution in solutions.iter() {
                         // Temporarily constrain that the solution can't be `solution` - we want to see if other solutions exist
-                        bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str())).assert().unwrap_warn()?;
+                        // We discard warnings here because this isn't a "real" operation, i.e., it's not part of the actual program execution
+                        bv._ne(&BV::from_binary_str(solver.clone(), solution.as_01x_str())).assert().discard_warnings()?;
                     }
                     warn!("A call to get_possible_solutions_for_bv() is resulting in a call to sat() with model generation enabled. Experimentally, these types of calls can be very slow. The BV is {:?}", bv);
                     solver.set_opt(BtorOption::ModelGen(ModelGen::All));
@@ -219,7 +220,8 @@ pub fn get_possible_solutions_for_bv<V: BV>(
                         let val = bv.get_a_solution()?.disambiguate();
                         solutions.insert(val.clone());
                         // Temporarily constrain that the solution can't be `val`, to see if there is another solution
-                        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert().unwrap_warn()?;
+                        // We discard warnings here because this isn't a "real" operation, i.e., it's not part of the actual program execution
+                        bv._ne(&BV::from_binary_str(solver.clone(), val.as_01x_str())).assert().discard_warnings()?;
                     }
                     solver.pop(1);
                     if solutions.len() > n {
@@ -443,7 +445,9 @@ pub fn max_possible_solution_for_bv_as_u64<V: BV>(
         return Ok(Some(u));
     }
     // Shortcut: check all-ones first, and if it's a valid solution, just return that
-    if bvs_can_be_equal(&solver, bv, &V::ones(solver.clone(), width)).unwrap_warn()? {
+    // We discard warnings here because this isn't a "real" operation, i.e., it's not
+    // part of the actual program execution
+    if bvs_can_be_equal(&solver, bv, &V::ones(solver.clone(), width)).discard_warnings()? {
         if width == 64 {
             return Ok(Some(std::u64::MAX));
         } else {
@@ -463,7 +467,9 @@ pub fn max_possible_solution_for_bv_as_u64<V: BV>(
         let mid = if mid / 2 > min { mid / 2 } else { mid }; // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
-        bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert().unwrap_warn()?;
+        // We discard warnings here because this isn't a "real" operation, i.e., it's not
+        // part of the actual program execution
+        bv.ugte(&V::from_u64(solver.clone(), mid, width)).assert().discard_warnings()?;
         if sat(&solver)? {
             min = mid;
         } else {
@@ -502,7 +508,9 @@ pub fn min_possible_solution_for_bv_as_u64<V: BV>(
         return Ok(Some(u));
     }
     // Shortcut: check `0` first, and if it's a valid solution, just return that
-    if bvs_can_be_equal(&solver, bv, &V::zero(solver.clone(), width)).unwrap_warn()? {
+    // We discard warnings here because this isn't a "real" operation, i.e., it's not
+    // part of the actual program execution
+    if bvs_can_be_equal(&solver, bv, &V::zero(solver.clone(), width)).discard_warnings()? {
         return Ok(Some(0));
     }
     // min is exclusive (we know `0` doesn't work), max is inclusive
@@ -518,7 +526,9 @@ pub fn min_possible_solution_for_bv_as_u64<V: BV>(
         let mid = if mid / 2 > min { mid / 2 } else { mid }; // as another small optimization, rather than checking the midpoint (pure binary search) we bias towards the small end (checking effectively the 25th percentile if min is 0) as we assume small positive numbers are more common, this gets us towards 0 with half the number of solves
         solver.push(1);
         pushes += 1;
-        bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert().unwrap_warn()?;
+        // We discard warnings here because this isn't a "real" operation, i.e., it's not
+        // part of the actual program execution
+        bv.ulte(&V::from_u64(solver.clone(), mid, width)).assert().discard_warnings()?;
         if sat(&solver)? {
             max = mid;
         } else {
