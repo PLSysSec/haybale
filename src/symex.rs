@@ -4,9 +4,14 @@ use llvm_ir::instruction::{BinaryOp, InlineAssembly};
 use llvm_ir::types::NamedStructDef;
 use llvm_ir::*;
 use log::{debug, info};
-use reduce::Reduce;
 use std::convert::TryInto;
 use std::fmt;
+
+// Rust 1.51.0 introduced its own `.reduce()` on the main `Iterator` trait.
+// So, starting with 1.51.0, we don't need `reduce::Reduce`, and in fact it
+// causes a conflict.
+#[rustversion::before(1.51)]
+use reduce::Reduce;
 
 use crate::backend::*;
 use crate::config::*;

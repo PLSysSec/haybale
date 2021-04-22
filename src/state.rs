@@ -5,13 +5,18 @@ use itertools::Itertools;
 use llvm_ir::types::{FPType, NamedStructDef, Typed};
 use llvm_ir::*;
 use log::{debug, info, warn};
-use reduce::Reduce;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+
+// Rust 1.51.0 introduced its own `.reduce()` on the main `Iterator` trait.
+// So, starting with 1.51.0, we don't need `reduce::Reduce`, and in fact it
+// causes a conflict.
+#[rustversion::before(1.51)]
+use reduce::Reduce;
 
 use crate::alloc::Alloc;
 use crate::backend::*;
