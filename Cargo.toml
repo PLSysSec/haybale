@@ -19,6 +19,7 @@ reduce = "0.1"
 cpp_demangle = "0.2"
 rustc-demangle = "0.1"
 log = "0.4.8"
+rustversion = "1.0"
 
 [dev-dependencies]
 env_logger = "0.7.1"

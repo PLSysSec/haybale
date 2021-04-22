@@ -8,8 +8,13 @@ use crate::solver_utils::PossibleSolutions;
 use crate::state::State;
 use llvm_ir::Operand;
 use log::{debug, info, warn};
-use reduce::Reduce;
 use std::convert::{TryFrom, TryInto};
+
+// Rust 1.51.0 introduced its own `.reduce()` on the main `Iterator` trait.
+// So, starting with 1.51.0, we don't need `reduce::Reduce`, and in fact it
+// causes a conflict.
+#[rustversion::before(1.51)]
+use reduce::Reduce;
 
 /// Set `num_bytes` bytes of memory at address `addr` each to the value `val`.
 /// Each individual byte will be set to `val`, so only the lowest 8 bits of `val`

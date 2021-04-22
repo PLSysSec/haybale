@@ -10,8 +10,13 @@ use crate::error::*;
 use crate::solver_utils::bvs_can_be_equal;
 use boolector::Btor;
 use log::debug;
-use reduce::Reduce;
 use std::rc::Rc;
+
+// Rust 1.51.0 introduced its own `.reduce()` on the main `Iterator` trait.
+// So, starting with 1.51.0, we don't need `reduce::Reduce`, and in fact it
+// causes a conflict.
+#[rustversion::before(1.51)]
+use reduce::Reduce;
 
 type BV = boolector::BV<Rc<Btor>>;
 type Array = boolector::Array<Rc<Btor>>;
