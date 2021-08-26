@@ -1,4 +1,7 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source to the Rust file `src/hooks/intrinsics.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>intrinsics.rs.html -- source</title><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../dark.css"><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script src="../../../storage.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="shortcut icon" href="../../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../../haybale/index.html'><div class='logo-container'><img src='../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../../settings.html"><img src="../../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">   1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/hooks/intrinsics.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>intrinsics.rs - source</title><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled ><script id="default-settings"></script><script src="../../../storage.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+<link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png">
+<link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../../haybale/index.html'><div class='logo-container rust-logo'><img src='../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><script src="../../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../../../settings.html"><img src="../../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">   1</span>
 <span id="2">   2</span>
 <span id="3">   3</span>
 <span id="4">   4</span>
@@ -1081,36 +1084,6 @@
 <span id="1081">1081</span>
 <span id="1082">1082</span>
 <span id="1083">1083</span>
-<span id="1084">1084</span>
-<span id="1085">1085</span>
-<span id="1086">1086</span>
-<span id="1087">1087</span>
-<span id="1088">1088</span>
-<span id="1089">1089</span>
-<span id="1090">1090</span>
-<span id="1091">1091</span>
-<span id="1092">1092</span>
-<span id="1093">1093</span>
-<span id="1094">1094</span>
-<span id="1095">1095</span>
-<span id="1096">1096</span>
-<span id="1097">1097</span>
-<span id="1098">1098</span>
-<span id="1099">1099</span>
-<span id="1100">1100</span>
-<span id="1101">1101</span>
-<span id="1102">1102</span>
-<span id="1103">1103</span>
-<span id="1104">1104</span>
-<span id="1105">1105</span>
-<span id="1106">1106</span>
-<span id="1107">1107</span>
-<span id="1108">1108</span>
-<span id="1109">1109</span>
-<span id="1110">1110</span>
-<span id="1111">1111</span>
-<span id="1112">1112</span>
-<span id="1113">1113</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Default hooks for some LLVM intrinsics</span>
 
@@ -1118,7 +1091,6 @@
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="ident">IsCall</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">hook_utils</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">return_value</span>::<span class="ident">ReturnValue</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::<span class="ident">State</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">symex</span>::<span class="ident">unary_on_vector</span>;
@@ -1126,7 +1098,6 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::<span class="ident">TryInto</span>;
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_memset</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1166,7 +1137,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_memcpy</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1222,7 +1192,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_bswap</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1242,7 +1211,7 @@
             <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">arg</span>.<span class="ident">get_width</span>(), <span class="kw-2">*</span><span class="ident">bits</span>);
             <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bswap</span>(<span class="kw-2">&amp;</span><span class="ident">arg</span>, <span class="kw-2">*</span><span class="ident">bits</span>)<span class="question-mark">?</span>))
         },
-        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
         <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;bswap on a scalable vector&quot;</span>.<span class="ident">into</span>()));
         },
@@ -1318,7 +1287,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_objectsize</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1340,7 +1308,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_assume</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1366,7 +1333,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_uadd_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1387,7 +1353,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_sadd_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1408,7 +1373,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_usub_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1429,7 +1393,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_ssub_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1450,7 +1413,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_umul_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1471,7 +1433,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_smul_with_overflow</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1492,7 +1453,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_uadd_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1510,7 +1470,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_sadd_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1528,7 +1487,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_usub_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1546,7 +1504,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_ssub_sat</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1564,7 +1521,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_ctlz</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1674,7 +1630,6 @@
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_cttz</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
-    <span class="ident">_proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">call</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">IsCall</span>,
 ) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ReturnValue</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1857,7 +1812,7 @@
 
         {
             <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">four</span>.<span class="ident">clone</span>(), <span class="ident">one_hundred</span>.<span class="ident">clone</span>());
-            <span class="kw">match</span> <span class="ident">symex_sadd_with_overflow</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+            <span class="kw">match</span> <span class="ident">symex_sadd_with_overflow</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
                 <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                     <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                     <span class="kw">let</span> <span class="ident">overflow</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">8</span>, <span class="number">8</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
@@ -1870,7 +1825,7 @@
 
         {
             <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">sixty_four</span>.<span class="ident">clone</span>(), <span class="ident">one_hundred</span>.<span class="ident">clone</span>());
-            <span class="kw">match</span> <span class="ident">symex_sadd_with_overflow</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+            <span class="kw">match</span> <span class="ident">symex_sadd_with_overflow</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
                 <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                     <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                     <span class="kw">let</span> <span class="ident">overflow</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">8</span>, <span class="number">8</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
@@ -1896,7 +1851,7 @@
 
         {
             <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">four</span>.<span class="ident">clone</span>(), <span class="ident">eight</span>.<span class="ident">clone</span>());
-            <span class="kw">match</span> <span class="ident">symex_umul_with_overflow</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+            <span class="kw">match</span> <span class="ident">symex_umul_with_overflow</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
                 <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                     <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                     <span class="kw">let</span> <span class="ident">overflow</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">8</span>, <span class="number">8</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
@@ -1909,7 +1864,7 @@
 
         {
             <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">eight</span>.<span class="ident">clone</span>(), <span class="ident">sixty_four</span>.<span class="ident">clone</span>());
-            <span class="kw">match</span> <span class="ident">symex_umul_with_overflow</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+            <span class="kw">match</span> <span class="ident">symex_umul_with_overflow</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
                 <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                     <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">7</span>, <span class="number">0</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                     <span class="kw">let</span> <span class="ident">overflow</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">slice</span>(<span class="number">8</span>, <span class="number">8</span>).<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
@@ -1935,7 +1890,7 @@
         <span class="kw">let</span> <span class="ident">six</span> <span class="op">=</span> <span class="ident">constant_operand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">4</span>, <span class="ident">value</span>: <span class="number">6</span> });
 
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">two</span>.<span class="ident">clone</span>(), <span class="ident">one</span>.<span class="ident">clone</span>());
-        <span class="kw">match</span> <span class="ident">symex_usub_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_usub_sat</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(), <span class="number">1</span>);
             },
@@ -1943,7 +1898,7 @@
         }
 
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">two</span>.<span class="ident">clone</span>(), <span class="ident">six</span>.<span class="ident">clone</span>());
-        <span class="kw">match</span> <span class="ident">symex_usub_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_usub_sat</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(), <span class="number">0</span>);
             },
@@ -1974,7 +1929,7 @@
         });
 
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">one</span>.<span class="ident">clone</span>(), <span class="ident">two</span>.<span class="ident">clone</span>());
-        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(), <span class="number">3</span>);
             },
@@ -1982,7 +1937,7 @@
         }
 
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">five</span>.<span class="ident">clone</span>(), <span class="ident">six</span>.<span class="ident">clone</span>());
-        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(), <span class="number">7</span>);
             },
@@ -1990,7 +1945,7 @@
         }
 
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">minusfour</span>.<span class="ident">clone</span>(), <span class="ident">two</span>.<span class="ident">clone</span>());
-        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="macro">assert_eq</span><span class="macro">!</span>(
                     <span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(),
@@ -2001,7 +1956,7 @@
         }
 
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(<span class="ident">minusfour</span>.<span class="ident">clone</span>(), <span class="ident">minusfive</span>.<span class="ident">clone</span>());
-        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_sadd_sat</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="macro">assert_eq</span><span class="macro">!</span>(
                     <span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>(),
@@ -2012,13 +1967,7 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">test_ctlz</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(
-        <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
-        <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">DefaultBackend</span><span class="op">&gt;</span>,
-        <span class="ident">width</span>: <span class="ident">u32</span>,
-        <span class="ident">input</span>: <span class="ident">u32</span>,
-        <span class="ident">output</span>: <span class="ident">u32</span>,
-    ) {
+    <span class="kw">fn</span> <span class="ident">test_ctlz</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">DefaultBackend</span><span class="op">&gt;</span>, <span class="ident">width</span>: <span class="ident">u32</span>, <span class="ident">input</span>: <span class="ident">u32</span>, <span class="ident">output</span>: <span class="ident">u32</span>) {
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(
             <span class="ident">constant_operand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> {
                 <span class="ident">bits</span>: <span class="ident">width</span>,
@@ -2026,7 +1975,7 @@
             }),
             <span class="ident">constant_operand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">1</span>, <span class="ident">value</span>: <span class="number">1</span> }),
         );
-        <span class="kw">match</span> <span class="ident">symex_ctlz</span>(<span class="ident">proj</span>, <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_ctlz</span>(<span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">outval</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                 <span class="macro">assert_eq</span><span class="macro">!</span>(
@@ -2043,13 +1992,7 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">test_cttz</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(
-        <span class="ident">proj</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
-        <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">DefaultBackend</span><span class="op">&gt;</span>,
-        <span class="ident">width</span>: <span class="ident">u32</span>,
-        <span class="ident">input</span>: <span class="ident">u32</span>,
-        <span class="ident">output</span>: <span class="ident">u32</span>,
-    ) {
+    <span class="kw">fn</span> <span class="ident">test_cttz</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span><span class="op">&gt;</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">DefaultBackend</span><span class="op">&gt;</span>, <span class="ident">width</span>: <span class="ident">u32</span>, <span class="ident">input</span>: <span class="ident">u32</span>, <span class="ident">output</span>: <span class="ident">u32</span>) {
         <span class="kw">let</span> <span class="ident">call</span> <span class="op">=</span> <span class="ident">DummyCall</span>::<span class="ident">new_twoarg_call</span>(
             <span class="ident">constant_operand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> {
                 <span class="ident">bits</span>: <span class="ident">width</span>,
@@ -2057,7 +2000,7 @@
             }),
             <span class="ident">constant_operand</span>(<span class="ident">Constant</span>::<span class="ident">Int</span> { <span class="ident">bits</span>: <span class="number">1</span>, <span class="ident">value</span>: <span class="number">1</span> }),
         );
-        <span class="kw">match</span> <span class="ident">symex_cttz</span>(<span class="ident">proj</span>, <span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
+        <span class="kw">match</span> <span class="ident">symex_cttz</span>(<span class="ident">state</span>, <span class="kw-2">&amp;</span><span class="ident">call</span>).<span class="ident">unwrap</span>() {
             <span class="ident">ReturnValue</span>::<span class="ident">Return</span>(<span class="ident">bv</span>) <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">outval</span> <span class="op">=</span> <span class="ident">bv</span>.<span class="ident">as_u64</span>().<span class="ident">unwrap</span>();
                 <span class="macro">assert_eq</span><span class="macro">!</span>(
@@ -2083,67 +2026,67 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">blank_state</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="string">&quot;test_func&quot;</span>);
 
         <span class="comment">// 32-bit ctlz(0) = 32</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0</span>, <span class="number">32</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0</span>, <span class="number">32</span>);
         <span class="comment">// 16-bit ctlz(0) = 16</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0</span>, <span class="number">16</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0</span>, <span class="number">16</span>);
         <span class="comment">// 8-bit ctlz(0) = 8</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0</span>, <span class="number">8</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0</span>, <span class="number">8</span>);
 
         <span class="comment">// 32-bit ctlz(1) = 31</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">1</span>, <span class="number">31</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">1</span>, <span class="number">31</span>);
         <span class="comment">// 16-bit ctlz(1) = 15</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">1</span>, <span class="number">15</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">1</span>, <span class="number">15</span>);
         <span class="comment">// 8-bit ctlz(1) = 7</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">7</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">7</span>);
 
         <span class="comment">// 32-bit ctlz(0x0000_000F) = 28</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0000_000F</span>, <span class="number">28</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0000_000F</span>, <span class="number">28</span>);
         <span class="comment">// 16-bit ctlz(0x000F) = 12</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x000F</span>, <span class="number">12</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x000F</span>, <span class="number">12</span>);
         <span class="comment">// 8-bit ctlz(0x0F) = 4</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x0F</span>, <span class="number">4</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x0F</span>, <span class="number">4</span>);
 
         <span class="comment">// 32-bit ctlz(0x0000_0008) = 28</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0000_0008</span>, <span class="number">28</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0000_0008</span>, <span class="number">28</span>);
         <span class="comment">// 16-bit ctlz(0x0008) = 12</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x0008</span>, <span class="number">12</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x0008</span>, <span class="number">12</span>);
         <span class="comment">// 8-bit ctlz(0x08) = 4</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x08</span>, <span class="number">4</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x08</span>, <span class="number">4</span>);
 
         <span class="comment">// 32-bit ctlz(0x0001_0000) = 15</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0001_0000</span>, <span class="number">15</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0001_0000</span>, <span class="number">15</span>);
         <span class="comment">// 16-bit ctlz(0x0100) = 7</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x0100</span>, <span class="number">7</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x0100</span>, <span class="number">7</span>);
         <span class="comment">// 8-bit ctlz(0x10) = 3</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x10</span>, <span class="number">3</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x10</span>, <span class="number">3</span>);
 
         <span class="comment">// 32-bit ctlz(0x0010_1234) = 11</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0010_1234</span>, <span class="number">11</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0010_1234</span>, <span class="number">11</span>);
         <span class="comment">// 16-bit ctlz(0x037B) = 6</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x037B</span>, <span class="number">6</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x037B</span>, <span class="number">6</span>);
         <span class="comment">// 8-bit ctlz(0x37) = 2</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x37</span>, <span class="number">2</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x37</span>, <span class="number">2</span>);
 
         <span class="comment">// 32-bit ctlz(0x5555_AAAA) = 1</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x5555_AAAA</span>, <span class="number">1</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x5555_AAAA</span>, <span class="number">1</span>);
         <span class="comment">// 16-bit ctlz(0x55AA) = 1</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x55AA</span>, <span class="number">1</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x55AA</span>, <span class="number">1</span>);
         <span class="comment">// 8-bit ctlz(0x5A) = 1</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x5A</span>, <span class="number">1</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x5A</span>, <span class="number">1</span>);
 
         <span class="comment">// 32-bit ctlz(0xFFFF_FFFF) = 0</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xFFFF_FFFF</span>, <span class="number">0</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xFFFF_FFFF</span>, <span class="number">0</span>);
         <span class="comment">// 16-bit ctlz(0xFFFF) = 0</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xFFFF</span>, <span class="number">0</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xFFFF</span>, <span class="number">0</span>);
         <span class="comment">// 8-bit ctlz(0xFF) = 0</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xFF</span>, <span class="number">0</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xFF</span>, <span class="number">0</span>);
 
         <span class="comment">// 32-bit ctlz(0x8000_000F) = 0</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x8000_000F</span>, <span class="number">0</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x8000_000F</span>, <span class="number">0</span>);
         <span class="comment">// 16-bit ctlz(0x800F) = 0</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x800F</span>, <span class="number">0</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x800F</span>, <span class="number">0</span>);
         <span class="comment">// 8-bit ctlz(0x8F) = 0</span>
-        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x8F</span>, <span class="number">0</span>);
+        <span class="ident">test_ctlz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x8F</span>, <span class="number">0</span>);
     }
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
@@ -2155,75 +2098,76 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">blank_state</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="string">&quot;test_func&quot;</span>);
 
         <span class="comment">// 32-bit cttz(0) = 32</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0</span>, <span class="number">32</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0</span>, <span class="number">32</span>);
         <span class="comment">// 16-bit cttz(0) = 16</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0</span>, <span class="number">16</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0</span>, <span class="number">16</span>);
         <span class="comment">// 8-bit cttz(0) = 8</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0</span>, <span class="number">8</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0</span>, <span class="number">8</span>);
 
         <span class="comment">// 32-bit cttz(1) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">1</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">1</span>, <span class="number">0</span>);
         <span class="comment">// 16-bit cttz(1) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">1</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">1</span>, <span class="number">0</span>);
         <span class="comment">// 8-bit cttz(1) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">0</span>);
 
         <span class="comment">// 32-bit cttz(0x8000_0000) = 31</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x8000_0000</span>, <span class="number">31</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x8000_0000</span>, <span class="number">31</span>);
         <span class="comment">// 16-bit cttz(0x8000) = 15</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x8000</span>, <span class="number">15</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x8000</span>, <span class="number">15</span>);
         <span class="comment">// 8-bit cttz(0x80) = 7</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x80</span>, <span class="number">7</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x80</span>, <span class="number">7</span>);
 
         <span class="comment">// 32-bit cttz(0xF000_0000) = 28</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xF000_0000</span>, <span class="number">28</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xF000_0000</span>, <span class="number">28</span>);
         <span class="comment">// 16-bit cttz(0xF000) = 12</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xF000</span>, <span class="number">12</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xF000</span>, <span class="number">12</span>);
         <span class="comment">// 8-bit cttz(0xF0) = 4</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xF0</span>, <span class="number">4</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xF0</span>, <span class="number">4</span>);
 
         <span class="comment">// 32-bit cttz(0x1000_0000) = 28</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x1000_0000</span>, <span class="number">28</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x1000_0000</span>, <span class="number">28</span>);
         <span class="comment">// 16-bit cttz(0x1000) = 12</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x1000</span>, <span class="number">12</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x1000</span>, <span class="number">12</span>);
         <span class="comment">// 8-bit cttz(0x10) = 4</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x10</span>, <span class="number">4</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x10</span>, <span class="number">4</span>);
 
         <span class="comment">// 32-bit cttz(0x0000_F000) = 12</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0000_F000</span>, <span class="number">12</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x0000_F000</span>, <span class="number">12</span>);
         <span class="comment">// 16-bit cttz(0x00F0) = 4</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x00F0</span>, <span class="number">4</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x00F0</span>, <span class="number">4</span>);
         <span class="comment">// 8-bit cttz(0x0C) = 2</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x0C</span>, <span class="number">2</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x0C</span>, <span class="number">2</span>);
 
         <span class="comment">// 32-bit cttz(0x4321_FA00) = 9</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x4321_FA00</span>, <span class="number">9</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x4321_FA00</span>, <span class="number">9</span>);
         <span class="comment">// 16-bit cttz(0x43A0) = 5</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x43A0</span>, <span class="number">5</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x43A0</span>, <span class="number">5</span>);
         <span class="comment">// 8-bit cttz(0x48) = 3</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x48</span>, <span class="number">3</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x48</span>, <span class="number">3</span>);
 
         <span class="comment">// 32-bit cttz(0x5555_AAAA) = 1</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x5555_AAAA</span>, <span class="number">1</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0x5555_AAAA</span>, <span class="number">1</span>);
         <span class="comment">// 16-bit cttz(0x55AA) = 1</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x55AA</span>, <span class="number">1</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0x55AA</span>, <span class="number">1</span>);
         <span class="comment">// 8-bit cttz(0x5A) = 1</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x5A</span>, <span class="number">1</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0x5A</span>, <span class="number">1</span>);
 
         <span class="comment">// 32-bit cttz(0xFFFF_FFFF) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xFFFF_FFFF</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xFFFF_FFFF</span>, <span class="number">0</span>);
         <span class="comment">// 16-bit cttz(0xFFFF) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xFFFF</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xFFFF</span>, <span class="number">0</span>);
         <span class="comment">// 8-bit cttz(0xFF) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xFF</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xFF</span>, <span class="number">0</span>);
 
         <span class="comment">// 32-bit cttz(0xF000_0001) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xF000_0001</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">32</span>, <span class="number">0xF000_0001</span>, <span class="number">0</span>);
         <span class="comment">// 16-bit cttz(0xF001) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xF001</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">16</span>, <span class="number">0xF001</span>, <span class="number">0</span>);
         <span class="comment">// 8-bit cttz(0xF1) = 0</span>
-        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xF1</span>, <span class="number">0</span>);
+        <span class="ident">test_cttz</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">state</span>, <span class="number">8</span>, <span class="number">0xF1</span>, <span class="number">0</span>);
     }
 }
 </pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../../";window.currentCrate = "haybale";</script><script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script><script defer src="../../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="haybale"></div>
+    <script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script><script defer src="../../../search-index.js"></script></body></html>

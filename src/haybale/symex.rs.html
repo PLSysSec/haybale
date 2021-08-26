@@ -1,4 +1,7 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source to the Rust file `src/symex.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>symex.rs.html -- source</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../haybale/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">   1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/symex.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>symex.rs - source</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled ><script id="default-settings"></script><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+<link rel="alternate icon" type="image/png" href="../../favicon-16x16.png">
+<link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../haybale/index.html'><div class='logo-container rust-logo'><img src='../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">   1</span>
 <span id="2">   2</span>
 <span id="3">   3</span>
 <span id="4">   4</span>
@@ -3992,6 +3995,80 @@
 <span id="3992">3992</span>
 <span id="3993">3993</span>
 <span id="3994">3994</span>
+<span id="3995">3995</span>
+<span id="3996">3996</span>
+<span id="3997">3997</span>
+<span id="3998">3998</span>
+<span id="3999">3999</span>
+<span id="4000">4000</span>
+<span id="4001">4001</span>
+<span id="4002">4002</span>
+<span id="4003">4003</span>
+<span id="4004">4004</span>
+<span id="4005">4005</span>
+<span id="4006">4006</span>
+<span id="4007">4007</span>
+<span id="4008">4008</span>
+<span id="4009">4009</span>
+<span id="4010">4010</span>
+<span id="4011">4011</span>
+<span id="4012">4012</span>
+<span id="4013">4013</span>
+<span id="4014">4014</span>
+<span id="4015">4015</span>
+<span id="4016">4016</span>
+<span id="4017">4017</span>
+<span id="4018">4018</span>
+<span id="4019">4019</span>
+<span id="4020">4020</span>
+<span id="4021">4021</span>
+<span id="4022">4022</span>
+<span id="4023">4023</span>
+<span id="4024">4024</span>
+<span id="4025">4025</span>
+<span id="4026">4026</span>
+<span id="4027">4027</span>
+<span id="4028">4028</span>
+<span id="4029">4029</span>
+<span id="4030">4030</span>
+<span id="4031">4031</span>
+<span id="4032">4032</span>
+<span id="4033">4033</span>
+<span id="4034">4034</span>
+<span id="4035">4035</span>
+<span id="4036">4036</span>
+<span id="4037">4037</span>
+<span id="4038">4038</span>
+<span id="4039">4039</span>
+<span id="4040">4040</span>
+<span id="4041">4041</span>
+<span id="4042">4042</span>
+<span id="4043">4043</span>
+<span id="4044">4044</span>
+<span id="4045">4045</span>
+<span id="4046">4046</span>
+<span id="4047">4047</span>
+<span id="4048">4048</span>
+<span id="4049">4049</span>
+<span id="4050">4050</span>
+<span id="4051">4051</span>
+<span id="4052">4052</span>
+<span id="4053">4053</span>
+<span id="4054">4054</span>
+<span id="4055">4055</span>
+<span id="4056">4056</span>
+<span id="4057">4057</span>
+<span id="4058">4058</span>
+<span id="4059">4059</span>
+<span id="4060">4060</span>
+<span id="4061">4061</span>
+<span id="4062">4062</span>
+<span id="4063">4063</span>
+<span id="4064">4064</span>
+<span id="4065">4065</span>
+<span id="4066">4066</span>
+<span id="4067">4067</span>
+<span id="4068">4068</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">either</span>::<span class="ident">Either</span>;
 <span class="kw">use</span> <span class="ident">itertools</span>::<span class="ident">Itertools</span>;
@@ -3999,32 +4076,45 @@
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">types</span>::<span class="ident">NamedStructDef</span>;
 <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">debug</span>, <span class="ident">info</span>};
-<span class="kw">use</span> <span class="ident">reduce</span>::<span class="ident">Reduce</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::<span class="ident">TryInto</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
+
+<span class="comment">// Rust 1.51.0 introduced its own `.reduce()` on the main `Iterator` trait.</span>
+<span class="comment">// So, starting with 1.51.0, we don&#39;t need `reduce::Reduce`, and in fact it</span>
+<span class="comment">// causes a conflict.</span>
+<span class="attribute">#[<span class="ident">rustversion</span>::<span class="ident">before</span>(<span class="number">1.51</span>)]</span>
+<span class="kw">use</span> <span class="ident">reduce</span>::<span class="ident">Reduce</span>;
 
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">backend</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">config</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">function_hooks</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">parameter_val</span>::<span class="ident">ParameterVal</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">project</span>::<span class="ident">Project</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">return_value</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">solver_utils</span>::<span class="ident">PossibleSolutions</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">state</span>::{<span class="ident">BBInstrIndex</span>, <span class="ident">Location</span>, <span class="ident">LocationDescription</span>, <span class="ident">PathEntry</span>, <span class="ident">State</span>};
 
 <span class="doccomment">/// Begin symbolic execution of the function named `funcname`, obtaining an</span>
-<span class="doccomment">/// `ExecutionManager`. The function&#39;s parameters will start completely</span>
-<span class="doccomment">/// unconstrained.</span>
+<span class="doccomment">/// `ExecutionManager`.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// `project`: The `Project` (set of LLVM modules) in which symbolic execution</span>
 <span class="doccomment">/// should take place. In the absence of function hooks (see</span>
 <span class="doccomment">/// [`Config`](struct.Config.html)), we will try to enter calls to any functions</span>
 <span class="doccomment">/// defined in the `Project`.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// `params`: a `ParameterVal` for each parameter to the function, indicating</span>
+<span class="doccomment">/// what the initial value of that parameter should be, or if the parameter</span>
+<span class="doccomment">/// should be unconstrained (so that the analysis considers all possible values</span>
+<span class="doccomment">/// for the parameter).</span>
+<span class="doccomment">/// `None` here is equivalent to supplying a `Vec` with all</span>
+<span class="doccomment">/// `ParameterVal::Unconstrained` entries.</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">symex_function</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span>(
     <span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
     <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
     <span class="ident">config</span>: <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
-) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">ExecutionManager</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> {
+    <span class="ident">params</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ParameterVal</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ExecutionManager</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span><span class="op">&gt;</span> {
     <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Symexing function {}&quot;</span>, <span class="ident">funcname</span>);
     <span class="kw">let</span> (<span class="ident">func</span>, <span class="ident">module</span>) <span class="op">=</span> <span class="ident">project</span>
         .<span class="ident">get_func_by_name</span>(<span class="ident">funcname</span>)
@@ -4041,20 +4131,61 @@
     };
     <span class="kw">let</span> <span class="ident">squash_unsats</span> <span class="op">=</span> <span class="ident">config</span>.<span class="ident">squash_unsats</span>;
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">State</span>::<span class="ident">new</span>(<span class="ident">project</span>, <span class="ident">start_loc</span>, <span class="ident">config</span>);
+    <span class="kw">let</span> <span class="ident">params</span> <span class="op">=</span> <span class="ident">params</span>.<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+        <span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">repeat</span>(<span class="ident">ParameterVal</span>::<span class="ident">Unconstrained</span>)
+            .<span class="ident">take</span>(<span class="ident">func</span>.<span class="ident">parameters</span>.<span class="ident">len</span>())
+            .<span class="ident">collect</span>()
+    });
     <span class="kw">let</span> <span class="ident">bvparams</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">func</span>
         .<span class="ident">parameters</span>
         .<span class="ident">iter</span>()
-        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">param</span><span class="op">|</span> {
+        .<span class="ident">zip_eq</span>(<span class="ident">params</span>.<span class="ident">into_iter</span>())
+        .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">param</span>, <span class="ident">paramval</span>)<span class="op">|</span> {
             <span class="kw">let</span> <span class="ident">param_size</span> <span class="op">=</span> <span class="ident">state</span>
                 .<span class="ident">size_in_bits</span>(<span class="kw-2">&amp;</span><span class="ident">param</span>.<span class="ident">ty</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;Parameter type is a struct opaque in the entire Project&quot;</span>);
             <span class="macro">assert_ne</span><span class="macro">!</span>(<span class="ident">param_size</span>, <span class="number">0</span>, <span class="string">&quot;Parameter {} shouldn&#39;t have size 0 bits&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">param</span>.<span class="ident">name</span>);
-            <span class="ident">state</span>
+            <span class="kw">let</span> <span class="ident">bvparam</span> <span class="op">=</span> <span class="ident">state</span>
                 .<span class="ident">new_bv_with_name</span>(<span class="ident">param</span>.<span class="ident">name</span>.<span class="ident">clone</span>(), <span class="ident">param_size</span>)
-                .<span class="ident">unwrap</span>()
+                .<span class="ident">unwrap</span>();
+            <span class="kw">match</span> <span class="ident">paramval</span> {
+                <span class="ident">ParameterVal</span>::<span class="ident">Unconstrained</span> <span class="op">=</span><span class="op">&gt;</span> {}, <span class="comment">// nothing to do</span>
+                <span class="ident">ParameterVal</span>::<span class="ident">ExactValue</span>(<span class="ident">val</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="ident">bvparam</span>.<span class="ident">_eq</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">val</span>, <span class="ident">param_size</span>)).<span class="ident">assert</span>()<span class="question-mark">?</span>;
+                },
+                <span class="ident">ParameterVal</span>::<span class="ident">Range</span>(<span class="ident">low</span>, <span class="ident">high</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="macro">debug_assert</span><span class="macro">!</span>(<span class="ident">low</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">high</span>);
+                    <span class="ident">bvparam</span>.<span class="ident">ugte</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">low</span>, <span class="ident">param_size</span>)).<span class="ident">assert</span>()<span class="question-mark">?</span>;
+                    <span class="ident">bvparam</span>.<span class="ident">ulte</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">bv_from_u64</span>(<span class="ident">high</span>, <span class="ident">param_size</span>)).<span class="ident">assert</span>()<span class="question-mark">?</span>;
+                },
+                <span class="ident">ParameterVal</span>::<span class="ident">NonNullPointer</span> <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="kw">match</span> <span class="ident">param</span>.<span class="ident">ty</span>.<span class="ident">as_ref</span>() {
+                        <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {
+                            <span class="ident">bvparam</span>.<span class="ident">_ne</span>(<span class="kw-2">&amp;</span><span class="ident">state</span>.<span class="ident">zero</span>(<span class="ident">param_size</span>)).<span class="ident">assert</span>()<span class="question-mark">?</span>;
+                        },
+                        <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;ParameterVal::NonNullPointer used for non-pointer parameter {} (which has type {:?})&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">param</span>.<span class="ident">name</span>, <span class="ident">ty</span>),
+                    }
+                }
+                <span class="ident">ParameterVal</span>::<span class="ident">PointerToAllocated</span>(<span class="ident">allocbytes</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="kw">match</span> <span class="ident">param</span>.<span class="ident">ty</span>.<span class="ident">as_ref</span>() {
+                        <span class="ident">Type</span>::<span class="ident">PointerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {
+                            <span class="kw">let</span> <span class="ident">allocbits</span> <span class="op">=</span> <span class="ident">allocbytes</span> <span class="op">*</span> <span class="number">8</span>;
+                            <span class="kw">let</span> <span class="ident">allocated</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">allocate</span>(<span class="ident">allocbits</span>);
+                            <span class="ident">bvparam</span>.<span class="ident">_eq</span>(<span class="kw-2">&amp;</span><span class="ident">allocated</span>).<span class="ident">assert</span>()<span class="question-mark">?</span>;
+                        },
+                        <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;ParameterVal::PointerToAllocated used for non-pointer parameter {} (which has type {:?})&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">param</span>.<span class="ident">name</span>, <span class="ident">ty</span>),
+                    }
+                }
+            }
+            <span class="prelude-val">Ok</span>(<span class="ident">bvparam</span>)
         })
-        .<span class="ident">collect</span>();
-    <span class="ident">ExecutionManager</span>::<span class="ident">new</span>(<span class="ident">state</span>, <span class="ident">project</span>, <span class="ident">bvparams</span>, <span class="ident">squash_unsats</span>)
+        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="ident">ExecutionManager</span>::<span class="ident">new</span>(
+        <span class="ident">state</span>,
+        <span class="ident">project</span>,
+        <span class="ident">bvparams</span>,
+        <span class="ident">squash_unsats</span>,
+    ))
 }
 
 <span class="doccomment">/// An `ExecutionManager` allows you to symbolically explore executions of a</span>
@@ -4076,6 +4207,7 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ExecutionManager</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> {
     <span class="ident">state</span>: <span class="ident">State</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
     <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+    <span class="ident">func</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Function</span>,
     <span class="ident">bvparams</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span>,
     <span class="doccomment">/// Whether the `ExecutionManager` is &quot;fresh&quot;. A &quot;fresh&quot; `ExecutionManager`</span>
     <span class="doccomment">/// has not yet produced its first path, i.e., `next()` has not been called</span>
@@ -4092,13 +4224,22 @@
         <span class="ident">bvparams</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">B</span>::<span class="ident">BV</span><span class="op">&gt;</span>,
         <span class="ident">squash_unsats</span>: <span class="ident">bool</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">let</span> <span class="ident">func</span> <span class="op">=</span> <span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">func</span>;
         <span class="self">Self</span> {
             <span class="ident">state</span>,
             <span class="ident">project</span>,
+            <span class="ident">func</span>,
             <span class="ident">bvparams</span>,
             <span class="ident">fresh</span>: <span class="bool-val">true</span>,
             <span class="ident">squash_unsats</span>,
         }
+    }
+
+    <span class="doccomment">/// Reference to the `Function` which the `ExecutionManager` is managing</span>
+    <span class="doccomment">/// symbolic execution of. (This is the top-level function, i.e., the</span>
+    <span class="doccomment">/// function we started the analysis in.)</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">func</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Function</span> {
+        <span class="self">self</span>.<span class="ident">func</span>
     }
 
     <span class="doccomment">/// Provides access to the `State` resulting from the end of the most recently</span>
@@ -4218,14 +4359,14 @@
                     <span class="ident">Instruction</span>::<span class="ident">PtrToInt</span>(<span class="ident">pti</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_cast_op</span>(<span class="ident">pti</span>),
                     <span class="ident">Instruction</span>::<span class="ident">IntToPtr</span>(<span class="ident">itp</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_cast_op</span>(<span class="ident">itp</span>),
                     <span class="ident">Instruction</span>::<span class="ident">BitCast</span>(<span class="ident">bitcast</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_cast_op</span>(<span class="ident">bitcast</span>),
-                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_10_OR_GREATER</span>)]</span>
+                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-10-or-greater&quot;</span>)]</span>
                     <span class="ident">Instruction</span>::<span class="ident">Freeze</span>(<span class="ident">freeze</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_cast_op</span>(<span class="ident">freeze</span>), <span class="comment">// since our BVs are never undef or poison, freeze is the identity operation for us</span>
                     <span class="ident">Instruction</span>::<span class="ident">Phi</span>(<span class="ident">phi</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_phi</span>(<span class="ident">phi</span>),
                     <span class="ident">Instruction</span>::<span class="ident">Select</span>(<span class="ident">select</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_select</span>(<span class="ident">select</span>),
                     <span class="ident">Instruction</span>::<span class="ident">CmpXchg</span>(<span class="ident">cmpxchg</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_cmpxchg</span>(<span class="ident">cmpxchg</span>),
-                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_9_OR_LOWER</span>)]</span>
+                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-9-or-lower&quot;</span>)]</span>
                     <span class="ident">Instruction</span>::<span class="ident">AtomicRMW</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;LLVM `AtomicRMW` instruction is not supported for the LLVM 9 version of Haybale; see Haybale issue #12&quot;</span>.<span class="ident">into</span>())),
-                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_10_OR_GREATER</span>)]</span>
+                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-10-or-greater&quot;</span>)]</span>
                     <span class="ident">Instruction</span>::<span class="ident">AtomicRMW</span>(<span class="ident">armw</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">symex_atomicrmw</span>(<span class="ident">armw</span>),
                     <span class="ident">Instruction</span>::<span class="ident">Call</span>(<span class="ident">call</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">symex_call</span>(<span class="ident">call</span>) {
                         <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
@@ -4507,7 +4648,7 @@
             <span class="ident">Type</span>::<span class="ident">IntegerType</span> { .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">record_bv_result</span>(<span class="ident">bop</span>, <span class="ident">bvoperation</span>(<span class="kw-2">&amp;</span><span class="ident">bvop0</span>, <span class="kw-2">&amp;</span><span class="ident">bvop1</span>))
             },
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;operation on scalable vectors&quot;</span>.<span class="ident">into</span>()));
             }
@@ -4543,7 +4684,7 @@
                 },
                 <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Expected ICmp to have operands of type integer, pointer, or vector of integers, but got type {:?}&quot;</span>, <span class="ident">ty</span>))),
             },
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;icmp on scalable vectors&quot;</span>.<span class="ident">into</span>()));
             }
@@ -4580,7 +4721,7 @@
                 <span class="self">self</span>.<span class="ident">state</span>
                     .<span class="ident">record_bv_result</span>(<span class="ident">zext</span>, <span class="ident">bvop</span>.<span class="ident">zext</span>(<span class="ident">dest_size</span> <span class="op">-</span> <span class="ident">source_size</span>))
             },
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;zext on a scalable vector&quot;</span>.<span class="ident">into</span>()));
             }
@@ -4597,7 +4738,7 @@
                     )
                 })<span class="question-mark">?</span>;
                 <span class="kw">let</span> <span class="ident">out_el_size</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">zext</span>).<span class="ident">as_ref</span>() {
-                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
                     <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="string">&quot;ZExt result type is a scalable vector, but its operand is not&quot;</span>.<span class="ident">into</span>()));
                     }
@@ -4648,7 +4789,7 @@
                 <span class="self">self</span>.<span class="ident">state</span>
                     .<span class="ident">record_bv_result</span>(<span class="ident">sext</span>, <span class="ident">bvop</span>.<span class="ident">sext</span>(<span class="ident">dest_size</span> <span class="op">-</span> <span class="ident">source_size</span>))
             },
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;sext on a scalable vector&quot;</span>.<span class="ident">into</span>()));
             }
@@ -4665,7 +4806,7 @@
                     )
                 })<span class="question-mark">?</span>;
                 <span class="kw">let</span> <span class="ident">out_el_size</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">sext</span>).<span class="ident">as_ref</span>() {
-                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
                     <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="string">&quot;SExt result type is a scalable vector, but its operand is not&quot;</span>.<span class="ident">into</span>()));
                     }
@@ -4715,14 +4856,14 @@
                 <span class="self">self</span>.<span class="ident">state</span>
                     .<span class="ident">record_bv_result</span>(<span class="ident">trunc</span>, <span class="ident">bvop</span>.<span class="ident">slice</span>(<span class="ident">dest_size</span> <span class="op">-</span> <span class="number">1</span>, <span class="number">0</span>))
             },
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;trunc on a scalable vector&quot;</span>.<span class="ident">into</span>()));
             }
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">num_elements</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">let</span> <span class="ident">in_vector</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">operand_to_bv</span>(<span class="kw-2">&amp;</span><span class="ident">trunc</span>.<span class="ident">operand</span>)<span class="question-mark">?</span>;
                 <span class="kw">let</span> <span class="ident">dest_el_size</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">trunc</span>).<span class="ident">as_ref</span>() {
-                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
                     <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="string">&quot;Trunc result type is a scalable vector, but its operand is not&quot;</span>.<span class="ident">into</span>()));
                     },
@@ -5022,7 +5163,7 @@
             <span class="ident">op0_type</span>
         };
         <span class="kw">match</span> <span class="ident">op_type</span>.<span class="ident">as_ref</span>() {
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;shufflevector on scalable vectors&quot;</span>.<span class="ident">into</span>()));
             }
@@ -5334,8 +5475,13 @@
                         <span class="comment">// have to do the assign_bv_to_name calls after changing state.cur_loc, so that the variables are created in the callee function</span>
                     }
                     <span class="macro">info</span><span class="macro">!</span>(
-                        <span class="string">&quot;Entering function {:?} in module {:?}&quot;</span>,
-                        <span class="ident">called_funcname</span>, <span class="kw-2">&amp;</span><span class="ident">callee_mod</span>.<span class="ident">name</span>
+                        <span class="string">&quot;Entering function {:?}{}&quot;</span>,
+                        <span class="ident">called_funcname</span>,
+                        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">config</span>.<span class="ident">print_module_name</span> {
+                            <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;in module {:?}&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">callee_mod</span>.<span class="ident">name</span>)
+                        } <span class="kw">else</span> {
+                            <span class="ident">String</span>::<span class="ident">new</span>()
+                        },
                     );
                     <span class="kw">let</span> <span class="ident">returned_bv</span> <span class="op">=</span> <span class="self">self</span>
                         .<span class="ident">symex_from_cur_loc_through_end_of_function</span>()<span class="question-mark">?</span>
@@ -5343,7 +5489,7 @@
                     <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">pop_callsite</span>() {
                         <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">returned_bv</span>)), <span class="comment">// if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`</span>
                         <span class="prelude-val">Some</span>(<span class="kw-2">ref</span> <span class="ident">callsite</span>)
-                            <span class="kw">if</span> <span class="ident">callsite</span>.<span class="ident">loc</span> <span class="op">=</span><span class="op">=</span> <span class="ident">saved_loc</span> <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="ident">callsite</span>.<span class="ident">instr</span>.<span class="ident">is_left</span>() <span class="op">=</span><span class="op">&gt;</span>
+                            <span class="kw">if</span> <span class="ident">callsite</span>.<span class="ident">loc</span> <span class="op">=</span><span class="op">=</span> <span class="ident">saved_loc</span> <span class="op">&amp;&amp;</span> <span class="ident">callsite</span>.<span class="ident">instr</span>.<span class="ident">is_left</span>() <span class="op">=</span><span class="op">&gt;</span>
                         {
                             <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span> <span class="op">=</span> <span class="ident">saved_loc</span>;
                             <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">inc</span>(); <span class="comment">// advance past the call instruction itself before recording the path entry. `saved_loc` must have been a call instruction, so can&#39;t be a terminator, so the call to `inc()` is safe.</span>
@@ -5696,7 +5842,7 @@
             <span class="ident">log</span>::<span class="ident">Level</span>::<span class="ident">Info</span>
         };
         <span class="ident">log</span>::<span class="macro">log</span><span class="macro">!</span>(<span class="ident">log_level</span>, <span class="string">&quot;Processing hook for {}&quot;</span>, <span class="ident">hooked_funcname</span>);
-        <span class="kw">match</span> <span class="ident">hook</span>.<span class="ident">call_hook</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">project</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">state</span>, <span class="ident">call</span>)<span class="question-mark">?</span> {
+        <span class="kw">match</span> <span class="ident">hook</span>.<span class="ident">call_hook</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">state</span>, <span class="ident">call</span>)<span class="question-mark">?</span> {
             <span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span> <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">if</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">type_of</span>(<span class="ident">call</span>).<span class="ident">as_ref</span>() <span class="op">=</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">Type</span>::<span class="ident">VoidType</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">ReturnValue</span>::<span class="ident">ReturnVoid</span>)
@@ -5769,7 +5915,7 @@
         <span class="kw">let</span> <span class="ident">false_feasible</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">state</span>
             .<span class="ident">sat_with_extra_constraints</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(<span class="kw-2">&amp;</span><span class="ident">bvcond</span>.<span class="ident">not</span>()))<span class="question-mark">?</span>;
-        <span class="kw">if</span> <span class="ident">true_feasible</span> <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="ident">false_feasible</span> {
+        <span class="kw">if</span> <span class="ident">true_feasible</span> <span class="op">&amp;&amp;</span> <span class="ident">false_feasible</span> {
             <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;both true and false branches are feasible&quot;</span>);
             <span class="comment">// for now we choose to explore true first, and backtrack to false if necessary</span>
             <span class="self">self</span>.<span class="ident">state</span>
@@ -5990,7 +6136,7 @@
                     <span class="kw">match</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">pop_callsite</span>() {
                         <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">returned_bv</span>)), <span class="comment">// if there was no callsite to pop, then we finished elsewhere. See notes on `symex_call()`</span>
                         <span class="prelude-val">Some</span>(<span class="kw-2">ref</span> <span class="ident">callsite</span>)
-                            <span class="kw">if</span> <span class="ident">callsite</span>.<span class="ident">loc</span> <span class="op">=</span><span class="op">=</span> <span class="ident">saved_loc</span> <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="ident">callsite</span>.<span class="ident">instr</span>.<span class="ident">is_right</span>() <span class="op">=</span><span class="op">&gt;</span>
+                            <span class="kw">if</span> <span class="ident">callsite</span>.<span class="ident">loc</span> <span class="op">=</span><span class="op">=</span> <span class="ident">saved_loc</span> <span class="op">&amp;&amp;</span> <span class="ident">callsite</span>.<span class="ident">instr</span>.<span class="ident">is_right</span>() <span class="op">=</span><span class="op">&gt;</span>
                         {
                             <span class="kw">let</span> <span class="ident">old_bb_name</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span>.<span class="ident">bb</span>.<span class="ident">name</span>;
                             <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">cur_loc</span> <span class="op">=</span> <span class="ident">saved_loc</span>;
@@ -6253,7 +6399,7 @@
                     <span class="kw">let</span> <span class="ident">false_feasible</span> <span class="op">=</span> <span class="self">self</span>
                         .<span class="ident">state</span>
                         .<span class="ident">sat_with_extra_constraints</span>(<span class="ident">std</span>::<span class="ident">iter</span>::<span class="ident">once</span>(<span class="kw-2">&amp;</span><span class="ident">bvcond</span>.<span class="ident">not</span>()))<span class="question-mark">?</span>;
-                    <span class="kw">if</span> <span class="ident">true_feasible</span> <span class="kw-2">&amp;</span><span class="op">&amp;</span> <span class="ident">false_feasible</span> {
+                    <span class="kw">if</span> <span class="ident">true_feasible</span> <span class="op">&amp;&amp;</span> <span class="ident">false_feasible</span> {
                         <span class="self">self</span>.<span class="ident">state</span>
                             .<span class="ident">record_bv_result</span>(<span class="ident">select</span>, <span class="ident">bvcond</span>.<span class="ident">cond_bv</span>(<span class="kw-2">&amp;</span><span class="ident">bvtrueval</span>, <span class="kw-2">&amp;</span><span class="ident">bvfalseval</span>))
                     } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">true_feasible</span> {
@@ -6271,7 +6417,7 @@
                         .<span class="ident">record_bv_result</span>(<span class="ident">select</span>, <span class="ident">bvcond</span>.<span class="ident">cond_bv</span>(<span class="kw-2">&amp;</span><span class="ident">bvtrueval</span>, <span class="kw-2">&amp;</span><span class="ident">bvfalseval</span>))
                 }
             },
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
             <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">UnsupportedInstruction</span>(<span class="string">&quot;select on scalable vectors&quot;</span>.<span class="ident">into</span>()));
             },
@@ -6285,7 +6431,7 @@
                     <span class="ident">ty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Expected Select vector condition to be vector of i1, but got vector of {:?}&quot;</span>, <span class="ident">ty</span>))),
                 };
                 <span class="kw">let</span> <span class="ident">el_size</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">optype</span>.<span class="ident">as_ref</span>() {
-                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_11_OR_GREATER</span>)]</span>
+                    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-11-or-greater&quot;</span>)]</span>
                     <span class="ident">Type</span>::<span class="ident">VectorType</span> { <span class="ident">scalable</span>: <span class="bool-val">true</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error</span>::<span class="ident">MalformedInstruction</span>(<span class="string">&quot;Select operands are scalable vectors but condition is not&quot;</span>.<span class="ident">into</span>()));
                     },
@@ -6365,7 +6511,7 @@
             .<span class="ident">record_bv_result</span>(<span class="ident">cmpxchg</span>, <span class="ident">match_flag</span>.<span class="ident">concat</span>(<span class="kw-2">&amp;</span><span class="ident">read_value</span>))
     }
 
-    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">LLVM_VERSION_10_OR_GREATER</span>)]</span>
+    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;llvm-10-or-greater&quot;</span>)]</span>
     <span class="kw">fn</span> <span class="ident">symex_atomicrmw</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">armw</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">instruction</span>::<span class="ident">AtomicRMW</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
         <span class="macro">debug</span><span class="macro">!</span>(<span class="string">&quot;Symexing atomicrmw {:?}&quot;</span>, <span class="ident">armw</span>);
         <span class="kw">use</span> <span class="ident">llvm_ir</span>::<span class="ident">instruction</span>::<span class="ident">RMWBinOp</span>;
@@ -6662,9 +6808,14 @@
 
     <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&gt;</span> <span class="ident">PathIterator</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span> {
         <span class="doccomment">/// For argument descriptions, see notes on `symex_function`</span>
-        <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>, <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>, <span class="ident">config</span>: <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
+            <span class="ident">funcname</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
+            <span class="ident">project</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;p</span> <span class="ident">Project</span>,
+            <span class="ident">config</span>: <span class="ident">Config</span><span class="op">&lt;</span><span class="lifetime">&#39;p</span>, <span class="ident">B</span><span class="op">&gt;</span>,
+            <span class="ident">params</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ParameterVal</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
             <span class="self">Self</span> {
-                <span class="ident">em</span>: <span class="ident">symex_function</span>(<span class="ident">funcname</span>, <span class="ident">project</span>, <span class="ident">config</span>),
+                <span class="ident">em</span>: <span class="ident">symex_function</span>(<span class="ident">funcname</span>, <span class="ident">project</span>, <span class="ident">config</span>, <span class="ident">params</span>).<span class="ident">unwrap</span>(),
             }
         }
     }
@@ -6719,7 +6870,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6741,7 +6892,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6764,7 +6915,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6789,7 +6940,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6844,7 +6995,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6870,7 +7021,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6897,7 +7048,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6925,7 +7076,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6961,7 +7112,7 @@
             <span class="ident">loop_bound</span>: <span class="number">30</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -6984,7 +7135,7 @@
             <span class="ident">loop_bound</span>: <span class="number">30</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7015,7 +7166,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7042,7 +7193,7 @@
             <span class="ident">max_callstack_depth</span>: <span class="prelude-val">Some</span>(<span class="number">0</span>),
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7068,7 +7219,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7094,7 +7245,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7123,7 +7274,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7152,7 +7303,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7180,7 +7331,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7209,7 +7360,7 @@
             <span class="ident">max_callstack_depth</span>: <span class="prelude-val">Some</span>(<span class="number">1</span>),
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7236,7 +7387,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7265,7 +7416,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7293,7 +7444,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7365,7 +7516,7 @@
             <span class="ident">loop_bound</span>: <span class="number">3</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7423,7 +7574,7 @@
             <span class="ident">loop_bound</span>: <span class="number">5</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7569,7 +7720,7 @@
             <span class="ident">loop_bound</span>: <span class="number">4</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7714,7 +7865,7 @@
             <span class="ident">loop_bound</span>: <span class="number">3</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7820,7 +7971,7 @@
             <span class="ident">loop_bound</span>: <span class="number">3</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7894,7 +8045,7 @@
             <span class="ident">loop_bound</span>: <span class="number">3</span>,
             ..<span class="ident">Config</span>::<span class="ident">default</span>()
         };
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>)
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">paths</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">PathIterator</span>::<span class="op">&lt;</span><span class="ident">DefaultBackend</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">funcname</span>, <span class="kw-2">&amp;</span><span class="ident">proj</span>, <span class="ident">config</span>, <span class="prelude-val">None</span>)
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
             .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">r</span>));
         <span class="ident">paths</span>.<span class="ident">sort</span>();
@@ -7988,4 +8139,5 @@
     }
 }
 </pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "haybale";</script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="haybale"></div>
+    <script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
