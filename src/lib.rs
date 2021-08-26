@@ -6,7 +6,7 @@
 // it was especially necessary when the docs.rs docs weren't working for any
 // llvm-sys consumers; now that we have docs.rs as the official docs, I'm not
 // sure if this is necessary or helpful anymore
-#![doc(html_root_url = "https://docs.rs/haybale/0.6.4")]
+#![doc(html_root_url = "https://docs.rs/haybale/0.7.0")]
 
 use llvm_ir::Type;
 use std::collections::HashSet;
