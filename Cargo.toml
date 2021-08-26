@@ -11,7 +11,7 @@ keywords = ["symbolic", "llvm", "IR", "SMT"]
 license = "MIT"
 
 [dependencies]
-llvm-ir = { git = "https://github.com/cdisselkoen/llvm-ir" }
+llvm-ir = "0.8.0"
 boolector = "0.4.1"
 either = "1.6"
 itertools = "0.10"
@@ -30,6 +30,7 @@ env_logger = "0.8"
 llvm-9 = ["llvm-ir/llvm-9", "llvm-9-or-lower", "llvm-9-or-greater"]
 llvm-10 = ["llvm-ir/llvm-10", "llvm-10-or-lower", "llvm-10-or-greater"]
 llvm-11 = ["llvm-ir/llvm-11", "llvm-11-or-lower", "llvm-11-or-greater"]
+llvm-12 = ["llvm-ir/llvm-12", "llvm-12-or-lower", "llvm-12-or-greater"]
 
 ###
 # For convenience, these automatically-enabled features allow us to avoid
@@ -38,10 +39,12 @@ llvm-11 = ["llvm-ir/llvm-11", "llvm-11-or-lower", "llvm-11-or-greater"]
 llvm-9-or-greater = []
 llvm-10-or-greater = ["llvm-9-or-greater"]
 llvm-11-or-greater = ["llvm-10-or-greater"]
+llvm-12-or-greater = ["llvm-11-or-greater"]
 
 llvm-9-or-lower = ["llvm-10-or-lower"]
 llvm-10-or-lower = ["llvm-11-or-lower"]
-llvm-11-or-lower = []
+llvm-11-or-lower = ["llvm-12-or-lower"]
+llvm-12-or-lower = []
 ###
 
 # These features select the corresponding LLVM version, and require an exact
@@ -50,6 +53,7 @@ llvm-11-or-lower = []
 llvm-9-strict = ["llvm-9", "llvm-ir/llvm-9-strict"]
 llvm-10-strict = ["llvm-10", "llvm-ir/llvm-10-strict"]
 llvm-11-strict = ["llvm-11", "llvm-ir/llvm-11-strict"]
+llvm-12-strict = ["llvm-12", "llvm-ir/llvm-12-strict"]
 
 [package.metadata.docs.rs]
 # Generate docs.rs documentation with the llvm-10 feature

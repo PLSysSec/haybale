@@ -39,11 +39,11 @@ to the LLVM version you want:
 
 ```toml
 [dependencies]
-haybale = { version = "0.6.4", features = ["llvm-11"] }
+haybale = { version = "0.6.4", features = ["llvm-12"] }
 ```
 
-Currently, the supported LLVM versions are `llvm-9`, `llvm-10`, and
-`llvm-11`.
+Currently, the supported LLVM versions are `llvm-9`, `llvm-10`, `llvm-11`, and
+`llvm-12`.
 
 `haybale` depends (indirectly) on the LLVM and Boolector libraries, which
 must both be available on your system.
