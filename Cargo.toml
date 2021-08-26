@@ -12,7 +12,7 @@ license = "MIT"
 
 [dependencies]
 llvm-ir = "0.8.0"
-boolector = "0.4.1"
+boolector = "0.4.2"
 either = "1.6"
 itertools = "0.10"
 reduce = "0.1"
@@ -31,6 +31,11 @@ llvm-9 = ["llvm-ir/llvm-9", "llvm-9-or-lower", "llvm-9-or-greater"]
 llvm-10 = ["llvm-ir/llvm-10", "llvm-10-or-lower", "llvm-10-or-greater"]
 llvm-11 = ["llvm-ir/llvm-11", "llvm-11-or-lower", "llvm-11-or-greater"]
 llvm-12 = ["llvm-ir/llvm-12", "llvm-12-or-lower", "llvm-12-or-greater"]
+
+# If you enable this, Cargo will automatically download and build Boolector as
+# part of the build process.  If you don't enable this, Cargo will look for a
+# system install of Boolector as a shared library.
+vendor-boolector = ["boolector/vendor-lgl"]
 
 ###
 # For convenience, these automatically-enabled features allow us to avoid

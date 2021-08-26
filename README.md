@@ -45,9 +45,24 @@ haybale = { version = "0.6.4", features = ["llvm-12"] }
 Currently, the supported LLVM versions are `llvm-9`, `llvm-10`, `llvm-11`, and
 `llvm-12`.
 
-`haybale` depends (indirectly) on the LLVM and Boolector libraries, which
-must both be available on your system.
-See the [`llvm-sys`] or [`boolector-sys`] READMEs for more details and instructions.
+`haybale` depends (indirectly) on the LLVM and Boolector libraries.
+* LLVM must be available on your system, in the version which matches the
+selected feature. (For instance, if you select the `llvm-12` feature, LLVM 12
+must be available on your system.) For more details and instructions on
+installing LLVM and making sure Cargo can find it, see the [`llvm-sys`] README.
+* For Boolector you have two options:
+    * You can compile and install Boolector 3.2.1 on your system as a shared library. (Make sure you configure it as a shared library, e.g., using
+    `./configure.sh --shared`, and install it, using `make install`.)
+    * Or, you can enable the `haybale` feature `vendor-boolector`. With this
+    option, Cargo will automatically download and build Boolector and statically
+    link to it. E.g.,
+      ```toml
+      [dependencies]
+      haybale = { version = "0.6.4", features = ["llvm-12", "vendor-boolector"] }
+      ```
+      This option probably only works on Linux and macOS, and requires standard
+      build tools to be available on your system -- e.g., for Debian-based
+      distributions, `build-essential`, `cmake`, `curl`, and `git`.
 
 ### 2. Acquire bitcode to analyze
 
@@ -603,7 +618,6 @@ Initial release!
 [Boolector]: https://boolector.github.io/
 [`boolector`]: https://crates.io/crates/boolector
 [`llvm-sys`]: https://crates.io/crates/llvm-sys
-[`boolector-sys`]: https://crates.io/crates/boolector-sys/
 [KLEE]: https://klee.github.io/
 [`Project`]: https://docs.rs/haybale/0.6.4/haybale/project/struct.Project.html
 [`Project` documentation]: https://docs.rs/haybale/0.6.4/haybale/project/struct.Project.html
