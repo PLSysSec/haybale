@@ -1614,36 +1614,6 @@ where
     ///
     /// Accounts for the `Project`'s pointer size and named struct definitions.
     ///
-    /// Note that some types have size 0 bits, and this may return `0`.
-    ///
-    /// Panics if `ty` is a struct which has no definition in the entire `Project`,
-    /// or if it is a struct/array/vector where one of the elements is a struct with no
-    /// definition in the entire `Project`.
-    #[deprecated = "Prefer size_in_bits()"]
-    pub fn size(&self, ty: &Type) -> u32 {
-        self.proj
-            .size_in_bits(ty)
-            .expect("state.size() encountered a struct with no definition in the entire Project")
-    }
-
-    /// Get the size of the `Type`, in bits.
-    ///
-    /// Accounts for the `Project`'s pointer size and named struct definitions.
-    ///
-    /// Note that some types have size 0 bits, and this may return `Some(0)`.
-    ///
-    /// Returns `None` for structs which have no definition in the entire `Project`,
-    /// or for structs/arrays/vectors where one of the elements is a struct with no
-    /// definition in the entire `Project`.
-    #[deprecated = "Renamed to size_in_bits()"]
-    pub fn size_opaque_aware(&self, ty: &Type, _proj: &'p Project) -> Option<u32> {
-        self.proj.size_in_bits(ty)
-    }
-
-    /// Get the size of the `Type`, in bits.
-    ///
-    /// Accounts for the `Project`'s pointer size and named struct definitions.
-    ///
     /// Note that some types have size 0 bits, and this may return `Some(0)`.
     ///
     /// Returns `None` for structs which have no definition in the entire `Project`,
@@ -1651,12 +1621,6 @@ where
     /// definition in the entire `Project`.
     pub fn size_in_bits(&self, ty: &Type) -> Option<u32> {
         self.proj.size_in_bits(ty)
-    }
-
-    /// Get the size of the `FPType`, in bits
-    #[deprecated = "Renamed to fp_size_in_bits"]
-    pub fn fp_size(fpt: FPType) -> u32 {
-        Self::fp_size_in_bits(fpt)
     }
 
     pub fn fp_size_in_bits(fpt: FPType) -> u32 {
