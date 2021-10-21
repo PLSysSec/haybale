@@ -11,7 +11,7 @@ keywords = ["symbolic", "llvm", "IR", "SMT"]
 license = "MIT"
 
 [dependencies]
-llvm-ir = "0.8.0"
+llvm-ir = "0.8.1"
 boolector = "0.4.2"
 either = "1.6"
 itertools = "0.10"
@@ -22,7 +22,7 @@ log = "0.4.8"
 rustversion = "1.0"
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 
 [features]
 # Select the LLVM version to be compatible with.
@@ -31,6 +31,7 @@ llvm-9 = ["llvm-ir/llvm-9", "llvm-9-or-lower", "llvm-9-or-greater"]
 llvm-10 = ["llvm-ir/llvm-10", "llvm-10-or-lower", "llvm-10-or-greater"]
 llvm-11 = ["llvm-ir/llvm-11", "llvm-11-or-lower", "llvm-11-or-greater"]
 llvm-12 = ["llvm-ir/llvm-12", "llvm-12-or-lower", "llvm-12-or-greater"]
+llvm-13 = ["llvm-ir/llvm-13", "llvm-13-or-lower", "llvm-13-or-greater"]
 
 # If you enable this, Cargo will automatically download and build Boolector as
 # part of the build process.  If you don't enable this, Cargo will look for a
@@ -45,11 +46,13 @@ llvm-9-or-greater = []
 llvm-10-or-greater = ["llvm-9-or-greater"]
 llvm-11-or-greater = ["llvm-10-or-greater"]
 llvm-12-or-greater = ["llvm-11-or-greater"]
+llvm-13-or-greater = ["llvm-12-or-greater"]
 
 llvm-9-or-lower = ["llvm-10-or-lower"]
 llvm-10-or-lower = ["llvm-11-or-lower"]
 llvm-11-or-lower = ["llvm-12-or-lower"]
-llvm-12-or-lower = []
+llvm-12-or-lower = ["llvm-13-or-lower"]
+llvm-13-or-lower = []
 ###
 
 # These features select the corresponding LLVM version, and require an exact
@@ -59,6 +62,7 @@ llvm-9-strict = ["llvm-9", "llvm-ir/llvm-9-strict"]
 llvm-10-strict = ["llvm-10", "llvm-ir/llvm-10-strict"]
 llvm-11-strict = ["llvm-11", "llvm-ir/llvm-11-strict"]
 llvm-12-strict = ["llvm-12", "llvm-ir/llvm-12-strict"]
+llvm-13-strict = ["llvm-13", "llvm-ir/llvm-13-strict"]
 
 [package.metadata.docs.rs]
 # Generate docs.rs documentation with the llvm-10 feature

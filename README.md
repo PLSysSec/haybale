@@ -42,8 +42,9 @@ to the LLVM version you want:
 haybale = { version = "0.7.0", features = ["llvm-12"] }
 ```
 
-Currently, the supported LLVM versions are `llvm-9`, `llvm-10`, `llvm-11`, and
-`llvm-12`.
+The latest crates.io release (0.7.0) supports LLVM versions `llvm-9`, `llvm-10`,
+`llvm-11`, and `llvm-12`.
+The Git version you're looking at also supports `llvm-13`.
 
 `haybale` depends (indirectly) on the LLVM and Boolector libraries.
 * LLVM must be available on your system, in the version which matches the
@@ -288,6 +289,8 @@ or of course you can generate local documentation with `cargo doc --open`.
 Currently, the official crates.io releases of `haybale` (`0.7.0` and later)
 depend on Boolector 3.2.1 and either LLVM 9, 10, 11, or 12, depending on whether
 you select the `llvm-9`, `llvm-10`, `llvm-11`, or `llvm-12` feature.
+The Git version you're looking at also supports LLVM 13 via the `llvm-13`
+feature.
 As of this writing, choosing an LLVM version has essentially no effect
 on `haybale`'s features or interface; the only difference is the ability to
 analyze bitcode generated with newer LLVMs. (And the LLVM 10+ versions
@@ -301,9 +304,7 @@ backported features.
 
 LLVM 7 and earlier are not supported.
 
-`haybale` works on stable Rust. LLVM 9 and 10 users need Rust 1.43 or later,
-while LLVM 11 and 12 users need Rust 1.44 or later instead, due to requirements
-of `llvm-ir`.
+`haybale` works on stable Rust, and requires Rust 1.45 or later.
 
 ## Under the hood
 
