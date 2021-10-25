@@ -1,7 +1,7 @@
 # `haybale`: Symbolic execution of LLVM IR, written in Rust
 
-[![Crates.io](http://meritbadge.herokuapp.com/haybale)](https://crates.io/crates/haybale)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/cdisselkoen/haybale/master/LICENSE)
+[![crates.io](https://img.shields.io/crates/v/haybale.svg)](https://crates.io/crates/haybale)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/cdisselkoen/haybale/main/LICENSE)
 
 `haybale` is a general-purpose symbolic execution engine written in Rust.
 It operates on LLVM IR, which allows it to analyze programs written in C/C++,
@@ -375,7 +375,8 @@ renamed to `state.fp_size_in_bits()`.
 
 ### Version 0.6.0 (Sep 1, 2020)
 
-- `haybale` now supports both LLVM 9 and LLVM 10 on its `master` branch.
+- `haybale` now supports both LLVM 9 and LLVM 10, using the same branch and
+same crates.io releases.
 When using `haybale`, you must choose either the `llvm-9` or the `llvm-10`
 feature.
 - Updated `llvm-ir` dependency to 0.7.1 (from 0.6.0), which includes runtime
