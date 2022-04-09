@@ -475,5 +475,5 @@ pub fn abort_hook<B: Backend>(
     _state: &mut State<B>,
     _call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
-    Ok(ReturnValue::Abort)
+    Ok(ReturnValue::Abort(99))//d.source_loc
 }

@@ -13,5 +13,5 @@ pub enum ReturnValue<V> {
     Throw(V),
     /// The function or call aborts without ever returning (e.g., with a Rust
     /// panic, or by calling the C `exit()` function)
-    Abort,
+    Abort(i32), // TODO: debug info plz
 }

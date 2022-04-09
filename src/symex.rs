@@ -425,7 +425,7 @@ where
                     }
                 }
             },
-            Some(ReturnValue::Abort) => Ok(Some(ReturnValue::Abort)),
+            Some(ReturnValue::Abort(i)) => Ok(Some(ReturnValue::Abort(i))),
             Some(symexresult) => match self.state.pop_callsite() {
                 Some(callsite) => match callsite.instr {
                     Either::Left(call) => {
@@ -458,7 +458,7 @@ where
                             ReturnValue::Throw(_) => {
                                 panic!("This case should have been handled above")
                             },
-                            ReturnValue::Abort => {
+                            ReturnValue::Abort(_) => {
                                 panic!("This case should have been handled above")
                             },
                         };
@@ -496,7 +496,7 @@ where
                             ReturnValue::Throw(_) => {
                                 panic!("This case should have been handled above")
                             },
-                            ReturnValue::Abort => {
+                            ReturnValue::Abort(_) => {
                                 panic!("This case should have been handled above")
                             },
                         };
@@ -1322,7 +1322,7 @@ where
                         debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
                         return Ok(Some(ReturnValue::Throw(bvptr)));
                     },
-                    ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                    ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                 }
                 let log_level = if quiet {
                     log::Level::Debug
@@ -1435,7 +1435,7 @@ where
                                     debug!("Callee threw an exception, but caller isn't inside a try block; rethrowing upwards");
                                     return Ok(Some(ReturnValue::Throw(bvptr)));
                                 },
-                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                                ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                             };
                             debug!("Completed ordinary return to caller");
                             info!(
@@ -1479,7 +1479,7 @@ where
                                     debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
                                     return Ok(Some(ReturnValue::Throw(bvptr)));
                                 },
-                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                                ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                             }
                             Ok(None)
                         },
@@ -1802,7 +1802,7 @@ where
                 }
             },
             ReturnValue::Throw(bvptr) => Ok(ReturnValue::Throw(bvptr)), // throwing is always OK and doesn't need to be checked against function type
-            ReturnValue::Abort => Ok(ReturnValue::Abort), // aborting is always OK and doesn't need to be checked against function type
+            ReturnValue::Abort(i) => Ok(ReturnValue::Abort(i)), // aborting is always OK and doesn't need to be checked against function type
         }
     }
 
@@ -1968,7 +1968,7 @@ where
                         );
                         return self.catch_at_exception_label(&bvptr, &invoke.exception_label);
                     },
-                    ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                    ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                 };
                 let old_bb_name = &self.state.cur_loc.bb.name;
                 // We had a normal return, so continue at the `return_label`
@@ -2086,7 +2086,7 @@ where
                                     return self
                                         .catch_at_exception_label(&bvptr, &invoke.exception_label);
                                 },
-                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                                ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                             }
                             // Returned normally, so continue at the `return_label`
                             self.state
@@ -2139,7 +2139,7 @@ where
                                     return self
                                         .catch_at_exception_label(&bvptr, &invoke.exception_label);
                                 },
-                                ReturnValue::Abort => return Ok(Some(ReturnValue::Abort)),
+                                ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                             }
                             Ok(None)
                         },
