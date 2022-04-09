@@ -472,8 +472,9 @@ pub fn generic_stub_hook<B: Backend>(
 /// It is suitable for hooking functions such as C's `exit()` which abort the
 /// program and never return.
 pub fn abort_hook<B: Backend>(
-    _state: &mut State<B>,
+    state: &mut State<B>,
     _call: &dyn IsCall,
 ) -> Result<ReturnValue<B::BV>> {
-    Ok(ReturnValue::Abort(99))//d.source_loc
+    let src = state.cur_loc.source_loc;
+    Ok(ReturnValue::Abort(src.map(|e| e.clone())))
 }
