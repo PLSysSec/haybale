@@ -150,7 +150,7 @@ pub fn find_zero_of_func<'p>(
     while let Some(bvretval) = em.next() {
         match bvretval {
             Ok(ReturnValue::ReturnVoid) => panic!("Function shouldn't return void"),
-            Ok(ReturnValue::Throw(_)) => continue, // we're looking for values that result in _returning_ zero, not _throwing_ zero
+            Ok(ReturnValue::Throw(_, _)) => continue, // we're looking for values that result in _returning_ zero, not _throwing_ zero
             Ok(ReturnValue::Abort(_)) => continue,
             Ok(ReturnValue::Return(bvretval)) => {
                 let state = em.mut_state();
@@ -293,12 +293,12 @@ pub fn get_possible_return_values_of_func<'p>(
                     },
                 };
             },
-            Ok(ReturnValue::Throw(bvptr)) => {
+            Ok(ReturnValue::Throw(bvptr, debug_src)) => {
                 let state = em.mut_state();
                 match thrown_size {
                     None => {
                         if !have_throw {
-                            candidate_values.insert(ReturnValue::Throw(bvptr.as_u64().unwrap()));
+                            candidate_values.insert(ReturnValue::Throw(bvptr.as_u64().unwrap(), debug_src));
                             have_throw = true;
                             if candidate_values.len() > n {
                                 break;
@@ -309,7 +309,7 @@ pub fn get_possible_return_values_of_func<'p>(
                         let thrown_value = state.read(&bvptr, thrown_size).unwrap();
                         // rule out all the thrown values we already have - we're interested in new values
                         for candidate in candidate_values.iter() {
-                            if let ReturnValue::Throw(candidate) = candidate {
+                            if let ReturnValue::Throw(candidate, _) = candidate {
                                 thrown_value
                                     ._ne(&state.bv_from_u64(*candidate, thrown_size))
                                     .assert();
@@ -322,7 +322,7 @@ pub fn get_possible_return_values_of_func<'p>(
                             PossibleSolutions::Exactly(v) => {
                                 candidate_values.extend(
                                     v.iter()
-                                        .map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap())),
+                                        .map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap(), debug_src.clone())),
                                 );
                                 if candidate_values.len() > n {
                                     break;
@@ -331,7 +331,7 @@ pub fn get_possible_return_values_of_func<'p>(
                             PossibleSolutions::AtLeast(v) => {
                                 candidate_values.extend(
                                     v.iter()
-                                        .map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap())),
+                                        .map(|bvsol| ReturnValue::Throw(bvsol.as_u64().unwrap(), debug_src.clone())),
                                 );
                                 break; // the total must be over n at this point
                             },

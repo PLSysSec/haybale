@@ -68,7 +68,7 @@ pub fn cxa_throw<B: Backend>(
     }
 
     let thrown_ptr = state.operand_to_bv(thrown_ptr)?;
-    Ok(ReturnValue::Throw(thrown_ptr))
+    Ok(ReturnValue::Throw(thrown_ptr, state.cur_loc.source_loc.map(|e| e.clone())))
 }
 
 pub fn cxa_begin_catch<B: Backend>(

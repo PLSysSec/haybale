@@ -382,7 +382,7 @@ where
     /// `Ok(None)` if no possible paths were found.
     fn symex_from_cur_loc(&mut self) -> Result<Option<ReturnValue<B::BV>>> {
         match self.symex_from_cur_loc_through_end_of_function()? {
-            Some(ReturnValue::Throw(bvptr)) => {
+            Some(ReturnValue::Throw(bvptr, debug_src)) => {
                 // pop callsites until we find an `invoke` instruction that can direct us to a catch block
                 loop {
                     match self.state.pop_callsite() {
@@ -420,7 +420,7 @@ where
                         },
                         None => {
                             // no callsite to return to, so we're done; exception was uncaught
-                            return Ok(Some(ReturnValue::Throw(bvptr)));
+                            return Ok(Some(ReturnValue::Throw(bvptr, debug_src)));
                         },
                     }
                 }
@@ -455,7 +455,7 @@ where
                                 };
                             },
                             ReturnValue::ReturnVoid => {},
-                            ReturnValue::Throw(_) => {
+                            ReturnValue::Throw(_, _) => {
                                 panic!("This case should have been handled above")
                             },
                             ReturnValue::Abort(_) => {
@@ -493,7 +493,7 @@ where
                                 };
                             },
                             ReturnValue::ReturnVoid => {},
-                            ReturnValue::Throw(_) => {
+                            ReturnValue::Throw(_, _) => {
                                 panic!("This case should have been handled above")
                             },
                             ReturnValue::Abort(_) => {
@@ -1318,9 +1318,9 @@ where
                             .assign_bv_to_name(call.dest.as_ref().unwrap().clone(), retval)?;
                     },
                     ReturnValue::ReturnVoid => {},
-                    ReturnValue::Throw(bvptr) => {
+                    ReturnValue::Throw(bvptr, debug_src) => {
                         debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
-                        return Ok(Some(ReturnValue::Throw(bvptr)));
+                        return Ok(Some(ReturnValue::Throw(bvptr, debug_src)));
                     },
                     ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                 }
@@ -1431,9 +1431,9 @@ where
                                     )?;
                                 },
                                 ReturnValue::ReturnVoid => assert_eq!(call.dest, None),
-                                ReturnValue::Throw(bvptr) => {
+                                ReturnValue::Throw(bvptr, debug_src) => {
                                     debug!("Callee threw an exception, but caller isn't inside a try block; rethrowing upwards");
-                                    return Ok(Some(ReturnValue::Throw(bvptr)));
+                                    return Ok(Some(ReturnValue::Throw(bvptr, debug_src)));
                                 },
                                 ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                             };
@@ -1475,9 +1475,9 @@ where
                                     )?;
                                 },
                                 ReturnValue::ReturnVoid => {},
-                                ReturnValue::Throw(bvptr) => {
+                                ReturnValue::Throw(bvptr, debug_src) => {
                                     debug!("Hook threw an exception, but caller isn't inside a try block; rethrowing upwards");
-                                    return Ok(Some(ReturnValue::Throw(bvptr)));
+                                    return Ok(Some(ReturnValue::Throw(bvptr, debug_src)));
                                 },
                                 ReturnValue::Abort(i) => return Ok(Some(ReturnValue::Abort(i))),
                             }
@@ -1801,7 +1801,7 @@ where
                     }
                 }
             },
-            ReturnValue::Throw(bvptr) => Ok(ReturnValue::Throw(bvptr)), // throwing is always OK and doesn't need to be checked against function type
+            ReturnValue::Throw(bvptr, debug_src) => Ok(ReturnValue::Throw(bvptr, debug_src)), // throwing is always OK and doesn't need to be checked against function type
             ReturnValue::Abort(i) => Ok(ReturnValue::Abort(i)), // aborting is always OK and doesn't need to be checked against function type
         }
     }
@@ -1957,7 +1957,7 @@ where
                             .assign_bv_to_name(invoke.result.clone(), retval)?;
                     },
                     ReturnValue::ReturnVoid => {},
-                    ReturnValue::Throw(bvptr) => {
+                    ReturnValue::Throw(bvptr, _) => {
                         info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}{}",
                             pretty_hookedthing, invoke.exception_label, self.state.cur_loc.func.name,
                             if self.state.config.print_module_name {
@@ -2074,7 +2074,7 @@ where
                                         .assign_bv_to_name(invoke.result.clone(), retval)?;
                                 },
                                 ReturnValue::ReturnVoid => {},
-                                ReturnValue::Throw(bvptr) => {
+                                ReturnValue::Throw(bvptr, _) => {
                                     info!("Caller {:?} catching an exception thrown by callee {:?}: execution continuing at bb {} in caller {:?}{}",
                                         self.state.cur_loc.func.name, called_funcname, self.state.cur_loc.bb.name, self.state.cur_loc.func.name,
                                         if self.state.config.print_module_name {
@@ -2127,7 +2127,7 @@ where
                                         .assign_bv_to_name(invoke.result.clone(), retval)?;
                                 },
                                 ReturnValue::ReturnVoid => {},
-                                ReturnValue::Throw(bvptr) => {
+                                ReturnValue::Throw(bvptr, _) => {
                                     info!("Hook for {} threw an exception, which we are catching at bb {} in function {:?}{}",
                                         pretty_funcname, invoke.exception_label, self.state.cur_loc.func.name,
                                         if self.state.config.print_module_name {
@@ -2160,7 +2160,7 @@ where
         // exception_ptr and throw that
         let operand = self.state.operand_to_bv(&resume.operand)?;
         let exception_ptr = operand.slice(self.project.pointer_size_bits() - 1, 0); // strip out the first element, assumed to be a pointer
-        Ok(Some(ReturnValue::Throw(exception_ptr)))
+        Ok(Some(ReturnValue::Throw(exception_ptr, self.state.cur_loc.source_loc.map(|e| e.clone()))))
     }
 
     /// Catches an exception, then continues execution in the function and
