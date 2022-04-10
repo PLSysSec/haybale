@@ -88,7 +88,7 @@ pub fn bvs_can_be_equal<V: BV>(btor: &Btor, a: &V, b: &V) -> Result<bool> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum PossibleSolutions<V: Eq + Hash> {
     /// This is exactly the set of possible solutions; there are no others.
     /// Note that an empty set here indicates there are no possible solutions.
@@ -97,6 +97,47 @@ pub enum PossibleSolutions<V: Eq + Hash> {
     /// may be others.  That is, there are at least this many solutions.
     AtLeast(HashSet<V>),
 }
+
+// This is available for tests
+// It needs to be implemented manually so that Abort(None) and Throw(_, None)
+//   don't affect the output. IE when comparing, debug info is ignored
+impl<V> PartialEq for PossibleSolutions<V>
+where V: Eq + Hash {
+    fn eq(&self, other: &Self) -> bool {
+	use PossibleSolutions::*;
+	let lhs: &HashSet<V>;
+	let rhs: &HashSet<V>;
+	match (self, other) {
+	    (Exactly(h1), Exactly(h2)) => {
+		lhs = h1;
+		rhs = h2;
+	    },
+	    (AtLeast(h1), AtLeast(h2)) => {
+		lhs = h1;
+		rhs = h2;
+	    },
+	    _ => {
+		return false;
+	    }
+	}
+
+	// set quality check
+	// Note that because there may be aliasing after Eq, we can't check length
+	lhs.iter().all(|lhs_el| {
+	    rhs.iter().any(|rhs_el| {
+		lhs_el == rhs_el
+	    })
+	})
+	    &&
+	    rhs.iter().all(|rhs_el| {
+		lhs.iter().any(|lhs_el| {
+		    lhs_el == rhs_el
+		})
+	    })
+    }
+}
+impl<V> Eq for PossibleSolutions<V>
+where V: Eq + Hash {}
 
 impl<V: Eq + Hash> PossibleSolutions<V> {
     /// Create a new, empty, `PossibleSolutions` (representing no possible solution)

@@ -53,38 +53,3 @@ fn may_panic() {
         PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Abort(None)),
     );
 }
-
-#[test]
-fn may_panic_debug() {
-    let funcname = "panic::may_panic";
-    init_logging();
-    let rvals = get_possible_return_values_of_func(
-        funcname,
-        &get_panic_project(),
-        Config::default(),
-        Some(vec![ParameterVal::Unconstrained]),
-        None,
-        3,
-    );
-    
-    let hs = match rvals {
-	PossibleSolutions::Exactly(v) => v,
-	PossibleSolutions::AtLeast(v) => v
-    };
-    let mut found = false;
-    for rval in hs.iter() {
-	match rval {
-	    ReturnValue::Abort(Some(dbg)) => {
-		// These are hardcoded. Unsure of a better way to do this
-		assert!(dbg.line == 3);
-		assert!(dbg.col == Some(9));
-		assert!(dbg.filename == "panic.rs");
-		found = true;
-	    },
-	    _ => {}
-	}
-    }
-    if !found {
-	panic!("Did not find debug info. Make sure that panic.bc was compiled with debug info (rustc -C debuginfo=1)");
-    }
-}
