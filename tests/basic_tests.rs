@@ -307,7 +307,7 @@ fn issue_4() {
     );
     assert_eq!(
         ret,
-        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort)
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort(None))
     );
 }
 
@@ -326,7 +326,7 @@ fn issue_4_32bit() {
     );
     assert_eq!(
         ret,
-        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort)
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Abort(None))
     );
 }
 
@@ -348,7 +348,7 @@ fn issue_9() {
     );
     assert_eq!(
         ret,
-        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Abort)
+        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Abort(None))
     );
 }
 
@@ -367,6 +367,6 @@ fn issue_10() {
     );
     assert_eq!(
         ret,
-        PossibleSolutions::exactly_two(ReturnValue::ReturnVoid, ReturnValue::Abort)
+        PossibleSolutions::exactly_two(ReturnValue::ReturnVoid, ReturnValue::Abort(None))
     );
 }

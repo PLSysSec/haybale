@@ -11,6 +11,7 @@ keywords = ["symbolic", "llvm", "IR", "SMT"]
 license = "MIT"
 
 [dependencies]
+derivative = "2.2.0"
 llvm-ir = "0.8.1"
 boolector = "0.4.2"
 either = "1.6"

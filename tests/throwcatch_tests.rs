@@ -30,10 +30,10 @@ fn doesnt_throw() {
                 match rval {
                     ReturnValue::Return(rval) => assert!(rval > 0),
                     ReturnValue::ReturnVoid => panic!("Function shouldn't return void"),
-                    ReturnValue::Throw(throwval) => {
+                    ReturnValue::Throw(throwval, _) => {
                         panic!("Function shouldn't throw, but it threw {:?}", throwval)
                     },
-                    ReturnValue::Abort => panic!("Function shouldn't abort, but it did"),
+                    ReturnValue::Abort(_) => panic!("Function shouldn't abort, but it did"),
                 }
             }
         },
@@ -55,7 +55,7 @@ fn throw_uncaught() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Throw(20)),
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Throw(20, None)),
     );
 }
 
@@ -77,8 +77,8 @@ fn throw_multiple_values() {
             vec![
                 ReturnValue::Return(1),
                 ReturnValue::Return(2),
-                ReturnValue::Throw(3),
-                ReturnValue::Throw(4),
+                ReturnValue::Throw(3, None),
+                ReturnValue::Throw(4, None),
             ]
             .into_iter()
             .collect()
@@ -103,7 +103,7 @@ fn throw_uncaught_wrongtype() {
         PossibleSolutions::Exactly(
             vec![
                 ReturnValue::Return(2),
-                ReturnValue::Throw(20),
+                ReturnValue::Throw(20, None),
                 // TODO: This function shouldn't actually be able to Return(10), but
                 // since our matching of catch blocks is currently imprecise, our
                 // current symex allows the exception to be either caught or not-caught
@@ -129,7 +129,7 @@ fn throw_uncaught_caller() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Throw(20)),
+        PossibleSolutions::exactly_two(ReturnValue::Return(1), ReturnValue::Throw(20, None)),
     );
 }
 
@@ -172,7 +172,7 @@ fn throw_and_catch_val() {
                 // TODO: This function shouldn't actually be able to Throw(20), but
                 // since our matching of catch blocks is currently imprecise, our
                 // current symex allows the exception to be either caught or not-caught
-                ReturnValue::Throw(20),
+                ReturnValue::Throw(20, None),
             ]
             .into_iter()
             .collect()
@@ -201,7 +201,7 @@ fn throw_and_catch_in_caller() {
                 // TODO: This function shouldn't actually be able to Throw(20), but
                 // since our matching of catch blocks is currently imprecise, our
                 // current symex allows the exception to be either caught or not-caught
-                ReturnValue::Throw(20),
+                ReturnValue::Throw(20, None),
             ]
             .into_iter()
             .collect()
@@ -225,6 +225,43 @@ fn throw_and_rethrow_in_caller() {
     );
     assert_eq!(
         rvals,
-        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Throw(20)),
+        PossibleSolutions::exactly_two(ReturnValue::Return(2), ReturnValue::Throw(20, None)),
     );
+}
+
+
+
+#[test]
+fn throw_debug_position() {
+    let funcname = "throw_uncaught";
+    init_logging();
+    let rvals = get_possible_return_values_of_func(
+        funcname,
+        &get_project(),
+        Config::default(),
+        None,
+        Some(32),
+        3,
+    );
+    
+    let hs = match rvals {
+	PossibleSolutions::Exactly(v) => v,
+	PossibleSolutions::AtLeast(v) => v
+    };
+    let mut found = false;
+    for rval in hs.iter() {
+	match rval {
+	    ReturnValue::Throw(_, Some(dbg)) => {
+		// These are hardcoded. Unsure of a better way to do this
+		assert!(dbg.line == 37);
+		assert!(dbg.col == Some(9));
+		assert!(dbg.filename == "throwcatch.cpp");
+		found = true;
+	    },
+	    _ => {}
+	}
+    }
+    if !found {
+	panic!("Did not find debug info. Make sure that throwcatch.bc was compiled with -g");
+    }
 }
