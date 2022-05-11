@@ -1723,6 +1723,7 @@ where
                         || funcname.starts_with("llvm.strip.invariant")
                         || funcname.starts_with("llvm.dbg")
                         || funcname.starts_with("llvm.expect")
+                        || funcname.starts_with("llvm.experimental.noalias.scope.decl")
                     {
                         // these are all safe to ignore
                         Ok(ResolvedFunction::HookActive {
