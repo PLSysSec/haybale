@@ -192,6 +192,40 @@ fn bswap<V: BV>(bv: &V, bits: u32) -> Result<V> {
                 .concat(&byte_6)
                 .concat(&byte_7))
         },
+        128 => {
+            let byte_0 = bv.slice(7, 0);
+            let byte_1 = bv.slice(15, 8);
+            let byte_2 = bv.slice(23, 16);
+            let byte_3 = bv.slice(31, 24);
+            let byte_4 = bv.slice(39, 32);
+            let byte_5 = bv.slice(47, 40);
+            let byte_6 = bv.slice(55, 48);
+            let byte_7 = bv.slice(63, 56);
+            let byte_8 = bv.slice(71, 64);
+            let byte_9 = bv.slice(79, 72);
+            let byte_10 = bv.slice(87, 80);
+            let byte_11 = bv.slice(95, 88);
+            let byte_12 = bv.slice(103, 96);
+            let byte_13 = bv.slice(111, 104);
+            let byte_14 = bv.slice(119, 112);
+            let byte_15 = bv.slice(127, 120);
+            Ok(byte_0
+                .concat(&byte_1)
+                .concat(&byte_2)
+                .concat(&byte_3)
+                .concat(&byte_4)
+                .concat(&byte_5)
+                .concat(&byte_6)
+                .concat(&byte_7)
+                .concat(&byte_8)
+                .concat(&byte_9)
+                .concat(&byte_10)
+                .concat(&byte_11)
+                .concat(&byte_12)
+                .concat(&byte_13)
+                .concat(&byte_14)
+                .concat(&byte_15))
+        },
         _ => Err(Error::UnsupportedInstruction(format!(
             "bswap on bitwidth {}",
             bits
